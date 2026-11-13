@@ -55,6 +55,7 @@ class Validator(private val model: Model) {
         checkCaptures()           // V6
         checkFolds()              // V8
         checkNevers()             // V10
+        checkTransientFields()    // V37 (Reference §4, "Transient fields of a kept act")
         checkWellFoundedness()    // V14 (stratify, then certify)
         checkTransitionInterference() // V15 (third leg)
         checkQuiescence()         // V16
@@ -1554,6 +1555,7 @@ class Validator(private val model: Model) {
     fun checkQueryPredicate(expr: Expr, scope: String): List<Diagnostic> {
         val before = diags.size
         checkExpr(expr, scope)
+        transientFieldReads(expr, scope, scope, allowedAct = null, site = "the query")
         val out = diags.subList(before, diags.size).toList()
         while (diags.size > before) diags.removeAt(diags.size - 1)
         return out
@@ -1568,6 +1570,7 @@ class Validator(private val model: Model) {
             val m = model.membersOf(scope)[d]
             when {
                 m == null -> add(Diagnostic("F2", "order by '$d' — '$scope' has no member '$d'"))
+                m.transient -> add(Diagnostic("V37", "order by '$d' — '$scope.$d' is transient: in the act's input, never in its record (Reference §4)"))
                 d == "id" -> add(Diagnostic("F2", "order by 'id' — identity orders nothing (Reference §5); name a datum the data carries"))
                 !isOrderable(m.type) -> add(Diagnostic("F2", "order by '$d' — $scope.$d is not orderable (Reference §10)"))
             }
@@ -3363,10 +3366,13 @@ class Validator(private val model: Model) {
                     else -> continue
                 }
                 val rel = type as? RelType ?: continue
-                if (rel.shape in model.transients)
-                    diags.add(Diagnostic("V17", "'$owner.$mName' references transient act '${rel.shape}' — " +
-                        "a transient act exists only within its own commit's transaction, so nothing durable " +
-                        "may point at it; copy the fields the outcome needs instead"))
+                if (rel.shape !in model.transients) continue
+                // a part of a transient act's closure points at its container, and two
+                // shapes of one closure may point at each other (Reference §6)
+                if (model.sameTransientClosure(owner, rel.shape)) continue
+                diags.add(Diagnostic("V17", "'$owner.$mName' references transient ${model.transientKind(rel.shape)} '${rel.shape}' — " +
+                    "it exists only within its own commit's transaction, so nothing durable " +
+                    "may point at it; copy the fields the outcome needs instead"))
             }
         }
         model.shapes.forEach { (name, s) -> checkMembers(name, s.members) }
@@ -3384,8 +3390,8 @@ class Validator(private val model: Model) {
                 is IsExpr -> e.refinement?.takeIf { (model.baseOf(it) ?: it) in model.transients }
                 else -> null
             } ?: return@forEachSpecExpr
-            diags.add(Diagnostic("V17", "$site reads transient act '$mentioned' — " +
-                "the act is not kept after its commit, so no expression may query it; " +
+            diags.add(Diagnostic("V17", "$site reads transient ${model.transientKind(mentioned)} '$mentioned' — " +
+                "it is not kept after its commit, so no expression may query it; " +
                 "read the durable outcomes its rules produced instead"))
         }
 
@@ -3393,8 +3399,8 @@ class Validator(private val model: Model) {
         // instance would persist, contradicting the marker
         for (rule in model.rules.values) {
             rule.body.statements().filterIsInstance<Creation>().filter { it.shape in model.transients }.forEach {
-                diags.add(Diagnostic("V17", "rule '${rule.name}' creates transient act '${it.shape}' — " +
-                    "a transient act is an input at the boundary, never a rule's effect"))
+                diags.add(Diagnostic("V17", "rule '${rule.name}' creates transient ${model.transientKind(it.shape)} '${it.shape}' — " +
+                    "a transient shape arrives as input at the boundary, never as a rule's effect"))
             }
         }
 
@@ -3403,10 +3409,10 @@ class Validator(private val model: Model) {
             val base = subjectScope(rule)?.let { model.baseOf(it) } ?: continue
             if (base !in model.transients) continue
             if (rule.leaving)
-                diags.add(Diagnostic("V17", "rule '${rule.name}' — 'when ${rule.trigger.keyword.trim()}' over transient act '$base' " +
-                    "is meaningless: the act's refinements are evaluated exactly once, at its commit; there are no exits"))
+                diags.add(Diagnostic("V17", "rule '${rule.name}' — 'when ${rule.trigger.keyword.trim()}' over transient ${model.transientKind(base)} '$base' " +
+                    "is meaningless: its refinements are evaluated exactly once, at the commit; there are no exits"))
             if (rule.preposition == "after" || rule.triggers.any { it != "commit" })
-                diags.add(Diagnostic("V17", "rule '${rule.name}' — transient act '$base' is gone before any " +
+                diags.add(Diagnostic("V17", "rule '${rule.name}' — transient ${model.transientKind(base)} '$base' is gone before any " +
                     "'after commit' firing or tick runs; handle it at its commit, and hang asynchronous work " +
                     "off a durable intent the handling rule creates"))
         }
@@ -3415,7 +3421,7 @@ class Validator(private val model: Model) {
         // boundary refuses. A `never` over the act is an answer too: the
         // refused configuration gets its response as the commit's refusal,
         // with nothing kept (Reference §4; §21).
-        for (t in model.transients) {
+        for (t in model.transients.filter { model.transientClosureOf[it] == it }) {
             val handlers = model.rules.values.filter {
                 !it.leaving && subjectScope(it)?.let { s -> model.baseOf(s) } == t
             }
@@ -3987,6 +3993,192 @@ class Validator(private val model: Model) {
     }
 
     /** Walks every expression in the spec with a human-readable site label. */
+    // ── V37: transient fields of a kept act (Reference §4, "Transient fields of a
+    // kept act") ────────────────────────────────────────────────────────────────
+    //
+    // `transient name: type` on an act: the field is in the act's input and not
+    // in its record. It is read by what runs at the act's commit, a `never` over
+    // the act and a rule whose subject is the bare act, and by nothing else: a
+    // refinement of a kept act persists and is re-evaluated as its data drifts,
+    // a derived property is read later, and any other reader reads a record
+    // that has no such field. Nothing assigns it.
+
+    private val transientFieldsByShape: Map<String, Set<String>> by lazy {
+        model.shapes.mapValues { (_, shape) ->
+            shape.members.filterIsInstance<StoredProp>().filter { it.transient }.map { it.name }.toSet()
+        }.filterValues { it.isNotEmpty() }
+    }
+
+    private fun checkTransientFields() {
+        if (transientFieldsByShape.isEmpty()) return
+        for ((shape, fields) in transientFieldsByShape) {
+            if (shape in model.exposed) continue
+            for (field in fields)
+                diags.add(Diagnostic("V37", "'$shape.$field' is transient, but '$shape' is a shape — a transient field is part " +
+                    "of an act's input, and a shape is created by rules, never committed; drop `transient`, or declare '$shape' an act"))
+        }
+        for ((name, shape) in model.shapes) shape.members.forEach { member ->
+            when (member) {
+                is StoredProp -> transientFieldReads(member.initially, name, name, null, "'$name.${member.name}'")
+                is DerivedProp -> transientFieldReads(member.expr, name, name, null, "'$name.${member.name}'")
+                else -> {}
+            }
+        }
+        for ((name, refinement) in model.refinements) {
+            transientFieldReadsInRef(refinement.expr, null, "shape '$name'")
+            refinement.members.forEach { member ->
+                if (member is DerivedProp) transientFieldReads(member.expr, name, name, null, "'$name.${member.name}'")
+            }
+        }
+        for (never in model.nevers) {
+            val subject = model.baseOfExpr(never.target)
+            transientFieldReadsInRef(never.target, subject, "${never.keyword} '${Printer.refExpr(never.target)}'")
+        }
+        for (rule in model.rules.values) checkTransientFieldsInRule(rule)
+    }
+
+    private fun checkTransientFieldsInRule(rule: RuleDecl) {
+        val scope = subjectScope(rule) ?: return
+        val site = "rule '${rule.name}'"
+        // the subject is the bare act, so the body runs once, at the act's commit
+        val bareAct = (rule.condition as? RefName)?.takeIf { it.where == null && it.name in model.shapes }?.name
+        transientFieldReadsInRef(rule.condition, null, site)
+        val aliases = rule.by?.let { mapOf(it.name to it.shape) }.orEmpty()
+        checkTransientFieldsInBody(rule.body, scope, bareAct, site, aliases)
+    }
+
+    private fun checkTransientFieldsInBody(items: List<BodyItem>, scope: String, allowedAct: String?, site: String, aliases: Map<String, String>) {
+        for (item in items) when (item) {
+            is Assignment -> {
+                transientFieldReads(item.value, scope, scope, allowedAct, site, aliases)
+                val assigned = transientFieldOnPath(item.target, scope, scope, aliases) ?: continue
+                diags.add(Diagnostic("V37", "$site assigns '${assigned.first}.${assigned.second}', which is transient — " +
+                    "it is in the act's input and not in its record, so there is nothing to assign"))
+            }
+            is Creation -> {
+                transientFieldReads(item.forExpr, scope, scope, allowedAct, site, aliases)
+                item.fields.forEach { transientFieldReads(it.value, scope, scope, allowedAct, site, aliases) }
+            }
+            is ForEach -> {
+                item.sourceExprs().forEach { transientFieldReads(it, scope, scope, allowedAct, site, aliases) }
+                val loopAliases = item.bindings.associate { binding ->
+                    val element = (binding.source as? LoopSource.Over)?.let { elementScopeOf(it.expr, scope, scope, aliases) }
+                    binding.name to (element ?: VALUE_ALIAS)
+                }
+                checkTransientFieldsInBody(item.body, scope, allowedAct, site, aliases + loopAliases)
+            }
+            is DeleteStmt, ThenMarker -> {}
+        }
+    }
+
+    /** The reads in a refinement expression: each `where` runs with its name's base as `this`. */
+    private fun transientFieldReadsInRef(expr: RefExpr, allowedAct: String?, site: String) {
+        when (expr) {
+            is RefName -> expr.where?.let { where ->
+                val scope = model.baseOf(expr.name) ?: expr.name
+                transientFieldReads(where, scope, scope, allowedAct, site)
+            }
+            is RefAnd -> { transientFieldReadsInRef(expr.left, allowedAct, site); transientFieldReadsInRef(expr.right, allowedAct, site) }
+            is RefOr -> { transientFieldReadsInRef(expr.left, allowedAct, site); transientFieldReadsInRef(expr.right, allowedAct, site) }
+            is RefNot -> transientFieldReadsInRef(expr.inner, allowedAct, site)
+        }
+    }
+
+    /**
+     * Reports every read of a transient field in [expr] that is not a read of
+     * [allowedAct]'s own field at the subject level. [thisScope] is what `this`
+     * names; [elementScope] is what a bare name resolves on, the element of the
+     * innermost collection `where`.
+     */
+    private fun transientFieldReads(
+        expr: Expr?, thisScope: String, elementScope: String, allowedAct: String?, site: String,
+        aliases: Map<String, String> = emptyMap(),
+    ) {
+        expr ?: return
+        when (expr) {
+            is PathExpr -> {
+                val read = transientFieldOnPath(expr, thisScope, elementScope, aliases) ?: return
+                val ownRead = expr.root == "this" || (expr.root !in aliases && elementScope == thisScope)
+                if (allowedAct == read.first && ownRead && read.third == 0) return
+                diags.add(Diagnostic("V37", "$site reads '${read.first}.${read.second}', which is transient — " +
+                    "it is in the act's input and not in its record, so only a `never` over '${read.first}' " +
+                    "or a rule on the bare act may read it, at the commit (Reference §4)"))
+            }
+            is UnaryMinus -> transientFieldReads(expr.inner, thisScope, elementScope, allowedAct, site, aliases)
+            is Binary -> {
+                transientFieldReads(expr.left, thisScope, elementScope, allowedAct, site, aliases)
+                transientFieldReads(expr.right, thisScope, elementScope, allowedAct, site, aliases)
+            }
+            is NotExpr -> transientFieldReads(expr.inner, thisScope, elementScope, allowedAct, site, aliases)
+            is IfExpr -> {
+                transientFieldReads(expr.condition, thisScope, elementScope, allowedAct, site, aliases)
+                transientFieldReads(expr.thenExpr, thisScope, elementScope, allowedAct, site, aliases)
+                transientFieldReads(expr.elseExpr, thisScope, elementScope, allowedAct, site, aliases)
+            }
+            is Interpolation -> expr.pieces.forEach { transientFieldReads(it, thisScope, elementScope, allowedAct, site, aliases) }
+            is IsExpr -> transientFieldReads(expr.subject, thisScope, elementScope, allowedAct, site, aliases)
+            is ExistsExpr -> {
+                transientFieldReads(expr.forExpr, thisScope, elementScope, allowedAct, site, aliases)
+                expr.collection?.let { transientFieldReadsInCollection(it, thisScope, elementScope, allowedAct, site, aliases) }
+            }
+            is AggCall -> transientFieldReadsInCollection(expr.collection, thisScope, elementScope, allowedAct, site, aliases)
+            is SetExpr -> transientFieldReadsInCollection(expr.collection, thisScope, elementScope, allowedAct, site, aliases)
+            is FunCall -> expr.args.forEach { transientFieldReads(it, thisScope, elementScope, allowedAct, site, aliases) }
+            is SingularFor -> transientFieldReads(expr.forExpr, thisScope, elementScope, allowedAct, site, aliases)
+            is ShapeForSource -> transientFieldReads(expr.forExpr, thisScope, elementScope, allowedAct, site, aliases)
+            is Access -> transientFieldReads(expr.target, thisScope, elementScope, allowedAct, site, aliases)
+            is WalkExpr -> transientFieldReads(expr.until, thisScope, elementScope, allowedAct, site, aliases)
+            else -> {}
+        }
+    }
+
+    /** A collection's `where` runs with its first binding's element as the bare-name scope and `this` unchanged. */
+    private fun transientFieldReadsInCollection(
+        collection: CollectionExpr, thisScope: String, elementScope: String, allowedAct: String?, site: String,
+        aliases: Map<String, String>,
+    ) {
+        collection.bindings.forEach { transientFieldReads(it.source, thisScope, elementScope, allowedAct, site, aliases) }
+        val where = collection.where ?: return
+        val inner = aliases + collection.bindings.mapNotNull { binding ->
+            binding.alias?.let { alias -> elementScopeOf(binding.source, thisScope, elementScope, aliases)?.let { alias to it } }
+        }
+        val element = collection.bindings.firstOrNull()?.let { elementScopeOf(it.source, thisScope, elementScope, aliases) } ?: elementScope
+        transientFieldReads(where, thisScope, element, allowedAct, site, inner)
+    }
+
+    /** The shape of a collection source's element: a bare shape name, or the type the model gives the expression. */
+    private fun elementScopeOf(source: Expr, thisScope: String, elementScope: String, aliases: Map<String, String>): String? {
+        if (source is PathExpr && source.segs.isEmpty() && (source.root in model.shapes || source.root in model.refinements)) return source.root
+        val env = TypeEnv(thisScope = thisScope, aliases = aliases)
+        return when (val type = model.types.of(source, elementScope, env)) {
+            is VType.Coll -> type.shape
+            else -> type?.instanceShape()
+        }
+    }
+
+    /**
+     * The first transient field a path reads, as (owner act, field, step index),
+     * or null when the path reads none. A step after the first resolves on the
+     * shape the previous step's reference points at.
+     */
+    private fun transientFieldOnPath(path: PathExpr, thisScope: String, elementScope: String, aliases: Map<String, String>): Triple<String, String, Int>? {
+        var shape: String?
+        val steps: List<String>
+        when {
+            path.root == "this" -> { shape = thisScope; steps = path.segs.map { it.name } }
+            path.root in aliases -> { shape = aliases.getValue(path.root).takeIf { it != VALUE_ALIAS }; steps = path.segs.map { it.name } }
+            path.root in model.shapes || path.root in model.refinements -> { shape = path.root; steps = path.segs.map { it.name } }
+            else -> { shape = elementScope; steps = listOf(path.root) + path.segs.map { it.name } }
+        }
+        for ((index, step) in steps.withIndex()) {
+            val owner = shape ?: return null
+            val member = model.membersOf(owner)[step] ?: return null
+            if (member.transient) return Triple(member.owner, step, index)
+            shape = member.type.instanceShape() ?: (member.type as? VType.Coll)?.shape
+        }
+        return null
+    }
+
     private fun forEachSpecExpr(visit: (site: String, e: Expr) -> Unit) {
         fun walk(site: String, e: Expr?) {
             e ?: return

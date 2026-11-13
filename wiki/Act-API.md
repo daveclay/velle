@@ -16,7 +16,7 @@ data class NewPeptideBatch(
 )
 ```
 
-The class carries no `id`, no timestamp fields, no derived properties, and no actor: those are Velle's to fill ([§5](Reference-05-Scalars), [§22](Reference-22-Open-unresolved)).
+The class carries no `id`, no timestamp fields, no derived properties, and no actor: those are Velle's to fill ([§5](Reference-05-Scalars), [§22](Reference-22-Open-unresolved)). A `transient` field ([§4, "Transient fields of a kept act"](Reference-04-State-and-commits#transient-fields-of-a-kept-act-transient)) is a constructor parameter like any stored field, and the model object has no such property: `NewOrder` in `examples/orders/output/src/main/kotlin/velle/generated/Orders.kt` takes `cardNumber` and `cardholder`, and `Order` carries neither.
 
 A `uuid` field is a `java.util.UUID`, a `duration` field a `java.time.Duration`, a `time` field a `java.time.LocalTime`, and a `bytes` field a `ByteArray` on the input class and the model object ([§5](Reference-05-Scalars)); a `uuid` with `initially randomUUID` is not an input parameter.
 
@@ -102,7 +102,7 @@ when (val r = sys.commit(batch)) {
 }
 ```
 
-A transient act ([§4](Reference-04-State-and-commits), "Transient acts") leaves no record, so its overload returns `Commit<NewSignUp, Nothing?>` and `r.ref` is null. What the act's rules made is found through the queries, as `sys.customers().last()` in `examples/billing/output/src/main/kotlin/velle/app/BillingApp.kt`.
+A transient act ([§4](Reference-04-State-and-commits), "Transient acts") leaves no record, so its overload returns `Commit<NewSignUp, Nothing?>` and `r.ref` is null. A transient act with parts takes them as a kept one does, and the parts leave no record either: `NewPriceRequest` in `examples/orders/output/src/main/kotlin/velle/generated/Orders.kt` takes its `requestedItems`, and the system has no `priceRequests()` or `requestedItems()` to read. What the act's rules made is found through the queries, as `sys.customers().last()` in `examples/billing/output/src/main/kotlin/velle/app/BillingApp.kt`.
 
 Before the runtime is entered, the function walks the input once. Every value in a creating position, a part or a `with`-named field's `New`, gets a token by its identity, and every reference to a sibling is resolved to that token. Three things are refused here, as a `Refused` whose reason begins with `type:` and carries no `never`:
 

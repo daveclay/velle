@@ -257,6 +257,7 @@ internal class QueryEngine(private val system: VelleSystem) {
         val ext = bare?.let { model.extTypeOf(it) }
         val extra = when {
             m == null -> listOf(Diagnostic("F1", "sum of '$member' — '${q.root}' has no member '$member'"))
+            m.transient -> listOf(Diagnostic("F1", "sum of '$member' — '${q.root}.$member' is transient: in the act's input, never in its record (Reference §4)"))
             ext != null -> if (ext.summableOrNull == null)
                 listOf(Diagnostic("E3", "sum of '$member' — '${model.specNameOf(ext)}' (${ext::class.qualifiedName}) declares no sum"))
                 else emptyList()

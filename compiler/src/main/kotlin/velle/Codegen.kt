@@ -374,9 +374,10 @@ object Codegen {
         /** The reference type a model object of [root] is: its base shape, or the union it is drawn from. */
         fun refTarget(root: String): String = model.baseOf(root) ?: model.unionRootOf(root) ?: root
 
-        /** The members a model object carries and a fields class exposes: everything but `id`. */
+        /** The members a model object carries and a fields class exposes: everything but `id`
+         *  and a transient field, which is in the act's input and not in its record (Reference §4). */
         fun dataMembers(scope: String): List<Pair<String, MemberInfo>> =
-            model.membersOf(scope).entries.filter { it.key != "id" }.map { it.key to it.value }
+            model.membersOf(scope).entries.filter { it.key != "id" && !it.value.transient }.map { it.key to it.value }
 
         /** A union's own derived members, carried by each operand's model object (read in the union's scope). */
         fun unionMembers(shape: String): List<Triple<String, String, VType>> =

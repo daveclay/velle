@@ -337,7 +337,8 @@ open class SqlStore(
     private fun columnsOf(shape: String): List<Col> =
         model.shapes.getValue(shape).members.mapNotNull { m ->
             when (m) {
-                is StoredProp -> model.typeOf(m.type).let { t ->
+                // a transient field is in the act's input and has no column (Reference §4)
+                is StoredProp -> if (m.transient) null else model.typeOf(m.type).let { t ->
                     if (t is VType.Coll || t is VType.CollS) null
                     else Col(m.name, t, t.instanceShape()?.let { isUnion(it) } == true)
                 }
@@ -349,7 +350,7 @@ open class SqlStore(
         }
 
     private fun collectionsOf(shape: String): List<Coll> =
-        model.shapes.getValue(shape).members.filterIsInstance<StoredProp>().mapNotNull { m ->
+        model.shapes.getValue(shape).members.filterIsInstance<StoredProp>().filterNot { it.transient }.mapNotNull { m ->
             when (val t = model.typeOf(m.type)) {
                 is VType.Coll -> Coll(m.name, VType.Inst(t.shape), isUnion(t.shape))
                 is VType.CollS -> Coll(m.name, model.scalarOf(t.name), union = false)

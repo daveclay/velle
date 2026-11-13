@@ -171,8 +171,8 @@ class VelleGraphQLTest {
     @Test
     fun `parts and a value supplied by value, through input types`() {
         val o = engine("orders")
-        val c = o.run("""mutation { customer(input: {name: "Ada"}) { ref { key } } product(input: {sku: "A-1"}) { ref { key } } }""")
-        val order = o.run("""mutation(${'$'}c: ID!, ${'$'}p: ID!) { order(input: {customer: ${'$'}c, placedOn: "2026-03-01", orderLines: [
+        val c = o.run("""mutation { customer(input: {name: "Ada"}) { ref { key } } product(input: {sku: "A-1", unitPrice: 10}) { ref { key } } }""")
+        val order = o.run("""mutation(${'$'}c: ID!, ${'$'}p: ID!) { order(input: {customer: ${'$'}c, placedOn: "2026-03-01", cardNumber: "4111111111111111", cardholder: "Ada Lovelace", orderLines: [
             {product: ${'$'}p, quantity: 2, customizations: [{note: "gift wrap"}]}, {product: ${'$'}p, quantity: 3}
         ]}) { accepted record { total orderLines { quantity customizations { note } } } } }""", mapOf("c" to c.at("customer", "ref", "key"), "p" to c.at("product", "ref", "key")))
         assertEquals(5, order.at("order", "record", "total"))

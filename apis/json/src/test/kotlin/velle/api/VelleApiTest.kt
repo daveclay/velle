@@ -241,9 +241,10 @@ class VelleApiTest {
     fun `an act arrives with its parts, and a part with parts of its own`() {
         val api = VelleApi(system(example("orders")), clock)
         val customer = accepted(api.commit("Customer", mapOf("name" to "Ada"), null)).ref()["key"]!!
-        val product = accepted(api.commit("Product", mapOf("sku" to "A-1"), null)).ref()["key"]!!
+        val product = accepted(api.commit("Product", mapOf("sku" to "A-1", "unitPrice" to 10), null)).ref()["key"]!!
         val order = accepted(api.commit("Order", mapOf(
             "customer" to customer, "placedOn" to "2026-03-01",
+            "cardNumber" to "4111111111111111", "cardholder" to "Ada Lovelace",
             "orderLines" to listOf(
                 mapOf("product" to product, "quantity" to 2, "customizations" to listOf(mapOf("note" to "gift wrap"))),
                 mapOf("product" to product, "quantity" to 3),
@@ -257,6 +258,7 @@ class VelleApiTest {
 
         // the whole closure is refused at the door when one part breaks a constraint
         val refused = api.commit("Order", mapOf("customer" to customer, "placedOn" to "2026-03-01",
+            "cardNumber" to "4111111111111111", "cardholder" to "Ada Lovelace",
             "orderLines" to listOf(mapOf("product" to product, "quantity" to 0))), null)
         assertEquals(false, refused["accepted"])
         assertEquals(1, api.count("Order", null, null))

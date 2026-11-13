@@ -33,14 +33,25 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
     fun commit(input: NewOrder): Commit<NewOrder, Ref<Order>> =
         boundary("Order", input).carrying(input)
 
+    /** Queue keys: [priceRequest.customer] — plus system-wide width below.
+     *  System-wide over QuoteLine — creates QuoteLine referencing an instance the derivation cannot key (unexamined (A5)).
+     *  System-wide over Product — reads Product.unitPrice with no path back to any key (unexamined (A5)).
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
+    fun commit(input: NewPriceRequest): Commit<NewPriceRequest, Nothing?> =
+        boundary("PriceRequest", input).carryingNoRecord(input)
+
     fun ticks(): List<Tick> = all("Tick") { materializeTick(it) }
     fun customers(): List<Customer> = all("Customer") { materializeCustomer(it) }
     fun products(): List<Product> = all("Product") { materializeProduct(it) }
     fun skuFamilys(): List<SkuFamily> = all("SkuFamily") { materializeSkuFamily(it) }
     fun orders(): List<Order> = all("Order") { materializeOrder(it) }
+    fun charges(): List<Charge> = all("Charge") { materializeCharge(it) }
     fun orderLines(): List<OrderLine> = all("OrderLine") { materializeOrderLine(it) }
     fun customizations(): List<Customization> = all("Customization") { materializeCustomization(it) }
     fun reservations(): List<Reservation> = all("Reservation") { materializeReservation(it) }
+    fun quotes(): List<Quote> = all("Quote") { materializeQuote(it) }
+    fun quoteLines(): List<QuoteLine> = all("QuoteLine") { materializeQuoteLine(it) }
     fun productInFamilys(): List<ProductInFamily> = all("ProductInFamily") { materializeProductInFamily(it) }
     fun productOfFamilys(): List<ProductOfFamily> = all("ProductOfFamily") { materializeProductOfFamily(it) }
 
@@ -74,6 +85,11 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         fun order(key: StoreKey): Order = byKey("Order", key)
         fun order(key: Long): Order = order(StoreKey(key))
 
+        val charges: ChargeQuery get() = query("Charge", ChargeFields()) { materializeCharge(it) }
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun charge(key: StoreKey): Charge = byKey("Charge", key)
+        fun charge(key: Long): Charge = charge(StoreKey(key))
+
         val orderLines: OrderLineQuery get() = query("OrderLine", OrderLineFields()) { materializeOrderLine(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun orderLine(key: StoreKey): OrderLine = byKey("OrderLine", key)
@@ -88,6 +104,16 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun reservation(key: StoreKey): Reservation = byKey("Reservation", key)
         fun reservation(key: Long): Reservation = reservation(StoreKey(key))
+
+        val quotes: QuoteQuery get() = query("Quote", QuoteFields()) { materializeQuote(it) }
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun quote(key: StoreKey): Quote = byKey("Quote", key)
+        fun quote(key: Long): Quote = quote(StoreKey(key))
+
+        val quoteLines: QuoteLineQuery get() = query("QuoteLine", QuoteLineFields()) { materializeQuoteLine(it) }
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun quoteLine(key: StoreKey): QuoteLine = byKey("QuoteLine", key)
+        fun quoteLine(key: Long): QuoteLine = quoteLine(StoreKey(key))
 
         val productInFamilys: ProductInFamilyQuery get() = query("ProductInFamily", ProductInFamilyFields()) { materializeProductInFamily(it) }
         /** The record behind [ref] as a member of ProductInFamily, or null when it is not one. */
@@ -105,9 +131,12 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         "Product" -> materializeProduct(id)
         "SkuFamily" -> materializeSkuFamily(id)
         "Order" -> materializeOrder(id)
+        "Charge" -> materializeCharge(id)
         "OrderLine" -> materializeOrderLine(id)
         "Customization" -> materializeCustomization(id)
         "Reservation" -> materializeReservation(id)
+        "Quote" -> materializeQuote(id)
+        "QuoteLine" -> materializeQuoteLine(id)
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
@@ -121,12 +150,15 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         orders = (system.get(id, "orders") as List<*>).map { system.refFor(it as Long) },
+        quotes = (system.get(id, "quotes") as List<*>).map { system.refFor(it as Long) },
     )
 
     private fun materializeProduct(id: Long): Product = Product(
         key = system.refFor(id).key,
         sku = system.get(id, "sku") as String,
+        unitPrice = (system.get(id, "unitPrice") as BigDecimal).intValueExact(),
         orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
+        quoteLines = (system.get(id, "quoteLines") as List<*>).map { system.refFor(it as Long) },
         isProductInFamily = system.isMember(id, "ProductInFamily"),
         isProductOfFamily = system.isMember(id, "ProductOfFamily"),
     )
@@ -142,7 +174,14 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         customer = system.refFor(system.get(id, "customer") as Long),
         placedOn = system.get(id, "placedOn") as LocalDate,
         total = (system.get(id, "total") as BigDecimal).intValueExact(),
+        charges = (system.get(id, "charges") as List<*>).map { system.refFor(it as Long) },
         orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
+    )
+
+    private fun materializeCharge(id: Long): Charge = Charge(
+        key = system.refFor(id).key,
+        order = system.refFor(system.get(id, "order") as Long),
+        cardholder = system.get(id, "cardholder") as String,
     )
 
     private fun materializeOrderLine(id: Long): OrderLine = OrderLine(
@@ -166,30 +205,59 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
     )
 
+    private fun materializeQuote(id: Long): Quote = Quote(
+        key = system.refFor(id).key,
+        customer = system.refFor(system.get(id, "customer") as Long),
+        quotedOn = system.get(id, "quotedOn") as Instant,
+        quoteLines = (system.get(id, "quoteLines") as List<*>).map { system.refFor(it as Long) },
+    )
+
+    private fun materializeQuoteLine(id: Long): QuoteLine = QuoteLine(
+        key = system.refFor(id).key,
+        quote = system.refFor(system.get(id, "quote") as Long),
+        product = system.refFor(system.get(id, "product") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        unitPrice = (system.get(id, "unitPrice") as BigDecimal).intValueExact(),
+    )
+
     private fun materializeProductInFamily(id: Long): ProductInFamily = ProductInFamily(
         key = system.refFor(id).key,
         sku = system.get(id, "sku") as String,
+        unitPrice = (system.get(id, "unitPrice") as BigDecimal).intValueExact(),
         orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
+        quoteLines = (system.get(id, "quoteLines") as List<*>).map { system.refFor(it as Long) },
         isProductOfFamily = system.isMember(id, "ProductOfFamily"),
     )
 
     private fun materializeProductOfFamily(id: Long): ProductOfFamily = ProductOfFamily(
         key = system.refFor(id).key,
         sku = system.get(id, "sku") as String,
+        unitPrice = (system.get(id, "unitPrice") as BigDecimal).intValueExact(),
         orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
+        quoteLines = (system.get(id, "quoteLines") as List<*>).map { system.refFor(it as Long) },
         isProductInFamily = system.isMember(id, "ProductInFamily"),
     )
 
     companion object {
         private val SPEC = """
 -- The exposure closure (Reference §6, "Inline part creation"): an order arrives
--- together with its line items — the parts don't exist yet, so they can't be
+-- together with its line items. The parts don't exist yet, so they can't be
 -- references; they are values created in the act's commit. `act ... with`
 -- names the inverse edges that ride the closure; back-references are
 -- language-populated; container and parts land as one commit, entrants all,
 -- and a part-triggered rule fires once per inline part in the act's
 -- transaction (the §20 fan-out precedent). The aggregate the parts imply
 -- lives on the container as a derivation, never a part-written field.
+--
+-- Two more things a shop asks of a request (Reference §4):
+--   · the card an order is paid with arrives on the order, is read once at
+--     the commit, and is never stored: `transient` on the two fields puts
+--     them in the act's input and not in its record ("Transient fields of
+--     a kept act"); the rule records a charge with the cardholder's name
+--   · a request for prices is answered with a quote and not kept: a
+--     `transient act` with parts, the requested items read at the commit
+--     and gone with the request; the quote's lines copy the price at
+--     quoting time, which is the business reason the copy exists
 
 act Customer {
     name: text
@@ -197,6 +265,7 @@ act Customer {
 
 act Product {
     sku: text
+    unitPrice: integer
 }
 
 -- A SKU belongs to a family when it fits the family's pattern. The pattern is
@@ -216,9 +285,25 @@ shape ProductOfFamily = Product where exists (SkuFamily where this.sku matches "
 act Order {
     customer: one Customer
     placedOn: Date
+    transient cardNumber: text    -- in the input, not in the record: read once, at this commit, never stored
+    transient cardholder: text
     total: integer = sum(orderLines, quantity)    -- derive the aggregate on the container
 } with {
     orderLines with { customizations }
+}
+
+-- what the rules record from the card: the cardholder's name, never the number
+shape Charge {
+    order: one Order
+    cardholder: text
+}
+
+-- a refusal at the door reading the card; the whole closure is refused, nothing lands
+never (Order where length(cardNumber) < 12)
+
+-- a rule on the bare act fires once, at the commit, and reads the card there
+rule TakePayment when Order {
+    Charge from { order: this, cardholder: cardholder }
 }
 
 shape OrderLine {
@@ -245,6 +330,41 @@ rule ReserveStock when OrderLine {
 -- a constraint no rule can move, checked at the door (Reference §21) — a closure
 -- carrying a non-positive quantity is refused whole, nothing lands
 never (OrderLine where quantity <= 0)
+
+-- A request for prices: answered with a quote, and not kept. The requested
+-- items arrive as the request's parts and are removed with it when the
+-- transaction closes (Reference §6, "Inline part creation").
+transient act PriceRequest {
+    customer: one Customer
+} with requestedItems
+
+shape RequestedItem {
+    request: one PriceRequest     -- the back-reference, filled in by Velle; legal because the item is a part of the request's closure
+    product: one Product
+    quantity: integer
+}
+
+shape Quote {
+    customer: one Customer
+    quotedOn: timestamp on create
+}
+
+-- the price at quoting time is copied: a later price change does not move a quote
+shape QuoteLine {
+    quote: one Quote
+    product: one Product
+    quantity: integer
+    unitPrice: integer
+}
+
+never (PriceRequest where count(requestedItems) == 0)
+
+rule QuoteRequest when PriceRequest {
+    Quote from { customer: customer } as quote
+    for each item in requestedItems {
+        QuoteLine from { quote: quote, product: item.product, quantity: item.quantity, unitPrice: item.product.unitPrice }
+    }
+}
 """
     }
 }
@@ -255,9 +375,12 @@ typealias CustomerQuery = TypedQuery<CustomerFields, Customer>
 typealias ProductQuery = TypedQuery<ProductFields, Product>
 typealias SkuFamilyQuery = TypedQuery<SkuFamilyFields, SkuFamily>
 typealias OrderQuery = TypedQuery<OrderFields, Order>
+typealias ChargeQuery = TypedQuery<ChargeFields, Charge>
 typealias OrderLineQuery = TypedQuery<OrderLineFields, OrderLine>
 typealias CustomizationQuery = TypedQuery<CustomizationFields, Customization>
 typealias ReservationQuery = TypedQuery<ReservationFields, Reservation>
+typealias QuoteQuery = TypedQuery<QuoteFields, Quote>
+typealias QuoteLineQuery = TypedQuery<QuoteLineFields, QuoteLine>
 typealias ProductInFamilyQuery = TypedQuery<ProductInFamilyFields, ProductInFamily>
 typealias ProductOfFamilyQuery = TypedQuery<ProductOfFamilyFields, ProductOfFamily>
 
@@ -276,9 +399,11 @@ data class NewCustomer(
 
 data class NewProduct(
     val sku: String,
+    val unitPrice: Int,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("sku", sku)
+        put("unitPrice", unitPrice)
     }
     override fun register(reg: NewRegistry) {
     }
@@ -301,11 +426,15 @@ data class NewSkuFamily(
 data class NewOrder(
     val customer: Ref<Customer>,
     val placedOn: LocalDate,
+    val cardNumber: String,
+    val cardholder: String,
     val orderLines: List<NewOrderLine> = emptyList(),
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("customer", system.idOf(customer))
         put("placedOn", placedOn)
+        put("cardNumber", cardNumber)
+        put("cardholder", cardholder)
     }
     override fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {
         put("orderLines", orderLines.map { it.asValue(system, reg) })
@@ -314,6 +443,22 @@ data class NewOrder(
         orderLines.forEach { reg.add(it); it.register(reg) }
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + parts(system, reg) + ("@shape" to "Order") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
+}
+
+data class NewPriceRequest(
+    val customer: Ref<Customer>,
+    val requestedItems: List<NewRequestedItem> = emptyList(),
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+        put("customer", system.idOf(customer))
+    }
+    override fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {
+        put("requestedItems", requestedItems.map { it.asValue(system, reg) })
+    }
+    override fun register(reg: NewRegistry) {
+        requestedItems.forEach { reg.add(it); it.register(reg) }
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + parts(system, reg) + ("@shape" to "PriceRequest") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 // ── closure input values (Reference §6, "Inline part creation") ──
@@ -344,6 +489,19 @@ data class NewOrderLine(
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "OrderLine") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
+data class NewRequestedItem(
+    val product: Ref<Product>,
+    val quantity: Int,
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+        put("product", system.idOf(product))
+        put("quantity", quantity)
+    }
+    override fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "RequestedItem") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
+}
+
 
 // ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
@@ -364,6 +522,7 @@ data class Customer(
     override val key: StoreKey,
     val name: String,
     val orders: List<Ref<Order>>,
+    val quotes: List<Ref<Quote>>,
 ) : Ref<Customer> {
     override val shape: String get() = "Customer"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -373,7 +532,9 @@ data class Customer(
 data class Product(
     override val key: StoreKey,
     val sku: String,
+    val unitPrice: Int,
     val orderLines: List<Ref<OrderLine>>,
+    val quoteLines: List<Ref<QuoteLine>>,
     /** membership of ProductInFamily at the moment of the read */
     val isProductInFamily: Boolean,
     /** membership of ProductOfFamily at the moment of the read */
@@ -399,9 +560,20 @@ data class Order(
     val customer: Ref<Customer>,
     val placedOn: LocalDate,
     val total: Int,
+    val charges: List<Ref<Charge>>,
     val orderLines: List<Ref<OrderLine>>,
 ) : Ref<Order> {
     override val shape: String get() = "Order"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+data class Charge(
+    override val key: StoreKey,
+    val order: Ref<Order>,
+    val cardholder: String,
+) : Ref<Charge> {
+    override val shape: String get() = "Charge"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -439,10 +611,35 @@ data class Reservation(
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
+data class Quote(
+    override val key: StoreKey,
+    val customer: Ref<Customer>,
+    val quotedOn: Instant,
+    val quoteLines: List<Ref<QuoteLine>>,
+) : Ref<Quote> {
+    override val shape: String get() = "Quote"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+data class QuoteLine(
+    override val key: StoreKey,
+    val quote: Ref<Quote>,
+    val product: Ref<Product>,
+    val quantity: Int,
+    val unitPrice: Int,
+) : Ref<QuoteLine> {
+    override val shape: String get() = "QuoteLine"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
 data class ProductInFamily(
     override val key: StoreKey,
     val sku: String,
+    val unitPrice: Int,
     val orderLines: List<Ref<OrderLine>>,
+    val quoteLines: List<Ref<QuoteLine>>,
     /** membership of ProductOfFamily at the moment of the read */
     val isProductOfFamily: Boolean,
 ) : Ref<Product> {
@@ -454,7 +651,9 @@ data class ProductInFamily(
 data class ProductOfFamily(
     override val key: StoreKey,
     val sku: String,
+    val unitPrice: Int,
     val orderLines: List<Ref<OrderLine>>,
+    val quoteLines: List<Ref<QuoteLine>>,
     /** membership of ProductInFamily at the moment of the read */
     val isProductInFamily: Boolean,
 ) : Ref<Product> {
@@ -476,6 +675,7 @@ class CustomerFields(path: List<String> = emptyList()) : Fields(path) {
 
 class ProductFields(path: List<String> = emptyList()) : Fields(path) {
     val sku: TextField get() = TextField(fieldPath + "sku")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
     fun isProductInFamily(): Expr = isA("ProductInFamily")
     fun isProductOfFamily(): Expr = isA("ProductOfFamily")
 }
@@ -489,6 +689,11 @@ class OrderFields(path: List<String> = emptyList()) : Fields(path) {
     val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
     val placedOn: DateField get() = DateField(fieldPath + "placedOn")
     val total: NumField get() = NumField(fieldPath + "total")
+}
+
+class ChargeFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val cardholder: TextField get() = TextField(fieldPath + "cardholder")
 }
 
 class OrderLineFields(path: List<String> = emptyList()) : Fields(path) {
@@ -507,20 +712,34 @@ class ReservationFields(path: List<String> = emptyList()) : Fields(path) {
     val quantity: NumField get() = NumField(fieldPath + "quantity")
 }
 
+class QuoteFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val quotedOn: DateTimeField get() = DateTimeField(fieldPath + "quotedOn")
+}
+
+class QuoteLineFields(path: List<String> = emptyList()) : Fields(path) {
+    val quote: QuoteFields get() = QuoteFields(fieldPath + "quote")
+    val product: ProductFields get() = ProductFields(fieldPath + "product")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+}
+
 class ProductInFamilyFields(path: List<String> = emptyList()) : Fields(path) {
     val sku: TextField get() = TextField(fieldPath + "sku")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
     fun isProductOfFamily(): Expr = isA("ProductOfFamily")
 }
 
 class ProductOfFamilyFields(path: List<String> = emptyList()) : Fields(path) {
     val sku: TextField get() = TextField(fieldPath + "sku")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
     fun isProductInFamily(): Expr = isA("ProductInFamily")
 }
 
 fun main() {
     val sys = OrdersSystem()
     println("Velle MockHarness — Orders")
-    println("Commits: commit(NewCustomer(...)), commit(NewProduct(...)), commit(NewSkuFamily(...)), commit(NewOrder(...))")
+    println("Commits: commit(NewCustomer(...)), commit(NewProduct(...)), commit(NewSkuFamily(...)), commit(NewOrder(...)), commit(NewPriceRequest(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>
@@ -530,7 +749,10 @@ fun main() {
     println("Product: " + sys.products().size)
     println("SkuFamily: " + sys.skuFamilys().size)
     println("Order: " + sys.orders().size)
+    println("Charge: " + sys.charges().size)
     println("OrderLine: " + sys.orderLines().size)
     println("Customization: " + sys.customizations().size)
     println("Reservation: " + sys.reservations().size)
+    println("Quote: " + sys.quotes().size)
+    println("QuoteLine: " + sys.quoteLines().size)
 }

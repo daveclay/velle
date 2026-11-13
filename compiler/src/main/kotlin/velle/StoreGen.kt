@@ -43,7 +43,8 @@ object StoreGen {
                 when (m) {
                     // a declared `many` / `many <scalar>` (Reference §6) travels as a
                     // list in membership order, like the generic Row carries it
-                    is StoredProp -> RowField(m.name, model.typeOf(m.type))
+                    // a transient field is in the act's input, never in a row (Reference §4)
+                    is StoredProp -> if (m.transient) null else RowField(m.name, model.typeOf(m.type))
                     is TimestampProp -> RowField(m.name, VType.DateTimeT)
                     // the actor of a durable act: a stored reference to the clause's base shape (Reference §22)
                     is ActorProp -> RowField(m.name, VType.Inst(model.baseOf(m.shape) ?: m.shape))
@@ -54,7 +55,7 @@ object StoreGen {
         class Join(val shape: String, val field: String, val target: String)
 
         val joins: List<Join> = shapes.flatMap { s ->
-            model.shapes.getValue(s).members.filterIsInstance<StoredProp>()
+            model.shapes.getValue(s).members.filterIsInstance<StoredProp>().filterNot { it.transient }
                 .mapNotNull { p -> (p.type as? RelType)?.takeIf { !it.many }?.let { Join(s, p.name, it.shape) } }
         }
 

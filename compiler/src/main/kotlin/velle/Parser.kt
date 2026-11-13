@@ -212,6 +212,15 @@ class Parser(private val tokens: List<Token>) {
             if (refinementBody) fail("a key is declared on the base shape, whose records it is over (Reference §21)", t)
             return parseUniqueKey()
         }
+        // `transient name: type` (Reference §4, "Transient fields of a kept act"): a stored
+        // field of an act that is in the input and not in the record
+        if (t.isKw("transient")) {
+            next()
+            if (refinementBody) fail("'transient' marks a stored field of an act — a refinement has no stored fields", t)
+            val member = parseMember(refinementBody = false)
+            if (member !is StoredProp) fail("'transient' marks a stored field — a derived property or a timestamp is not supplied, so it cannot be transient", t)
+            return member.copy(transient = true)
+        }
         val name = expect(TokType.LIDENT).text
         // `name = expr`: a derived property that states no type and takes its expression's (Reference §7)
         if (at(TokType.ASSIGN)) {

@@ -62,8 +62,22 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
     /** externally committable shapes — the `act` declarations (Reference §22) */
     val exposed = linkedSetOf<String>()
 
-    /** shapes declared `transient act` — inputs to the state, not members of it (Reference §4) */
+    /** The transient shapes: every `transient act`, an input to the state and not a member
+     *  of it (Reference §4), and every part of such an act's closure, which arrives with
+     *  the act and is removed with it (Reference §6, "Inline part creation"). */
     val transients = mutableSetOf<String>()
+
+    /** For each transient shape, the transient act whose closure it belongs to: the act
+     *  itself for an act, the act for a part. Two shapes of one closure may reference
+     *  each other; nothing outside the closure may reference either. */
+    val transientClosureOf = mutableMapOf<String, String>()
+
+    /** How a diagnostic names a transient shape: "act" for the act, "part" for a part of its closure. */
+    fun transientKind(shape: String): String = if (transientClosureOf[shape] == shape) "act" else "part"
+
+    /** Whether both shapes fall in one transient act's closure. */
+    fun sameTransientClosure(one: String, other: String): Boolean =
+        transientClosureOf[one] != null && transientClosureOf[one] == transientClosureOf[other]
 
     /** raw `with` declarations per act, resolved lazily by [closures] */
     private val withDecls = mutableMapOf<String, List<WithEntry>>()
@@ -102,7 +116,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
                 if (!register(d.name)) continue
                 shapes[d.name] = d
                 if (d.exposed) exposed.add(d.name)
-                if (d.transient) transients.add(d.name)
+                if (d.transient) { transients.add(d.name); transientClosureOf[d.name] = d.name }
                 if (d.with.isNotEmpty()) withDecls[d.name] = d.with
             }
             is RefinementDecl -> if (register(d.name)) refinements[d.name] = d
@@ -461,7 +475,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
         val out = linkedMapOf<String, MemberInfo>()
         fun add(owner: String, m: Member) {
             when (m) {
-                is StoredProp -> out[m.name] = MemberInfo(m.name, owner, typeOf(m.type), stored = true, visible = m.visible)
+                is StoredProp -> out[m.name] = MemberInfo(m.name, owner, typeOf(m.type), stored = true, visible = m.visible, transient = m.transient)
                 // a derived property that states no type holds `Unknown` until every member is in,
                 // then takes its expression's type (resolveUntyped below)
                 is DerivedProp -> out[m.name] =
@@ -483,13 +497,15 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             shape.members.forEach { add(scope, it) }
             // inferred inverse collections (Reference §6) — from the declared side's
             // `one` (a one-to-many's child pointer) or bare `many` (an m2m edge
-            // set). None from a transient act: the collection would be a read of
-            // instances that are not kept (Reference §4, "Transient acts"). Two
-            // declared sides at the same target make the decapitalize-and-
-            // pluralize name ambiguous — no inverse is inferred, and use sites
-            // demand declared derived views (Reference §6; the `Transfer` example).
+            // set). None from a transient shape onto a shape outside its closure:
+            // the collection would be a read of instances that are not kept
+            // (Reference §4, "Transient acts"). Within one closure the inverse is
+            // how the act reads its own parts (Reference §6). Two declared sides at
+            // the same target make the decapitalize-and-pluralize name ambiguous —
+            // no inverse is inferred, and use sites demand declared derived views
+            // (Reference §6; the `Transfer` example).
             for ((otherName, other) in shapes) {
-                if (otherName in transients) continue
+                if (otherName in transients && !sameTransientClosure(otherName, scope)) continue
                 // a field typed with a static union targets every operand (Reference §9):
                 // `Comment.target: one Content` puts `comments` on each operand
                 val targeting = other.members.filterIsInstance<StoredProp>()
@@ -596,14 +612,29 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
      * [diagnostics] as V22 the first time this is read (Validator forces it).
      */
     val closures: Map<String, List<ClosureEdge>> by lazy {
-        withDecls.entries.associate { (shape, entries) ->
-            if (shape in transients) {
-                error("V22", "transient act '$shape' with a closure is refused — " +
-                    "the combination is open (OQ43); commit the request without inline parts")
-                return@associate shape to emptyList()
+        val resolved = withDecls.entries.associate { (shape, entries) -> shape to resolveClosureLevel(shape, entries) }
+        markTransientParts(resolved)
+        resolved
+    }
+
+    /** The closure is resolved as soon as the model is built, so every reader sees the parts
+     *  of a transient act's closure as transient shapes. */
+    init { closures }
+
+    /** The parts of a transient act's closure are transient with it (Reference §6): they
+     *  join [transients] under the act, and the members computed before the marking
+     *  are recomputed against it. */
+    private fun markTransientParts(resolved: Map<String, List<ClosureEdge>>) {
+        fun partsOf(edge: ClosureEdge): List<String> =
+            (if (edge.byValue) basesOf(edge.partShape) else listOf(edge.partShape)) + edge.children.flatMap(::partsOf)
+        for ((act, edges) in resolved) {
+            if (act !in transients) continue
+            for (part in edges.flatMap(::partsOf)) {
+                transients.add(part)
+                transientClosureOf[part] = act
             }
-            shape to resolveClosureLevel(shape, entries)
         }
+        memberCache.clear()
     }
 
     private fun resolveClosureLevel(scope: String, entries: List<WithEntry>): List<ClosureEdge> {
@@ -1031,6 +1062,8 @@ data class MemberInfo(
     val visible: List<VisibleClause> = emptyList(),
     /** Set on an inferred inverse collection: the declared side it is a view of (Reference §6). */
     val inverse: InverseInfo? = null,
+    /** A transient field of a kept act (Reference §4): in the input, not in the record; never stored. */
+    val transient: Boolean = false,
 )
 
 /** The declared side an inferred inverse reads: [shape].[field], to-one or an m2m `many`. */

@@ -462,7 +462,8 @@ class QueryCompiler(
         for ((i, name) in names.withIndex()) {
             val m = model.membersOf(sc ?: return null)[name] ?: return null
             val last = i == names.lastIndex
-            val column = m.stored || m.timestamp
+            // a transient field is in the act's input and has no column (Reference §4)
+            val column = (m.stored && !m.transient) || m.timestamp
             if (!column) return null
             if (!last && m.type.instanceShape() == null) return null
             if (last && !wantInstance && m.type.strip() is VType.Inst) return null

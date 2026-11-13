@@ -5,8 +5,9 @@ where an admin defines a *kind* of surveyed thing (site, plot, specimen) and
 its *fields* at runtime; an *entry* is one surveyed thing; a *reading* is
 one field's value, held as text because the field says what it means; a
 *submission* carries a list of readings. The findings are work items
-in OQ43 and OQ53, and OQ90 under "Expressions,
-refinements, and unions" in `QUESTIONS.md`; the lookup finding (OQ74, settled) became
+in OQ53, and OQ90 under "Expressions,
+refinements, and unions" in `QUESTIONS.md`; the transient-request finding (OQ43, settled) became
+Reference §4 "Transient fields of a kept act" and Reference §6 "A request that is not kept, with its parts"; the lookup finding (OQ74, settled) became
 the worked pattern "An act that names a record by its values" in `wiki/patterns.md`,
 the walk finding (OQ76, settled) became Reference §7 "Walks", the text-as-data
 finding (OQ75, settled) became the comparison rule in `wiki/checks.md` F2 and the
@@ -31,8 +32,9 @@ what to expect:
 | `02-lookup-recursion-stored-accepted` | the nearest kind with a location as `walk parent until hasLocation`, the ancestor set as `walk parent`, and a prohibition reading it, over a stored `parent`; `name: text unique` is the kind's key | passes | Reference §7 "Walks" (OQ76, settled); Reference §21 "Keys" (OQ77, settled) |
 | `03-assigned-field-refused` | a rule assigns `entry.label`; a `never` over the submission resolves a parent by label | `[V10] never over Entry.label is a guarantee ('ApplyRelabel' writes the field it reads) — v0 cannot yet prove it inductively over its writers; fail closed` | OQ53, V10 |
 | `03-assigned-field-workaround` | the label derived from the latest `Outcome` record; nothing assigns it | passes | OQ53, V10 |
-| `04-transient-with-parts-refused` | `transient act Submission ... with readings` | `[V17] 'Reading.submission' references transient act 'Submission'`, `[V18] a 'Submission' can arrive that nothing provably answers`, `[V22] transient act 'Submission' with a closure is refused — the combination is open (OQ43)` | OQ43 |
-| `04-transient-with-parts-workaround` | the submission kept, an `Outcome` record, a rule on `not exists Outcome for this` | passes | OQ43 |
+| `04-transient-with-parts` | a submission that carries its readings, answered and not kept: `transient act Submission ... with readings`, the readings read at the commit and copied into an entry | passes | Reference §6, "A request that is not kept, with its parts" |
+| `04-transient-field` | a kept sign-up whose invite code is checked, used to find the invite, and not kept: `transient inviteCode: text` | passes | Reference §4, "Transient fields of a kept act" |
+| `04-transient-branch-fields` | a kept order with its lines, the card it is paid with as `transient cardNumber: text` and `transient cardholder: text` beside `with orderLines` | passes | Reference §4, "Transient fields of a kept act"; `examples/orders/orders.velle` |
 | `05-text-as-number-refused` | `value < field.min` with `value: text?` and `min: decimal?` | `[F2] 'value < field.min' — compares the text 'value' with a decimal; a text is not compared as a decimal. Write number(value), which is absent when the text is not a number, or declare 'value' as a decimal on a shape of its own` | checks F2; Reference §5 |
 | `05-text-as-number-function` | the settled spelling for a value that is text by the business's design: `number(value) is none` as the format check and `number(value) < field.min` as the minimum | passes | Reference §5 "The built-in functions" |
 | `05-text-as-number-workaround` | the spelling for a shape that can declare the type: one optional typed field per kind (`numberValue: decimal?`, `dateValue: Date?`, `textValue: text?`) and a `never` per kind; gives up holding every value in one field | passes | Reference §5 |

@@ -755,7 +755,8 @@ class VelleSystem(
             val decl = model.shapes.getValue(inst.shape)
             val fields = buildMap {
                 for (m in decl.members) when (m) {
-                    is StoredProp -> put(m.name, storeValue(inst.fields[m.name] ?: Value.VNone))
+                    // a transient field is in the act's input and not in its record (Reference §4)
+                    is StoredProp -> if (!m.transient) put(m.name, storeValue(inst.fields[m.name] ?: Value.VNone))
                     is TimestampProp -> put(m.name, storeValue(inst.fields[m.name] ?: Value.VNone))
                     is ActorProp -> put(m.name, storeValue(inst.fields[m.name] ?: Value.VNone))
                     else -> {}

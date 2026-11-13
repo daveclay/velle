@@ -182,9 +182,54 @@ Each nested `with` is read against the part's shape the same way. Where no inver
 - `with` creates records. It never updates existing ones. To change a record that exists, commit a reference to it and let a rule assign the field ([§12](Reference-12-Assignment)).
 - A rule on a part may not write a field of the record it arrived under. Several lines writing one field of one order is a write conflict, and the compiler rejects it ([checks.md, V1](checks#v1--one-writer-disjointness)). Derive the aggregate on the order instead, as `examples/orders/orders.velle` does with `total: integer = sum(orderLines, quantity)`, or write a rule on the order.
 - Once committed, the order and its lines are ordinary records. They are updated, frozen, exited, and referenced like any other.
-- A `transient act` may not have a `with` clause.
+- A `transient act` may have a `with` clause. Its parts arrive as values, are read at the commit, and are gone with the request when the transaction closes (see "A request that is not kept, with its parts", below).
 
 To require at least one line, write a `never` or a gate refinement over the committed order ([§21](Reference-21-never)). An empty part list is allowed and means no parts. What the generated Kotlin carries for an act, its parts, and the references below is on the [Act API](Act-API) page.
+
+## A request that is not kept, with its parts
+
+A request for prices arrives with the items to price. The shop answers with a quote, and the request itself is not worth keeping ([§4, "Transient acts"](Reference-04-State-and-commits#transient-acts-transient-act)). From `examples/orders/orders.velle`:
+
+```
+transient act PriceRequest {
+    customer: one Customer
+} with requestedItems
+
+shape RequestedItem {
+    request: one PriceRequest
+    product: one Product
+    quantity: integer
+}
+
+shape Quote {
+    customer: one Customer
+    quotedOn: timestamp on create
+}
+
+shape QuoteLine {
+    quote: one Quote
+    product: one Product
+    quantity: integer
+    unitPrice: integer
+}
+
+never (PriceRequest where count(requestedItems) == 0)
+
+rule QuoteRequest when PriceRequest {
+    Quote from { customer: customer } as quote
+    for each item in requestedItems {
+        QuoteLine from { quote: quote, product: item.product, quantity: item.quantity, unitPrice: item.product.unitPrice }
+    }
+}
+```
+
+- `transient act PriceRequest ... with requestedItems` says the request is not kept, and that its items arrive with it as values. The items are not kept either.
+- `RequestedItem.request: one PriceRequest` points back at the request. It is allowed because the item arrives with the request, and it gives the request its `requestedItems` collection.
+- `never (PriceRequest where count(requestedItems) == 0)` reads the items at the door. An empty request is refused whole.
+- `rule QuoteRequest when PriceRequest` fires once, at the commit, and runs over the items with `for each` ([§14](Reference-14-for)). Each quote line copies the product, the quantity, and the product's price at that moment. A later price change does not move a quote, which is why the copy exists.
+- When the transaction closes, the request and its items are gone. The quote and its lines remain.
+
+A part that arrives with a transient request is not kept, so everything [§4](Reference-04-State-and-commits#transient-acts-transient-act) says a transient act may not do holds for the part: no shape may hold a relationship to it, its name appears in no expression, and a rule over it fires only at the commit ([checks.md, V17](checks#v17--transient-isolation)). The request owes one answer in every situation, as any transient act does. Its parts owe none.
 
 ## A reference supplied by value (`with` naming a `one` field)
 

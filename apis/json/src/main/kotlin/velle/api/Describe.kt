@@ -56,6 +56,7 @@ class Describe(private val model: Model) {
                 val m = linkedMapOf<String, Any?>()
                 m["name"] = p.name
                 m.putAll(type(p.type))
+                if (p.transient) m["transient"] = true // in the input, never in the record (Reference §4)
                 if (p.name in siblings) m["mayBeNew"] = true
                 edges.find { it.byValue && it.prop == p.name }?.let { e ->
                     m["newValue"] = model.basesOf(e.partShape).sorted().map { operand ->
@@ -88,7 +89,8 @@ class Describe(private val model: Model) {
         if (refinement) out["bases"] = model.basesOf(name).sorted()
         if (name in model.exposed) out["act"] = true
         if (name in model.builtin) out["velle"] = true // Velle's own shape, which no act creates (Reference §17)
-        out["members"] = model.membersOf(name).values.filter { it.name != "id" }.map { m ->
+        // a transient field is in the act's input and not in its record (Reference §4)
+        out["members"] = model.membersOf(name).values.filter { it.name != "id" && !it.transient }.map { m ->
             val d = linkedMapOf<String, Any?>("name" to m.name)
             d.putAll(type(m.type))
             d["kind"] = when {

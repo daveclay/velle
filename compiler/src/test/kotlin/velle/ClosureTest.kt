@@ -167,14 +167,16 @@ class ClosureTest {
     }
 
     @Test
-    fun `a transient container refuses a closure`() {
+    fun `a transient container carries a closure, its parts transient with it`() {
         val d = diagnostics(
             """
             transient act A { t: text } with bs
             shape B { a: one A, t: text }
+            shape Note { t: text }
+            rule Keep when A { Note from { t: t } }
             """.trimIndent()
         )
-        assertTrue(d.any { it.code == "V22" && "OQ43" in it.message }, d.toString())
+        assertEquals(emptyList(), d)
     }
 
     @Test

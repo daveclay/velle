@@ -14,6 +14,12 @@ import velle.generated.*
  */
 interface RequiredGivens {
 
+    /** Perform the commit(s) that make ONE new subject enter 'Order'; return the subject. */
+    fun order(): Order
+
     /** Perform the commit(s) that make ONE new subject enter 'OrderLine'; return the subject. */
     fun orderLine(): OrderLine
+
+    /** Commit ONE new 'PriceRequest' that enters 'PriceRequest' at its commit. The act is transient — nothing to return. */
+    fun priceRequest()
 }

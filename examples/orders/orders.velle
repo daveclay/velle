@@ -1,11 +1,21 @@
 -- The exposure closure (Reference §6, "Inline part creation"): an order arrives
--- together with its line items — the parts don't exist yet, so they can't be
+-- together with its line items. The parts don't exist yet, so they can't be
 -- references; they are values created in the act's commit. `act ... with`
 -- names the inverse edges that ride the closure; back-references are
 -- language-populated; container and parts land as one commit, entrants all,
 -- and a part-triggered rule fires once per inline part in the act's
 -- transaction (the §20 fan-out precedent). The aggregate the parts imply
 -- lives on the container as a derivation, never a part-written field.
+--
+-- Two more things a shop asks of a request (Reference §4):
+--   · the card an order is paid with arrives on the order, is read once at
+--     the commit, and is never stored: `transient` on the two fields puts
+--     them in the act's input and not in its record ("Transient fields of
+--     a kept act"); the rule records a charge with the cardholder's name
+--   · a request for prices is answered with a quote and not kept: a
+--     `transient act` with parts, the requested items read at the commit
+--     and gone with the request; the quote's lines copy the price at
+--     quoting time, which is the business reason the copy exists
 
 act Customer {
     name: text
@@ -13,6 +23,7 @@ act Customer {
 
 act Product {
     sku: text
+    unitPrice: integer
 }
 
 -- A SKU belongs to a family when it fits the family's pattern. The pattern is
@@ -32,9 +43,25 @@ shape ProductOfFamily = Product where exists (SkuFamily where this.sku matches "
 act Order {
     customer: one Customer
     placedOn: Date
+    transient cardNumber: text    -- in the input, not in the record: read once, at this commit, never stored
+    transient cardholder: text
     total: integer = sum(orderLines, quantity)    -- derive the aggregate on the container
 } with {
     orderLines with { customizations }
+}
+
+-- what the rules record from the card: the cardholder's name, never the number
+shape Charge {
+    order: one Order
+    cardholder: text
+}
+
+-- a refusal at the door reading the card; the whole closure is refused, nothing lands
+never (Order where length(cardNumber) < 12)
+
+-- a rule on the bare act fires once, at the commit, and reads the card there
+rule TakePayment when Order {
+    Charge from { order: this, cardholder: cardholder }
 }
 
 shape OrderLine {
@@ -61,3 +88,38 @@ rule ReserveStock when OrderLine {
 -- a constraint no rule can move, checked at the door (Reference §21) — a closure
 -- carrying a non-positive quantity is refused whole, nothing lands
 never (OrderLine where quantity <= 0)
+
+-- A request for prices: answered with a quote, and not kept. The requested
+-- items arrive as the request's parts and are removed with it when the
+-- transaction closes (Reference §6, "Inline part creation").
+transient act PriceRequest {
+    customer: one Customer
+} with requestedItems
+
+shape RequestedItem {
+    request: one PriceRequest     -- the back-reference, filled in by Velle; legal because the item is a part of the request's closure
+    product: one Product
+    quantity: integer
+}
+
+shape Quote {
+    customer: one Customer
+    quotedOn: timestamp on create
+}
+
+-- the price at quoting time is copied: a later price change does not move a quote
+shape QuoteLine {
+    quote: one Quote
+    product: one Product
+    quantity: integer
+    unitPrice: integer
+}
+
+never (PriceRequest where count(requestedItems) == 0)
+
+rule QuoteRequest when PriceRequest {
+    Quote from { customer: customer } as quote
+    for each item in requestedItems {
+        QuoteLine from { quote: quote, product: item.product, quantity: item.quantity, unitPrice: item.product.unitPrice }
+    }
+}

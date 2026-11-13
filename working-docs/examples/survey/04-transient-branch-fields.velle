@@ -1,0 +1,30 @@
+-- An order is kept with its lines; the card it is paid with arrives as transient fields of the order and is never stored.
+act Customer {
+    name: text
+}
+
+act Product {
+    sku: text
+}
+
+act Order {
+    customer: one Customer
+    placedOn: Date
+    transient cardNumber: text
+    transient cardholder: text
+} with orderLines
+
+shape OrderLine {
+    order: one Order
+    product: one Product
+    quantity: integer
+}
+
+shape ChargeIntent {
+    order: one Order
+    cardholder: text
+}
+
+rule Charge when Order {
+    ChargeIntent from { order: this, cardholder: cardholder }
+}

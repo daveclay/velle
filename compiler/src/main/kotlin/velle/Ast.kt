@@ -160,6 +160,9 @@ data class StoredProp(
     /** `name: text unique` (Reference §21, "Keys"): no two records share this field's value;
      *  the one-field spelling of [UniqueKey]. */
     val unique: Boolean = false,
+    /** `transient name: text` (Reference §4, "Transient fields of a kept act"): in the act's
+     *  input and not in its record; read by what runs at the act's commit, never stored. */
+    val transient: Boolean = false,
 ) : Member
 
 /**

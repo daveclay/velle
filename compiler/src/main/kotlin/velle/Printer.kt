@@ -109,6 +109,7 @@ object Printer {
 
     fun member(m: Member): String = when (m) {
         is StoredProp -> buildString {
+            if (m.transient) append("transient ")
             append("${m.name}: ${type(m.type)}")
             m.initially?.let { append(" initially ${expr(it)}") }
             if (m.initiallyRequired) append(" initially required")

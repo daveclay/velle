@@ -1,0 +1,20 @@
+-- A sign-up is kept; the invite code it carries is checked at the door, used to find the invite, and not kept: a transient field.
+act Invite {
+    code: text unique
+}
+
+act SignUp {
+    email: text
+    transient inviteCode: text
+}
+
+shape InviteUse {
+    invite: one Invite
+    signUp: one SignUp
+}
+
+never (SignUp where not exists (Invite where code == this.inviteCode))
+
+rule UseInvite when SignUp {
+    InviteUse from { invite: (Invite where code == this.inviteCode), signUp: this }
+}

@@ -2,7 +2,7 @@
 
 **Status:** open (2026-10-14) — Reference §8 names refinement exhaustiveness as a compiler goal; nothing has built it, and three settled designs lean on it
 **In plain terms:** can the compiler prove that a set of refinements covers every instance of a shape in every reachable state? Three things wait on the answer: a transient request must provably get a response (V18 today proves only a complement pair); a declared state partition (`states of Invoice = Draft | Issued | Paid | Voided`, Reference §22) is that proof made into a declaration; and deletion's positive-exhaustive sentence ("deletable only in Draft") was ruled to ride the partition declaration.
-**See:** Reference §8 (the goal), §22 "State partition declaration" · `checks.md` V18 (the complement slice) · Reference §8 "Frozen fields" (`undeletable`; the gate is negative only) · OQ43 §2 (V18's reach over transient parts)
+**See:** Reference §8 (the goal), §22 "State partition declaration" · `checks.md` V18 (the complement slice) · Reference §8 "Frozen fields" (`undeletable`; the gate is negative only) · `checks.md` V18 (a transient act's parts owe no answer of their own)
 
 ---
 
@@ -55,7 +55,7 @@ error: a PlaceBid can arrive that no rule responds to.
 
 What v0 has (`checks.md` V18): coverage is proven when some answer is the bare act shape, or two answers' predicates are syntactic complements; everything else, per-reason enumerations included, is rejected, and the prescribed idiom is one complement rule whose reason is a conditional value. The pharmacy pass lived inside that slice: a derived boolean on the act (`dispensable`) as the partition key, and a third answer chained off the refusal record instead of a third partition.
 
-**The item:** grow V18 beyond the complement slice once the engine exists. Whether a closure's parts owe their own coverage or the container's answer covers the submission is OQ43 §2.
+**The item:** grow V18 beyond the complement slice once the engine exists. A closure's parts owe no coverage of their own; the act's answer covers what it carries (`checks.md` V18).
 
 ## 2. `states of`: the partition declaration, and the sentence deletion handed it
 

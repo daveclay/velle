@@ -195,7 +195,7 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
         b.field { it.name("shape").type(GraphQLNonNull.nonNull(Scalars.GraphQLString)).description("The record's own shape.") }
         b.field { it.name("key").type(GraphQLNonNull.nonNull(Scalars.GraphQLID)).description("The store's key for the record.") }
         for (m in model.membersOf(scope).values) {
-            if (m.name == "id") continue
+            if (m.name == "id" || m.transient) continue // a transient field is never in the record (Reference §4)
             val gated = m.visible.isNotEmpty()
             val field = memberField(m.name)
             b.field { it.name(field).type(outType(m.type, gated)) }

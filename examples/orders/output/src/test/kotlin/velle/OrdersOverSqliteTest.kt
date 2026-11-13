@@ -9,6 +9,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import velle.generated.OrdersStoreOverGeneric
 import velle.generated.OrdersStoreResolver
 import velle.generated.OrdersSystem
@@ -66,7 +67,7 @@ class OrdersPersistenceTest {
 
     private fun OrdersSystem.cardedProduct(): Pair<Customer, Product> {
         accept(commit(NewCustomer("Ada")))
-        accept(commit(NewProduct("SKU-1")))
+        accept(commit(NewProduct("SKU-1", unitPrice = 10)))
         return customers().last() to products().last()
     }
 
@@ -77,6 +78,7 @@ class OrdersPersistenceTest {
         accept(first.commit(NewOrder(
             customer = ada,
             placedOn = LocalDate.parse("2026-08-21"),
+            cardNumber = "4111111111111111", cardholder = "Ada Lovelace",
             orderLines = listOf(
                 NewOrderLine(
                     product = prod, quantity = 2,
@@ -101,12 +103,34 @@ class OrdersPersistenceTest {
     }
 
     @Test
+    fun `the card has no column and the price request no table`() {
+        val first = process()
+        val (ada, prod) = first.cardedProduct()
+        accept(first.commit(NewOrder(
+            customer = ada,
+            placedOn = LocalDate.parse("2026-08-21"),
+            cardNumber = "4111111111111111", cardholder = "Ada Lovelace",
+        )))
+        accept(first.commit(NewPriceRequest(
+            customer = ada,
+            requestedItems = listOf(NewRequestedItem(product = prod, quantity = 3)),
+        )))
+        val orderColumns = rows("""PRAGMA table_info("Order")""").map { it[1] }
+        assertTrue("cardNumber" !in orderColumns && "cardholder" !in orderColumns, "the card is never stored: $orderColumns")
+        assertEquals(listOf(listOf(1L, "Ada Lovelace")), rows("""SELECT "order", cardholder FROM Charge"""))
+        val tables = rows("""SELECT name FROM sqlite_master WHERE type = 'table'""").map { it[0] }
+        assertTrue("PriceRequest" !in tables && "RequestedItem" !in tables, "a transient act and its parts have no table: $tables")
+        assertEquals(listOf(listOf(1L, 3L, 10L)), rows("""SELECT quote, quantity, unitPrice FROM QuoteLine"""))
+    }
+
+    @Test
     fun `a refused closure leaves storage untouched`() {
         val first = process()
         val (ada, prod) = first.cardedProduct()
         val r = first.commit(NewOrder(
             customer = ada,
             placedOn = LocalDate.parse("2026-08-21"),
+            cardNumber = "4111111111111111", cardholder = "Ada Lovelace",
             orderLines = listOf(
                 NewOrderLine(product = prod, quantity = 2),
                 NewOrderLine(product = prod, quantity = 0),

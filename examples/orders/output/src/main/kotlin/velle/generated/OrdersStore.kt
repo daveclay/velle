@@ -30,6 +30,7 @@ data class CustomerRow(
 data class ProductRow(
     val key: StoreKey,
     val sku: String,
+    val unitPrice: Int,
 )
 
 /** One stored SkuFamily row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -44,6 +45,13 @@ data class OrderRow(
     val key: StoreKey,
     val customer: Ref.Persisted,
     val placedOn: LocalDate,
+)
+
+/** One stored Charge row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class ChargeRow(
+    val key: StoreKey,
+    val order: Ref.Persisted,
+    val cardholder: String,
 )
 
 /** One stored OrderLine row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -68,6 +76,22 @@ data class ReservationRow(
     val quantity: Int,
 )
 
+/** One stored Quote row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class QuoteRow(
+    val key: StoreKey,
+    val customer: Ref.Persisted,
+    val quotedOn: Instant,
+)
+
+/** One stored QuoteLine row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class QuoteLineRow(
+    val key: StoreKey,
+    val quote: Ref.Persisted,
+    val product: Ref.Persisted,
+    val quantity: Int,
+    val unitPrice: Int,
+)
+
 /**
  * Every question the Orders spec can ask of storage, typed. Keyed and join
  * reads must be exact; every `...Candidates` read is under the superset
@@ -86,9 +110,12 @@ interface OrdersStore {
     fun product(key: StoreKey): ProductRow?
     fun skuFamily(key: StoreKey): SkuFamilyRow?
     fun order(key: StoreKey): OrderRow?
+    fun charge(key: StoreKey): ChargeRow?
     fun orderLine(key: StoreKey): OrderLineRow?
     fun customization(key: StoreKey): CustomizationRow?
     fun reservation(key: StoreKey): ReservationRow?
+    fun quote(key: StoreKey): QuoteRow?
+    fun quoteLine(key: StoreKey): QuoteLineRow?
 
     // ── scan floor: all rows of a shape ──
     fun allTicks(): List<TickRow>
@@ -96,30 +123,37 @@ interface OrdersStore {
     fun allProducts(): List<ProductRow>
     fun allSkuFamilys(): List<SkuFamilyRow>
     fun allOrders(): List<OrderRow>
+    fun allCharges(): List<ChargeRow>
     fun allOrderLines(): List<OrderLineRow>
     fun allCustomizations(): List<CustomizationRow>
     fun allReservations(): List<ReservationRow>
+    fun allQuotes(): List<QuoteRow>
+    fun allQuoteLines(): List<QuoteLineRow>
 
     // ── join reads: rows referencing a target through a to-one field ──
     fun ordersByCustomer(target: Ref.Persisted): List<OrderRow>
+    fun chargesByOrder(target: Ref.Persisted): List<ChargeRow>
     fun orderLinesByOrder(target: Ref.Persisted): List<OrderLineRow>
     fun orderLinesByProduct(target: Ref.Persisted): List<OrderLineRow>
     fun customizationsByLine(target: Ref.Persisted): List<CustomizationRow>
     fun reservationsByLine(target: Ref.Persisted): List<ReservationRow>
+    fun quotesByCustomer(target: Ref.Persisted): List<QuoteRow>
+    fun quoteLinesByQuote(target: Ref.Persisted): List<QuoteLineRow>
+    fun quoteLinesByProduct(target: Ref.Persisted): List<QuoteLineRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement ProductInFamily; refinement ProductOfFamily — `ProductInFamily`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun productInFamilyCandidates(): List<ProductRow>
-    /** Serves never #1 — `OrderLine where quantity <= 0`.
+    /** Serves never #2 — `OrderLine where quantity <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never1Candidates(): List<OrderLineRow>
+    fun never2Candidates(): List<OrderLineRow>
 }
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class OrdersStoreQuestions(model: Model) {
     val productInFamilyCandidates = QTemplate.of(model, "Product", RefName("ProductInFamily"))
-    val never1Candidates = QTemplate.of(model, "OrderLine", model.nevers[0].target)
+    val never2Candidates = QTemplate.of(model, "OrderLine", model.nevers[1].target)
 }
 
 /**
@@ -139,21 +173,29 @@ open class OrdersStoreOverGeneric(
     override fun product(key: StoreKey): ProductRow? = backend.fetchByKey("Product", key)?.toProductRow()
     override fun skuFamily(key: StoreKey): SkuFamilyRow? = backend.fetchByKey("SkuFamily", key)?.toSkuFamilyRow()
     override fun order(key: StoreKey): OrderRow? = backend.fetchByKey("Order", key)?.toOrderRow()
+    override fun charge(key: StoreKey): ChargeRow? = backend.fetchByKey("Charge", key)?.toChargeRow()
     override fun orderLine(key: StoreKey): OrderLineRow? = backend.fetchByKey("OrderLine", key)?.toOrderLineRow()
     override fun customization(key: StoreKey): CustomizationRow? = backend.fetchByKey("Customization", key)?.toCustomizationRow()
     override fun reservation(key: StoreKey): ReservationRow? = backend.fetchByKey("Reservation", key)?.toReservationRow()
+    override fun quote(key: StoreKey): QuoteRow? = backend.fetchByKey("Quote", key)?.toQuoteRow()
+    override fun quoteLine(key: StoreKey): QuoteLineRow? = backend.fetchByKey("QuoteLine", key)?.toQuoteLineRow()
 
     override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allCustomers(): List<CustomerRow> = backend.fetchAll("Customer").map { it.toCustomerRow() }
     override fun allProducts(): List<ProductRow> = backend.fetchAll("Product").map { it.toProductRow() }
     override fun allSkuFamilys(): List<SkuFamilyRow> = backend.fetchAll("SkuFamily").map { it.toSkuFamilyRow() }
     override fun allOrders(): List<OrderRow> = backend.fetchAll("Order").map { it.toOrderRow() }
+    override fun allCharges(): List<ChargeRow> = backend.fetchAll("Charge").map { it.toChargeRow() }
     override fun allOrderLines(): List<OrderLineRow> = backend.fetchAll("OrderLine").map { it.toOrderLineRow() }
     override fun allCustomizations(): List<CustomizationRow> = backend.fetchAll("Customization").map { it.toCustomizationRow() }
     override fun allReservations(): List<ReservationRow> = backend.fetchAll("Reservation").map { it.toReservationRow() }
+    override fun allQuotes(): List<QuoteRow> = backend.fetchAll("Quote").map { it.toQuoteRow() }
+    override fun allQuoteLines(): List<QuoteLineRow> = backend.fetchAll("QuoteLine").map { it.toQuoteLineRow() }
 
     override fun ordersByCustomer(target: Ref.Persisted): List<OrderRow> =
         backend.fetchReferencing("Order", "customer", target).map { it.toOrderRow() }
+    override fun chargesByOrder(target: Ref.Persisted): List<ChargeRow> =
+        backend.fetchReferencing("Charge", "order", target).map { it.toChargeRow() }
     override fun orderLinesByOrder(target: Ref.Persisted): List<OrderLineRow> =
         backend.fetchReferencing("OrderLine", "order", target).map { it.toOrderLineRow() }
     override fun orderLinesByProduct(target: Ref.Persisted): List<OrderLineRow> =
@@ -162,13 +204,19 @@ open class OrdersStoreOverGeneric(
         backend.fetchReferencing("Customization", "line", target).map { it.toCustomizationRow() }
     override fun reservationsByLine(target: Ref.Persisted): List<ReservationRow> =
         backend.fetchReferencing("Reservation", "line", target).map { it.toReservationRow() }
+    override fun quotesByCustomer(target: Ref.Persisted): List<QuoteRow> =
+        backend.fetchReferencing("Quote", "customer", target).map { it.toQuoteRow() }
+    override fun quoteLinesByQuote(target: Ref.Persisted): List<QuoteLineRow> =
+        backend.fetchReferencing("QuoteLine", "quote", target).map { it.toQuoteLineRow() }
+    override fun quoteLinesByProduct(target: Ref.Persisted): List<QuoteLineRow> =
+        backend.fetchReferencing("QuoteLine", "product", target).map { it.toQuoteLineRow() }
 
     override fun productInFamilyCandidates(): List<ProductRow> =
         backend.fetchCandidates("Product", questions.productInFamilyCandidates.instantiate(listOf()))
             .map { it.toProductRow() }
 
-    override fun never1Candidates(): List<OrderLineRow> =
-        backend.fetchCandidates("OrderLine", questions.never1Candidates.instantiate(listOf()))
+    override fun never2Candidates(): List<OrderLineRow> =
+        backend.fetchCandidates("OrderLine", questions.never2Candidates.instantiate(listOf()))
             .map { it.toOrderLineRow() }
 }
 
@@ -187,9 +235,12 @@ class OrdersStoreResolver(
         "Product" -> store.product(key)?.toRow()
         "SkuFamily" -> store.skuFamily(key)?.toRow()
         "Order" -> store.order(key)?.toRow()
+        "Charge" -> store.charge(key)?.toRow()
         "OrderLine" -> store.orderLine(key)?.toRow()
         "Customization" -> store.customization(key)?.toRow()
         "Reservation" -> store.reservation(key)?.toRow()
+        "Quote" -> store.quote(key)?.toRow()
+        "QuoteLine" -> store.quoteLine(key)?.toRow()
         else -> null
     }
 
@@ -199,18 +250,25 @@ class OrdersStoreResolver(
         "Product" -> store.allProducts().map { it.toRow() }
         "SkuFamily" -> store.allSkuFamilys().map { it.toRow() }
         "Order" -> store.allOrders().map { it.toRow() }
+        "Charge" -> store.allCharges().map { it.toRow() }
         "OrderLine" -> store.allOrderLines().map { it.toRow() }
         "Customization" -> store.allCustomizations().map { it.toRow() }
         "Reservation" -> store.allReservations().map { it.toRow() }
+        "Quote" -> store.allQuotes().map { it.toRow() }
+        "QuoteLine" -> store.allQuoteLines().map { it.toRow() }
         else -> emptyList()
     }
 
     override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
         shape == "Order" && field == "customer" -> store.ordersByCustomer(target).map { it.toRow() }
+        shape == "Charge" && field == "order" -> store.chargesByOrder(target).map { it.toRow() }
         shape == "OrderLine" && field == "order" -> store.orderLinesByOrder(target).map { it.toRow() }
         shape == "OrderLine" && field == "product" -> store.orderLinesByProduct(target).map { it.toRow() }
         shape == "Customization" && field == "line" -> store.customizationsByLine(target).map { it.toRow() }
         shape == "Reservation" && field == "line" -> store.reservationsByLine(target).map { it.toRow() }
+        shape == "Quote" && field == "customer" -> store.quotesByCustomer(target).map { it.toRow() }
+        shape == "QuoteLine" && field == "quote" -> store.quoteLinesByQuote(target).map { it.toRow() }
+        shape == "QuoteLine" && field == "product" -> store.quoteLinesByProduct(target).map { it.toRow() }
         else -> emptyList()
     }
 
@@ -218,7 +276,7 @@ class OrdersStoreResolver(
         if (shape == "Product")
             questions.productInFamilyCandidates.match(filter)?.let { h -> return store.productInFamilyCandidates().map { it.toRow() } }
         if (shape == "OrderLine")
-            questions.never1Candidates.match(filter)?.let { h -> return store.never1Candidates().map { it.toRow() } }
+            questions.never2Candidates.match(filter)?.let { h -> return store.never2Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
 
@@ -252,10 +310,12 @@ fun CustomerRow.toRow(): Row = Row("Customer", key, buildMap {
 fun Row.toProductRow(): ProductRow = ProductRow(
     key = key,
     sku = fields["sku"] as String,
+    unitPrice = (fields["unitPrice"] as Number).toInt(),
 )
 
 fun ProductRow.toRow(): Row = Row("Product", key, buildMap {
     put("sku", sku)
+    put("unitPrice", unitPrice)
 })
 
 fun Row.toSkuFamilyRow(): SkuFamilyRow = SkuFamilyRow(
@@ -278,6 +338,17 @@ fun Row.toOrderRow(): OrderRow = OrderRow(
 fun OrderRow.toRow(): Row = Row("Order", key, buildMap {
     put("customer", customer)
     put("placedOn", placedOn)
+})
+
+fun Row.toChargeRow(): ChargeRow = ChargeRow(
+    key = key,
+    order = fields["order"] as Ref.Persisted,
+    cardholder = fields["cardholder"] as String,
+)
+
+fun ChargeRow.toRow(): Row = Row("Charge", key, buildMap {
+    put("order", order)
+    put("cardholder", cardholder)
 })
 
 fun Row.toOrderLineRow(): OrderLineRow = OrderLineRow(
@@ -313,4 +384,30 @@ fun Row.toReservationRow(): ReservationRow = ReservationRow(
 fun ReservationRow.toRow(): Row = Row("Reservation", key, buildMap {
     put("line", line)
     put("quantity", quantity)
+})
+
+fun Row.toQuoteRow(): QuoteRow = QuoteRow(
+    key = key,
+    customer = fields["customer"] as Ref.Persisted,
+    quotedOn = fields["quotedOn"] as Instant,
+)
+
+fun QuoteRow.toRow(): Row = Row("Quote", key, buildMap {
+    put("customer", customer)
+    put("quotedOn", quotedOn)
+})
+
+fun Row.toQuoteLineRow(): QuoteLineRow = QuoteLineRow(
+    key = key,
+    quote = fields["quote"] as Ref.Persisted,
+    product = fields["product"] as Ref.Persisted,
+    quantity = (fields["quantity"] as Number).toInt(),
+    unitPrice = (fields["unitPrice"] as Number).toInt(),
+)
+
+fun QuoteLineRow.toRow(): Row = Row("QuoteLine", key, buildMap {
+    put("quote", quote)
+    put("product", product)
+    put("quantity", quantity)
+    put("unitPrice", unitPrice)
 })

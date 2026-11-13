@@ -1,0 +1,29 @@
+-- A submission is a list of readings, answered when it arrives and not kept: a transient act with parts.
+transient act Submission {
+    kindName: text
+} with readings
+
+shape Reading {
+    submission: one Submission
+    fieldName: text
+    value: text
+}
+
+shape Entry {
+    kindName: text
+}
+
+shape EntryValue {
+    entry: one Entry
+    fieldName: text
+    value: text
+}
+
+never (Submission where count(readings) == 0)
+
+rule RecordEntry when Submission {
+    Entry from { kindName: kindName } as entry
+    for each reading in readings {
+        EntryValue from { entry: entry, fieldName: reading.fieldName, value: reading.value }
+    }
+}

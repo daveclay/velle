@@ -80,7 +80,7 @@ class Wire(private val system: VelleSystem) {
         out["shape"] = shape
         out["key"] = system.refFor(id).key.value
         for (m in model.membersOf(scope).values) {
-            if (m.name == "id") continue
+            if (m.name == "id" || m.transient) continue // a transient field is never in the record (Reference §4)
             out[m.name] = if (m.name in hidden) null else out(memberValue(id, scope, m.name, m.owner), m.type)
         }
         if (scope in model.shapes) for (r in flagsOf(shape)) out["is$r"] = system.isMember(id, r)
