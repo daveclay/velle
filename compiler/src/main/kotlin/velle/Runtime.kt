@@ -152,7 +152,16 @@ fun <I> CommitResult.carryingNoRecord(input: I): Commit<I, Nothing?> = when (thi
     is CommitResult.Refused -> Commit.Refused(input, reason, rejection)
 }
 
-class VelleRuntimeError(message: String) : Exception(message)
+open class VelleRuntimeError(message: String) : Exception(message)
+
+/**
+ * A rule firing that fails on the books rather than the machinery (Reference §10, §14): a
+ * `from` block that would store an absence in a required field, or a selection that does not
+ * single out a winner. Inside an act's transaction the act comes back refused naming the
+ * [rule], which [VelleSystem.fire] fills in on the way out; behind an `after commit` boundary
+ * or in a tick it is a [FiringFailure] like any other.
+ */
+class FiringFailed(message: String, val rule: String? = null) : VelleRuntimeError(message)
 
 /**
  * In a raw commit, a `one` field's reference to a new record arriving
@@ -1053,7 +1062,12 @@ class VelleSystem(
                 CommitResult.Accepted(id, ref, afterRejections, afterFailures)
             },
             onFailure = { e ->
-                if (e is NeverViolation) CommitResult.Refused(e.rejection.message, e.rejection) else throw e
+                when (e) {
+                    is NeverViolation -> CommitResult.Refused(e.rejection.message, e.rejection)
+                    // a firing that failed on the books: the committer is told by the refusal (Reference §14)
+                    is FiringFailed -> CommitResult.Refused("rule '${e.rule}' did not fire: ${e.message}")
+                    else -> throw e
+                }
             }
         )
     }
@@ -1716,7 +1730,12 @@ class VelleSystem(
         // the clause say `?` for
         val ctx = Evaluator.Ctx(scope, subject, actor = rule.by?.let { it.name to txn?.actor })
         val mutations = mutableListOf<Mutation>()
-        execute(rule.body, ctx, subject, mutations)
+        try {
+            execute(rule.body, ctx, subject, mutations)
+        } catch (failure: FiringFailed) {
+            if (failure.rule != null) throw failure
+            throw FiringFailed(failure.message!!, rule.name)
+        }
         if (mutations.isNotEmpty()) applyCommit(mutations)
     }
 
@@ -1773,7 +1792,7 @@ class VelleSystem(
                     val rel = p.type as? RelType; val sc = p.type as? ScalarType
                     if (rel?.optional == true || sc?.optional == true || rel?.many == true || sc?.many == true) continue
                     val given = item.fields.firstOrNull { it.name == p.name }?.value?.let { Printer.expr(it) } ?: "the value given"
-                    throw VelleRuntimeError(
+                    throw FiringFailed(
                         "'${item.shape}.${p.name}' is required and '$given' is absent: the selection matched nothing (Reference §14)")
                 }
                 // `as name` (Reference §14): later statements reference this record by its

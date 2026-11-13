@@ -529,7 +529,7 @@ class Evaluator(private val system: VelleSystem) {
                 // the declared datums do not discriminate — fail loud, never pick
                 val tied = keyed.count { compareDatums(it.third, chosen.third) == 0 }
                 if (tied > 1)
-                    throw VelleRuntimeError(
+                    throw FiringFailed(
                         "${e.name}(... by ${e.orderBy.joinToString(", ")}) does not discriminate: " +
                             "$tied instances share the ordering datum — declare a further criterion (Reference §10)"
                     )

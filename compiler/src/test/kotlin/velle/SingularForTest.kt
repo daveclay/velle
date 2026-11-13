@@ -3,7 +3,6 @@ package velle
 import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -13,7 +12,8 @@ import kotlin.test.assertTrue
  * proof-gated `for` query — resolves through base-instance scan plus
  * membership filter. The form is one record or absent (Reference §10): an entry
  * with no arrival reads `(Arrival for this).at` absent, and a `from` block that
- * stores the absent record in a required field fails the firing (Reference §14).
+ * stores the absent record in a required field refuses the act naming the rule
+ * (Reference §14).
  */
 class SingularForTest {
 
@@ -126,7 +126,7 @@ class SingularForTest {
     }
 
     @Test
-    fun `a from block storing an absent singular reference in a required field fails the firing`() {
+    fun `a from block storing an absent singular reference in a required field refuses the act naming the rule`() {
         val spec = entryAndArrival + """
 
             act Audit {
@@ -146,8 +146,9 @@ class SingularForTest {
         val sys = VelleSystem(Model(Parser.parse(spec)))
         sys.scope {
             val entry = sys.mustCommit("Entry", "key" to "PLOT-1")
-            val failure = assertFailsWith<VelleRuntimeError> { sys.commit("Audit", mapOf("entry" to entry)) }
-            assertEquals("'AuditNote.arrival' is required and '(Arrival for entry)' is absent: the selection matched nothing (Reference §14)", failure.message)
+            val refused = assertIs<CommitResult.Refused>(sys.commit("Audit", mapOf("entry" to entry)))
+            assertEquals("rule 'NoteArrival' did not fire: 'AuditNote.arrival' is required and '(Arrival for entry)' is absent: the selection matched nothing (Reference §14)", refused.reason)
+            assertEquals(null, refused.rejection)
             assertEquals(0, sys.instancesOf("AuditNote").size)
             assertEquals(0, sys.instancesOf("Audit").size)
         }

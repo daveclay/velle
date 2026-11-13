@@ -97,11 +97,11 @@ class LookupProbeTest {
             val r = runCatching { sys.commit("Submission", mapOf("entryKey" to "PLOT-9999")) }
             report("first/bad-key/no-existence-never", r)
             // `first` over an empty selection is absent, and the `from` would store the absence
-            // in a required `one Entry`. The firing fails, the commit is undone, and the caller
-            // is told (Reference §14). The existence `never` is what keeps this case out.
-            val e = r.exceptionOrNull()
-            assertIs<VelleRuntimeError>(e)
-            assertTrue(e.message!!.contains("'Arrival.entry' is required"), e.message)
+            // in a required `one Entry`. The firing fails, the commit is undone, and the act
+            // comes back refused naming the rule (Reference §14). The existence `never` is what
+            // keeps this case out.
+            val refused = assertIs<CommitResult.Refused>(r.getOrThrow())
+            assertTrue(refused.reason.startsWith("rule 'RecordArrival' did not fire: 'Arrival.entry' is required"), refused.reason)
             assertEquals(0, sys.instancesOf("Submission").size)
             assertEquals(0, sys.instancesOf("Arrival").size)
         }
