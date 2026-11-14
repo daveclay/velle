@@ -1,0 +1,34 @@
+-- A request that carries one of three words, answered one word at a time: one
+-- rule for "approved", one for the other two. Over a text field the compiler
+-- cannot see that the two rules cover every request, because a text has every
+-- other value too, so V18 refuses the spec. Over a declared type with exactly
+-- these three words the two rules cover it (OQ132 D5).
+shape Entry {
+    name: text unique
+}
+
+transient act Review {
+    entry: one Entry
+    outcome: text
+}
+
+Review requires outcome in ["approved", "declined", "error"]
+
+shape Approval {
+    entry: one Entry
+    reviewedOn: timestamp on create
+}
+
+shape Failure {
+    entry: one Entry
+    outcome: text
+    reviewedOn: timestamp on create
+}
+
+rule RecordApproval when (Review where outcome == "approved") {
+    Approval from { entry: entry }
+}
+
+rule RecordFailure when (Review where outcome in ["declined", "error"]) {
+    Failure from { entry: entry, outcome: outcome }
+}

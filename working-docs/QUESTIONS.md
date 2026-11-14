@@ -1,6 +1,6 @@
 # Open questions — the directory
 
-One line per open question (OQ) here, and nothing else. An OQ whose context fits in its line is only the line. An OQ with more lives in `questions/OQ<n>-*.md`, where the file's header states the question in plain terms before the dense part begins, and the discussion, the decisions, and the work items as `- [ ]` lines are in the file. OQ tags are stable — numbers are never renumbered or reused (next free: OQ132), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
+One line per open question (OQ) here, and nothing else. An OQ whose context fits in its line is only the line. An OQ with more lives in `questions/OQ<n>-*.md`, where the file's header states the question in plain terms before the dense part begins, and the discussion, the decisions, and the work items as `- [ ]` lines are in the file. OQ tags are stable — numbers are never renumbered or reused (next free: OQ133), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
 
 **Every work item has a tag** (Dave, 2026-11-11). A work item is one action, verb-first, one line. It is a `- [ ]` line in the file of the OQ that holds its context, or, when no OQ holds it, an OQ of its own: a tagged line here, `- **OQ<n>** — <the action>`, with a file only once its context outgrows the line. A `- [ ]` line never stands here, so every piece of work can be named by a tag. This file is a directory; an OQ file holds the details. OQs are grouped by the part of Velle they change, not by where they were found; S-numbers, P-numbers, and B-numbers are findings of the peptides, pharmacy, and batches passes, recorded in OQ16's calibration record.
 
@@ -98,6 +98,7 @@ A frontend framework grown from the console: given the model description and not
 
 ## Larger language questions
 
+- **[OQ132](questions/OQ132-enumeration.md)** — a field that takes one of a few words (a role, an outcome, a priority) is a text with a `requires` listing the words today, which binds the door only and lets a misspelt word in a rule compile; whether the words become a type declared in the spec, `Role is one of "pharmacist", "technician", "admin"`, read at compile time as a `time` constant is · opened 2026-11-14 at Dave's request; settled 2026-11-14, build pending; four work items
 - **[OQ79](questions/OQ79-mutual-relationship.md)** — a relationship that goes both ways: `friends: many Profile` on `Profile` is one stored edge set and an inferred inverse, "who lists me", which is not the same set; whether Velle gets a declaration for a relationship that is its own inverse · opened 2026-11-09 from OQ76's D5; not designed
 - **[OQ28](questions/OQ28-bootstrap-backfill.md)** — bootstrap/backfill: a new rule against pre-existing state · not designed
 - **[OQ59](questions/OQ59-escape-hatch.md)** — the escape hatch: open codegen · deferred, post-v0; the demands from the project's earliest notes, kept when those notes were retired

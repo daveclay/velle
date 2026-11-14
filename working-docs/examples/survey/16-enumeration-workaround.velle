@@ -1,0 +1,27 @@
+-- How a spec says today that a field takes one of a few words: the field is a
+-- text, and a prohibition lists the words. The door refuses a Field whose
+-- type is any other word. Every rule and refinement that names a word writes
+-- it as a quoted text the compiler does not check against the list (see
+-- 16-enumeration-misspelt-word-accepted).
+act Field {
+    name: text unique
+    type: text
+}
+
+Field requires type in ["number", "date", "text"]
+
+shape Reading {
+    fieldName: text
+    numberValue: decimal?
+    dateValue: Date?
+    textValue: text?
+    field: one Field? =
+        if exists (Field where name == this.fieldName) then first(Field where name == this.fieldName by name)
+        else none
+}
+
+shape NumberField = Field where type == "number"
+
+never (Reading where field is some and field.type == "number" and numberValue is none)
+never (Reading where field is some and field.type == "date" and dateValue is none)
+never (Reading where field is some and field.type == "text" and textValue is none)

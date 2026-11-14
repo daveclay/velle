@@ -1,0 +1,22 @@
+-- The proposed spelling: the words are declared once as a type of their own,
+-- the field is of that type, and a quoted word beside it is read as the type
+-- when the spec is compiled, as "09:00" is read beside a time (Reference §5).
+-- Refused today: the parser knows no such declaration.
+FieldType is one of "number", "date", "text"
+
+act Field {
+    name: text unique
+    type: FieldType
+}
+
+shape NumberField = Field where type == "number"
+
+shape Reading {
+    fieldName: text
+    numberValue: decimal?
+    field: one Field? =
+        if exists (Field where name == this.fieldName) then first(Field where name == this.fieldName by name)
+        else none
+}
+
+never (Reading where field is some and field is NumberField and numberValue is none)

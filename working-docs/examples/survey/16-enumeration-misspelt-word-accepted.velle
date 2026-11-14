@@ -1,0 +1,21 @@
+-- The same spec with one word misspelt in a refinement: "numbr". The compiler
+-- accepts it, because the field is a text and any text compares with any
+-- text; at runtime NumberField holds no record, ever, and nothing says why.
+act Field {
+    name: text unique
+    type: text
+}
+
+Field requires type in ["number", "date", "text"]
+
+shape NumberField = Field where type == "numbr"
+
+shape Reading {
+    fieldName: text
+    numberValue: decimal?
+    field: one Field? =
+        if exists (Field where name == this.fieldName) then first(Field where name == this.fieldName by name)
+        else none
+}
+
+never (Reading where field is some and field is NumberField and numberValue is none)
