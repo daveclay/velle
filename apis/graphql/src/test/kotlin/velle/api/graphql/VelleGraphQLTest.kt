@@ -51,6 +51,20 @@ class VelleGraphQLTest {
         return Engine(VelleGraphQL.graphQL(VelleApi(sys, Clock.fixed(day, ZoneOffset.UTC)), ticks), sys)
     }
 
+    private fun sdl(name: String, ticks: Boolean = false) =
+        SchemaPrinter().print(VelleGraphQL.schema(VelleApi(system(example(name)), null), ticks))
+
+    /** The body of `input <name> { ... }` in [sdl], with each field on its own line. */
+    private fun inputType(sdl: String, name: String) = block(sdl, "input $name")
+
+    /** The body of `type <name> { ... }` in [sdl], with each field on its own line. */
+    private fun objectType(sdl: String, name: String) = block(sdl, "type $name")
+
+    private fun block(sdl: String, header: String): String {
+        assertTrue("\n$header {" in sdl, "no $header in\n$sdl")
+        return sdl.substringAfter("\n$header {").substringBefore("\n}") + "\n"
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun Map<String, Any?>.at(vararg path: String): Any? = path.fold(this as Any?) { acc, k -> (acc as Map<String, Any?>)[k] }
 
@@ -188,5 +202,100 @@ class VelleGraphQLTest {
         assertEquals("E. coli", batch.at("peptideBatch", "record", "origin", "strain", "name"))
         val both = b.errors("""mutation(${'$'}p: ID!) { peptideBatch(input: {peptide: ${'$'}p, quantityMg: 1, origin: {existing: {shape: "Fermentation", key: "1"}, newExternalOrder: {vendor: "1", orderItem: "x"}}}) { accepted } }""", mapOf("p" to refs.at("peptide", "ref", "key")))
         assertEquals("BAD_REQUEST", both.single().extensions["kind"])
+    }
+
+    @Test
+    fun `an input field is nullable when its type is optional or many, or it is a part or a value created with the act`() {
+        val student = inputType(sdl("enrollment"), "StudentInput")
+        assertTrue("\n  name: String!\n" in student, student)
+        assertTrue("\n  advisor: ID\n" in student, "an optional one is nullable: $student")
+        assertTrue("\n  courses: [ID!]\n" in student, "a many reference is nullable: $student")
+        assertTrue("\n  tags: [String!]\n" in student, "a many value is nullable: $student")
+        val course = inputType(sdl("enrollment"), "CourseInput")
+        assertTrue("\n  startsAt: Time\n" in course, "an optional value is nullable: $course")
+        assertTrue("\n  term: Duration!\n" in course, course)
+
+        val order = inputType(sdl("orders"), "OrderInput")
+        assertTrue("\n  orderLines: [OrderOrderLineInput!]\n" in order, "parts are nullable: $order")
+        val batch = inputType(sdl("batches"), "PeptideBatchInput")
+        assertTrue("\n  origin: PeptideBatchOriginInput\n" in batch, "a value created with the act is nullable: $batch")
+    }
+
+    @Test
+    fun `an optional field that is initially required is non-null in the input, and an initially-valued field is left out`() {
+        val listing = inputType(sdl("moderation"), "ListingInput")
+        assertTrue("\n  seller: ID!\n" in listing, listing)
+        assertTrue("isDraft" !in listing, listing)
+    }
+
+    @Test
+    fun `a part's input leaves out the reference back to its container`() {
+        val line = inputType(sdl("orders"), "OrderOrderLineInput")
+        assertTrue("order:" !in line, line)
+        assertTrue("\n  product: ID!\n" in line, line)
+        val customization = inputType(sdl("orders"), "OrderCustomizationInput")
+        assertTrue("line:" !in customization, customization)
+    }
+
+    @Test
+    fun `a reference to a union of shapes is a RefInput, a reference to one shape is an ID`() {
+        val comment = inputType(sdl("gallery"), "CommentInput")
+        assertTrue("\n  target: RefInput!\n" in comment, "Content is Post or Photo: $comment")
+        assertTrue("\n  author: ID!\n" in comment, comment)
+        val task = inputType(sdl("peptides"), "CollectionTaskInput")
+        assertTrue("\n  trial: RefInput!\n" in task, "the trial may be a record created with the task: $task")
+    }
+
+    @Test
+    fun `only a nested input has asNew`() {
+        assertTrue("asNew" !in inputType(sdl("billing"), "SignUpInput"))
+        assertTrue("\n  asNew: Int\n" in inputType(sdl("orders"), "OrderOrderLineInput"))
+    }
+
+    @Test
+    fun `a record type has no id and no transient field`() {
+        val order = objectType(sdl("orders"), "Order")
+        assertTrue("\n  id:" !in order, order)
+        assertTrue("cardNumber" !in order && "cardholder" !in order, order)
+        assertTrue("\n  placedOn: Date!\n" in order, order)
+    }
+
+    @Test
+    fun `a member named key or shape is served as key_ or shape_`() {
+        val sys = system("""
+            act Entry {
+                key: text
+                label: text
+            }
+        """)
+        val graphQL = VelleGraphQL.graphQL(VelleApi(sys, Clock.fixed(day, ZoneOffset.UTC)))
+        assertTrue("\n  key_: String!\n" in objectType(SchemaPrinter().print(graphQL.graphQLSchema), "Entry"))
+        val e = Engine(graphQL, sys)
+        val entry = e.run("""mutation { entry(input: {key: "k-1", label: "first"}) { record { key key_ label } } }""")
+        assertEquals("k-1", entry.at("entry", "record", "key_"))
+        assertNotNull(entry.at("entry", "record", "key"))
+    }
+
+    @Test
+    fun `a reference to a record the actor may not see reads as absent, not as a refusal`() {
+        val e = engine("vendors")
+        val admin = e.sys.seed("Staff", mapOf("name" to "Grace", "role" to "admin"))
+        val staff = e.sys.seed("Staff", mapOf("name" to "Linus", "role" to "staff"))
+        val globex = e.sys.seed("Vendor", mapOf("name" to "Globex"))
+        e.run("""mutation(${'$'}v: ID!) { listProduct(input: {vendor: ${'$'}v, name: "Thin", price: 1, cost: 1}) { accepted } }""", mapOf("v" to globex.key.value), actor = admin)
+        val query = """{ marginAlerts(orderBy: ["raisedOn"]) { items { product { name } } } }"""
+        assertEquals("Thin", (e.run(query, actor = admin).at("marginAlerts", "items") as List<*>).single().let { (it as Map<*, *>)["product"] as Map<*, *> }["name"])
+        // the product is absent for the staff member; the field is non-null, so GraphQL reports that and nulls the item
+        val asStaff = e.errors(query, actor = staff).single()
+        assertNull(asStaff.extensions?.get("kind"), asStaff.toString())
+        assertTrue("non null" in asStaff.message, asStaff.toString())
+    }
+
+    @Test
+    fun `without ticks there is no tick mutation`() {
+        val api = VelleApi(system(example("billing")), null)
+        assertNull(VelleGraphQL.schema(api).mutationType.getFieldDefinition("tick"))
+        assertNull(VelleGraphQL.graphQL(api).graphQLSchema.mutationType.getFieldDefinition("tick"))
+        assertNotNull(VelleGraphQL.graphQL(api, ticks = true).graphQLSchema.mutationType.getFieldDefinition("tick"))
     }
 }

@@ -36,10 +36,12 @@ import graphql.schema.GraphQLTypeReference
 import graphql.schema.GraphQLUnionType
 import graphql.schema.TypeResolver
 import velle.ClosureEdge
+import velle.MemberInfo
 import velle.Ref
 import velle.RelType
 import velle.ScalarType
 import velle.StoredProp
+import velle.TypeRef
 import velle.TypeRegistry
 import velle.VType
 import velle.api.ApiException
@@ -75,7 +77,7 @@ object VelleGraphQL {
     /** Turns an [ApiException] into a GraphQL error carrying `extensions.kind` (BAD_REQUEST, NOT_FOUND, UNAUTHORIZED) and `extensions.details`. */
     object ExceptionHandler : DataFetcherExceptionHandler {
         override fun handleException(params: DataFetcherExceptionHandlerParameters): CompletableFuture<DataFetcherExceptionHandlerResult> {
-            val e = params.exception.let { if (it is java.util.concurrent.CompletionException && it.cause != null) it.cause!! else it }
+            val e = params.exception
             val builder = GraphqlErrorBuilder.newError(params.dataFetchingEnvironment).message(e.message ?: e::class.simpleName)
             if (e is ApiException) builder.extensions(mapOf("kind" to e.kind.name, "details" to e.details))
             return CompletableFuture.completedFuture(DataFetcherExceptionHandlerResult.newResult().error(builder.build()).build())
@@ -119,8 +121,10 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
     // ── scalars: the wire form in and out ───────────────────────────────────────
 
     /** A scalar that carries the wire form: what [velle.api.Wire] writes, read back by it on the way in. */
-    private fun wireScalar(name: String, velleName: String, description: String): GraphQLScalarType = scalars.getOrPut(name) {
-        GraphQLScalarType.newScalar().name(name).description(description).coercing(object : Coercing<Any, Any> {
+    private fun wireScalar(scalar: WireScalar): GraphQLScalarType = scalars.getOrPut(scalar.graphQLName) {
+        val name = scalar.graphQLName
+        val velleName = scalar.velleName
+        GraphQLScalarType.newScalar().name(name).description(scalar.description).coercing(object : Coercing<Any, Any> {
             override fun serialize(v: Any, ctx: GraphQLContext, locale: Locale): Any = v
             override fun parseValue(input: Any, ctx: GraphQLContext, locale: Locale): Any {
                 try { api.wire.scalar(input, velleName, name) } catch (e: ApiException) { throw CoercingParseValueException(e.message) }
@@ -142,14 +146,6 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
         }).build()
     }
 
-    private val decimal get() = wireScalar("Decimal", "decimal", "An exact decimal number, as a JSON number.")
-    private val long get() = wireScalar("Long", "long", "A whole number beyond 32 bits, as a JSON number.")
-    private val date get() = wireScalar("Date", "Date", "A calendar date as ISO text: 2026-04-01.")
-    private val dateTime get() = wireScalar("DateTime", "DateTime", "A moment as ISO text: 2026-04-01T09:00:00Z.")
-    private val time get() = wireScalar("Time", "time", "A time of day as ISO text: 09:30:00.")
-    private val uuid get() = wireScalar("UUID", "uuid", "A UUID as text.")
-    private val duration get() = wireScalar("Duration", "duration", "A span of time as ISO-8601 text (PT36H) or an amount and unit (3 days).")
-    private val bytes get() = wireScalar("Bytes", "bytes", "Binary data as base64 text.")
     private val json get() = scalars.getOrPut("JSON") {
         GraphQLScalarType.newScalar().name("JSON").description("Any JSON value, passed through as is.").coercing(object : Coercing<Any, Any> {
             override fun serialize(v: Any, ctx: GraphQLContext, locale: Locale): Any = v
@@ -160,63 +156,67 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
         }).build()
     }
 
-    private fun scalarType(name: String): GraphQLScalarType = when (name) {
-        "text" -> Scalars.GraphQLString
-        "boolean" -> Scalars.GraphQLBoolean
-        "integer" -> Scalars.GraphQLInt
-        "long" -> long
-        "decimal", "double" -> decimal
-        "Date" -> date
-        "DateTime" -> dateTime
-        "time" -> time
-        "uuid" -> uuid
-        "duration" -> duration
-        "bytes" -> bytes
-        else -> wireScalar(name, name, "A value of the extension type $name, as its own text.")
-    }
+    private fun scalarType(name: String): GraphQLScalarType =
+        BUILT_IN_SCALARS[name] ?: wireScalar(WIRE_SCALARS[name] ?: WireScalar(name, name, "A value of the extension type $name, as its own text."))
 
     // ── output types ────────────────────────────────────────────────────────────
 
-    private fun outType(t: VType, gated: Boolean): GraphQLOutputType {
-        val bare = (t as? VType.Optional)?.inner ?: t
-        val type: GraphQLOutputType = when (bare) {
-            is VType.Inst -> GraphQLTypeReference.typeRef(bare.shape)
-            is VType.Coll -> GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(bare.shape)))
-            is VType.CollS -> GraphQLList.list(GraphQLNonNull.nonNull(scalarType(bare.name)))
-            VType.Id -> Scalars.GraphQLID
-            else -> scalarType(describe.scalarName(bare))
-        }
-        return if (t is VType.Optional || gated) type else GraphQLNonNull.nonNull(type)
+    /** The field type for a member of [type]: nullable when the member is optional or its visibility is gated, else non-null. */
+    private fun outType(type: VType, gated: Boolean): GraphQLOutputType {
+        val bare = bareOutType(bareType(type))
+        return if (type is VType.Optional || gated) bare else GraphQLNonNull.nonNull(bare)
     }
 
+    private fun bareOutType(type: VType): GraphQLOutputType = when (type) {
+        is VType.Inst -> GraphQLTypeReference.typeRef(type.shape)
+        is VType.Coll -> GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(type.shape)))
+        is VType.CollS -> GraphQLList.list(GraphQLNonNull.nonNull(scalarType(type.name)))
+        VType.Id -> Scalars.GraphQLID
+        else -> scalarType(describe.scalarName(type))
+    }
+
+    private fun bareType(type: VType): VType = (type as? VType.Optional)?.inner ?: type
+
+    /** [read] a record, or null when the API says there is no such record; any other refusal passes through. */
+    private fun <T> readOrAbsent(read: () -> T): T? =
+        try { read() } catch (refusal: ApiException) { if (refusal.kind == ApiException.Kind.NOT_FOUND) null else throw refusal }
+
     private fun objectType(scope: String): GraphQLObjectType {
-        val b = GraphQLObjectType.newObject().name(scope)
-        b.description(if (scope in model.refinements) "The refinement $scope: a ${model.basesOf(scope).joinToString(" or ")} read as a member of it." else "The shape $scope.")
-        b.field { it.name("shape").type(GraphQLNonNull.nonNull(Scalars.GraphQLString)).description("The record's own shape.") }
-        b.field { it.name("key").type(GraphQLNonNull.nonNull(Scalars.GraphQLID)).description("The store's key for the record.") }
-        for (m in model.membersOf(scope).values) {
-            if (m.name == "id" || m.transient) continue // a transient field is never in the record (Reference §4)
-            val gated = m.visible.isNotEmpty()
-            val field = memberField(m.name)
-            b.field { it.name(field).type(outType(m.type, gated)) }
-            val bare = (m.type as? VType.Optional)?.inner ?: m.type
-            when (bare) {
-                is VType.Inst -> registry.dataFetcher(FieldCoordinates.coordinates(scope, field), DataFetcher { env ->
-                    val ref = (env.getSource<Map<String, Any?>>()!![m.name] as? Map<*, *>) ?: return@DataFetcher null
-                    try { api.read(api.refTo(ref["shape"] as String, ref["key"]!!), VelleGraphQL.actorOf(env)) }
-                    catch (e: ApiException) { if (e.kind == ApiException.Kind.NOT_FOUND) null else throw e }
-                })
-                is VType.Coll -> registry.dataFetcher(FieldCoordinates.coordinates(scope, field), DataFetcher { env ->
-                    val refs = (env.getSource<Map<String, Any?>>()!![m.name] as? List<*>).orEmpty()
-                        .map { r -> (r as Map<*, *>).let { api.refTo(it["shape"] as String, it["key"]!!) } }
-                    api.readEach(refs, VelleGraphQL.actorOf(env)).filterNotNull()
-                })
-                else -> if (field != m.name) registry.dataFetcher(FieldCoordinates.coordinates(scope, field), DataFetcher { env -> env.getSource<Map<String, Any?>>()!![m.name] })
-            }
+        val type = GraphQLObjectType.newObject().name(scope)
+        type.description(if (scope in model.refinements) "The refinement $scope: a ${model.basesOf(scope).joinToString(" or ")} read as a member of it." else "The shape $scope.")
+        type.field { it.name("shape").type(GraphQLNonNull.nonNull(Scalars.GraphQLString)).description("The record's own shape.") }
+        type.field { it.name("key").type(GraphQLNonNull.nonNull(Scalars.GraphQLID)).description("The store's key for the record.") }
+        for (member in model.membersOf(scope).values) {
+            if (member.name == "id" || member.transient) continue // a transient field is never in the record (Reference §4)
+            val field = memberField(member.name)
+            type.field { it.name(field).type(outType(member.type, member.visible.isNotEmpty())) }
+            memberFetcher(member, field)?.let { registry.dataFetcher(FieldCoordinates.coordinates(scope, field), it) }
         }
         if (scope in model.shapes) for (flag in api.wire.flagsOf(scope))
-            b.field { it.name("is$flag").type(GraphQLNonNull.nonNull(Scalars.GraphQLBoolean)).description("Is the record a $flag now?") }
-        return b.build()
+            type.field { it.name("is$flag").type(GraphQLNonNull.nonNull(Scalars.GraphQLBoolean)).description("Is the record a $flag now?") }
+        return type.build()
+    }
+
+    /**
+     * How [field] is read from the record's wire map: a reference is followed to its record, a collection
+     * of references to its records, and a renamed member is read under its own name. Null leaves the
+     * default fetcher, which reads the map under [field].
+     */
+    private fun memberFetcher(member: MemberInfo, field: String): DataFetcher<*>? = when (bareType(member.type)) {
+        is VType.Inst -> DataFetcher { env -> referencedRecord(env, member.name) }
+        is VType.Coll -> DataFetcher { env -> referencedRecords(env, member.name) }
+        else -> if (field != member.name) DataFetcher { env -> env.getSource<Map<String, Any?>>()!![member.name] } else null
+    }
+
+    private fun referencedRecord(env: DataFetchingEnvironment, member: String): Any? {
+        val ref = env.getSource<Map<String, Any?>>()!![member] as? Map<*, *> ?: return null
+        return readOrAbsent { api.read(api.refTo(ref["shape"] as String, ref["key"]!!), VelleGraphQL.actorOf(env)) }
+    }
+
+    private fun referencedRecords(env: DataFetchingEnvironment, member: String): List<Any?> {
+        val refs = (env.getSource<Map<String, Any?>>()!![member] as? List<*>).orEmpty()
+            .map { ref -> (ref as Map<*, *>).let { api.refTo(it["shape"] as String, it["key"]!!) } }
+        return api.readEach(refs, VelleGraphQL.actorOf(env)).filterNotNull()
     }
 
     private fun union(name: String): GraphQLUnionType {
@@ -358,7 +358,7 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
             b.field { it.name("record").type(GraphQLTypeReference.typeRef(act)).description("The $act record, read back after the commit.") }
             registry.dataFetcher(FieldCoordinates.coordinates("${act}Outcome", "record"), DataFetcher { env ->
                 val ref = env.getSource<Map<String, Any?>>()!!["ref"] as? Map<*, *> ?: return@DataFetcher null
-                try { api.read(act, ref["key"]!!, VelleGraphQL.actorOf(env)) } catch (e: ApiException) { if (e.kind == ApiException.Kind.NOT_FOUND) null else throw e }
+                readOrAbsent { api.read(act, ref["key"]!!, VelleGraphQL.actorOf(env)) }
             })
         }
         return b.build()
@@ -395,32 +395,42 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
         val decl = model.shapes.getValue(shape)
         val actor = decl.actor?.name
         val siblings = model.siblingFields(act, shape, edges, backRef).map { it.name }.toSet()
-        val out = mutableListOf<GraphQLInputObjectField>()
-        for (p in decl.members.filterIsInstance<StoredProp>()) {
-            if (p.name == backRef || p.name == actor || p.initially != null) continue
-            val edge = edges.find { it.byValue && it.prop == p.name }
-            val type: GraphQLInputType = when (val t = p.type) {
-                is RelType -> when {
-                    edge != null -> byValueInput(act, edge)
-                    p.name in siblings || model.isCrossBase(t.shape) || t.shape in model.refinements -> GraphQLTypeReference.typeRef("RefInput")
-                    else -> Scalars.GraphQLID
-                }.let { if (t.many) GraphQLList.list(GraphQLNonNull.nonNull(it)) else it }
-                is ScalarType -> scalarType(t.name).let { if (t.many) GraphQLList.list(GraphQLNonNull.nonNull(it)) else it }
-            }
-            val optional = when (val t = p.type) {
-                is RelType -> t.optional || t.many
-                is ScalarType -> t.optional || t.many
-            } && !p.initiallyRequired
-            out.add(GraphQLInputObjectField.newInputObjectField().name(p.name).type(if (optional || edge != null) type else GraphQLNonNull.nonNull(type)).build())
-        }
-        for (edge in edges.filter { !it.byValue })
-            out.add(GraphQLInputObjectField.newInputObjectField().name(edge.prop)
-                .description("The ${edge.partShape} parts created with this ${shape}.")
-                .type(GraphQLList.list(GraphQLNonNull.nonNull(nestedInput(act, edge.partShape, edge.childrenFor(edge.partShape), edge.backRef)))).build())
-        if (nested) out.add(GraphQLInputObjectField.newInputObjectField().name("asNew").type(Scalars.GraphQLInt)
-            .description("Tag this value with a number so a sibling field may point at it with `{new: n}`.").build())
-        return out
+        val supplied = decl.members.filterIsInstance<StoredProp>().filter { it.name != backRef && it.name != actor && it.initially == null }
+        val fields = supplied.map { prop -> storedField(act, prop, siblings, edges.find { it.byValue && it.prop == prop.name }) } +
+            edges.filter { !it.byValue }.map { partsField(act, shape, it) }
+        return if (nested) fields + asNewField() else fields
     }
+
+    /** A stored field as the committer supplies it, non-null unless the type is optional or many, the field is supplied by value, or it is given `initially`. */
+    private fun storedField(act: String, prop: StoredProp, siblings: Set<String>, byValue: ClosureEdge?): GraphQLInputObjectField {
+        val type = storedInputType(act, prop, siblings, byValue)
+        val nullable = ((prop.type.isOptional || prop.type.isMany) && !prop.initiallyRequired) || byValue != null
+        return GraphQLInputObjectField.newInputObjectField().name(prop.name).type(if (nullable) type else GraphQLNonNull.nonNull(type)).build()
+    }
+
+    /** A by-value `one` as its choice type; a reference as a `RefInput` when it may name a record created with the act or its shape is a refinement (a static union is one), else an ID; a value as its scalar; a list when `many`. */
+    private fun storedInputType(act: String, prop: StoredProp, siblings: Set<String>, byValue: ClosureEdge?): GraphQLInputType {
+        val one: GraphQLInputType = when (val type = prop.type) {
+            is ScalarType -> scalarType(type.name)
+            is RelType -> when {
+                byValue != null -> byValueInput(act, byValue)
+                prop.name in siblings || type.shape in model.refinements -> GraphQLTypeReference.typeRef("RefInput")
+                else -> Scalars.GraphQLID
+            }
+        }
+        return if (prop.type.isMany) GraphQLList.list(GraphQLNonNull.nonNull(one)) else one
+    }
+
+    private fun partsField(act: String, shape: String, edge: ClosureEdge): GraphQLInputObjectField =
+        GraphQLInputObjectField.newInputObjectField().name(edge.prop)
+            .description("The ${edge.partShape} parts created with this ${shape}.")
+            .type(GraphQLList.list(GraphQLNonNull.nonNull(nestedInput(act, edge.partShape, edge.childrenFor(edge.partShape), edge.backRef)))).build()
+
+    private fun asNewField(): GraphQLInputObjectField = GraphQLInputObjectField.newInputObjectField().name("asNew").type(Scalars.GraphQLInt)
+        .description("Tag this value with a number so a sibling field may point at it with `{new: n}`.").build()
+
+    private val TypeRef.isOptional: Boolean get() = when (this) { is ScalarType -> optional; is RelType -> optional }
+    private val TypeRef.isMany: Boolean get() = when (this) { is ScalarType -> many; is RelType -> many }
 
     /** A `one` field named in `with`: `existing` names a record on the books, `new<Operand>` carries a value created here. */
     private fun byValueInput(act: String, edge: ClosureEdge): GraphQLInputType {
@@ -441,22 +451,49 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
      * as `@new`, a by-value field's `existing` as the reference and its `new<Operand>`
      * as the nested value tagged with its shape, and a `RefInput` as `{shape, key, new}`.
      */
-    private fun toWire(v: Any?): Any? = when (v) {
+    private fun toWire(value: Any?): Any? = when (value) {
         null -> null
-        is Map<*, *> -> {
-            val entries = v.entries.filter { it.value != null }
-            val byValue = entries.singleOrNull { it.key == "existing" } ?: entries.singleOrNull { (it.key as String).startsWith("new") && it.key != "new" && it.value is Map<*, *> }
-            when {
-                entries.any { it.key == "existing" } || entries.any { (it.key as String).startsWith("new") && it.key != "new" && it.value is Map<*, *> } -> {
-                    if (entries.size != 1) throw ApiException.badRequest("a by-value field takes `existing` or exactly one `new...`, not ${entries.map { it.key }}")
-                    val e = byValue!!
-                    if (e.key == "existing") toWire(e.value)
-                    else (toWire(e.value) as Map<String, Any?>) + ("@shape" to (e.key as String).removePrefix("new"))
-                }
-                else -> entries.associate { (k, value) -> (if (k == "asNew") "@new" else k as String) to toWire(value) }
-            }
-        }
-        is List<*> -> v.map { toWire(it) }
-        else -> v
+        is Map<*, *> -> mapToWire(value.entries.filter { it.value != null })
+        is List<*> -> value.map { toWire(it) }
+        else -> value
     }
+
+    /** The entries of one input object with their nulls dropped: a by-value field's single choice, or a plain object. */
+    private fun mapToWire(entries: List<Map.Entry<Any?, Any?>>): Any? {
+        val choices = entries.filter { isByValueChoice(it) }
+        if (choices.isEmpty()) return entries.associate { (key, value) -> (if (key == "asNew") "@new" else key as String) to toWire(value) }
+        if (entries.size != 1) throw ApiException.badRequest("a by-value field takes `existing` or exactly one `new...`, not ${entries.map { it.key }}")
+        val choice = choices.single()
+        if (choice.key == "existing") return toWire(choice.value)
+        @Suppress("UNCHECKED_CAST")
+        return (toWire(choice.value) as Map<String, Any?>) + ("@shape" to (choice.key as String).removePrefix("new"))
+    }
+
+    /** `existing`, or a `new<Operand>` carrying an object: the one entry a by-value field is written with. */
+    private fun isByValueChoice(entry: Map.Entry<Any?, Any?>): Boolean =
+        entry.key == "existing" || ((entry.key as String).startsWith("new") && entry.key != "new" && entry.value is Map<*, *>)
 }
+
+/** A Velle scalar carried as its own GraphQL scalar: the GraphQL name, the Velle type [velle.api.Wire] reads it as, and the schema's description of it. */
+private class WireScalar(val graphQLName: String, val velleName: String, val description: String)
+
+private val BUILT_IN_SCALARS: Map<String, GraphQLScalarType> = mapOf(
+    "text" to Scalars.GraphQLString,
+    "boolean" to Scalars.GraphQLBoolean,
+    "integer" to Scalars.GraphQLInt,
+)
+
+private val DECIMAL = WireScalar("Decimal", "decimal", "An exact decimal number, as a JSON number.")
+
+/** The Velle scalars with a wire form of their own, by Velle type name; any other name is an extension type. */
+private val WIRE_SCALARS: Map<String, WireScalar> = mapOf(
+    "long" to WireScalar("Long", "long", "A whole number beyond 32 bits, as a JSON number."),
+    "decimal" to DECIMAL,
+    "double" to DECIMAL,
+    "Date" to WireScalar("Date", "Date", "A calendar date as ISO text: 2026-04-01."),
+    "DateTime" to WireScalar("DateTime", "DateTime", "A moment as ISO text: 2026-04-01T09:00:00Z."),
+    "time" to WireScalar("Time", "time", "A time of day as ISO text: 09:30:00."),
+    "uuid" to WireScalar("UUID", "uuid", "A UUID as text."),
+    "duration" to WireScalar("Duration", "duration", "A span of time as ISO-8601 text (PT36H) or an amount and unit (3 days)."),
+    "bytes" to WireScalar("Bytes", "bytes", "Binary data as base64 text."),
+)
