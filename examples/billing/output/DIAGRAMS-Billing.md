@@ -38,7 +38,7 @@ classDiagram
         issuedOn: timestamp on create
         /total: Money
         /balance: Money
-        /status: text
+        /status: Status
     }
     class LineItem {
         <<act>>

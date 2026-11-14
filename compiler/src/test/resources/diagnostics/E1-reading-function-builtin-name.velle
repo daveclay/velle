@@ -1,0 +1,7 @@
+-- A type declared by its words whose reading function would be a builtin function's name: `number`.
+Number is one of "one", "two"
+
+act Count {
+    name: text
+    size: Number
+}

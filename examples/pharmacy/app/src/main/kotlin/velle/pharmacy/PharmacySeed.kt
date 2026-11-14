@@ -230,7 +230,7 @@ internal class SeedWalk(private val sys: PharmacySystem, private val days: Int) 
         admins += founder
 
         for (h in Roster.hires) {
-            ok(sys.commit(NewHireStaff(h.name, h.role), founder))
+            ok(sys.commit(NewHireStaff(h.name, Role.of(h.role)), founder))
             val s = sys.staffs().last()
             staffNames[s] = h.name
             when (h.role) {
@@ -262,7 +262,7 @@ internal class SeedWalk(private val sys: PharmacySystem, private val days: Int) 
                 ok(sys.commit(NewStockLot(drug, lotNumber(d, i), expires, size)))
             }
         }
-        for ((a, b, severity) in Roster.interactions) ok(sys.commit(NewInteraction(drugs.getValue(a), drugs.getValue(b), severity)))
+        for ((a, b, severity) in Roster.interactions) ok(sys.commit(NewInteraction(drugs.getValue(a), drugs.getValue(b), Severity.of(severity))))
 
         for (p in Roster.plans) plans += make(sys.commit(NewInsurancePlan(p.name, p.coversControlled)))
         for (p in Roster.prescribers) prescribers += make(sys.commit(NewPrescriber(p.name, p.dea, p.fax)))
@@ -367,7 +367,7 @@ internal class SeedWalk(private val sys: PharmacySystem, private val days: Int) 
         if (after.fillsRecorded == before) return null
         val fill = after.fills.map { sys.read(it) }.maxBy { it.fillNumber }
         val rph = licensedPharmacist(notThis = tech)
-        ok(sys.commit(NewVerifyFill(fill, "approved", "checked against the order"), rph))
+        ok(sys.commit(NewVerifyFill(fill, Verdict.approved, "checked against the order"), rph))
         later(15)
         val verified = sys.read(fill)
         for (claim in verified.claims) {
@@ -399,13 +399,13 @@ internal class SeedWalk(private val sys: PharmacySystem, private val days: Int) 
             val claim = sys.read(p.claim)
             when {
                 p.controlled && !p.plan.coversControlled ->
-                    ok(sys.commit(NewAdjudication(claim, "rejected", dec("0"), claim.amount)))
+                    ok(sys.commit(NewAdjudication(claim, ClaimOutcome.rejected, dec("0"), claim.amount)))
                 rnd.nextInt(12) == 0 ->
-                    ok(sys.commit(NewAdjudication(claim, "rejected", dec("0"), claim.amount)))
+                    ok(sys.commit(NewAdjudication(claim, ClaimOutcome.rejected, dec("0"), claim.amount)))
                 else -> {
                     val share = claim.amount.multiply(dec(p.plan.copayShare)).setScale(2, RoundingMode.HALF_UP)
                     val copay = share.max(dec(p.plan.copayFloor)).min(claim.amount)
-                    ok(sys.commit(NewAdjudication(claim, "paid", claim.amount.subtract(copay), copay)))
+                    ok(sys.commit(NewAdjudication(claim, ClaimOutcome.paid, claim.amount.subtract(copay), copay)))
                 }
             }
             later(1)
@@ -624,7 +624,7 @@ internal class SeedWalk(private val sys: PharmacySystem, private val days: Int) 
                 ok(sys.commit(NewFillPrescription(key("FILL"), rx.ref, lot, p.quantity, p.fillsRecorded + 1), tech))
                 later(10)
                 val fill = sys.read(rx.ref).fills.map { sys.read(it) }.maxBy { it.fillNumber }
-                ok(sys.commit(NewVerifyFill(fill, "rejected", "500 mg ER pulled for a 500 mg IR order; returned to shelf"), licensedPharmacist(notThis = tech)))
+                ok(sys.commit(NewVerifyFill(fill, Verdict.rejected, "500 mg ER pulled for a 500 mg IR order; returned to shelf"), licensedPharmacist(notThis = tech)))
                 later(20)
                 fillVerifyAndClaim(sys.read(rx.ref), tech)?.let { toCounter(it, rx.patient) }
             }

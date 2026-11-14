@@ -46,19 +46,19 @@ class Scenario(val sys: PharmacySystem) {
     }
 
     /** Everyone else is hired by the founder through the gated act. */
-    fun staff(name: String, role: String): Staff {
+    fun staff(name: String, role: Role): Staff {
         accept(sys.commit(NewHireStaff(name, role), founder)); return sys.staffs().last()
     }
 
     /** A pharmacist whose licence runs until [licensedUntil], recorded by the founder. */
     fun pharmacist(name: String = "Priya", licensedUntil: LocalDate = today.plusDays(365)): Staff {
-        val p = staff(name, "pharmacist")
+        val p = staff(name, Role.pharmacist)
         accept(sys.commit(NewLicenceRenewal(p, "RPH-${p.key}", licensedUntil), founder))
         return p
     }
 
-    fun technician(name: String = "Tom"): Staff = staff(name, "technician")
-    fun administrator(name: String = "Ada"): Staff = staff(name, "admin")
+    fun technician(name: String = "Tom"): Staff = staff(name, Role.technician)
+    fun administrator(name: String = "Ada"): Staff = staff(name, Role.admin)
 
     // ── drugs ────────────────────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ class Scenario(val sys: PharmacySystem) {
     fun controlledDrug(name: String = "oxycodone", schedule: Int = 2): Drug =
         drug(name, schedule = schedule, requiresCounselling = true)
 
-    fun interaction(a: Drug, b: Drug, severity: String = "major") {
+    fun interaction(a: Drug, b: Drug, severity: Severity = Severity.major) {
         accept(sys.commit(NewInteraction(a, b, severity)))
     }
 
@@ -177,7 +177,7 @@ class Scenario(val sys: PharmacySystem) {
         return sys.fills().last()
     }
 
-    fun verify(fill: Fill, pharmacist: Staff, outcome: String = "approved") {
+    fun verify(fill: Fill, pharmacist: Staff, outcome: Verdict = Verdict.approved) {
         accept(sys.commit(NewVerifyFill(fill, outcome, "checked"), pharmacist))
     }
 

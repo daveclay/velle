@@ -8,6 +8,8 @@
 
 ## 1. Every request gets a response (V18's full form)
 
+*One slice is V18's since 2026-11-14: when the act carries a field of a type declared by its words (Reference §5, "A field that takes one of a few words"), answers that each test that field with `==` or `in` and name every word between them are coverage, and a word none names is reported by name (`checks.md` V18). A word test beside another condition stays with the engine below.*
+
 A transient act that nothing answers in some reachable state is ignored with no record it ever arrived. The auction-house pass that validated the transient-acts decision found the trap: a pause feature arrives months later, touching only `OpenAuction`'s declaration, and the refusal rules that enumerated reasons go stale while every line keeps compiling.
 
 ```

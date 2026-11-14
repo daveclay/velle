@@ -246,7 +246,7 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
 
     override fun adjudication() {
         fillForSubmitClaim()
-        s.accept(sys.commit(NewAdjudication(sys.claims().last(), "paid", s.dec("40.00"), s.dec("5.00"))))
+        s.accept(sys.commit(NewAdjudication(sys.claims().last(), ClaimOutcome.paid, s.dec("40.00"), s.dec("5.00"))))
     }
 }
 

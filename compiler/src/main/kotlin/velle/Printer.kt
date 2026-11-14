@@ -45,6 +45,7 @@ object Printer {
             if (d.toleratesContention) " tolerates contention" else ""
         is VisibilityDefault -> visible(d.clause)
         is UsesDecl -> "uses ${d.qualified}" + (d.alias?.let { " as $it" } ?: "")
+        is EnumDecl -> "${d.name} is one of " + d.words.joinToString(", ") { word -> "\"$word\"" }
     }
 
     /** `visible to Staff as viewer where ...` / `visible to anyone` (Reference §22). */

@@ -302,21 +302,21 @@ act Agent {
     email: text
 }
 
+Priority is one of "low", "normal", "high"
+
 transient act RaiseTicket {
     member: one Member
     subject: text
     due: Date
-    priority: text
+    priority: Priority
     assignee: one Agent?
 }
-
-RaiseTicket requires priority == "low" or priority == "normal" or priority == "high"
 
 shape Ticket {
     member: one Member
     subject: text
     due: Date
-    priority: text
+    priority: Priority
     assignee: one Agent?
     openedOn: timestamp on create
     assigneeEmail: text? = assignee?.email

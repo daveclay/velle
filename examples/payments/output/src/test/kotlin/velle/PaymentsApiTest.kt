@@ -43,7 +43,7 @@ open class PaymentsApiTest {
         assertEquals("grace@velle.example", sys.read(order).receiptEmail)
 
         // the processor approves — as its own later act
-        sys.commit(NewProcessorVerdict(attempt, "approved"))
+        sys.commit(NewProcessorVerdict(attempt, Verdict.approved))
         with(sys) {
             assertTrue(sys.read(attempt).isSuccessfulCharge)
             assertTrue(sys.read(order).isSettledOrder)
@@ -68,7 +68,7 @@ open class PaymentsApiTest {
         sys.commit(NewChangeShippingAddress(order, "9 Corrected St"))
         assertEquals("9 Corrected St", sys.read(order).shippingAddress) // not ready yet: applied
 
-        sys.commit(NewProcessorVerdict(sys.chargeAttempts().single(), "approved"))
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().single(), Verdict.approved))
         sys.commit(NewChangeShippingAddress(order, "1 Too Late Rd"))
         assertEquals("9 Corrected St", sys.read(order).shippingAddress) // frozen: refused
         assertEquals(1, sys.addressChangeRefusals().size)
@@ -83,15 +83,15 @@ open class PaymentsApiTest {
         // each verdict lands a moment later: retries are ordered by requestedOn, and a
         // data class reads every derived property, first(... by requestedOn) included
         sys.advanceSeconds(1)
-        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "declined"))
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), Verdict.declined))
         assertEquals(2, sys.chargeAttempts().size) // the decline triggered a retry
 
         sys.advanceSeconds(1)
-        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "error"))
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), Verdict.error))
         assertEquals(3, sys.chargeAttempts().size)
 
         sys.advanceSeconds(1)
-        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "declined"))
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), Verdict.declined))
         assertEquals(3, sys.chargeAttempts().size) // budget spent: no fourth attempt
         with(sys) { assertTrue(sys.read(order).isExhaustedOrder) }
         assertEquals(1, sys.reservationReleases().size) // compensation fired
@@ -118,7 +118,7 @@ open class PaymentsApiTest {
     fun `refund reverses settlement and a manual charge drives a second episode`() {
         val sys = newSystem()
         val order = sys.newOrder()
-        sys.commit(NewProcessorVerdict(sys.chargeAttempts().single(), "approved"))
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().single(), Verdict.approved))
         sys.tickNightly() // ship it
 
         sys.commit(NewIssueRefund(order, BigDecimal("100")))
@@ -128,7 +128,7 @@ open class PaymentsApiTest {
 
         sys.advanceSeconds(1) // the manual charge is a later attempt than the first
         sys.commit(NewManualCharge(order))
-        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "approved"))
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), Verdict.approved))
         with(sys) { assertTrue(sys.read(order).isSettledOrder) }
         assertEquals(2, sys.receipts().size) // a second episode, a second receipt
     }
@@ -151,7 +151,7 @@ open class PaymentsApiTest {
         sys.tickDaily()
         assertEquals(1, sys.paymentReminders().size) // three-day lull per order
 
-        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "approved"))
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), Verdict.approved))
         sys.tickDaily()
         assertEquals(1, sys.dunningResolutions().size) // the sweep closed the episode
         assertEquals(1, sys.paymentReminders().size)   // and the nagging stopped
@@ -169,12 +169,12 @@ open class PaymentsApiTest {
 
         val order = sys.newOrder(amount = "60")
         sys.advanceSeconds(1) // attempts are ordered by requestedOn: each lands a moment later
-        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "declined"))
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), Verdict.declined))
         sys.advanceSeconds(1)
-        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "approved"))
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), Verdict.approved))
         sys.advanceSeconds(1)
         sys.commit(NewManualCharge(order)) // support double-charges by mistake
-        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "approved"))
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), Verdict.approved))
         // two approvals of 60 against a 60 order: settled with surplus
         assertEquals(0, sys.settledOrders().single().surplus.compareTo(BigDecimal("60")))
 

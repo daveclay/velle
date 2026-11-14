@@ -139,7 +139,7 @@ data class TicketRow(
     val member: Ref.Persisted,
     val subject: String,
     val due: LocalDate,
-    val priority: String,
+    val priority: Priority,
     val assignee: Ref.Persisted?,
     val openedOn: Instant,
 )
@@ -850,7 +850,7 @@ fun Row.toTicketRow(): TicketRow = TicketRow(
     member = fields["member"] as Ref.Persisted,
     subject = fields["subject"] as String,
     due = fields["due"] as LocalDate,
-    priority = fields["priority"] as String,
+    priority = Priority.of(fields["priority"] as String),
     assignee = fields["assignee"] as Ref.Persisted?,
     openedOn = fields["openedOn"] as Instant,
 )
@@ -859,7 +859,7 @@ fun TicketRow.toRow(): Row = Row("Ticket", key, buildMap {
     put("member", member)
     put("subject", subject)
     put("due", due)
-    put("priority", priority)
+    put("priority", priority.word)
     assignee?.let { put("assignee", it) }
     put("openedOn", openedOn)
 })

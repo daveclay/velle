@@ -1,0 +1,8 @@
+-- `max` over a field of a type declared by its words, which have no order.
+Priority is one of "low", "normal", "high"
+
+act Ticket {
+    subject: text
+    priority: Priority
+    top: Priority = max(priority, priority)
+}

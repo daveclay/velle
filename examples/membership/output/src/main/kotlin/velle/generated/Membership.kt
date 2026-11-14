@@ -467,7 +467,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
-        priority = system.get(id, "priority") as String,
+        priority = Priority.of(system.get(id, "priority") as String),
         assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
@@ -703,7 +703,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
-        priority = system.get(id, "priority") as String,
+        priority = Priority.of(system.get(id, "priority") as String),
         assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
@@ -727,7 +727,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
-        priority = system.get(id, "priority") as String,
+        priority = Priority.of(system.get(id, "priority") as String),
         assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
@@ -749,7 +749,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
-        priority = system.get(id, "priority") as String,
+        priority = Priority.of(system.get(id, "priority") as String),
         assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
@@ -771,7 +771,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
-        priority = system.get(id, "priority") as String,
+        priority = Priority.of(system.get(id, "priority") as String),
         assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
@@ -793,7 +793,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
-        priority = system.get(id, "priority") as String,
+        priority = Priority.of(system.get(id, "priority") as String),
         assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
@@ -815,7 +815,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
-        priority = system.get(id, "priority") as String,
+        priority = Priority.of(system.get(id, "priority") as String),
         assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
@@ -837,7 +837,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
-        priority = system.get(id, "priority") as String,
+        priority = Priority.of(system.get(id, "priority") as String),
         assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
@@ -1226,21 +1226,21 @@ act Agent {
     email: text
 }
 
+Priority is one of "low", "normal", "high"
+
 transient act RaiseTicket {
     member: one Member
     subject: text
     due: Date
-    priority: text
+    priority: Priority
     assignee: one Agent?
 }
-
-RaiseTicket requires priority == "low" or priority == "normal" or priority == "high"
 
 shape Ticket {
     member: one Member
     subject: text
     due: Date
-    priority: text
+    priority: Priority
     assignee: one Agent?
     openedOn: timestamp on create
     assigneeEmail: text? = assignee?.email
@@ -1397,6 +1397,19 @@ typealias UrgentQueueQuery = TypedQuery<UrgentQueueFields, UrgentQueue>
 typealias MemberWithDisputedChargeQuery = TypedQuery<MemberWithDisputedChargeFields, MemberWithDisputedCharge>
 typealias LateEscalatedMemberQuery = TypedQuery<LateEscalatedMemberFields, LateEscalatedMember>
 
+// ── the types declared by their words: one enum class each, an entry per word ──
+enum class Priority(val word: String) {
+    low("low"),
+    normal("normal"),
+    high("high");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): Priority = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"low\", \"normal\", \"high\"")
+    }
+}
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewPlan(
@@ -1485,14 +1498,14 @@ data class NewRaiseTicket(
     val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
-    val priority: String,
+    val priority: Priority,
     val assignee: Ref<Agent>? = null,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("subject", subject)
         put("due", due)
-        put("priority", priority)
+        put("priority", priority.word)
         assignee?.let { put("assignee", system.idOf(it)) }
     }
     override fun register(reg: NewRegistry) {
@@ -1753,7 +1766,7 @@ data class Ticket(
     val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
-    val priority: String,
+    val priority: Priority,
     val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
@@ -2078,7 +2091,7 @@ data class ClosedTicket(
     val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
-    val priority: String,
+    val priority: Priority,
     val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
@@ -2112,7 +2125,7 @@ data class OpenTicket(
     val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
-    val priority: String,
+    val priority: Priority,
     val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
@@ -2144,7 +2157,7 @@ data class OverdueTicket(
     val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
-    val priority: String,
+    val priority: Priority,
     val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
@@ -2176,7 +2189,7 @@ data class HighPriority(
     val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
-    val priority: String,
+    val priority: Priority,
     val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
@@ -2208,7 +2221,7 @@ data class Unassigned(
     val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
-    val priority: String,
+    val priority: Priority,
     val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
@@ -2240,7 +2253,7 @@ data class NeedsAttention(
     val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
-    val priority: String,
+    val priority: Priority,
     val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
@@ -2272,7 +2285,7 @@ data class UrgentQueue(
     val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
-    val priority: String,
+    val priority: Priority,
     val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
@@ -2493,7 +2506,7 @@ class TicketFields(path: List<String> = emptyList()) : Fields(path) {
     val member: MemberFields get() = MemberFields(fieldPath + "member")
     val subject: TextField get() = TextField(fieldPath + "subject")
     val due: DateField get() = DateField(fieldPath + "due")
-    val priority: TextField get() = TextField(fieldPath + "priority")
+    val priority: EnumField<Priority> get() = EnumField<Priority>(fieldPath + "priority") { it.word }
     val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
     val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
     val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
@@ -2660,7 +2673,7 @@ class ClosedTicketFields(path: List<String> = emptyList()) : Fields(path) {
     val member: MemberFields get() = MemberFields(fieldPath + "member")
     val subject: TextField get() = TextField(fieldPath + "subject")
     val due: DateField get() = DateField(fieldPath + "due")
-    val priority: TextField get() = TextField(fieldPath + "priority")
+    val priority: EnumField<Priority> get() = EnumField<Priority>(fieldPath + "priority") { it.word }
     val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
     val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
     val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
@@ -2679,7 +2692,7 @@ class OpenTicketFields(path: List<String> = emptyList()) : Fields(path) {
     val member: MemberFields get() = MemberFields(fieldPath + "member")
     val subject: TextField get() = TextField(fieldPath + "subject")
     val due: DateField get() = DateField(fieldPath + "due")
-    val priority: TextField get() = TextField(fieldPath + "priority")
+    val priority: EnumField<Priority> get() = EnumField<Priority>(fieldPath + "priority") { it.word }
     val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
     val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
     val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
@@ -2696,7 +2709,7 @@ class OverdueTicketFields(path: List<String> = emptyList()) : Fields(path) {
     val member: MemberFields get() = MemberFields(fieldPath + "member")
     val subject: TextField get() = TextField(fieldPath + "subject")
     val due: DateField get() = DateField(fieldPath + "due")
-    val priority: TextField get() = TextField(fieldPath + "priority")
+    val priority: EnumField<Priority> get() = EnumField<Priority>(fieldPath + "priority") { it.word }
     val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
     val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
     val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
@@ -2713,7 +2726,7 @@ class HighPriorityFields(path: List<String> = emptyList()) : Fields(path) {
     val member: MemberFields get() = MemberFields(fieldPath + "member")
     val subject: TextField get() = TextField(fieldPath + "subject")
     val due: DateField get() = DateField(fieldPath + "due")
-    val priority: TextField get() = TextField(fieldPath + "priority")
+    val priority: EnumField<Priority> get() = EnumField<Priority>(fieldPath + "priority") { it.word }
     val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
     val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
     val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
@@ -2730,7 +2743,7 @@ class UnassignedFields(path: List<String> = emptyList()) : Fields(path) {
     val member: MemberFields get() = MemberFields(fieldPath + "member")
     val subject: TextField get() = TextField(fieldPath + "subject")
     val due: DateField get() = DateField(fieldPath + "due")
-    val priority: TextField get() = TextField(fieldPath + "priority")
+    val priority: EnumField<Priority> get() = EnumField<Priority>(fieldPath + "priority") { it.word }
     val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
     val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
     val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
@@ -2747,7 +2760,7 @@ class NeedsAttentionFields(path: List<String> = emptyList()) : Fields(path) {
     val member: MemberFields get() = MemberFields(fieldPath + "member")
     val subject: TextField get() = TextField(fieldPath + "subject")
     val due: DateField get() = DateField(fieldPath + "due")
-    val priority: TextField get() = TextField(fieldPath + "priority")
+    val priority: EnumField<Priority> get() = EnumField<Priority>(fieldPath + "priority") { it.word }
     val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
     val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
     val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
@@ -2764,7 +2777,7 @@ class UrgentQueueFields(path: List<String> = emptyList()) : Fields(path) {
     val member: MemberFields get() = MemberFields(fieldPath + "member")
     val subject: TextField get() = TextField(fieldPath + "subject")
     val due: DateField get() = DateField(fieldPath + "due")
-    val priority: TextField get() = TextField(fieldPath + "priority")
+    val priority: EnumField<Priority> get() = EnumField<Priority>(fieldPath + "priority") { it.word }
     val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
     val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
     val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")

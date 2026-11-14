@@ -1,0 +1,8 @@
+-- One name declared twice with `is one of`.
+Role is one of "pharmacist", "admin"
+Role is one of "staff", "admin"
+
+act Staff {
+    name: text
+    role: Role
+}

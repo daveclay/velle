@@ -44,6 +44,10 @@ class TypeRegistry(types: List<VelleType<*>>, functions: List<VelleFunction> = e
     /** Every function, builtin and registered, by `namespace.name`. */
     val functions: Map<String, VelleFunction>
 
+    /** The functions given at construction, the registered ones without the builtins: what a
+     *  registry built on this one is given again. */
+    val registeredFunctions: List<VelleFunction> = functions
+
     /** The operator table across every registered type, keyed (left, op, right). */
     private val operators: Map<Triple<String, String, String>, Operator<*, *, *>>
 

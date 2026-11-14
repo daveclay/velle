@@ -88,7 +88,7 @@ class TypedStoreTest {
         val inv = billing.invoices().last()
         accept(billing.commit(NewLineItem(inv, "Design", Money.of("1200.00"), 1)))
         accept(billing.commit(NewSubmitPayment(inv, Money.of("1200.00"))))
-        assertEquals("paid", billing.read(inv).status)
+        assertEquals(Status.paid, billing.read(inv).status)
         assertEquals(1, billing.receipts().size)
         assertEquals(1, billing.receiptEmails().size)
 

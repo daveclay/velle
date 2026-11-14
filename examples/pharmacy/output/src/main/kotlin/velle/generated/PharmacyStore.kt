@@ -24,7 +24,7 @@ data class TickRow(
 data class StaffRow(
     val key: StoreKey,
     val name: String,
-    val role: String,
+    val role: Role,
 )
 
 /** One stored LicenceRenewal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -66,7 +66,7 @@ data class InteractionRow(
     val key: StoreKey,
     val drugA: Ref.Persisted,
     val drugB: Ref.Persisted,
-    val severity: String,
+    val severity: Severity,
 )
 
 /** One stored PriceChange row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -304,7 +304,7 @@ data class VerificationRow(
     val key: StoreKey,
     val fill: Ref.Persisted,
     val pharmacist: Ref.Persisted,
-    val outcome: String,
+    val outcome: Verdict,
     val note: String,
     val verifiedAt: Instant,
 )
@@ -406,7 +406,7 @@ data class ClaimRow(
 data class ClaimResponseRow(
     val key: StoreKey,
     val claim: Ref.Persisted,
-    val outcome: String,
+    val outcome: ClaimOutcome,
     val paidAmount: BigDecimal,
     val patientPays: BigDecimal,
     val respondedAt: Instant,
@@ -714,39 +714,33 @@ interface PharmacyStore {
     /** Serves rule FollowUpClaim — `StaleClaim where not (exists (ClaimFollowUp where (claim == this) and (followedUpAt > (now - 24 hours))))`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun followUpClaimCandidates(submittedAtBefore: Instant, followedUpAtAfter: Instant): List<ClaimRow>
-    /** Serves never #1 — `Staff where ((role != "pharmacist") and (role != "technician")) and (role != "admin")`.
+    /** Serves never #1 — `LicenceRenewal where pharmacist is not Pharmacist`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never1Candidates(): List<StaffRow>
-    /** Serves never #2 — `LicenceRenewal where pharmacist is not Pharmacist`.
+    fun never1Candidates(): List<LicenceRenewalRow>
+    /** Serves never #2 — `Drug where ((schedule < 0) or (schedule == 1)) or (schedule > 5)`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never2Candidates(): List<LicenceRenewalRow>
-    /** Serves never #3 — `Drug where ((schedule < 0) or (schedule == 1)) or (schedule > 5)`.
+    fun never2Candidates(): List<DrugRow>
+    /** Serves never #4 — `PriceChange where unitPrice < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never3Candidates(): List<DrugRow>
-    /** Serves never #5 — `Interaction where (severity != "major") and (severity != "moderate")`.
+    fun never4Candidates(): List<PriceChangeRow>
+    /** Serves never #7 — `StockLot where received <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never5Candidates(): List<InteractionRow>
-    /** Serves never #6 — `PriceChange where unitPrice < 0`.
+    fun never7Candidates(): List<StockLotRow>
+    /** Serves never #10 — `Prescription where quantity <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never6Candidates(): List<PriceChangeRow>
-    /** Serves never #9 — `StockLot where received <= 0`.
+    fun never10Candidates(): List<PrescriptionRow>
+    /** Serves never #11 — `Prescription where daysSupply <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never9Candidates(): List<StockLotRow>
-    /** Serves never #12 — `Prescription where quantity <= 0`.
+    fun never11Candidates(): List<PrescriptionRow>
+    /** Serves never #12 — `Prescription where refillsAuthorized < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never12Candidates(): List<PrescriptionRow>
-    /** Serves never #13 — `Prescription where daysSupply <= 0`.
+    /** Serves never #13 — `Prescription where (drug is ScheduleTwo) and (refillsAuthorized > 0)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never13Candidates(): List<PrescriptionRow>
-    /** Serves never #14 — `Prescription where refillsAuthorized < 0`.
+    /** Serves never #14 — `Prescription where (drug is Controlled) and (refillsAuthorized > 5)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never14Candidates(): List<PrescriptionRow>
-    /** Serves never #15 — `Prescription where (drug is ScheduleTwo) and (refillsAuthorized > 0)`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never15Candidates(): List<PrescriptionRow>
-    /** Serves never #16 — `Prescription where (drug is Controlled) and (refillsAuthorized > 5)`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never16Candidates(): List<PrescriptionRow>
 
     // ── capture memory: null when no current membership (Reference §13) ──
     fun readyForPickupCapture(instance: Ref.Persisted): ReadyForPickupCapture?
@@ -790,17 +784,15 @@ class PharmacyStoreQuestions(model: Model) {
     val nagRefillTaskCandidates = QTemplate.of(model, "RefillTask", model.rules.getValue("NagRefillTask").condition)
     val submitClaimCandidates = QTemplate.of(model, "Fill", model.rules.getValue("SubmitClaim").condition)
     val followUpClaimCandidates = QTemplate.of(model, "Claim", model.rules.getValue("FollowUpClaim").condition)
-    val never1Candidates = QTemplate.of(model, "Staff", model.nevers[0].target)
-    val never2Candidates = QTemplate.of(model, "LicenceRenewal", model.nevers[1].target)
-    val never3Candidates = QTemplate.of(model, "Drug", model.nevers[2].target)
-    val never5Candidates = QTemplate.of(model, "Interaction", model.nevers[4].target)
-    val never6Candidates = QTemplate.of(model, "PriceChange", model.nevers[5].target)
-    val never9Candidates = QTemplate.of(model, "StockLot", model.nevers[8].target)
+    val never1Candidates = QTemplate.of(model, "LicenceRenewal", model.nevers[0].target)
+    val never2Candidates = QTemplate.of(model, "Drug", model.nevers[1].target)
+    val never4Candidates = QTemplate.of(model, "PriceChange", model.nevers[3].target)
+    val never7Candidates = QTemplate.of(model, "StockLot", model.nevers[6].target)
+    val never10Candidates = QTemplate.of(model, "Prescription", model.nevers[9].target)
+    val never11Candidates = QTemplate.of(model, "Prescription", model.nevers[10].target)
     val never12Candidates = QTemplate.of(model, "Prescription", model.nevers[11].target)
     val never13Candidates = QTemplate.of(model, "Prescription", model.nevers[12].target)
     val never14Candidates = QTemplate.of(model, "Prescription", model.nevers[13].target)
-    val never15Candidates = QTemplate.of(model, "Prescription", model.nevers[14].target)
-    val never16Candidates = QTemplate.of(model, "Prescription", model.nevers[15].target)
 }
 
 /**
@@ -1174,29 +1166,29 @@ open class PharmacyStoreOverGeneric(
         backend.fetchCandidates("Claim", questions.followUpClaimCandidates.instantiate(listOf(QConst.QDateTime(submittedAtBefore), QConst.QDateTime(followedUpAtAfter))))
             .map { it.toClaimRow() }
 
-    override fun never1Candidates(): List<StaffRow> =
-        backend.fetchCandidates("Staff", questions.never1Candidates.instantiate(listOf()))
-            .map { it.toStaffRow() }
-
-    override fun never2Candidates(): List<LicenceRenewalRow> =
-        backend.fetchCandidates("LicenceRenewal", questions.never2Candidates.instantiate(listOf()))
+    override fun never1Candidates(): List<LicenceRenewalRow> =
+        backend.fetchCandidates("LicenceRenewal", questions.never1Candidates.instantiate(listOf()))
             .map { it.toLicenceRenewalRow() }
 
-    override fun never3Candidates(): List<DrugRow> =
-        backend.fetchCandidates("Drug", questions.never3Candidates.instantiate(listOf()))
+    override fun never2Candidates(): List<DrugRow> =
+        backend.fetchCandidates("Drug", questions.never2Candidates.instantiate(listOf()))
             .map { it.toDrugRow() }
 
-    override fun never5Candidates(): List<InteractionRow> =
-        backend.fetchCandidates("Interaction", questions.never5Candidates.instantiate(listOf()))
-            .map { it.toInteractionRow() }
-
-    override fun never6Candidates(): List<PriceChangeRow> =
-        backend.fetchCandidates("PriceChange", questions.never6Candidates.instantiate(listOf()))
+    override fun never4Candidates(): List<PriceChangeRow> =
+        backend.fetchCandidates("PriceChange", questions.never4Candidates.instantiate(listOf()))
             .map { it.toPriceChangeRow() }
 
-    override fun never9Candidates(): List<StockLotRow> =
-        backend.fetchCandidates("StockLot", questions.never9Candidates.instantiate(listOf()))
+    override fun never7Candidates(): List<StockLotRow> =
+        backend.fetchCandidates("StockLot", questions.never7Candidates.instantiate(listOf()))
             .map { it.toStockLotRow() }
+
+    override fun never10Candidates(): List<PrescriptionRow> =
+        backend.fetchCandidates("Prescription", questions.never10Candidates.instantiate(listOf()))
+            .map { it.toPrescriptionRow() }
+
+    override fun never11Candidates(): List<PrescriptionRow> =
+        backend.fetchCandidates("Prescription", questions.never11Candidates.instantiate(listOf()))
+            .map { it.toPrescriptionRow() }
 
     override fun never12Candidates(): List<PrescriptionRow> =
         backend.fetchCandidates("Prescription", questions.never12Candidates.instantiate(listOf()))
@@ -1208,14 +1200,6 @@ open class PharmacyStoreOverGeneric(
 
     override fun never14Candidates(): List<PrescriptionRow> =
         backend.fetchCandidates("Prescription", questions.never14Candidates.instantiate(listOf()))
-            .map { it.toPrescriptionRow() }
-
-    override fun never15Candidates(): List<PrescriptionRow> =
-        backend.fetchCandidates("Prescription", questions.never15Candidates.instantiate(listOf()))
-            .map { it.toPrescriptionRow() }
-
-    override fun never16Candidates(): List<PrescriptionRow> =
-        backend.fetchCandidates("Prescription", questions.never16Candidates.instantiate(listOf()))
             .map { it.toPrescriptionRow() }
 
     override fun readyForPickupCapture(instance: Ref.Persisted): ReadyForPickupCapture? =
@@ -1471,28 +1455,24 @@ class PharmacyStoreResolver(
             questions.submitClaimCandidates.match(filter)?.let { h -> return store.submitClaimCandidates().map { it.toRow() } }
         if (shape == "Claim")
             questions.followUpClaimCandidates.match(filter)?.let { h -> return store.followUpClaimCandidates(h.instant(0), h.instant(1)).map { it.toRow() } }
-        if (shape == "Staff")
-            questions.never1Candidates.match(filter)?.let { h -> return store.never1Candidates().map { it.toRow() } }
         if (shape == "LicenceRenewal")
-            questions.never2Candidates.match(filter)?.let { h -> return store.never2Candidates().map { it.toRow() } }
+            questions.never1Candidates.match(filter)?.let { h -> return store.never1Candidates().map { it.toRow() } }
         if (shape == "Drug")
-            questions.never3Candidates.match(filter)?.let { h -> return store.never3Candidates().map { it.toRow() } }
-        if (shape == "Interaction")
-            questions.never5Candidates.match(filter)?.let { h -> return store.never5Candidates().map { it.toRow() } }
+            questions.never2Candidates.match(filter)?.let { h -> return store.never2Candidates().map { it.toRow() } }
         if (shape == "PriceChange")
-            questions.never6Candidates.match(filter)?.let { h -> return store.never6Candidates().map { it.toRow() } }
+            questions.never4Candidates.match(filter)?.let { h -> return store.never4Candidates().map { it.toRow() } }
         if (shape == "StockLot")
-            questions.never9Candidates.match(filter)?.let { h -> return store.never9Candidates().map { it.toRow() } }
+            questions.never7Candidates.match(filter)?.let { h -> return store.never7Candidates().map { it.toRow() } }
+        if (shape == "Prescription")
+            questions.never10Candidates.match(filter)?.let { h -> return store.never10Candidates().map { it.toRow() } }
+        if (shape == "Prescription")
+            questions.never11Candidates.match(filter)?.let { h -> return store.never11Candidates().map { it.toRow() } }
         if (shape == "Prescription")
             questions.never12Candidates.match(filter)?.let { h -> return store.never12Candidates().map { it.toRow() } }
         if (shape == "Prescription")
             questions.never13Candidates.match(filter)?.let { h -> return store.never13Candidates().map { it.toRow() } }
         if (shape == "Prescription")
             questions.never14Candidates.match(filter)?.let { h -> return store.never14Candidates().map { it.toRow() } }
-        if (shape == "Prescription")
-            questions.never15Candidates.match(filter)?.let { h -> return store.never15Candidates().map { it.toRow() } }
-        if (shape == "Prescription")
-            questions.never16Candidates.match(filter)?.let { h -> return store.never16Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
 
@@ -1521,12 +1501,12 @@ fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
 fun Row.toStaffRow(): StaffRow = StaffRow(
     key = key,
     name = fields["name"] as String,
-    role = fields["role"] as String,
+    role = Role.of(fields["role"] as String),
 )
 
 fun StaffRow.toRow(): Row = Row("Staff", key, buildMap {
     put("name", name)
-    put("role", role)
+    put("role", role.word)
 })
 
 fun Row.toLicenceRenewalRow(): LicenceRenewalRow = LicenceRenewalRow(
@@ -1589,13 +1569,13 @@ fun Row.toInteractionRow(): InteractionRow = InteractionRow(
     key = key,
     drugA = fields["drugA"] as Ref.Persisted,
     drugB = fields["drugB"] as Ref.Persisted,
-    severity = fields["severity"] as String,
+    severity = Severity.of(fields["severity"] as String),
 )
 
 fun InteractionRow.toRow(): Row = Row("Interaction", key, buildMap {
     put("drugA", drugA)
     put("drugB", drugB)
-    put("severity", severity)
+    put("severity", severity.word)
 })
 
 fun Row.toPriceChangeRow(): PriceChangeRow = PriceChangeRow(
@@ -1984,7 +1964,7 @@ fun Row.toVerificationRow(): VerificationRow = VerificationRow(
     key = key,
     fill = fields["fill"] as Ref.Persisted,
     pharmacist = fields["pharmacist"] as Ref.Persisted,
-    outcome = fields["outcome"] as String,
+    outcome = Verdict.of(fields["outcome"] as String),
     note = fields["note"] as String,
     verifiedAt = fields["verifiedAt"] as Instant,
 )
@@ -1992,7 +1972,7 @@ fun Row.toVerificationRow(): VerificationRow = VerificationRow(
 fun VerificationRow.toRow(): Row = Row("Verification", key, buildMap {
     put("fill", fill)
     put("pharmacist", pharmacist)
-    put("outcome", outcome)
+    put("outcome", outcome.word)
     put("note", note)
     put("verifiedAt", verifiedAt)
 })
@@ -2150,7 +2130,7 @@ fun ClaimRow.toRow(): Row = Row("Claim", key, buildMap {
 fun Row.toClaimResponseRow(): ClaimResponseRow = ClaimResponseRow(
     key = key,
     claim = fields["claim"] as Ref.Persisted,
-    outcome = fields["outcome"] as String,
+    outcome = ClaimOutcome.of(fields["outcome"] as String),
     paidAmount = fields["paidAmount"] as BigDecimal,
     patientPays = fields["patientPays"] as BigDecimal,
     respondedAt = fields["respondedAt"] as Instant,
@@ -2158,7 +2138,7 @@ fun Row.toClaimResponseRow(): ClaimResponseRow = ClaimResponseRow(
 
 fun ClaimResponseRow.toRow(): Row = Row("ClaimResponse", key, buildMap {
     put("claim", claim)
-    put("outcome", outcome)
+    put("outcome", outcome.word)
     put("paidAmount", paidAmount)
     put("patientPays", patientPays)
     put("respondedAt", respondedAt)

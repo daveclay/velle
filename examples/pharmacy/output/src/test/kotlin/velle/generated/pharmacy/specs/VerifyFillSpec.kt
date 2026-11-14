@@ -13,8 +13,6 @@ import velle.generated.pharmacy.*
  *
  * never (VerifyFill where (actor == fill.filledBy) and (fill.lot.drug is Controlled))
  *
- * VerifyFill requires (outcome == "approved") or (outcome == "rejected")
- *
  * VerifyFill requires actor to be LicensedPharmacist
  *
  */

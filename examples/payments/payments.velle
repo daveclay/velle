@@ -115,16 +115,16 @@ shape ChargeAttempt {
 -- its own act referencing the attempt — never a write into it. The verdict's
 -- arrival is the input; the response record carries the commit-stamped
 -- `respondedOn`.
+Verdict is one of "approved", "declined", "error"
+
 transient act ProcessorVerdict {
     attempt: one ChargeAttempt
-    outcome: text
+    outcome: Verdict
 }
-
-ProcessorVerdict requires outcome == "approved" or outcome == "declined" or outcome == "error"
 
 shape ChargeResponse {
     attempt: one ChargeAttempt
-    outcome: text
+    outcome: Verdict
     respondedOn: timestamp on create
 }
 
@@ -149,7 +149,7 @@ shape PendingAttempt = ChargeAttempt where
     not exists ChargeResponse for this and not exists AttemptTimeout for this
 
 shape CompletedAttempt = ChargeAttempt where exists ChargeResponse for this {
-    outcome: text = latest(ChargeResponse where attempt == this by respondedOn).outcome
+    outcome: Verdict = latest(ChargeResponse where attempt == this by respondedOn).outcome
 }
 
 shape SuccessfulCharge = CompletedAttempt where outcome == "approved"

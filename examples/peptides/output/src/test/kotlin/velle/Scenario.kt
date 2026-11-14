@@ -110,14 +110,14 @@ class Scenario(val sys: PeptidesSystem) {
         return Trial(lab, greenhouse, sys.greenhouseTrials().last())
     }
 
-    fun plot(t: Trial, bench: String, treatment: String): GreenhousePlot {
+    fun plot(t: Trial, bench: String, treatment: Arm): GreenhousePlot {
         accept(sys.commit(NewGreenhousePlot(t.trial, bench, treatment))); return sys.greenhousePlots().last()
     }
 
     /** One plot per arm. */
     fun laidOut(t: Trial = approvedTrial()): Trial {
-        t.treated = plot(t, "A1", "peptide")
-        t.control = plot(t, "B1", "control")
+        t.treated = plot(t, "A1", Arm.peptide)
+        t.control = plot(t, "B1", Arm.control)
         return t
     }
 
@@ -171,8 +171,8 @@ class Scenario(val sys: PeptidesSystem) {
     }
 
     fun fieldPlots(f: Field): Field {
-        accept(sys.commit(NewFieldPlot(f.trial, 1, "peptide"))); f.treated = sys.fieldPlots().last()
-        accept(sys.commit(NewFieldPlot(f.trial, 1, "control"))); f.control = sys.fieldPlots().last()
+        accept(sys.commit(NewFieldPlot(f.trial, 1, Arm.peptide))); f.treated = sys.fieldPlots().last()
+        accept(sys.commit(NewFieldPlot(f.trial, 1, Arm.control))); f.control = sys.fieldPlots().last()
         return f
     }
 

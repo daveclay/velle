@@ -72,7 +72,7 @@ data class ChargeAttemptRow(
 data class ChargeResponseRow(
     val key: StoreKey,
     val attempt: Ref.Persisted,
-    val outcome: String,
+    val outcome: Verdict,
     val respondedOn: Instant,
 )
 
@@ -782,13 +782,13 @@ fun ChargeAttemptRow.toRow(): Row = Row("ChargeAttempt", key, buildMap {
 fun Row.toChargeResponseRow(): ChargeResponseRow = ChargeResponseRow(
     key = key,
     attempt = fields["attempt"] as Ref.Persisted,
-    outcome = fields["outcome"] as String,
+    outcome = Verdict.of(fields["outcome"] as String),
     respondedOn = fields["respondedOn"] as Instant,
 )
 
 fun ChargeResponseRow.toRow(): Row = Row("ChargeResponse", key, buildMap {
     put("attempt", attempt)
-    put("outcome", outcome)
+    put("outcome", outcome.word)
     put("respondedOn", respondedOn)
 })
 

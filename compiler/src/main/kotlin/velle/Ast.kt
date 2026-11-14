@@ -129,6 +129,14 @@ data class UsesDecl(val qualified: String, val alias: String? = null) : Decl {
     val name: String get() = alias ?: qualified.substringAfterLast('.')
 }
 
+/**
+ * `Role is one of "pharmacist", "technician", "admin"` (Reference §5, "A field that takes one
+ * of a few words"): a type the spec declares, whose values are exactly [words]. A field of
+ * the type holds one of the words and nothing else; a quoted word beside it is read against
+ * the list when the spec is compiled. The model builds an [EnumType] per declaration.
+ */
+data class EnumDecl(val name: String, val words: List<String>) : Decl
+
 // ── Shape / refinement members ───────────────────────────────────────────────
 
 sealed interface Member

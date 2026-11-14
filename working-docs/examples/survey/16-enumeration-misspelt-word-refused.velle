@@ -1,12 +1,12 @@
 -- The same spec with one word misspelt in a refinement: "numbr". The compiler
--- accepts it, because the field is a text and any text compares with any
--- text; at runtime NumberField holds no record, ever, and nothing says why.
+-- reads the word against the declaration and refuses it where it is written,
+-- naming the three words (checks F2).
+FieldType is one of "number", "date", "text"
+
 act Field {
     name: text unique
-    type: text
+    type: FieldType
 }
-
-Field requires type in ["number", "date", "text"]
 
 shape NumberField = Field where type == "numbr"
 

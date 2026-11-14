@@ -11,8 +11,6 @@ import velle.generated.pharmacy.*
  *     ClaimResponse from { claim: claim, outcome: outcome, paidAmount: paidAmount, patientPays: patientPays }
  * }
  *
- * Adjudication requires (outcome == "paid") or (outcome == "rejected")
- *
  * never (Adjudication where (paidAmount < 0) or (patientPays < 0))
  *
  */

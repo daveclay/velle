@@ -16,13 +16,9 @@ each case below is an executable test.
 
 - ApplyPrice - a new ChangePrice sets product.price
 
-## StaffSpec.kt
-
-
 ## Not yet generated
 
+- requires #3: the role gate an act's `by` clause states
 - requires #4: the role gate an act's `by` clause states
-- requires #5: the role gate an act's `by` clause states
-- requires #2: non-comparison predicate
-- never #3: non-literal bound
-- requires #1: shape is not an act
+- requires #1: non-comparison predicate
+- never #2: non-literal bound

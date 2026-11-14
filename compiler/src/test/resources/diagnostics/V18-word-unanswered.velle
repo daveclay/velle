@@ -1,0 +1,28 @@
+-- A transient act carrying a field of a type declared by its words, with one of the words answered by no rule or `never`.
+Outcome is one of "approved", "declined", "error"
+
+shape Entry {
+    name: text unique
+}
+
+transient act Review {
+    entry: one Entry
+    outcome: Outcome
+}
+
+shape Approval {
+    entry: one Entry
+}
+
+shape Failure {
+    entry: one Entry
+    outcome: Outcome
+}
+
+rule RecordApproval when (Review where outcome == "approved") {
+    Approval from { entry: entry }
+}
+
+rule RecordFailure when (Review where outcome == "declined") {
+    Failure from { entry: entry, outcome: outcome }
+}

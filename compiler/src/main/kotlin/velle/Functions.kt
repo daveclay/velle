@@ -111,6 +111,8 @@ class FunctionResolver(private val registry: TypeRegistry, private val elementTy
         val result: VType = when (val r = sig.result) {
             is Returns.Is -> registry.typeOfClass(r.type)?.let { registry.vtypeOf(it) }
                 ?: return Reason("F2", "'$call' — '${fn.qualifiedName}' returns ${r.type.qualifiedName}, which is not a registered type")
+            is Returns.Named -> registry[r.qualifiedName]?.let { registry.vtypeOf(it) }
+                ?: return Reason("F2", "'$call' — '${fn.qualifiedName}' returns '${r.qualifiedName}', which is not a registered type")
             is Returns.SameAs -> anchor(r.index) ?: return Outcome.Ok(sig, VType.Unknown, resolved)
             is Returns.ElementOf -> (bare(args.getOrNull(r.index)?.type) as? VType.CollS)?.let { elementTypeOf(it) }
                 ?: return Outcome.Ok(sig, VType.Unknown, resolved)
@@ -122,7 +124,9 @@ class FunctionResolver(private val registry: TypeRegistry, private val elementTy
     private fun missing(fn: VelleFunction, call: String, obj: VelleType<*>, k: kotlin.reflect.KClass<*>, p: velle.ext.Parameter, arg: String, plural: Boolean = false): Reason {
         val isExt = registry.vtypeOf(obj) is VType.Ext
         val what = if (plural) "them" else "it"
-        return if (isExt) {
+        return if (obj is EnumType && k == Ordered::class) {
+            Reason("F2", "'$call' — the words of '${obj.name}' have no order, so '${fn.name}' is not defined on them (Reference §5)")
+        } else if (isExt) {
             val cap = if (k == Ordered::class) "declares no ordering" else "does not implement `${k.simpleName}`"
             Reason("E3", "'$call' — ${describeType(obj)} $cap, so '${fn.name}' is not defined on $what; implement `${k.simpleName}` on the type")
         } else if (k == Ordered::class) {
@@ -149,7 +153,8 @@ class FunctionResolver(private val registry: TypeRegistry, private val elementTy
     }
 
     private fun describeType(t: VelleType<*>): String =
-        if (registry.vtypeOf(t) is VType.Ext) "'${t.name}' (${t::class.qualifiedName})" else article(t.name)
+        if (t is EnumType) "'${t.name}'"
+        else if (registry.vtypeOf(t) is VType.Ext) "'${t.name}' (${t::class.qualifiedName})" else article(t.name)
 
     private fun describeArg(t: VType?): String = when (t) {
         null -> "untyped"

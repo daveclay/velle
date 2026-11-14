@@ -20,6 +20,8 @@ The class carries no `id`, no timestamp fields, no derived properties, and no ac
 
 A `uuid` field is a `java.util.UUID`, a `duration` field a `java.time.Duration`, a `time` field a `java.time.LocalTime`, and a `bytes` field a `ByteArray` on the input class and the model object ([§5](Reference-05-Scalars)); a `uuid` with `initially randomUUID` is not an input parameter.
 
+A field that takes one of a few words ([§5](Reference-05-Scalars#a-field-that-takes-one-of-a-few-words)) is a Kotlin `enum class` named after the declaration, generated beside the input classes, with one entry per word carrying the word as `word`, and `of(word)` back from a word. For `Role is one of "pharmacist", "technician", "admin"` in `examples/pharmacy/pharmacy.velle`, `NewHireStaff` takes a `Role`, and `Role.pharmacist.word` is `"pharmacist"`. An entry is spelled as its word when the word is a Kotlin identifier; otherwise every character that is not a letter or a digit is an underscore, and a word that is a Kotlin keyword is written in backticks, `Status.\`open\``. A word the declaration does not list cannot be written through the input class; one arriving raw, over HTTP, is refused at the door with the words listed.
+
 ## Parts
 
 An act declared with inline parts ([§6](Reference-06-Relationships), "Inline part creation") takes one list per part collection, each element a `New` class for the part shape without its back-reference. A part with parts of its own nests the same way. From `examples/orders/orders.velle`:

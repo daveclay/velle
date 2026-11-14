@@ -55,5 +55,4 @@ each case below is an executable test.
 ## Not yet generated
 
 - never #1: never over a refinement
-- requires #4: multi-conjunct predicate
-- never #5: non-comparison predicate
+- never #4: non-comparison predicate

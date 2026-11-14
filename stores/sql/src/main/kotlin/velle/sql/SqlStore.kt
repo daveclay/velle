@@ -20,6 +20,7 @@ import velle.VType
 import velle.VelleSystem
 import velle.canonicalAny
 import velle.equalAny
+import velle.EnumType
 import velle.ext.VelleType
 import java.math.BigDecimal
 import velle.AdmissionKey
@@ -228,10 +229,7 @@ open class SqlStore(
         // E4: a binding for every extension type a stored field holds, and the binding
         // round-trips the type's own samples through the dialect's column for its class
         for (type in model.storedExtensionTypes) {
-            val b = this.bindings[type.qualifiedName]
-                ?: throw IllegalStateException("${dialect.name} store has no binding for '${model.specNameOf(type)}' (${type.qualifiedName}); " +
-                    "add a SqlTypeBinding<${type.kotlinClass.simpleName}> and name it in META-INF/services/velle.sql.SqlTypeBinding")
-            roundTrip(type, b)
+            roundTrip(type, bindingFor(type))
         }
     }
 
@@ -309,7 +307,15 @@ open class SqlStore(
     }
 
     private fun bindingOf(t: VType.Ext): SqlTypeBinding<*> =
-        bindings[t.qualifiedName] ?: throw IllegalStateException("${dialect.name} store has no binding for '${t.qualifiedName}'")
+        model.registry[t.qualifiedName]?.let { bindingFor(it) } ?: throw IllegalStateException("${dialect.name} store has no binding for '${t.qualifiedName}'")
+
+    /** The binding for an extension type: a type the spec declares by its words is held as its
+     *  word by [EnumBinding], shipped here; any other type's binding is a library of its own (E4). */
+    private fun bindingFor(type: VelleType<*>): SqlTypeBinding<*> =
+        if (type is EnumType) EnumBinding(type)
+        else bindings[type.qualifiedName]
+            ?: throw IllegalStateException("${dialect.name} store has no binding for '${model.specNameOf(type)}' (${type.qualifiedName}); " +
+                "add a SqlTypeBinding<${type.kotlinClass.simpleName}> and name it in META-INF/services/velle.sql.SqlTypeBinding")
 
     /** Numerics arrive as BigDecimal from the runtime, but a typed store layer
      *  may hand back Int/Long/Double (the generated row types). */

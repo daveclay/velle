@@ -94,7 +94,7 @@ open class QueryApiTest {
 
         val overdue = sys.read.overdueInvoices.orderBy { due.ascending }.list()
         assertEquals(listOf(d1), overdue.map { it.due })
-        assertEquals("overdue", overdue.single().status)
+        assertEquals(Status.overdue, overdue.single().status)
 
         val viaMembership = sys.read.invoices.where { isOverdueInvoice() }.orderBy { due.ascending }.list()
         assertEquals(overdue.map { it.key }, viaMembership.map { it.key })
@@ -257,7 +257,7 @@ open class QueryApiTest {
         val after = sys.read(inv)
         assertEquals(Money.ZERO, after.balance)
         assertEquals(true, after.isPaidInvoice)
-        assertEquals("paid", after.status)
+        assertEquals(Status.paid, after.status)
 
         // a refinement root fetches the member, or null
         assertEquals(after.key, sys.read.paidInvoice(inv)?.key)

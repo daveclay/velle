@@ -1,18 +1,17 @@
 -- A request that carries one of three words, answered one word at a time: one
--- rule for "approved", one for the other two. Over a text field the compiler
--- cannot see that the two rules cover every request, because a text has every
--- other value too, so V18 refuses the spec. Over a declared type with exactly
--- these three words the two rules cover it (OQ132 D5).
+-- rule for "approved", one for the other two. Over the declared type the two
+-- rules name every word, so the compiler sees every request answered (checks
+-- V18). Drop "error" from the second rule and the compiler names it.
 shape Entry {
     name: text unique
 }
 
+Outcome is one of "approved", "declined", "error"
+
 transient act Review {
     entry: one Entry
-    outcome: text
+    outcome: Outcome
 }
-
-Review requires outcome in ["approved", "declined", "error"]
 
 shape Approval {
     entry: one Entry
@@ -21,7 +20,7 @@ shape Approval {
 
 shape Failure {
     entry: one Entry
-    outcome: text
+    outcome: Outcome
     reviewedOn: timestamp on create
 }
 

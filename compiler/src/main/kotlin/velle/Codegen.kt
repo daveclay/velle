@@ -8,6 +8,18 @@ package velle
  * system manually.
  * A spike: sugar over VelleSystem, not a standalone compilation.
  */
+/** Kotlin's keywords, hard, soft, and modifier: an enum entry spelled as one is written in backticks,
+ *  since a modifier such as `open` before an entry reads as a modifier, not the entry. */
+internal val KOTLIN_KEYWORDS = setOf(
+    "as", "break", "class", "continue", "do", "else", "false", "for", "fun", "if", "in", "interface", "is", "null",
+    "object", "package", "return", "super", "this", "throw", "true", "try", "typealias", "typeof", "val", "var", "when", "while",
+    "by", "catch", "constructor", "delegate", "dynamic", "field", "file", "finally", "get", "import", "init", "param",
+    "property", "receiver", "set", "setparam", "value", "where",
+    "abstract", "actual", "annotation", "companion", "const", "crossinline", "data", "enum", "expect", "external", "final",
+    "infix", "inline", "inner", "internal", "lateinit", "noinline", "open", "operator", "out", "override", "private",
+    "protected", "public", "reified", "sealed", "suspend", "tailrec", "vararg",
+)
+
 object Codegen {
 
     fun generate(specSource: String, systemName: String, packageName: String = "velle.generated"): String {
@@ -44,6 +56,7 @@ object Codegen {
             line("}")
             line()
             queryAliases()
+            enumClasses()
             actInputTypes()
             closureInputTypes()
             referenceTypes()
@@ -481,6 +494,42 @@ object Codegen {
         }
 
         /** One name per typed query, so `read.orders` reads as an `OrderQuery` and a viewer's as an `OrderQueryForStaff`. */
+        /** One `enum class` per type the spec declares by its words (Reference §5; Act API): an
+         *  entry per word carrying the word, and `of(word)` back from the word a store or the runtime holds. */
+        fun enumClasses() {
+            if (model.enums.isEmpty()) return
+            line("// ── the types declared by their words: one enum class each, an entry per word ──")
+            for (declared in model.enums.values) {
+                line("enum class ${declared.name}(val word: String) {")
+                declared.words.forEachIndexed { index, word ->
+                    line("    ${enumEntry(declared, word)}(\"${escape(word)}\")" + if (index == declared.words.lastIndex) ";" else ",")
+                }
+                line()
+                line("    companion object {")
+                line("        /** The entry carrying [word]; a word the declaration does not list is an error. */")
+                line("        fun of(word: String): ${declared.name} = entries.firstOrNull { it.word == word }")
+                line("            ?: throw IllegalArgumentException(\"\\\"${'$'}word\\\" is not one of ${escape(declared.quotedWords())}\")")
+                line("    }")
+                line("}")
+                line()
+            }
+        }
+
+        /** A word's entry name, in backticks when it is a Kotlin keyword. */
+        fun enumEntry(declared: EnumType, word: String): String =
+            declared.entryName(word).let { if (it in KOTLIN_KEYWORDS) "`$it`" else it }
+
+        fun escape(text: String) = text.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\${'$'}")
+
+        /** The type a spec declares by its words behind a scalar name or a [VType], or null. */
+        fun enumOf(name: String): EnumType? = model.enums[name]
+        fun enumOf(t: VType): EnumType? = when (t) {
+            is VType.Ext -> model.registry[t.qualifiedName] as? EnumType
+            is VType.Optional -> enumOf(t.inner)
+            is VType.CollS -> enumOf(t.name)
+            else -> null
+        }
+
         fun queryAliases() {
             line("// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──")
             queryRoots.forEach { root -> line("typealias ${root}Query = TypedQuery<${root}Fields, $root>") }
@@ -655,7 +704,7 @@ object Codegen {
         fun fieldHandle(t: VType): String? = when (t) {
             is VType.Num -> "NumField"
             // an extension type (Reference §5): ordered comparisons only when the type declares an ordering
-            is VType.Ext -> model.registry[t.qualifiedName]?.let { x ->
+            is VType.Ext -> enumOf(t)?.let { "EnumField<${it.name}>" } ?: model.registry[t.qualifiedName]?.let { x ->
                 (if (x.orderingOrNull != null) "OrderedExtField" else "ExtField") + "<${x.kotlinClass.qualifiedName}>"
             }
             VType.Text -> "TextField"
@@ -675,7 +724,11 @@ object Codegen {
         fun fieldHandleCtor(t: VType, name: String): String {
             val bare = (t as? VType.Optional)?.inner ?: t
             val handle = fieldHandle(t)!!
-            return if (bare is VType.Ext) "$handle(fieldPath + \"$name\", \"${bare.qualifiedName}\")" else "$handle(fieldPath + \"$name\")"
+            return when {
+                bare is VType.Ext && enumOf(bare) != null -> "$handle(fieldPath + \"$name\") { it.word }"
+                bare is VType.Ext -> "$handle(fieldPath + \"$name\", \"${bare.qualifiedName}\")"
+                else -> "$handle(fieldPath + \"$name\")"
+            }
         }
 
         fun specConstant() {
@@ -721,9 +774,10 @@ object Codegen {
         }
 
         /** Convert a parameter back to the raw value the runtime accepts. */
+        /** The raw value the runtime takes for an input field: a reference's id, a declared type's word, the value otherwise. */
         fun rawExpr(expr: String, t: TypeRef): String = when (t) {
             is RelType -> if (t.many) "$expr.map { system.idOf(it) }" else "system.idOf($expr)"
-            is ScalarType -> expr
+            is ScalarType -> if (enumOf(t.name) == null) expr else if (t.many) "$expr.map { it.word }" else "$expr.word"
         }
 
         fun scalarKotlin(name: String): String = when (name) {
@@ -739,13 +793,15 @@ object Codegen {
             "duration" -> "Duration"
             "time" -> "LocalTime"
             "bytes" -> "ByteArray"
+            // a type the spec declares by its words: the enum class generated beside this file (Reference §5)
+            in model.enums -> name
             // a registered extension type: its own class, fully qualified (Reference §5; OQ65)
             else -> model.typeScope[name]?.kotlinClass?.qualifiedName ?: "Any"
         }
 
         fun kotlinType(t: VType): String = when (t) {
             is VType.Num -> scalarKotlin(t.name)
-            is VType.Ext -> model.registry[t.qualifiedName]?.kotlinClass?.qualifiedName ?: "Any"
+            is VType.Ext -> enumOf(t)?.name ?: model.registry[t.qualifiedName]?.kotlinClass?.qualifiedName ?: "Any"
             VType.Text -> "String"
             VType.Bool -> "Boolean"
             VType.DateT -> "LocalDate"
@@ -777,10 +833,11 @@ object Codegen {
             VType.DurationT -> "$call as Duration"
             VType.TimeT -> "$call as LocalTime"
             VType.BytesT -> "$call as ByteArray"
-            is VType.Ext -> "$call as ${kotlinType(t)}"
+            is VType.Ext -> enumOf(t)?.let { "${it.name}.of($call as String)" } ?: "$call as ${kotlinType(t)}"
             is VType.Inst -> "system.refFor($call as Long)"
             is VType.Coll -> "($call as List<*>).map { system.refFor(it as Long) }"
             is VType.CollS -> when (t.name) {
+                in model.enums -> "($call as List<*>).map { ${t.name}.of(it as String) }"
                 "integer" -> "($call as List<*>).map { (it as BigDecimal).intValueExact() }"
                 "long" -> "($call as List<*>).map { (it as BigDecimal).longValueExact() }"
                 "double" -> "($call as List<*>).map { (it as BigDecimal).toDouble() }"
@@ -789,7 +846,7 @@ object Codegen {
             }
             is VType.Optional -> when (val inner = t.inner) {
                 is VType.Inst -> "($call as Long?)?.let { system.refFor(it) }"
-                else -> "$call as ${kotlinType(t)}"
+                else -> enumOf(inner)?.let { "($call as String?)?.let { word -> ${it.name}.of(word) }" } ?: "$call as ${kotlinType(t)}"
             }
             VType.Id, VType.Unknown -> call
         }

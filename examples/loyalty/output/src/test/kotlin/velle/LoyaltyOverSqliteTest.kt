@@ -91,8 +91,8 @@ class LoyaltyPersistenceTest {
         assertEquals(founder2, second.read(recruit2).foundingReferrer, "the chain walks stored references to its root")
 
         accept(second.commit(NewPurchase(recruit2, BigDecimal("150"))))
-        assertEquals("gold", second.read(recruit2).tier)
-        assertEquals("advocate", second.read(scout2).tier, "the referrer's promotion wrote a different stored row")
+        assertEquals(Tier.gold, second.read(recruit2).tier)
+        assertEquals(Tier.advocate, second.read(scout2).tier, "the referrer's promotion wrote a different stored row")
         assertEquals(1, second.thankYouNotes().size)
     }
 }

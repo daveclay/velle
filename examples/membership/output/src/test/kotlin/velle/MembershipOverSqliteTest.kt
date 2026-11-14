@@ -79,7 +79,7 @@ class MembershipPersistenceTest {
         accept(first.commit(NewChangeEmail(ada, "New@Example.com")))
         accept(first.commit(NewAgent("Grace", "grace@velle.example")))
         val grace = first.agents().last()
-        accept(first.commit(NewRaiseTicket(ada, "billing question", LocalDate.of(2026, 3, 1), "normal")))
+        accept(first.commit(NewRaiseTicket(ada, "billing question", LocalDate.of(2026, 3, 1), Priority.normal)))
         accept(first.commit(NewCloseTicket(first.tickets().last(), grace)))
         assertEquals(listOf(listOf(1L)), rows("""SELECT closedBy FROM capture_ClosedTicket"""), "the capture landed as a row")
 

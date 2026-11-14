@@ -69,18 +69,12 @@ each case below is an executable test.
 - never - a AssayReading where hoursElapsed below 0 is refused
 - never - a AssayReading with hoursElapsed 0 is accepted
 
-## GreenhousePlotSpec.kt
-
-
 ## PlotObservationSpec.kt
 
 - never - a PlotObservation where dayAfterTreatment below 0 is refused
 - never - a PlotObservation with dayAfterTreatment 0 is accepted
 
 ## CorrectObservationSpec.kt
-
-
-## FieldPlotSpec.kt
 
 
 ## ScoutingSpec.kt
@@ -107,20 +101,18 @@ each case below is an executable test.
 
 ## Not yet generated
 
-- never #9: non-comparison predicate
-- never #15: non-comparison predicate
+- never #8: non-comparison predicate
+- never #13: non-comparison predicate
 - never #1: non-literal bound
 - never #2: complex comparison subject
-- unique #17: a key, unique (assay, hoursElapsed): no bound to cross
-- requires #4: multi-conjunct predicate
-- never #5: complex comparison subject
-- never #7: non-comparison predicate
-- unique #19: a key, unique (plot, dayAfterTreatment): no bound to cross
-- never #8: complex comparison subject
-- requires #10: multi-conjunct predicate
-- never #11: complex comparison subject
+- unique #15: a key, unique (assay, hoursElapsed): no bound to cross
+- never #4: complex comparison subject
+- never #6: non-comparison predicate
+- unique #17: a key, unique (plot, dayAfterTreatment): no bound to cross
+- never #7: complex comparison subject
+- never #9: complex comparison subject
+- never #10: complex comparison subject
+- unique #19: a key, unique (plot, daysAfterPlanting): no bound to cross
 - never #12: complex comparison subject
-- unique #21: a key, unique (plot, daysAfterPlanting): no bound to cross
-- never #14: complex comparison subject
-- unique #18: a key, trial: one GreenhouseTrial unique: no bound to cross
-- unique #20: a key, unique (site, observedOn): no bound to cross
+- unique #16: a key, trial: one GreenhouseTrial unique: no bound to cross
+- unique #18: a key, unique (site, observedOn): no bound to cross

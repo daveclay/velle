@@ -920,7 +920,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         bench = system.get(id, "bench") as String,
-        treatment = system.get(id, "treatment") as String,
+        treatment = Arm.of(system.get(id, "treatment") as String),
         lastObservedDay = (system.get(id, "lastObservedDay") as BigDecimal).intValueExact(),
         audpc = system.get(id, "audpc") as BigDecimal,
         plotObservations = (system.get(id, "plotObservations") as List<*>).map { system.refFor(it as Long) },
@@ -1096,7 +1096,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         block = (system.get(id, "block") as BigDecimal).intValueExact(),
-        treatment = system.get(id, "treatment") as String,
+        treatment = Arm.of(system.get(id, "treatment") as String),
         yieldKgPerHa = system.get(id, "yieldKgPerHa") as BigDecimal,
         scoutings = (system.get(id, "scoutings") as List<*>).map { system.refFor(it as Long) },
         harvests = (system.get(id, "harvests") as List<*>).map { system.refFor(it as Long) },
@@ -1431,7 +1431,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         bench = system.get(id, "bench") as String,
-        treatment = system.get(id, "treatment") as String,
+        treatment = Arm.of(system.get(id, "treatment") as String),
         lastObservedDay = (system.get(id, "lastObservedDay") as BigDecimal).intValueExact(),
         audpc = system.get(id, "audpc") as BigDecimal,
         plotObservations = (system.get(id, "plotObservations") as List<*>).map { system.refFor(it as Long) },
@@ -2005,17 +2005,17 @@ rule RefuseGreenhouseTrial when RefusedGreenhouseRequest {
 }
 
 -- Plots are laid out on benches, each in the peptide arm or the control arm.
+Arm is one of "peptide", "control"
+
 act GreenhousePlot {
     trial: one GreenhouseTrial
     bench: text
-    treatment: text
+    treatment: Arm
     lastObservedDay: integer = if plotObservations is empty then 0
                                else latest(plotObservations by dayAfterTreatment).dayAfterTreatment
     audpc: decimal = if plotObservations is empty then 0.0
                      else latest(plotObservations by dayAfterTreatment).audpcSoFar
 }
-
-GreenhousePlot requires treatment == "peptide" or treatment == "control"
 
 -- Treatment day: the plants are inoculated and the peptide applied. The
 -- record is the fact; a trial is treated once.
@@ -2438,11 +2438,9 @@ shape PlantedTrial = FieldTrial where plantings is not empty
 act FieldPlot {
     trial: one FieldTrial
     block: integer
-    treatment: text
+    treatment: Arm
     yieldKgPerHa: decimal = if harvests is empty then 0.0 else latest(harvests by harvestedOn).yieldKgPerHa
 }
-
-FieldPlot requires treatment == "peptide" or treatment == "control"
 
 -- The peptide is sprayed on the treated plots on a date. The request is
 -- transient for the same reason as planting: the halt check below must be a
@@ -2747,6 +2745,18 @@ typealias DoneTaskQuery = TypedQuery<DoneTaskFields, DoneTask>
 typealias OpenTaskQuery = TypedQuery<OpenTaskFields, OpenTask>
 typealias OverdueTaskQuery = TypedQuery<OverdueTaskFields, OverdueTask>
 
+// ── the types declared by their words: one enum class each, an entry per word ──
+enum class Arm(val word: String) {
+    peptide("peptide"),
+    control("control");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): Arm = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"peptide\", \"control\"")
+    }
+}
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewCrop(
@@ -2917,12 +2927,12 @@ data class NewRequestGreenhouseTrial(
 data class NewGreenhousePlot(
     val trial: Ref<GreenhouseTrial>,
     val bench: String,
-    val treatment: String,
+    val treatment: Arm,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("bench", bench)
-        put("treatment", treatment)
+        put("treatment", treatment.word)
     }
     override fun register(reg: NewRegistry) {
     }
@@ -3099,12 +3109,12 @@ data class NewPlantTrial(
 data class NewFieldPlot(
     val trial: Ref<FieldTrial>,
     val block: Int,
-    val treatment: String,
+    val treatment: Arm,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("block", block)
-        put("treatment", treatment)
+        put("treatment", treatment.word)
     }
     override fun register(reg: NewRegistry) {
     }
@@ -3457,7 +3467,7 @@ data class GreenhousePlot(
     override val key: StoreKey,
     val trial: Ref<GreenhouseTrial>,
     val bench: String,
-    val treatment: String,
+    val treatment: Arm,
     val lastObservedDay: Int,
     val audpc: BigDecimal,
     val plotObservations: List<Ref<PlotObservation>>,
@@ -3719,7 +3729,7 @@ data class FieldPlot(
     override val key: StoreKey,
     val trial: Ref<FieldTrial>,
     val block: Int,
-    val treatment: String,
+    val treatment: Arm,
     val yieldKgPerHa: BigDecimal,
     val scoutings: List<Ref<Scouting>>,
     val harvests: List<Ref<Harvest>>,
@@ -4205,7 +4215,7 @@ data class TreatedPlot(
     override val key: StoreKey,
     val trial: Ref<GreenhouseTrial>,
     val bench: String,
-    val treatment: String,
+    val treatment: Arm,
     val lastObservedDay: Int,
     val audpc: BigDecimal,
     val plotObservations: List<Ref<PlotObservation>>,
@@ -4780,7 +4790,7 @@ class GreenhouseRefusalFields(path: List<String> = emptyList()) : Fields(path) {
 class GreenhousePlotFields(path: List<String> = emptyList()) : Fields(path) {
     val trial: GreenhouseTrialFields get() = GreenhouseTrialFields(fieldPath + "trial")
     val bench: TextField get() = TextField(fieldPath + "bench")
-    val treatment: TextField get() = TextField(fieldPath + "treatment")
+    val treatment: EnumField<Arm> get() = EnumField<Arm>(fieldPath + "treatment") { it.word }
     val lastObservedDay: NumField get() = NumField(fieldPath + "lastObservedDay")
     val audpc: NumField get() = NumField(fieldPath + "audpc")
     fun isTreatedPlot(): Expr = isA("TreatedPlot")
@@ -4920,7 +4930,7 @@ class PlantingFields(path: List<String> = emptyList()) : Fields(path) {
 class FieldPlotFields(path: List<String> = emptyList()) : Fields(path) {
     val trial: FieldTrialFields get() = FieldTrialFields(fieldPath + "trial")
     val block: NumField get() = NumField(fieldPath + "block")
-    val treatment: TextField get() = TextField(fieldPath + "treatment")
+    val treatment: EnumField<Arm> get() = EnumField<Arm>(fieldPath + "treatment") { it.word }
     val yieldKgPerHa: NumField get() = NumField(fieldPath + "yieldKgPerHa")
 }
 
@@ -5172,7 +5182,7 @@ class LockedObservationFields(path: List<String> = emptyList()) : Fields(path) {
 class TreatedPlotFields(path: List<String> = emptyList()) : Fields(path) {
     val trial: GreenhouseTrialFields get() = GreenhouseTrialFields(fieldPath + "trial")
     val bench: TextField get() = TextField(fieldPath + "bench")
-    val treatment: TextField get() = TextField(fieldPath + "treatment")
+    val treatment: EnumField<Arm> get() = EnumField<Arm>(fieldPath + "treatment") { it.word }
     val lastObservedDay: NumField get() = NumField(fieldPath + "lastObservedDay")
     val audpc: NumField get() = NumField(fieldPath + "audpc")
 }

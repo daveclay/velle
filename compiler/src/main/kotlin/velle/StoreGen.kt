@@ -342,8 +342,8 @@ object StoreGen {
                 line()
                 line("fun ${s}Row.toRow(): Row = Row(\"$s\", key, buildMap {")
                 fs.forEach {
-                    if (it.type is VType.Optional) line("    ${it.name}?.let { put(\"${it.name}\", it) }")
-                    else line("    put(\"${it.name}\", ${it.name})")
+                    if (it.type is VType.Optional) line("    ${it.name}?.let { put(\"${it.name}\", ${rawValue("it", it.type)}) }")
+                    else line("    put(\"${it.name}\", ${rawValue(it.name, it.type)})")
                 }
                 line("})")
             }
@@ -355,14 +355,29 @@ object StoreGen {
                 line()
                 line("fun ${cs.refinement}Capture.toValues(): Map<String, Any?> = buildMap {")
                 cs.props.forEach {
-                    if (it.type is VType.Optional) line("    ${it.name}?.let { put(\"${it.name}\", it) }")
-                    else line("    put(\"${it.name}\", ${it.name})")
+                    if (it.type is VType.Optional) line("    ${it.name}?.let { put(\"${it.name}\", ${rawValue("it", it.type)}) }")
+                    else line("    put(\"${it.name}\", ${rawValue(it.name, it.type)})")
                 }
                 line("}")
             }
         }
 
         // ── type mapping ─────────────────────────────────────────────────────
+
+        /** The type a spec declares by its words behind [t], or null. */
+        fun enumOf(t: VType): EnumType? = when (t) {
+            is VType.Ext -> model.registry[t.qualifiedName] as? EnumType
+            is VType.Optional -> enumOf(t.inner)
+            is VType.CollS -> model.enums[t.name]
+            else -> null
+        }
+
+        /** The raw value a row's field puts on the wire: a declared type's word, the value otherwise. */
+        fun rawValue(expr: String, t: VType): String = when {
+            enumOf(t) == null -> expr
+            (t as? VType.Optional)?.inner is VType.CollS || t is VType.CollS -> "$expr.map { it.word }"
+            else -> "$expr.word"
+        }
 
         fun rowKotlin(t: VType): String = when (t) {
             is VType.Num -> when (t.name) {
@@ -376,7 +391,7 @@ object StoreGen {
             VType.DurationT -> "Duration"
             VType.TimeT -> "LocalTime"
             VType.BytesT -> "ByteArray"
-            is VType.Ext -> model.registry[t.qualifiedName]?.kotlinClass?.qualifiedName ?: "Any"
+            is VType.Ext -> enumOf(t)?.name ?: model.registry[t.qualifiedName]?.kotlinClass?.qualifiedName ?: "Any"
             is VType.Inst -> "Ref.Persisted"
             is VType.Coll -> "List<Ref.Persisted>"
             is VType.CollS -> "List<${rowKotlin(scalarType(t.name))}>"
@@ -401,7 +416,7 @@ object StoreGen {
             VType.BytesT -> "$expr as ByteArray"
             VType.Text -> "$expr as String"
             VType.Bool -> "$expr as Boolean"
-            is VType.Ext -> "$expr as ${rowKotlin(t)}"
+            is VType.Ext -> enumOf(t)?.let { "${it.name}.of($expr as String)" } ?: "$expr as ${rowKotlin(t)}"
             is VType.Inst -> "$expr as Ref.Persisted"
             is VType.Coll -> "($expr as List<*>).map { it as Ref.Persisted }"
             is VType.CollS -> "($expr as List<*>).map { ${fromRaw("it", scalarType(t.name))} }"
@@ -412,7 +427,7 @@ object StoreGen {
                     "double" -> "($expr as Number?)?.toDouble()"
                     else -> "$expr as BigDecimal?"
                 }
-                else -> "$expr as ${rowKotlin(inner)}?"
+                else -> enumOf(inner)?.let { "($expr as String?)?.let { word -> ${it.name}.of(word) } " .trimEnd() } ?: "$expr as ${rowKotlin(inner)}?"
             }
             else -> expr
         }

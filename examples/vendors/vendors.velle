@@ -32,12 +32,12 @@ visible to Staff
 -- Everyone who keeps the catalogue is staff; administrators also assign
 -- vendors and list products. Staff records are seeded by the engineer
 -- outside the trust boundary (fixtures, a migration): nothing here hires.
+Role is one of "staff", "admin"
+
 shape Staff {
     name: text
-    role: text
+    role: Role
 }
-
-Staff requires role == "staff" or role == "admin"
 
 shape Administrator = Staff where role == "admin"
 

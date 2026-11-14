@@ -133,7 +133,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         referrer = (system.get(id, "referrer") as Long?)?.let { system.refFor(it) },
-        tier = system.get(id, "tier") as String,
+        tier = Tier.of(system.get(id, "tier") as String),
         upline = (system.get(id, "upline") as List<*>).map { system.refFor(it as Long) },
         foundingReferrer = (system.get(id, "foundingReferrer") as Long?)?.let { system.refFor(it) },
         recruits = (system.get(id, "recruits") as List<*>).map { system.refFor(it as Long) },
@@ -215,7 +215,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         referrer = (system.get(id, "referrer") as Long?)?.let { system.refFor(it) },
-        tier = system.get(id, "tier") as String,
+        tier = Tier.of(system.get(id, "tier") as String),
         upline = (system.get(id, "upline") as List<*>).map { system.refFor(it as Long) },
         foundingReferrer = (system.get(id, "foundingReferrer") as Long?)?.let { system.refFor(it) },
         recruits = (system.get(id, "recruits") as List<*>).map { system.refFor(it as Long) },
@@ -259,10 +259,12 @@ transient act Join {
     referrer: one Member?
 }
 
+Tier is one of "basic", "gold", "advocate"
+
 shape Member {
     name: text
     referrer: one Member?
-    tier: text initially "basic"
+    tier: Tier initially "basic"
 
     -- The referral chain, walked (Reference §7, "Walks"). `upline` is everyone
     -- above this member, at any remove, the member themself only if the chain
@@ -430,6 +432,19 @@ typealias QualifiedPurchaseQuery = TypedQuery<QualifiedPurchaseFields, Qualified
 typealias VipPurchaseQuery = TypedQuery<VipPurchaseFields, VipPurchase>
 typealias CertifiedMemberQuery = TypedQuery<CertifiedMemberFields, CertifiedMember>
 
+// ── the types declared by their words: one enum class each, an entry per word ──
+enum class Tier(val word: String) {
+    basic("basic"),
+    gold("gold"),
+    advocate("advocate");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): Tier = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"basic\", \"gold\", \"advocate\"")
+    }
+}
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewJoin(
@@ -506,7 +521,7 @@ data class Member(
     override val key: StoreKey,
     val name: String,
     val referrer: Ref<Member>?,
-    val tier: String,
+    val tier: Tier,
     val upline: List<Ref<Member>>,
     val foundingReferrer: Ref<Member>?,
     val recruits: List<Ref<Member>>,
@@ -633,7 +648,7 @@ data class CertifiedMember(
     override val key: StoreKey,
     val name: String,
     val referrer: Ref<Member>?,
-    val tier: String,
+    val tier: Tier,
     val upline: List<Ref<Member>>,
     val foundingReferrer: Ref<Member>?,
     val recruits: List<Ref<Member>>,
@@ -663,7 +678,7 @@ class TickFields(path: List<String> = emptyList()) : Fields(path) {
 class MemberFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
     val referrer: MemberFields get() = MemberFields(fieldPath + "referrer")
-    val tier: TextField get() = TextField(fieldPath + "tier")
+    val tier: EnumField<Tier> get() = EnumField<Tier>(fieldPath + "tier") { it.word }
     val foundingReferrer: MemberFields get() = MemberFields(fieldPath + "foundingReferrer")
     val streak: NumField get() = NumField(fieldPath + "streak")
     fun isCertifiedMember(): Expr = isA("CertifiedMember")
@@ -721,7 +736,7 @@ class VipPurchaseFields(path: List<String> = emptyList()) : Fields(path) {
 class CertifiedMemberFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
     val referrer: MemberFields get() = MemberFields(fieldPath + "referrer")
-    val tier: TextField get() = TextField(fieldPath + "tier")
+    val tier: EnumField<Tier> get() = EnumField<Tier>(fieldPath + "tier") { it.word }
     val foundingReferrer: MemberFields get() = MemberFields(fieldPath + "foundingReferrer")
     val streak: NumField get() = NumField(fieldPath + "streak")
 }

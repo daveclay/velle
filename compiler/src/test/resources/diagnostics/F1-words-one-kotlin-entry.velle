@@ -1,0 +1,7 @@
+-- Two words the generated Kotlin would spell as one entry: "in-progress" and "in progress".
+State is one of "open", "in-progress", "in progress"
+
+act Ticket {
+    subject: text
+    state: State
+}

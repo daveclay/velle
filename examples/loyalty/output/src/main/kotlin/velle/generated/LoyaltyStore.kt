@@ -25,7 +25,7 @@ data class MemberRow(
     val key: StoreKey,
     val name: String,
     val referrer: Ref.Persisted?,
-    val tier: String,
+    val tier: Tier,
 )
 
 /** One stored DuesPayment row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -308,13 +308,13 @@ fun Row.toMemberRow(): MemberRow = MemberRow(
     key = key,
     name = fields["name"] as String,
     referrer = fields["referrer"] as Ref.Persisted?,
-    tier = fields["tier"] as String,
+    tier = Tier.of(fields["tier"] as String),
 )
 
 fun MemberRow.toRow(): Row = Row("Member", key, buildMap {
     put("name", name)
     referrer?.let { put("referrer", it) }
-    put("tier", tier)
+    put("tier", tier.word)
 })
 
 fun Row.toDuesPaymentRow(): DuesPaymentRow = DuesPaymentRow(

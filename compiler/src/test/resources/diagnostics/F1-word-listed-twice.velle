@@ -1,0 +1,7 @@
+-- A declaration that lists one of its words twice.
+Role is one of "pharmacist", "admin", "pharmacist"
+
+act Staff {
+    name: text
+    role: Role
+}

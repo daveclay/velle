@@ -40,7 +40,7 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
     }
 
     private fun ticket(
-        priority: String = "normal",
+        priority: Priority = Priority.normal,
         due: LocalDate = LocalDate.of(2026, 3, 1),
     ): Ticket {
         sys.commit(NewRaiseTicket(newMember(), "billing question", due, priority))
@@ -60,7 +60,7 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
     }
 
     override fun raiseTicket() {
-        sys.commit(NewRaiseTicket(newMember(), "billing question", LocalDate.of(2026, 3, 1), "normal"))
+        sys.commit(NewRaiseTicket(newMember(), "billing question", LocalDate.of(2026, 3, 1), Priority.normal))
     }
 
     override fun closeTicket() {
@@ -131,5 +131,5 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
         sys.commit(NewAssignTicket(ticket(), agent()))
     }
 
-    override fun ticketForEscalateUrgent(): Ticket = ticket(priority = "high")
+    override fun ticketForEscalateUrgent(): Ticket = ticket(priority = Priority.high)
 }

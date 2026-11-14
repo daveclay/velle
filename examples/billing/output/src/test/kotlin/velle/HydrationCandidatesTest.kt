@@ -100,7 +100,7 @@ class HydrationCandidatesTest {
         accept(billing.commit(NewLineItem(inv, "Design", Money.of("1200.00"), 1)))
         accept(billing.commit(NewSubmitPayment(inv, Money.of("1200.00"))))
 
-        assertEquals("paid", billing.read(inv).status)
+        assertEquals(Status.paid, billing.read(inv).status)
         assertEquals(1, sqlCount("Receipt"))
         assertEquals(1, sqlCount("ReceiptEmail"))
 

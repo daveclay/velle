@@ -24,7 +24,7 @@ data class TickRow(
 data class StaffRow(
     val key: StoreKey,
     val name: String,
-    val role: String,
+    val role: Role,
 )
 
 /** One stored VendorAssignment row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -97,16 +97,12 @@ interface VendorsStore {
     /** Serves rule FlagThinMargin — `ThinMargin where not (exists MarginAlert for this)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun flagThinMarginCandidates(): List<ProductRow>
-    /** Serves never #1 — `Staff where (role != "staff") and (role != "admin")`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never1Candidates(): List<StaffRow>
 }
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class VendorsStoreQuestions(model: Model) {
     val administratorCandidates = QTemplate.of(model, "Staff", RefName("Administrator"))
     val flagThinMarginCandidates = QTemplate.of(model, "Product", model.rules.getValue("FlagThinMargin").condition)
-    val never1Candidates = QTemplate.of(model, "Staff", model.nevers[0].target)
 }
 
 /**
@@ -151,10 +147,6 @@ open class VendorsStoreOverGeneric(
     override fun flagThinMarginCandidates(): List<ProductRow> =
         backend.fetchCandidates("Product", questions.flagThinMarginCandidates.instantiate(listOf()))
             .map { it.toProductRow() }
-
-    override fun never1Candidates(): List<StaffRow> =
-        backend.fetchCandidates("Staff", questions.never1Candidates.instantiate(listOf()))
-            .map { it.toStaffRow() }
 }
 
 /** The bridge the runtime speaks through: generic protocol in, typed store out. */
@@ -199,8 +191,6 @@ class VendorsStoreResolver(
             questions.administratorCandidates.match(filter)?.let { h -> return store.administratorCandidates().map { it.toRow() } }
         if (shape == "Product")
             questions.flagThinMarginCandidates.match(filter)?.let { h -> return store.flagThinMarginCandidates().map { it.toRow() } }
-        if (shape == "Staff")
-            questions.never1Candidates.match(filter)?.let { h -> return store.never1Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
 
@@ -225,12 +215,12 @@ fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
 fun Row.toStaffRow(): StaffRow = StaffRow(
     key = key,
     name = fields["name"] as String,
-    role = fields["role"] as String,
+    role = Role.of(fields["role"] as String),
 )
 
 fun StaffRow.toRow(): Row = Row("Staff", key, buildMap {
     put("name", name)
-    put("role", role)
+    put("role", role.word)
 })
 
 fun Row.toVendorAssignmentRow(): VendorAssignmentRow = VendorAssignmentRow(

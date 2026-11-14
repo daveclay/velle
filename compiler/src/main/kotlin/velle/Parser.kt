@@ -68,6 +68,7 @@ class Parser(private val tokens: List<Token>) {
             t.isKw("rule") -> parseRule()
             t.isKw("never") -> parseNever()
             t.type == TokType.UIDENT && peekAhead(1).isKw("requires") -> parseRequires()
+            t.type == TokType.UIDENT && peekAhead(1).isKw("is") && peekAhead(2).isKw("one") -> parseEnum()
             t.isKw("act") || t.isKw("transient") -> parseAct()
             t.isKw("uses") -> parseUses()
             // the spec-wide visibility default (Reference §22): `visible to Staff` / `visible to anyone`
@@ -77,6 +78,27 @@ class Parser(private val tokens: List<Token>) {
             }
             else -> fail("expected a declaration (shape/act/rule/never/requires/visible/uses)", t)
         }
+    }
+
+    // ── a type declared by its words (Reference §5) ──────────────────────────
+
+    /** `Role is one of "pharmacist", "technician", "admin"`: the words a field of the type
+     *  takes, each a quoted text with no pieces, one or more, separated by commas. */
+    private fun parseEnum(): EnumDecl {
+        val name = expect(TokType.UIDENT).text
+        expectKw("is")
+        expectKw("one")
+        val of = peek()
+        if (!(of.type == TokType.LIDENT && of.text == "of")) fail("'$name is one' continues 'of' and the words in quotes: $name is one of \"a\", \"b\"", of)
+        next()
+        val words = mutableListOf<String>()
+        do {
+            val word = peek()
+            if (word.type != TokType.TEXT) fail("'$name is one of' lists its words in quotes, separated by commas: $name is one of \"a\", \"b\"", word)
+            next()
+            words.add(word.text)
+        } while (consumeIf(TokType.COMMA))
+        return EnumDecl(name, words)
     }
 
     // ── uses ─────────────────────────────────────────────────────────────────

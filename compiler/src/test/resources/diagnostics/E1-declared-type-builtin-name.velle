@@ -1,0 +1,6 @@
+-- A type declared by its words under a builtin type's name.
+Date is one of "monday", "tuesday"
+
+act Shift {
+    name: text
+}

@@ -46,7 +46,3 @@ each case below is an executable test.
 ## ExtensionRequestSpec.kt
 
 - GrantGracePeriod - a new ExtensionRequest produces a PaymentExtension
-
-## Not yet generated
-
-- requires #2: multi-conjunct predicate

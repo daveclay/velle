@@ -99,6 +99,9 @@ sealed interface Accepts {
 sealed interface Returns {
     /** A value of the registered type whose class is [type]. */
     data class Is(val type: KClass<*>) : Returns
+    /** A value of the registered type with this qualified name, for a type with several
+     *  instances of one class, such as the types a spec declares by their words. */
+    data class Named(val qualifiedName: String) : Returns
     /** The type the argument in position [index] has. */
     data class SameAs(val index: Int) : Returns
     /** The element type of the `many` in position [index]. */

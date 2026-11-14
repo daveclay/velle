@@ -1,0 +1,9 @@
+-- An ordered comparison over a field of a type declared by its words: `priority < "high"`.
+Priority is one of "low", "normal", "high"
+
+act Ticket {
+    subject: text
+    priority: Priority
+}
+
+shape Minor = Ticket where priority < "high"

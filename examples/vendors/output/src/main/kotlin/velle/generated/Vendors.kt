@@ -103,7 +103,7 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     private fun materializeStaff(id: Long): Staff = Staff(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        role = system.get(id, "role") as String,
+        role = Role.of(system.get(id, "role") as String),
         vendorAssignments = (system.get(id, "vendorAssignments") as List<*>).map { system.refFor(it as Long) },
         isAdministrator = system.isMember(id, "Administrator"),
     )
@@ -141,7 +141,7 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     private fun materializeAdministrator(id: Long): Administrator = Administrator(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        role = system.get(id, "role") as String,
+        role = Role.of(system.get(id, "role") as String),
         vendorAssignments = (system.get(id, "vendorAssignments") as List<*>).map { system.refFor(it as Long) },
     )
 
@@ -260,12 +260,12 @@ visible to Staff
 -- Everyone who keeps the catalogue is staff; administrators also assign
 -- vendors and list products. Staff records are seeded by the engineer
 -- outside the trust boundary (fixtures, a migration): nothing here hires.
+Role is one of "staff", "admin"
+
 shape Staff {
     name: text
-    role: text
+    role: Role
 }
-
-Staff requires role == "staff" or role == "admin"
 
 shape Administrator = Staff where role == "admin"
 
@@ -365,6 +365,18 @@ typealias ThinMarginQuery = TypedQuery<ThinMarginFields, ThinMargin>
 typealias ProductQueryForStaff = TypedQuery<ProductFields, ProductForStaff>
 typealias ThinMarginQueryForStaff = TypedQuery<ThinMarginFields, ThinMarginForStaff>
 
+// ── the types declared by their words: one enum class each, an entry per word ──
+enum class Role(val word: String) {
+    staff("staff"),
+    admin("admin");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): Role = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"staff\", \"admin\"")
+    }
+}
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewAssignVendor(
@@ -429,7 +441,7 @@ data class Tick(
 data class Staff(
     override val key: StoreKey,
     val name: String,
-    val role: String,
+    val role: Role,
     val vendorAssignments: List<Ref<VendorAssignment>>,
     /** membership of Administrator at the moment of the read */
     val isAdministrator: Boolean,
@@ -489,7 +501,7 @@ data class MarginAlert(
 data class Administrator(
     override val key: StoreKey,
     val name: String,
-    val role: String,
+    val role: Role,
     val vendorAssignments: List<Ref<VendorAssignment>>,
 ) : Ref<Staff> {
     override val shape: String get() = "Staff"
@@ -542,7 +554,7 @@ class TickFields(path: List<String> = emptyList()) : Fields(path) {
 
 class StaffFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
-    val role: TextField get() = TextField(fieldPath + "role")
+    val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isAdministrator(): Expr = isA("Administrator")
 }
 
@@ -571,7 +583,7 @@ class MarginAlertFields(path: List<String> = emptyList()) : Fields(path) {
 
 class AdministratorFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
-    val role: TextField get() = TextField(fieldPath + "role")
+    val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
 }
 
 class ThinMarginFields(path: List<String> = emptyList()) : Fields(path) {

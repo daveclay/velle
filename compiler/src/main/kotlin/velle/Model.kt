@@ -13,7 +13,27 @@ import velle.ext.VelleType
  * `lineItems`. The naming rule is a convention the Reference uses by example
  * (`invoices`, `payments`) without stating it — flagged for the docs.
  */
-class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.default) {
+class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.default) {
+
+    /** The types the spec declares by their words, `Role is one of ...` (Reference §5), by name. */
+    val enums: Map<String, EnumType> = rawDecls.filterIsInstance<EnumDecl>().distinctBy { it.name }
+        .filter { !TypeRegistry.isBuiltin(it.name) }
+        .associate { declared -> declared.name to EnumType(declared.name, declared.words.distinct()) }
+
+    /** The classpath's registry with the spec's own declared types beside the libraries' (Reference §5):
+     *  one registry, so every consumer dispatching on it reads a declared type as it reads `Money`. */
+    val registry: TypeRegistry =
+        if (enums.isEmpty()) baseRegistry
+        else TypeRegistry(baseRegistry.byQualifiedName.values + enums.values, baseRegistry.registeredFunctions + enumReaders())
+
+    /** One reading function per declared type, `role(text)`, leaving out one that would take a builtin's name (E1, below). */
+    private fun enumReaders(): List<VelleFunction> =
+        enums.values.filter { readerNameFree(it.name) }.map { EnumReader(it) }
+
+    private fun readerNameFree(typeName: String): Boolean {
+        val reader = EnumReader.readerName(typeName)
+        return reader !in TypeRegistry.BUILTIN_FUNCTION_NAMES && reader !in TypeRegistry.RESERVED_FUNCTION_NAMES
+    }
 
     /** The spec's declarations behind Velle's own: the prelude is parsed into every model ahead of the spec. */
     private val allDecls: List<Decl> = PRELUDE + rawDecls
@@ -112,6 +132,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
         decls = lookups.rewritten
         for (d in decls) when (d) {
             is UsesDecl -> {}
+            is EnumDecl -> checkEnumDecl(d)
             is ShapeDecl -> {
                 if (!register(d.name)) continue
                 shapes[d.name] = d
@@ -277,10 +298,28 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             return false
         }
         typeScope[name]?.let { t ->
-            error("E1", "'$name' is both a shape in this spec and the registered type '${t.qualifiedName}'; " +
+            if (t is EnumType) error("F1", "'$name' is both a shape and a type declared with '$name is one of ...'; rename one of them")
+            else error("E1", "'$name' is both a shape in this spec and the registered type '${t.qualifiedName}'; " +
                 "add `uses ${t.qualifiedName} as <Name>` to call the type something else here")
         }
         return true
+    }
+
+    /** What a `Role is one of ...` declaration must satisfy (Reference §5): one declaration per
+     *  name, no builtin's name, each word once, and no two words sharing a Kotlin entry name. */
+    private fun checkEnumDecl(d: EnumDecl) {
+        if (TypeRegistry.isBuiltin(d.name)) { error("E1", "'${d.name} is one of ...': '${d.name}' is a builtin type name (Reference §5)"); return }
+        val declared = enums.getValue(d.name)
+        if (!readerNameFree(d.name))
+            error("E1", "'${d.name} is one of ...': its reading function '${EnumReader.readerName(d.name)}' is a builtin function name; choose another name")
+        if (declared.words != d.words) {
+            if (d.words.size != d.words.distinct().size)
+                d.words.groupBy { it }.filterValues { it.size > 1 }.keys.forEach { word -> error("F1", "'${d.name} is one of ...' lists \"$word\" twice") }
+            else error("F1", "'${d.name}' is declared twice with 'is one of'; declare it once")
+        }
+        declared.words.groupBy { declared.entryName(it) }.filterValues { it.size > 1 }.values.forEach { words ->
+            error("F1", "'${d.name} is one of ...': ${words.joinToString(" and ") { "\"$it\"" }} would be one entry, '${declared.entryName(words.first())}', in the generated Kotlin; spell one of them differently")
+        }
     }
 
     // ── extension types (Reference §5; OQ65) ─────────────────────────────────
@@ -288,6 +327,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
     private fun resolveTypeScope(): Pair<Map<String, VelleType<*>>, Map<String, List<VelleType<*>>>> {
         val scope = linkedMapOf<String, VelleType<*>>()
         val picked = mutableSetOf<String>()
+        for (declared in enums.values) { scope[declared.name] = declared; picked.add(declared.qualifiedName) }
         for (u in uses) {
             val t = registry[u.qualified]
             if (t == null) {

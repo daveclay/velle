@@ -1027,7 +1027,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeStaff(id: Long): Staff = Staff(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        role = system.get(id, "role") as String,
+        role = Role.of(system.get(id, "role") as String),
         licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { system.refFor(it as Long) },
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
         stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { system.refFor(it as Long) },
@@ -1091,7 +1091,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         drugA = system.refFor(system.get(id, "drugA") as Long),
         drugB = system.refFor(system.get(id, "drugB") as Long),
-        severity = system.get(id, "severity") as String,
+        severity = Severity.of(system.get(id, "severity") as String),
     )
 
     private fun materializePriceChange(id: Long): PriceChange = PriceChange(
@@ -1378,7 +1378,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
-        outcome = system.get(id, "outcome") as String,
+        outcome = Verdict.of(system.get(id, "outcome") as String),
         note = system.get(id, "note") as String,
         verifiedAt = system.get(id, "verifiedAt") as Instant,
     )
@@ -1477,7 +1477,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeClaimResponse(id: Long): ClaimResponse = ClaimResponse(
         key = system.refFor(id).key,
         claim = system.refFor(system.get(id, "claim") as Long),
-        outcome = system.get(id, "outcome") as String,
+        outcome = ClaimOutcome.of(system.get(id, "outcome") as String),
         paidAmount = system.get(id, "paidAmount") as BigDecimal,
         patientPays = system.get(id, "patientPays") as BigDecimal,
         respondedAt = system.get(id, "respondedAt") as Instant,
@@ -1499,7 +1499,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializePharmacist(id: Long): Pharmacist = Pharmacist(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        role = system.get(id, "role") as String,
+        role = Role.of(system.get(id, "role") as String),
         licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { system.refFor(it as Long) },
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
         stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { system.refFor(it as Long) },
@@ -1516,7 +1516,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeTechnician(id: Long): Technician = Technician(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        role = system.get(id, "role") as String,
+        role = Role.of(system.get(id, "role") as String),
         licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { system.refFor(it as Long) },
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
         stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { system.refFor(it as Long) },
@@ -1533,7 +1533,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeAdministrator(id: Long): Administrator = Administrator(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        role = system.get(id, "role") as String,
+        role = Role.of(system.get(id, "role") as String),
         licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { system.refFor(it as Long) },
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
         stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { system.refFor(it as Long) },
@@ -1550,7 +1550,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeLicensedPharmacist(id: Long): LicensedPharmacist = LicensedPharmacist(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        role = system.get(id, "role") as String,
+        role = Role.of(system.get(id, "role") as String),
         licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { system.refFor(it as Long) },
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
         stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { system.refFor(it as Long) },
@@ -1567,7 +1567,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeLicenceExpiringSoon(id: Long): LicenceExpiringSoon = LicenceExpiringSoon(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        role = system.get(id, "role") as String,
+        role = Role.of(system.get(id, "role") as String),
         licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { system.refFor(it as Long) },
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
         stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { system.refFor(it as Long) },
@@ -2973,16 +2973,16 @@ visible to Staff
 -- velle: the actor (Reference §22, "The actor") — `by <Role>` in an act's
 -- header is the role gate, sugar for `requires actor to be <Role>`; the
 -- first administrator is seeded by the engineer, outside the trust boundary
+Role is one of "pharmacist", "technician", "admin"
+
 shape Staff {
     name: text
-    role: text
+    role: Role
 }
-
-Staff requires role == "pharmacist" or role == "technician" or role == "admin"
 
 transient act HireStaff by Administrator {
     name: text
-    role: text
+    role: Role
 }
 
 rule RecordHire when HireStaff {
@@ -3063,14 +3063,15 @@ shape LowStock    = Drug where onHand < reorderPoint
 -- velle: two `one Drug` fields on one shape — no inverse is inferred (checks
 -- V19); Drug.interactions above is the declared view, with `or` in its
 -- formula so the fact is found from either side
+Severity is one of "major", "moderate"
+
 act Interaction {
     drugA: one Drug
     drugB: one Drug
-    severity: text
+    severity: Severity
 }
 
 never (Interaction where drugA == drugB)
-Interaction requires severity == "major" or severity == "moderate"
 
 -- Prices change on a date, and the history matters for billing disputes:
 -- nothing is overwritten. The price in force is the latest change whose date
@@ -3667,14 +3668,15 @@ rule LogControlled when (Fill where lot.drug is Controlled) {
 -- fill they filled themselves; a fill is verified once.
 -- velle: the licence gate in the header reads a time-dependent refinement;
 -- an identity comparison between the actor and the fill's field
+Verdict is one of "approved", "rejected"
+
 transient act VerifyFill by LicensedPharmacist {
     fill: one Fill
-    outcome: text
+    outcome: Verdict
     note: text
 }
 
 never (VerifyFill where actor == fill.filledBy and fill.lot.drug is Controlled)
-VerifyFill requires outcome == "approved" or outcome == "rejected"
 
 -- A fill is verified once: a key on the verification record (Reference §21,
 -- "Keys"), since the request's own verification is the one that would make
@@ -3682,7 +3684,7 @@ VerifyFill requires outcome == "approved" or outcome == "rejected"
 shape Verification {
     fill: one Fill unique
     pharmacist: one Staff
-    outcome: text
+    outcome: Verdict
     note: text
     verifiedAt: timestamp on create
 }
@@ -3923,19 +3925,20 @@ rule SubmitClaim when (InsuredFill where not exists Claim for this) {
     Claim from { fill: this, plan: insurer, amount: total }
 }
 
+ClaimOutcome is one of "paid", "rejected"
+
 transient act Adjudication {
     claim: one Claim
-    outcome: text
+    outcome: ClaimOutcome
     paidAmount: decimal
     patientPays: decimal
 }
 
-Adjudication requires outcome == "paid" or outcome == "rejected"
 never (Adjudication where paidAmount < 0 or patientPays < 0)
 
 shape ClaimResponse {
     claim: one Claim
-    outcome: text
+    outcome: ClaimOutcome
     paidAmount: decimal
     patientPays: decimal
     respondedAt: timestamp on create
@@ -4074,15 +4077,61 @@ typealias PaidClaimQuery = TypedQuery<PaidClaimFields, PaidClaim>
 typealias RejectedClaimQuery = TypedQuery<RejectedClaimFields, RejectedClaim>
 typealias StaleClaimQuery = TypedQuery<StaleClaimFields, StaleClaim>
 
+// ── the types declared by their words: one enum class each, an entry per word ──
+enum class Role(val word: String) {
+    pharmacist("pharmacist"),
+    technician("technician"),
+    admin("admin");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): Role = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"pharmacist\", \"technician\", \"admin\"")
+    }
+}
+
+enum class Severity(val word: String) {
+    major("major"),
+    moderate("moderate");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): Severity = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"major\", \"moderate\"")
+    }
+}
+
+enum class Verdict(val word: String) {
+    approved("approved"),
+    rejected("rejected");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): Verdict = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"approved\", \"rejected\"")
+    }
+}
+
+enum class ClaimOutcome(val word: String) {
+    paid("paid"),
+    rejected("rejected");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): ClaimOutcome = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"paid\", \"rejected\"")
+    }
+}
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewHireStaff(
     val name: String,
-    val role: String,
+    val role: Role,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
-        put("role", role)
+        put("role", role.word)
     }
     override fun register(reg: NewRegistry) {
     }
@@ -4141,12 +4190,12 @@ data class NewDrug(
 data class NewInteraction(
     val drugA: Ref<Drug>,
     val drugB: Ref<Drug>,
-    val severity: String,
+    val severity: Severity,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("drugA", system.idOf(drugA))
         put("drugB", system.idOf(drugB))
-        put("severity", severity)
+        put("severity", severity.word)
     }
     override fun register(reg: NewRegistry) {
     }
@@ -4424,12 +4473,12 @@ data class NewMonitoringCheck(
 
 data class NewVerifyFill(
     val fill: Ref<Fill>,
-    val outcome: String,
+    val outcome: Verdict,
     val note: String,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("fill", system.idOf(fill))
-        put("outcome", outcome)
+        put("outcome", outcome.word)
         put("note", note)
     }
     override fun register(reg: NewRegistry) {
@@ -4502,13 +4551,13 @@ data class NewAutoRefillCancellation(
 
 data class NewAdjudication(
     val claim: Ref<Claim>,
-    val outcome: String,
+    val outcome: ClaimOutcome,
     val paidAmount: BigDecimal,
     val patientPays: BigDecimal,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("claim", system.idOf(claim))
-        put("outcome", outcome)
+        put("outcome", outcome.word)
         put("paidAmount", paidAmount)
         put("patientPays", patientPays)
     }
@@ -4556,7 +4605,7 @@ data class Tick(
 data class Staff(
     override val key: StoreKey,
     val name: String,
-    val role: String,
+    val role: Role,
     val licenceRenewals: List<Ref<LicenceRenewal>>,
     val licenceReminders: List<Ref<LicenceReminder>>,
     val stockAdjustments: List<Ref<StockAdjustment>>,
@@ -4648,7 +4697,7 @@ data class Interaction(
     override val key: StoreKey,
     val drugA: Ref<Drug>,
     val drugB: Ref<Drug>,
-    val severity: String,
+    val severity: Severity,
 ) : Ref<Interaction> {
     override val shape: String get() = "Interaction"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -5070,7 +5119,7 @@ data class Verification(
     override val key: StoreKey,
     val fill: Ref<Fill>,
     val pharmacist: Ref<Staff>,
-    val outcome: String,
+    val outcome: Verdict,
     val note: String,
     val verifiedAt: Instant,
 ) : Ref<Verification> {
@@ -5227,7 +5276,7 @@ data class Claim(
 data class ClaimResponse(
     override val key: StoreKey,
     val claim: Ref<Claim>,
-    val outcome: String,
+    val outcome: ClaimOutcome,
     val paidAmount: BigDecimal,
     val patientPays: BigDecimal,
     val respondedAt: Instant,
@@ -5261,7 +5310,7 @@ data class ControlledInventorySnapshot(
 data class Pharmacist(
     override val key: StoreKey,
     val name: String,
-    val role: String,
+    val role: Role,
     val licenceRenewals: List<Ref<LicenceRenewal>>,
     val licenceReminders: List<Ref<LicenceReminder>>,
     val stockAdjustments: List<Ref<StockAdjustment>>,
@@ -5286,7 +5335,7 @@ data class Pharmacist(
 data class Technician(
     override val key: StoreKey,
     val name: String,
-    val role: String,
+    val role: Role,
     val licenceRenewals: List<Ref<LicenceRenewal>>,
     val licenceReminders: List<Ref<LicenceReminder>>,
     val stockAdjustments: List<Ref<StockAdjustment>>,
@@ -5311,7 +5360,7 @@ data class Technician(
 data class Administrator(
     override val key: StoreKey,
     val name: String,
-    val role: String,
+    val role: Role,
     val licenceRenewals: List<Ref<LicenceRenewal>>,
     val licenceReminders: List<Ref<LicenceReminder>>,
     val stockAdjustments: List<Ref<StockAdjustment>>,
@@ -5336,7 +5385,7 @@ data class Administrator(
 data class LicensedPharmacist(
     override val key: StoreKey,
     val name: String,
-    val role: String,
+    val role: Role,
     val licenceRenewals: List<Ref<LicenceRenewal>>,
     val licenceReminders: List<Ref<LicenceReminder>>,
     val stockAdjustments: List<Ref<StockAdjustment>>,
@@ -5361,7 +5410,7 @@ data class LicensedPharmacist(
 data class LicenceExpiringSoon(
     override val key: StoreKey,
     val name: String,
-    val role: String,
+    val role: Role,
     val licenceRenewals: List<Ref<LicenceRenewal>>,
     val licenceReminders: List<Ref<LicenceReminder>>,
     val stockAdjustments: List<Ref<StockAdjustment>>,
@@ -6696,7 +6745,7 @@ class TickFields(path: List<String> = emptyList()) : Fields(path) {
 
 class StaffFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
-    val role: TextField get() = TextField(fieldPath + "role")
+    val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isPharmacist(): Expr = isA("Pharmacist")
     fun isTechnician(): Expr = isA("Technician")
     fun isAdministrator(): Expr = isA("Administrator")
@@ -6737,7 +6786,7 @@ class DrugFields(path: List<String> = emptyList()) : Fields(path) {
 class InteractionFields(path: List<String> = emptyList()) : Fields(path) {
     val drugA: DrugFields get() = DrugFields(fieldPath + "drugA")
     val drugB: DrugFields get() = DrugFields(fieldPath + "drugB")
-    val severity: TextField get() = TextField(fieldPath + "severity")
+    val severity: EnumField<Severity> get() = EnumField<Severity>(fieldPath + "severity") { it.word }
 }
 
 class PriceChangeFields(path: List<String> = emptyList()) : Fields(path) {
@@ -6956,7 +7005,7 @@ class ControlledLogEntryFields(path: List<String> = emptyList()) : Fields(path) 
 class VerificationFields(path: List<String> = emptyList()) : Fields(path) {
     val fill: FillFields get() = FillFields(fieldPath + "fill")
     val pharmacist: StaffFields get() = StaffFields(fieldPath + "pharmacist")
-    val outcome: TextField get() = TextField(fieldPath + "outcome")
+    val outcome: EnumField<Verdict> get() = EnumField<Verdict>(fieldPath + "outcome") { it.word }
     val note: TextField get() = TextField(fieldPath + "note")
     val verifiedAt: DateTimeField get() = DateTimeField(fieldPath + "verifiedAt")
 }
@@ -7039,7 +7088,7 @@ class ClaimFields(path: List<String> = emptyList()) : Fields(path) {
 
 class ClaimResponseFields(path: List<String> = emptyList()) : Fields(path) {
     val claim: ClaimFields get() = ClaimFields(fieldPath + "claim")
-    val outcome: TextField get() = TextField(fieldPath + "outcome")
+    val outcome: EnumField<ClaimOutcome> get() = EnumField<ClaimOutcome>(fieldPath + "outcome") { it.word }
     val paidAmount: NumField get() = NumField(fieldPath + "paidAmount")
     val patientPays: NumField get() = NumField(fieldPath + "patientPays")
     val respondedAt: DateTimeField get() = DateTimeField(fieldPath + "respondedAt")
@@ -7058,7 +7107,7 @@ class ControlledInventorySnapshotFields(path: List<String> = emptyList()) : Fiel
 
 class PharmacistFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
-    val role: TextField get() = TextField(fieldPath + "role")
+    val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isTechnician(): Expr = isA("Technician")
     fun isAdministrator(): Expr = isA("Administrator")
     fun isLicensedPharmacist(): Expr = isA("LicensedPharmacist")
@@ -7067,7 +7116,7 @@ class PharmacistFields(path: List<String> = emptyList()) : Fields(path) {
 
 class TechnicianFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
-    val role: TextField get() = TextField(fieldPath + "role")
+    val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isPharmacist(): Expr = isA("Pharmacist")
     fun isAdministrator(): Expr = isA("Administrator")
     fun isLicensedPharmacist(): Expr = isA("LicensedPharmacist")
@@ -7076,7 +7125,7 @@ class TechnicianFields(path: List<String> = emptyList()) : Fields(path) {
 
 class AdministratorFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
-    val role: TextField get() = TextField(fieldPath + "role")
+    val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isPharmacist(): Expr = isA("Pharmacist")
     fun isTechnician(): Expr = isA("Technician")
     fun isLicensedPharmacist(): Expr = isA("LicensedPharmacist")
@@ -7085,7 +7134,7 @@ class AdministratorFields(path: List<String> = emptyList()) : Fields(path) {
 
 class LicensedPharmacistFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
-    val role: TextField get() = TextField(fieldPath + "role")
+    val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isPharmacist(): Expr = isA("Pharmacist")
     fun isTechnician(): Expr = isA("Technician")
     fun isAdministrator(): Expr = isA("Administrator")
@@ -7094,7 +7143,7 @@ class LicensedPharmacistFields(path: List<String> = emptyList()) : Fields(path) 
 
 class LicenceExpiringSoonFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
-    val role: TextField get() = TextField(fieldPath + "role")
+    val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isPharmacist(): Expr = isA("Pharmacist")
     fun isTechnician(): Expr = isA("Technician")
     fun isAdministrator(): Expr = isA("Administrator")

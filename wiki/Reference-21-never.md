@@ -20,7 +20,6 @@ A `requires` states the same thing from the other side. It names a shape or refi
 VerifyFill requires actor to be LicensedPharmacist                         -- "only a licensed pharmacist verifies" (or `by LicensedPharmacist` in the header)
 FillPrescription requires filledBy to be Technician or filledBy to be Pharmacist   -- the actor, bound `as filledBy`
 Fill requires fillNumber == count(prescription.fills where fillNumber <= this.fillNumber)
-Staff requires role == "pharmacist" or role == "technician" or role == "admin"
 ```
 
 Line by line:
@@ -28,7 +27,7 @@ Line by line:
 - `VerifyFill requires actor to be LicensedPharmacist` means `never (VerifyFill where actor is not LicensedPharmacist)`. The compiler turns every requirement into the matching `never` by negating the predicate: comparisons flip, `and` and `or` swap, `is` and `is not` swap.
 - `to be` is a second spelling of refinement membership, allowed only inside a `requires`. It reads as the sentence an owner says. It takes a refinement name and nothing else. Optionality, emptiness, and non-membership keep their one spelling: `is some`, `is not empty`, `is not`. Outside a requirement, `to be` is an error.
 - `actor` and `filledBy` are the person who committed the act, bound by the act's `by` clause ([Authorization](Authorization)).
-- The third line checks a field against a count. The fourth restricts a field to a list of values.
+- The third line checks a field against a count. A field that takes one of a few words, such as a staff member's role, is not a requirement but a type: `Role is one of "pharmacist", "technician", "admin"` and `role: Role` ([§5](Reference-05-Scalars#a-field-that-takes-one-of-a-few-words)).
 
 Choose `never` or `requires` by which sentence the owner said. "A price change is never negative" is `never (PriceChange where unitPrice < 0)`. "A fill number is its position in the series" is a `requires`. Both are the same construct underneath.
 

@@ -33,8 +33,6 @@ import velle.generated.membership.*
  *     Escalation from { ticket: this, raisedOn: today }
  * }
  *
- * RaiseTicket requires ((priority == "low") or (priority == "normal")) or (priority == "high")
- *
  */
 class RaiseTicketSpec : SpecSupport() {
 

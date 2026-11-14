@@ -1,6 +1,7 @@
 package velle.generated.pharmacy
 
 import java.math.BigDecimal
+import velle.CommitResult
 import velle.Keyed
 import velle.generated.*
 import kotlin.test.Test
@@ -34,6 +35,13 @@ open class PharmacyFlowTest {
 
     private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
     private fun refuse(r: Commit<*, *>) = assertTrue(r !is Commit.Accepted<*, *>, "expected a refusal, got: $r")
+
+    /** A raw commit the typed surface cannot spell, refused at the door with [reason] in its message. */
+    private fun refusedRaw(act: String, fields: Map<String, Any?>, actor: Staff?, reason: String) {
+        val result = sys.system.commit(act, fields, actor = actor?.let { sys.system.idOf(it) })
+        assertIs<CommitResult.Refused>(result, "expected a refusal, got: $result")
+        assertTrue(reason in result.reason, result.reason)
+    }
     private fun Keyed.isA(refinement: String) = sys.system.isMember(sys.system.idOf(this), refinement)
     private fun dec(s: String) = BigDecimal(s)
     private fun BigDecimal.plain() = stripTrailingZeros().toPlainString()
@@ -167,7 +175,7 @@ open class PharmacyFlowTest {
         val aspirin = s.drug("aspirin")
         s.interaction(aspirin, warfarin)
         assertEquals(1, sys.read(warfarin).interactions.size, "the view reads the pair from the other side")
-        refuse(sys.commit(NewInteraction(aspirin, aspirin, "major")))
+        refuse(sys.commit(NewInteraction(aspirin, aspirin, Severity.major)))
 
         val patient = s.patient()
         val dr = s.prescriber()
@@ -272,19 +280,21 @@ open class PharmacyFlowTest {
     fun `verify - a licensed pharmacist verifies once, never their own controlled fill, and a rejection returns the stock`() {
         val c = s.filled(s.counter(drug = s.controlledDrug(), refills = 0))
         val lapsed = s.pharmacist("Lapsed", licensedUntil = s.today.minusDays(1))
-        refuse(sys.commit(NewVerifyFill(c.fill, "approved", ""), lapsed))
-        refuse(sys.commit(NewVerifyFill(c.fill, "approved", ""), c.technician))
-        refuse(sys.commit(NewVerifyFill(c.fill, "maybe", ""), c.pharmacist))
+        refuse(sys.commit(NewVerifyFill(c.fill, Verdict.approved, ""), lapsed))
+        refuse(sys.commit(NewVerifyFill(c.fill, Verdict.approved, ""), c.technician))
+        // a word the declaration does not list cannot be written through the typed input class;
+        // the door refuses it when it arrives raw, naming the list (Reference §5)
+        refusedRaw("VerifyFill", mapOf("fill" to sys.system.idOf(c.fill), "outcome" to "maybe", "note" to ""), c.pharmacist, "\"maybe\" is not one of \"approved\", \"rejected\"")
 
         // the pharmacist fills the second one themself: another pharmacist must verify it
         val other = s.counter(patient = c.patient, drug = c.drug, refills = 0)
         s.monitoringCheck(other.prescription, c.pharmacist)
         val ownFill = s.fill(other.prescription, other.lot, c.pharmacist)
-        refuse(sys.commit(NewVerifyFill(ownFill, "approved", ""), c.pharmacist))
+        refuse(sys.commit(NewVerifyFill(ownFill, Verdict.approved, ""), c.pharmacist))
         s.verify(ownFill, s.pharmacist("Colleague"))
 
-        s.verify(c.fill, c.pharmacist, "rejected")
-        refuse(sys.commit(NewVerifyFill(c.fill, "approved", ""), c.pharmacist), ) // verified once
+        s.verify(c.fill, c.pharmacist, Verdict.rejected)
+        refuse(sys.commit(NewVerifyFill(c.fill, Verdict.approved, ""), c.pharmacist), ) // verified once
         assertTrue(c.fill.isA("RejectedFill"))
         assertFalse(c.fill.isA("ConsumingFill"))
         assertEquals(100, sys.read(c.lot).onHand, "the rejected fill went back on the shelf")
@@ -574,8 +584,8 @@ open class PharmacyFlowTest {
         sys.tickHourly()
         assertEquals(1, sys.claimFollowUps().size)
 
-        refuse(sys.commit(NewAdjudication(claim, "maybe", dec("40"), dec("5"))))
-        accept(sys.commit(NewAdjudication(claim, "paid", dec("40.00"), dec("5.00"))))
+        refusedRaw("Adjudication", mapOf("claim" to sys.system.idOf(claim), "outcome" to "maybe", "paidAmount" to dec("40"), "patientPays" to dec("5")), null, "\"maybe\" is not one of \"paid\", \"rejected\"")
+        accept(sys.commit(NewAdjudication(claim, ClaimOutcome.paid, dec("40.00"), dec("5.00"))))
         assertTrue(claim.isA("PaidClaim"))
         assertFalse(claim.isA("StaleClaim"))
         assertEquals("5", sys.read(c.fill).amountDue.plain())
@@ -610,7 +620,7 @@ open class PharmacyFlowTest {
 
     @Test
     fun `admin - staff roles are a closed list, licences near lapsing are reminded weekly, and the monthly snapshot counts every controlled drug`() {
-        refuse(sys.commit(NewHireStaff("Jo", "janitor"), s.founder))
+        refusedRaw("HireStaff", mapOf("name" to "Jo", "role" to "janitor"), s.founder, "\"janitor\" is not one of \"pharmacist\", \"technician\", \"admin\"")
         val soon = s.pharmacist("Soon", licensedUntil = s.today.plusDays(20))
         val fine = s.pharmacist("Fine", licensedUntil = s.today.plusDays(200))
         refuse(sys.commit(NewLicenceRenewal(s.technician(), "RPH-X", s.today.plusDays(365)), s.founder))

@@ -237,7 +237,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         issuedOn = system.get(id, "issuedOn") as Instant,
         total = system.get(id, "total") as velle.finance.Money,
         balance = system.get(id, "balance") as velle.finance.Money,
-        status = system.get(id, "status") as String,
+        status = Status.of(system.get(id, "status") as String),
         lineItems = (system.get(id, "lineItems") as List<*>).map { system.refFor(it as Long) },
         payments = (system.get(id, "payments") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
@@ -328,7 +328,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         issuedOn = system.get(id, "issuedOn") as Instant,
         total = system.get(id, "total") as velle.finance.Money,
         balance = system.get(id, "balance") as velle.finance.Money,
-        status = system.get(id, "status") as String,
+        status = Status.of(system.get(id, "status") as String),
         lineItems = (system.get(id, "lineItems") as List<*>).map { system.refFor(it as Long) },
         payments = (system.get(id, "payments") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
@@ -359,7 +359,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         issuedOn = system.get(id, "issuedOn") as Instant,
         total = system.get(id, "total") as velle.finance.Money,
         balance = system.get(id, "balance") as velle.finance.Money,
-        status = system.get(id, "status") as String,
+        status = Status.of(system.get(id, "status") as String),
         lineItems = (system.get(id, "lineItems") as List<*>).map { system.refFor(it as Long) },
         payments = (system.get(id, "payments") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
@@ -383,7 +383,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         issuedOn = system.get(id, "issuedOn") as Instant,
         total = system.get(id, "total") as velle.finance.Money,
         balance = system.get(id, "balance") as velle.finance.Money,
-        status = system.get(id, "status") as String,
+        status = Status.of(system.get(id, "status") as String),
         lineItems = (system.get(id, "lineItems") as List<*>).map { system.refFor(it as Long) },
         payments = (system.get(id, "payments") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
@@ -408,7 +408,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         issuedOn = system.get(id, "issuedOn") as Instant,
         total = system.get(id, "total") as velle.finance.Money,
         balance = system.get(id, "balance") as velle.finance.Money,
-        status = system.get(id, "status") as String,
+        status = Status.of(system.get(id, "status") as String),
         lineItems = (system.get(id, "lineItems") as List<*>).map { system.refFor(it as Long) },
         payments = (system.get(id, "payments") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
@@ -432,7 +432,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         issuedOn = system.get(id, "issuedOn") as Instant,
         total = system.get(id, "total") as velle.finance.Money,
         balance = system.get(id, "balance") as velle.finance.Money,
-        status = system.get(id, "status") as String,
+        status = Status.of(system.get(id, "status") as String),
         lineItems = (system.get(id, "lineItems") as List<*>).map { system.refFor(it as Long) },
         payments = (system.get(id, "payments") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
@@ -509,6 +509,8 @@ transient act BillCustomer {
     due: Date
 }
 
+Status is one of "paid", "overdue", "open"
+
 shape Invoice {
     customer: one Customer
     due: Date
@@ -516,7 +518,7 @@ shape Invoice {
     issuedOn: timestamp on create
     total: Money = sum(lineItems, amount)
     balance: Money = total - sum(payments, amount)
-    status: text = if balance <= 0 then "paid" else if due < today then "overdue" else "open"
+    status: Status = if balance <= 0 then "paid" else if due < today then "overdue" else "open"
 }
 
 rule OpenInvoice when BillCustomer {
@@ -708,6 +710,19 @@ typealias ActionableOverdueQuery = TypedQuery<ActionableOverdueFields, Actionabl
 typealias IssuedInvoiceQuery = TypedQuery<IssuedInvoiceFields, IssuedInvoice>
 typealias ArchivedInvoiceQuery = TypedQuery<ArchivedInvoiceFields, ArchivedInvoice>
 
+// ── the types declared by their words: one enum class each, an entry per word ──
+enum class Status(val word: String) {
+    paid("paid"),
+    overdue("overdue"),
+    `open`("open");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): Status = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"paid\", \"overdue\", \"open\"")
+    }
+}
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewSignUp(
@@ -873,7 +888,7 @@ data class Invoice(
     val issuedOn: Instant,
     val total: velle.finance.Money,
     val balance: velle.finance.Money,
-    val status: String,
+    val status: Status,
     val lineItems: List<Ref<LineItem>>,
     val payments: List<Ref<Payment>>,
     val receipts: List<Ref<Receipt>>,
@@ -1014,7 +1029,7 @@ data class PaidInvoice(
     val issuedOn: Instant,
     val total: velle.finance.Money,
     val balance: velle.finance.Money,
-    val status: String,
+    val status: Status,
     val lineItems: List<Ref<LineItem>>,
     val payments: List<Ref<Payment>>,
     val receipts: List<Ref<Receipt>>,
@@ -1057,7 +1072,7 @@ data class OverdueInvoice(
     val issuedOn: Instant,
     val total: velle.finance.Money,
     val balance: velle.finance.Money,
-    val status: String,
+    val status: Status,
     val lineItems: List<Ref<LineItem>>,
     val payments: List<Ref<Payment>>,
     val receipts: List<Ref<Receipt>>,
@@ -1089,7 +1104,7 @@ data class ActionableOverdue(
     val issuedOn: Instant,
     val total: velle.finance.Money,
     val balance: velle.finance.Money,
-    val status: String,
+    val status: Status,
     val lineItems: List<Ref<LineItem>>,
     val payments: List<Ref<Payment>>,
     val receipts: List<Ref<Receipt>>,
@@ -1122,7 +1137,7 @@ data class IssuedInvoice(
     val issuedOn: Instant,
     val total: velle.finance.Money,
     val balance: velle.finance.Money,
-    val status: String,
+    val status: Status,
     val lineItems: List<Ref<LineItem>>,
     val payments: List<Ref<Payment>>,
     val receipts: List<Ref<Receipt>>,
@@ -1154,7 +1169,7 @@ data class ArchivedInvoice(
     val issuedOn: Instant,
     val total: velle.finance.Money,
     val balance: velle.finance.Money,
-    val status: String,
+    val status: Status,
     val lineItems: List<Ref<LineItem>>,
     val payments: List<Ref<Payment>>,
     val receipts: List<Ref<Receipt>>,
@@ -1205,7 +1220,7 @@ class InvoiceFields(path: List<String> = emptyList()) : Fields(path) {
     val issuedOn: DateTimeField get() = DateTimeField(fieldPath + "issuedOn")
     val total: OrderedExtField<velle.finance.Money> get() = OrderedExtField<velle.finance.Money>(fieldPath + "total", "velle.finance.Money")
     val balance: OrderedExtField<velle.finance.Money> get() = OrderedExtField<velle.finance.Money>(fieldPath + "balance", "velle.finance.Money")
-    val status: TextField get() = TextField(fieldPath + "status")
+    val status: EnumField<Status> get() = EnumField<Status>(fieldPath + "status") { it.word }
     fun isPaidInvoice(): Expr = isA("PaidInvoice")
     fun isOverdueInvoice(): Expr = isA("OverdueInvoice")
     fun isActionableOverdue(): Expr = isA("ActionableOverdue")
@@ -1275,7 +1290,7 @@ class PaidInvoiceFields(path: List<String> = emptyList()) : Fields(path) {
     val issuedOn: DateTimeField get() = DateTimeField(fieldPath + "issuedOn")
     val total: OrderedExtField<velle.finance.Money> get() = OrderedExtField<velle.finance.Money>(fieldPath + "total", "velle.finance.Money")
     val balance: OrderedExtField<velle.finance.Money> get() = OrderedExtField<velle.finance.Money>(fieldPath + "balance", "velle.finance.Money")
-    val status: TextField get() = TextField(fieldPath + "status")
+    val status: EnumField<Status> get() = EnumField<Status>(fieldPath + "status") { it.word }
     fun isOverdueInvoice(): Expr = isA("OverdueInvoice")
     fun isActionableOverdue(): Expr = isA("ActionableOverdue")
     fun isIssuedInvoice(): Expr = isA("IssuedInvoice")
@@ -1294,7 +1309,7 @@ class OverdueInvoiceFields(path: List<String> = emptyList()) : Fields(path) {
     val issuedOn: DateTimeField get() = DateTimeField(fieldPath + "issuedOn")
     val total: OrderedExtField<velle.finance.Money> get() = OrderedExtField<velle.finance.Money>(fieldPath + "total", "velle.finance.Money")
     val balance: OrderedExtField<velle.finance.Money> get() = OrderedExtField<velle.finance.Money>(fieldPath + "balance", "velle.finance.Money")
-    val status: TextField get() = TextField(fieldPath + "status")
+    val status: EnumField<Status> get() = EnumField<Status>(fieldPath + "status") { it.word }
     fun isPaidInvoice(): Expr = isA("PaidInvoice")
     fun isActionableOverdue(): Expr = isA("ActionableOverdue")
     fun isIssuedInvoice(): Expr = isA("IssuedInvoice")
@@ -1308,7 +1323,7 @@ class ActionableOverdueFields(path: List<String> = emptyList()) : Fields(path) {
     val issuedOn: DateTimeField get() = DateTimeField(fieldPath + "issuedOn")
     val total: OrderedExtField<velle.finance.Money> get() = OrderedExtField<velle.finance.Money>(fieldPath + "total", "velle.finance.Money")
     val balance: OrderedExtField<velle.finance.Money> get() = OrderedExtField<velle.finance.Money>(fieldPath + "balance", "velle.finance.Money")
-    val status: TextField get() = TextField(fieldPath + "status")
+    val status: EnumField<Status> get() = EnumField<Status>(fieldPath + "status") { it.word }
     val archivedOn: DateField get() = DateField(fieldPath + "archivedOn")
     fun isPaidInvoice(): Expr = isA("PaidInvoice")
     fun isOverdueInvoice(): Expr = isA("OverdueInvoice")
@@ -1323,7 +1338,7 @@ class IssuedInvoiceFields(path: List<String> = emptyList()) : Fields(path) {
     val issuedOn: DateTimeField get() = DateTimeField(fieldPath + "issuedOn")
     val total: OrderedExtField<velle.finance.Money> get() = OrderedExtField<velle.finance.Money>(fieldPath + "total", "velle.finance.Money")
     val balance: OrderedExtField<velle.finance.Money> get() = OrderedExtField<velle.finance.Money>(fieldPath + "balance", "velle.finance.Money")
-    val status: TextField get() = TextField(fieldPath + "status")
+    val status: EnumField<Status> get() = EnumField<Status>(fieldPath + "status") { it.word }
     fun isPaidInvoice(): Expr = isA("PaidInvoice")
     fun isOverdueInvoice(): Expr = isA("OverdueInvoice")
     fun isActionableOverdue(): Expr = isA("ActionableOverdue")
@@ -1337,7 +1352,7 @@ class ArchivedInvoiceFields(path: List<String> = emptyList()) : Fields(path) {
     val issuedOn: DateTimeField get() = DateTimeField(fieldPath + "issuedOn")
     val total: OrderedExtField<velle.finance.Money> get() = OrderedExtField<velle.finance.Money>(fieldPath + "total", "velle.finance.Money")
     val balance: OrderedExtField<velle.finance.Money> get() = OrderedExtField<velle.finance.Money>(fieldPath + "balance", "velle.finance.Money")
-    val status: TextField get() = TextField(fieldPath + "status")
+    val status: EnumField<Status> get() = EnumField<Status>(fieldPath + "status") { it.word }
     val archivedOn: DateField get() = DateField(fieldPath + "archivedOn")
     fun isPaidInvoice(): Expr = isA("PaidInvoice")
     fun isOverdueInvoice(): Expr = isA("OverdueInvoice")

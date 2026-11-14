@@ -1,7 +1,7 @@
--- The proposed spelling: the words are declared once as a type of their own,
--- the field is of that type, and a quoted word beside it is read as the type
--- when the spec is compiled, as "09:00" is read beside a time (Reference §5).
--- Refused today: the parser knows no such declaration.
+-- A field that takes one of a few words: the words are declared once as a type
+-- of their own, the field is of that type, and a quoted word beside it is read
+-- as the type when the spec is compiled, as "09:00" is read beside a time
+-- (Reference §5, "A field that takes one of a few words").
 FieldType is one of "number", "date", "text"
 
 act Field {

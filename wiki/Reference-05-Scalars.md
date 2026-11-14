@@ -1,6 +1,6 @@
 # 5. Scalars
 
-A scalar is a single value a property holds: text, a number, true or false, a date, a moment in time, or a value of a type an engineer has added. This page lists the scalar types, how an added type is named, how a property holds several scalar values, the built-in functions, and three things that go with a property declaration: a starting value, a timestamp the system keeps, and the identity every record carries. After it you can declare the properties of a [shape](Reference-03-shape) and know which values the system fills in.
+A scalar is a single value a property holds: text, a number, true or false, a date, a moment in time, one of a few words the spec names, or a value of a type an engineer has added. This page lists the scalar types, how a field that takes one of a few words is declared, how an added type is named, how a property holds several scalar values, the built-in functions, and three things that go with a property declaration: a starting value, a timestamp the system keeps, and the identity every record carries. After it you can declare the properties of a [shape](Reference-03-shape) and know which values the system fills in.
 
 ## The types
 
@@ -20,7 +20,7 @@ A scalar is a single value a property holds: text, a number, true or false, a da
 | `bytes` | binary data the system stores and hands back unchanged (`ByteArray`) |
 | `Regex` | a regular expression, in the Java dialect, that compiles (`velle.ext.builtin.RegexValue`); `==` and `!=` only; `matches` takes one on its right ([§10](Reference-10-Predicate-expressions)) |
 
-Each type behaves as its Kotlin counterpart unless the Reference says otherwise. A `DateTime` has no time zone; when the business needs one, store it as data beside the value. A comparison's two sides are one type: a text beside a number or a date, or a `Date` beside a `DateTime`, is an error, and a comparison never reads a text as another type. Where a value is held as text because the business says what it is, `number`, `date`, and `datetime` read it (below, "The built-in functions"). The one reading a comparison makes is of a quoted text beside a `uuid` or a `time`, since neither has a literal of its own: `code == "123e4567-e89b-12d3-a456-426614174000"` and `opensAt < "09:00"` read the text when the spec is compiled, and a text the type cannot read is an error there. A `duration` is ordered, adds to and subtracts from another `duration`, moves a `Date` or `DateTime` ([§10](Reference-10-Predicate-expressions)), and is the difference of two dates or two moments: `elapsed: duration = finished - started`. A `Date` moved by a `duration` that is not whole days is an error when the rule runs, as it is for the literal `today + 3 hours`. A `time` moves by a `duration` as a clock does, wrapping past midnight, and two times subtract to a `duration`. `bytes` is for a document, an image, or a key another system produced: a spec stores it, reads it back, and tests `is some`; two values are equal when their contents are, and they order byte by byte, but no rule should need to say more about one.
+Each type behaves as its Kotlin counterpart unless the Reference says otherwise. A `DateTime` has no time zone; when the business needs one, store it as data beside the value. A comparison's two sides are one type: a text beside a number or a date, or a `Date` beside a `DateTime`, is an error, and a comparison never reads a text as another type. Where a value is held as text because the business says what it is, `number`, `date`, and `datetime` read it (below, "The built-in functions"). The one reading a comparison makes is of a quoted text beside a `uuid`, a `time`, or a type declared by its words (below, "A field that takes one of a few words"), since none has a literal of its own: `code == "123e4567-e89b-12d3-a456-426614174000"` and `opensAt < "09:00"` read the text when the spec is compiled, and a text the type cannot read is an error there. A `duration` is ordered, adds to and subtracts from another `duration`, moves a `Date` or `DateTime` ([§10](Reference-10-Predicate-expressions)), and is the difference of two dates or two moments: `elapsed: duration = finished - started`. A `Date` moved by a `duration` that is not whole days is an error when the rule runs, as it is for the literal `today + 3 hours`. A `time` moves by a `duration` as a clock does, wrapping past midnight, and two times subtract to a `duration`. `bytes` is for a document, an image, or a key another system produced: a spec stores it, reads it back, and tests `is some`; two values are equal when their contents are, and they order byte by byte, but no rule should need to say more about one.
 
 `now` is the current `DateTime`. `today` is the current `Date` in the system's one time zone, set at deployment, not in the spec.
 
@@ -76,6 +76,32 @@ uses velle.finance.Money as Cash      -- the same type, written Cash in this spe
 ```
 
 An extension type is one value, never a business concept with parts. An amount and its currency are two fields of a shape, where the product owner reads the rules about them. A path never reaches into a value of the type: `price.currency` is a field of a shape or nothing. A field may hold several of the type's values with `many` (below), compared by the type's own equality; `one` takes a shape only. Duration arithmetic stays on `Date` and `DateTime`. Writing a type, and the piece that lets a store hold it, is the [Extension types](Extension-types) guide. A `uses` line picks or renames a registered function the same way, with a lowercase name: `uses velle.finance.roundToCents as cents` ([Extension functions](Extension-functions)).
+
+## A field that takes one of a few words
+
+Many fields hold one of a few fixed words: a staff member's role is pharmacist, technician, or admin; a verification's outcome is approved or rejected; a ticket's priority is low, normal, or high. The spec declares the words once, as a type of its own, and a field of that type holds one of them and nothing else. From `examples/pharmacy/pharmacy.velle`:
+
+```
+Role is one of "pharmacist", "technician", "admin"
+
+shape Staff {
+    name: text
+    role: Role
+}
+
+shape Pharmacist = Staff where role == "pharmacist"
+shape Technician = Staff where role == "technician"
+shape Administrator = Staff where role == "admin"
+```
+
+- `Role is one of "pharmacist", "technician", "admin"` declares the type `Role` and its three words. The declaration stands at the top level, like a `shape`. The name is capitalized, as a type's is, and the words are quoted texts separated by commas.
+- `role: Role` holds one of the three words. A committed `Staff` whose `role` is any other word is refused at the door, with the three words in the message. The field takes `?` and `many` as any scalar does: `role: Role?`, `roles: many Role`.
+- `role == "pharmacist"` compares the field with a quoted word, and the compiler reads the word as a `Role` when the spec is compiled: `role == "pharmcist"` is an error at the word, naming the three. The same reading happens wherever a word is written for the type: `in ["pharmacist", "admin"]`, a `from` block, an assignment, an `initially`, and each branch of an `if` that computes the type, as `status: Status = if balance <= 0 then "paid" else if due < today then "overdue" else "open"` does in `examples/billing/billing.velle`.
+- Two values of the type compare with `==`, `!=`, and `in`, and nothing else. The words have no order: `priority >= "normal"` is an error, since the order the words are listed in means nothing. A business that ranks its words says so with a number, `rank: integer = if priority == "low" then 1 else if priority == "normal" then 2 else 3`.
+- A field of the type and a `text` field are two kinds and never meet in a comparison. A text the business holds, such as a form's answer, is read as the type by the type's reading function, the type's name with a lowercase first letter: `role(answer)` is the word the text spells and absent when it spells none, as `number(value)` reads a number (below, "The built-in functions"). `role(answer) is none` refuses a text that is not a role.
+- When a transient act carries a field of the type, one answering rule per word answers every request ([§4](Reference-04-State-and-commits)): over `Verdict is one of "approved", "declined", "error"` in `examples/payments/payments.velle`, a rule on `outcome == "approved"` and one on `outcome in ["declined", "error"]` together cover `ProcessorVerdict`, and a word no rule or `never` names is an error naming the word.
+
+A store holds the word as text. The engineer's Kotlin sees a class with one entry per word ([Act API](Act-API)).
 
 ## Collections of values (`many`)
 
@@ -190,6 +216,8 @@ An act declared `by` carries one more system-filled property: the actor who comm
 ## What the compiler checks
 
 - **Rejects** a call to a name no builtin or registered function has, a call that none of the function's signatures accepts (a text function with anything but one text argument, `abs` on anything but a number or a duration, a date part on anything but a value with a calendar date, `hour` or `minute` on anything but a value with a time of day, `max` or `min` on values of two types), `%` on anything but numbers, a comparison between two kinds that differ (a text beside a number or a date, a `Date` beside a `DateTime`), naming `number`, `date`, or `datetime` when a text field is one side, a quoted text beside a `uuid` or a `time` that the type cannot read, `+` or any arithmetic on a text, an ordered comparison on a `uuid` or a `boolean`, and duration arithmetic on anything but a `Date`, a `DateTime`, or a `duration` ([checks.md, F2](checks#f2--type-checking)).
+- **Rejects** a word written for a type declared by its words that the declaration does not list, naming the words; an ordered comparison, `max`, `min`, a selector's `by`, or a query's order over such a field, since the words have no order; a declaration that lists a word twice, a name declared twice, a name that is also a shape's or a builtin type's, a name whose reading function would be a builtin function's, and two words the generated Kotlin cannot tell apart ([checks.md, F1](checks#f1--name-resolution-and-casing), [F2](checks#f2--type-checking), [E1](checks#e1--registered-type-and-function-names)).
+- **Refuses** at the boundary a committed word the type does not list, naming the field and the words ([checks.md, V21](checks#v21--act-field-forms)).
 - **Rejects** a name in type position that is neither a builtin, nor a shape after `one` or `many`, nor an extension type in scope; a name two registered types share with no `uses` line picking one; and a shape named like an extension type in scope, naming the `uses` line to write ([checks.md, F1](checks#f1--name-resolution-and-casing), [E1](checks#e1--registered-type-and-function-names)).
 - **Rejects** an operator, comparison, `sum`, `max`, `min`, selector `by`, or registered function on an extension type that does not implement the capability it asks for, naming the Kotlin class and the interface ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
 - **Rejects** a `where` that does not name each value with `as`, a `sum` by field, a `by`, or a second binding over a collection of values, naming the `(values as value where ...)` form; `sum` with no field over anything but a `many` of numbers or durations, or over the values that pass a filter; and `max` or `min` over a `many` of values with no order ([checks.md, F2](checks#f2--type-checking)).

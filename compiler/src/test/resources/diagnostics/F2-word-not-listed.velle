@@ -1,0 +1,9 @@
+-- A word written for a type declared by its words that the declaration does not list: `role == "pharmcist"`.
+Role is one of "pharmacist", "technician", "admin"
+
+act Staff {
+    name: text
+    role: Role
+}
+
+shape Pharmacist = Staff where role == "pharmcist"

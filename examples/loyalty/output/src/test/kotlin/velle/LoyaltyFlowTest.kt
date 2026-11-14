@@ -97,8 +97,8 @@ open class LoyaltyFlowTest {
         val recruiter = member("Recruiter")
         val buyer = member("Buyer", referrer = recruiter)
         assertIs<Commit.Accepted<*, *>>(sys.commit(NewPurchase(buyer, BigDecimal("150"))))
-        assertEquals("gold", sys.read(buyer).tier)
-        assertEquals("advocate", sys.read(recruiter).tier)
+        assertEquals(Tier.gold, sys.read(buyer).tier)
+        assertEquals(Tier.advocate, sys.read(recruiter).tier)
     }
 
     @Test

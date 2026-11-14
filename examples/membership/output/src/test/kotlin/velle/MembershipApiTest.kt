@@ -44,7 +44,7 @@ open class MembershipApiTest {
         sys.commit(NewAgent("Grace", "grace@velle.example"))
         val grace = sys.agents().single()
 
-        sys.commit(NewRaiseTicket(ada, "playback stutters", LocalDate.of(2026, 2, 1), "high"))
+        sys.commit(NewRaiseTicket(ada, "playback stutters", LocalDate.of(2026, 2, 1), Priority.high))
         val ticket = sys.tickets().single()
 
         assertNull(sys.read(ticket).assigneeEmail, "?. short-circuits on the absent assignee")
@@ -74,14 +74,14 @@ open class MembershipApiTest {
 
         sys.tickMonthly() // renewal mints the charge with its generated reference
         val reference = sys.read(sys.charges().single()).reference
-        sys.commit(NewRaiseTicket(ada, reference, LocalDate.of(2026, 3, 1), "low"))
+        sys.commit(NewRaiseTicket(ada, reference, LocalDate.of(2026, 3, 1), Priority.low))
         assertTrue(
             sys.system.isMember(sys.system.idOf(ada), "MemberWithDisputedCharge"),
             "sibling join: a ticket subject quoting a charge reference",
         )
 
         // an already-overdue urgent ticket gets escalated after its due date
-        sys.commit(NewRaiseTicket(ada, "old issue", LocalDate.of(2025, 12, 1), "normal"))
+        sys.commit(NewRaiseTicket(ada, "old issue", LocalDate.of(2025, 12, 1), Priority.normal))
         sys.tickDaily()
         assertTrue(
             sys.system.isMember(sys.system.idOf(ada), "LateEscalatedMember"),
@@ -97,7 +97,7 @@ open class MembershipApiTest {
         val ada = sys.members().single()
         sys.commit(NewAgent("Grace", "grace@velle.example"))
         val grace = sys.agents().single()
-        sys.commit(NewRaiseTicket(ada, "billing question", LocalDate.of(2026, 3, 1), "normal"))
+        sys.commit(NewRaiseTicket(ada, "billing question", LocalDate.of(2026, 3, 1), Priority.normal))
         val ticket = sys.tickets().single()
 
         sys.commit(NewCloseTicket(ticket, grace))

@@ -248,17 +248,17 @@ rule RefuseGreenhouseTrial when RefusedGreenhouseRequest {
 }
 
 -- Plots are laid out on benches, each in the peptide arm or the control arm.
+Arm is one of "peptide", "control"
+
 act GreenhousePlot {
     trial: one GreenhouseTrial
     bench: text
-    treatment: text
+    treatment: Arm
     lastObservedDay: integer = if plotObservations is empty then 0
                                else latest(plotObservations by dayAfterTreatment).dayAfterTreatment
     audpc: decimal = if plotObservations is empty then 0.0
                      else latest(plotObservations by dayAfterTreatment).audpcSoFar
 }
-
-GreenhousePlot requires treatment == "peptide" or treatment == "control"
 
 -- Treatment day: the plants are inoculated and the peptide applied. The
 -- record is the fact; a trial is treated once.
@@ -681,11 +681,9 @@ shape PlantedTrial = FieldTrial where plantings is not empty
 act FieldPlot {
     trial: one FieldTrial
     block: integer
-    treatment: text
+    treatment: Arm
     yieldKgPerHa: decimal = if harvests is empty then 0.0 else latest(harvests by harvestedOn).yieldKgPerHa
 }
-
-FieldPlot requires treatment == "peptide" or treatment == "control"
 
 -- The peptide is sprayed on the treated plots on a date. The request is
 -- transient for the same reason as planting: the halt check below must be a

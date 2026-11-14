@@ -24,10 +24,12 @@ transient act Join {
     referrer: one Member?
 }
 
+Tier is one of "basic", "gold", "advocate"
+
 shape Member {
     name: text
     referrer: one Member?
-    tier: text initially "basic"
+    tier: Tier initially "basic"
 
     -- The referral chain, walked (Reference §7, "Walks"). `upline` is everyone
     -- above this member, at any remove, the member themself only if the chain

@@ -437,6 +437,20 @@ class OrderedExtField<T : Any>(path: List<String>, qualifiedName: String) : ExtF
     val descending: OrderDatum get() = OrderDatum(fieldPath.single(), descending = true)
 }
 
+/**
+ * A member of a type declared by its words (Reference §5, "A field that takes one of a few
+ * words"): equality and `in` against the entries of the generated `enum class`, each of which
+ * carries its word. The word is what the runtime and the stores hold, so a test is a text
+ * constant beside the member, read as the type as a spec's own quoted word is.
+ */
+class EnumField<E : Any>(path: List<String>, private val wordOf: (E) -> String) : Fields(path) {
+    private fun lit(v: E): Expr = TextLit(wordOf(v))
+    infix fun eq(v: E): Expr = Binary("==", pathExpr(), lit(v))
+    infix fun neq(v: E): Expr = Binary("!=", pathExpr(), lit(v))
+    /** `member in [a, b]` (Reference §10): equal to one of the listed words. */
+    fun oneOf(vararg v: E): Expr = Binary("in", pathExpr(), ListLit(v.map { lit(it) }))
+}
+
 /** A reference to a shape the codegen has no fields class for (a union): identity tests only. */
 class RefField(path: List<String>) : Fields(path)
 

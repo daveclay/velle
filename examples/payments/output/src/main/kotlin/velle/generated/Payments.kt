@@ -673,7 +673,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeChargeResponse(id: Long): ChargeResponse = ChargeResponse(
         key = system.refFor(id).key,
         attempt = system.refFor(system.get(id, "attempt") as Long),
-        outcome = system.get(id, "outcome") as String,
+        outcome = Verdict.of(system.get(id, "outcome") as String),
         respondedOn = system.get(id, "respondedOn") as Instant,
     )
 
@@ -984,7 +984,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { system.refFor(it as Long) },
         attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
-        outcome = system.getAs(id, "CompletedAttempt", "outcome") as String,
+        outcome = Verdict.of(system.getAs(id, "CompletedAttempt", "outcome") as String),
         isPendingAttempt = system.isMember(id, "PendingAttempt"),
         isSuccessfulCharge = system.isMember(id, "SuccessfulCharge"),
         isFailedCharge = system.isMember(id, "FailedCharge"),
@@ -1001,7 +1001,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { system.refFor(it as Long) },
         attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
-        outcome = system.get(id, "outcome") as String,
+        outcome = Verdict.of(system.get(id, "outcome") as String),
         isPendingAttempt = system.isMember(id, "PendingAttempt"),
         isCompletedAttempt = system.isMember(id, "CompletedAttempt"),
         isFailedCharge = system.isMember(id, "FailedCharge"),
@@ -1018,7 +1018,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { system.refFor(it as Long) },
         attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
-        outcome = system.get(id, "outcome") as String,
+        outcome = Verdict.of(system.get(id, "outcome") as String),
         isPendingAttempt = system.isMember(id, "PendingAttempt"),
         isCompletedAttempt = system.isMember(id, "CompletedAttempt"),
         isSuccessfulCharge = system.isMember(id, "SuccessfulCharge"),
@@ -1512,16 +1512,16 @@ shape ChargeAttempt {
 -- its own act referencing the attempt — never a write into it. The verdict's
 -- arrival is the input; the response record carries the commit-stamped
 -- `respondedOn`.
+Verdict is one of "approved", "declined", "error"
+
 transient act ProcessorVerdict {
     attempt: one ChargeAttempt
-    outcome: text
+    outcome: Verdict
 }
-
-ProcessorVerdict requires outcome == "approved" or outcome == "declined" or outcome == "error"
 
 shape ChargeResponse {
     attempt: one ChargeAttempt
-    outcome: text
+    outcome: Verdict
     respondedOn: timestamp on create
 }
 
@@ -1546,7 +1546,7 @@ shape PendingAttempt = ChargeAttempt where
     not exists ChargeResponse for this and not exists AttemptTimeout for this
 
 shape CompletedAttempt = ChargeAttempt where exists ChargeResponse for this {
-    outcome: text = latest(ChargeResponse where attempt == this by respondedOn).outcome
+    outcome: Verdict = latest(ChargeResponse where attempt == this by respondedOn).outcome
 }
 
 shape SuccessfulCharge = CompletedAttempt where outcome == "approved"
@@ -1874,6 +1874,19 @@ typealias InGracePeriodQuery = TypedQuery<InGracePeriodFields, InGracePeriod>
 typealias OpenDunningFlagQuery = TypedQuery<OpenDunningFlagFields, OpenDunningFlag>
 typealias ClosableDunningFlagQuery = TypedQuery<ClosableDunningFlagFields, ClosableDunningFlag>
 
+// ── the types declared by their words: one enum class each, an entry per word ──
+enum class Verdict(val word: String) {
+    approved("approved"),
+    declined("declined"),
+    error("error");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): Verdict = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"approved\", \"declined\", \"error\"")
+    }
+}
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewContact(
@@ -1949,11 +1962,11 @@ data class NewPlaceOrder(
 
 data class NewProcessorVerdict(
     val attempt: Ref<ChargeAttempt>,
-    val outcome: String,
+    val outcome: Verdict,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("attempt", system.idOf(attempt))
-        put("outcome", outcome)
+        put("outcome", outcome.word)
     }
     override fun register(reg: NewRegistry) {
     }
@@ -2153,7 +2166,7 @@ data class ChargeAttempt(
 data class ChargeResponse(
     override val key: StoreKey,
     val attempt: Ref<ChargeAttempt>,
-    val outcome: String,
+    val outcome: Verdict,
     val respondedOn: Instant,
 ) : Ref<ChargeResponse> {
     override val shape: String get() = "ChargeResponse"
@@ -2627,7 +2640,7 @@ data class CompletedAttempt(
     val chargeResponses: List<Ref<ChargeResponse>>,
     val attemptTimeouts: List<Ref<AttemptTimeout>>,
     val receipts: List<Ref<Receipt>>,
-    val outcome: String,
+    val outcome: Verdict,
     /** membership of PendingAttempt at the moment of the read */
     val isPendingAttempt: Boolean,
     /** membership of SuccessfulCharge at the moment of the read */
@@ -2653,7 +2666,7 @@ data class SuccessfulCharge(
     val chargeResponses: List<Ref<ChargeResponse>>,
     val attemptTimeouts: List<Ref<AttemptTimeout>>,
     val receipts: List<Ref<Receipt>>,
-    val outcome: String,
+    val outcome: Verdict,
     /** membership of PendingAttempt at the moment of the read */
     val isPendingAttempt: Boolean,
     /** membership of CompletedAttempt at the moment of the read */
@@ -2679,7 +2692,7 @@ data class FailedCharge(
     val chargeResponses: List<Ref<ChargeResponse>>,
     val attemptTimeouts: List<Ref<AttemptTimeout>>,
     val receipts: List<Ref<Receipt>>,
-    val outcome: String,
+    val outcome: Verdict,
     /** membership of PendingAttempt at the moment of the read */
     val isPendingAttempt: Boolean,
     /** membership of CompletedAttempt at the moment of the read */
@@ -3308,7 +3321,7 @@ class ChargeAttemptFields(path: List<String> = emptyList()) : Fields(path) {
 
 class ChargeResponseFields(path: List<String> = emptyList()) : Fields(path) {
     val attempt: ChargeAttemptFields get() = ChargeAttemptFields(fieldPath + "attempt")
-    val outcome: TextField get() = TextField(fieldPath + "outcome")
+    val outcome: EnumField<Verdict> get() = EnumField<Verdict>(fieldPath + "outcome") { it.word }
     val respondedOn: DateTimeField get() = DateTimeField(fieldPath + "respondedOn")
 }
 
@@ -3531,7 +3544,7 @@ class CompletedAttemptFields(path: List<String> = emptyList()) : Fields(path) {
     val amount: NumField get() = NumField(fieldPath + "amount")
     val attemptKey: TextField get() = TextField(fieldPath + "attemptKey")
     val requestedOn: DateTimeField get() = DateTimeField(fieldPath + "requestedOn")
-    val outcome: TextField get() = TextField(fieldPath + "outcome")
+    val outcome: EnumField<Verdict> get() = EnumField<Verdict>(fieldPath + "outcome") { it.word }
     fun isPendingAttempt(): Expr = isA("PendingAttempt")
     fun isSuccessfulCharge(): Expr = isA("SuccessfulCharge")
     fun isFailedCharge(): Expr = isA("FailedCharge")
@@ -3544,7 +3557,7 @@ class SuccessfulChargeFields(path: List<String> = emptyList()) : Fields(path) {
     val amount: NumField get() = NumField(fieldPath + "amount")
     val attemptKey: TextField get() = TextField(fieldPath + "attemptKey")
     val requestedOn: DateTimeField get() = DateTimeField(fieldPath + "requestedOn")
-    val outcome: TextField get() = TextField(fieldPath + "outcome")
+    val outcome: EnumField<Verdict> get() = EnumField<Verdict>(fieldPath + "outcome") { it.word }
     fun isPendingAttempt(): Expr = isA("PendingAttempt")
     fun isCompletedAttempt(): Expr = isA("CompletedAttempt")
     fun isFailedCharge(): Expr = isA("FailedCharge")
@@ -3557,7 +3570,7 @@ class FailedChargeFields(path: List<String> = emptyList()) : Fields(path) {
     val amount: NumField get() = NumField(fieldPath + "amount")
     val attemptKey: TextField get() = TextField(fieldPath + "attemptKey")
     val requestedOn: DateTimeField get() = DateTimeField(fieldPath + "requestedOn")
-    val outcome: TextField get() = TextField(fieldPath + "outcome")
+    val outcome: EnumField<Verdict> get() = EnumField<Verdict>(fieldPath + "outcome") { it.word }
     fun isPendingAttempt(): Expr = isA("PendingAttempt")
     fun isCompletedAttempt(): Expr = isA("CompletedAttempt")
     fun isSuccessfulCharge(): Expr = isA("SuccessfulCharge")

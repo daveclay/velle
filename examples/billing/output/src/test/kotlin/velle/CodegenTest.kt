@@ -68,13 +68,13 @@ open class GeneratedApiTest {
             sys.commit(NewLineItem(invoice, "widgets", Money.of("100"), 2)))
 
         assertEquals(Money.of("200"), sys.read(invoice).total)
-        assertEquals("open", sys.read(invoice).status)
+        assertEquals(Status.open, sys.read(invoice).status)
         assertEquals(2, sys.read(sys.read(invoice).lineItems.single()).quantity)
         assertEquals("Ada", sys.read(sys.read(invoice).customer).name)
 
         assertIs<Commit.Accepted<*, *>>(sys.commit(NewSubmitPayment(invoice, Money.of("200"))))
         with(sys) { assertTrue(sys.read(invoice).isPaidInvoice) }
-        assertEquals("paid", sys.read(invoice).status)
+        assertEquals(Status.paid, sys.read(invoice).status)
         assertEquals(1, sys.receipts().size)
         assertEquals(1, sys.receiptEmails().size)
         assertEquals(Money.of("200"), sys.read(ada).largestPayment)

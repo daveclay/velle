@@ -41,7 +41,7 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
         return sys.chargeAttempts().last()
     }
 
-    private fun respond(attempt: ChargeAttempt, outcome: String) {
+    private fun respond(attempt: ChargeAttempt, outcome: Verdict) {
         sys.commit(NewProcessorVerdict(attempt, outcome))
     }
 
@@ -64,26 +64,26 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
 
     override fun successfulCharge(): ChargeAttempt {
         val attempt = pendingAttempt()
-        respond(attempt, "approved")
+        respond(attempt, Verdict.approved)
         return attempt
     }
 
     override fun retryableOrder(): Order {
         val o = order()
-        respond(sys.chargeAttempts().last(), "declined")
+        respond(sys.chargeAttempts().last(), Verdict.declined)
         return o
     }
 
     override fun orderForReleaseStockOnExhaustion(): Order {
         // each decline triggers the next retry; the third failure exhausts
         val o = order()
-        repeat(3) { respond(sys.chargeAttempts().last(), "declined") }
+        repeat(3) { respond(sys.chargeAttempts().last(), Verdict.declined) }
         return o
     }
 
     override fun readyToShip(): Order {
         val o = order()
-        respond(sys.chargeAttempts().last(), "approved") // settled + reserved + unshipped
+        respond(sys.chargeAttempts().last(), Verdict.approved) // settled + reserved + unshipped
         return o
     }
 
@@ -99,7 +99,7 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
 
     override fun settledOrder(): Order {
         val o = order()
-        respond(sys.chargeAttempts().last(), "approved")
+        respond(sys.chargeAttempts().last(), Verdict.approved)
         return o
     }
 
@@ -129,7 +129,7 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
         // the flag opens at the overdue order's own creation commit; paying in
         // full makes it closable with no Daily tick involved
         overdueOrder(withCard = true)
-        respond(sys.chargeAttempts().last(), "approved")
+        respond(sys.chargeAttempts().last(), Verdict.approved)
         return sys.dunningFlags().last()
     }
 
@@ -140,7 +140,7 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
     }
 
     override fun processorVerdict() {
-        respond(pendingAttempt(), "approved")
+        respond(pendingAttempt(), Verdict.approved)
     }
 
     override fun issueRefund() {

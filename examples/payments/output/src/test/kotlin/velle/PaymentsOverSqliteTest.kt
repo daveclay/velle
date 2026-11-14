@@ -72,7 +72,7 @@ class PaymentsPersistenceTest {
 
         val second = process()
         val attempt = second.read.chargeAttempt(1L)
-        accept(second.commit(NewProcessorVerdict(attempt, "approved")))
+        accept(second.commit(NewProcessorVerdict(attempt, Verdict.approved)))
         val order = second.read.order(1L)
         with(second) {
             assertTrue(second.read(attempt).isSuccessfulCharge)

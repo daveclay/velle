@@ -11,8 +11,6 @@ import velle.generated.payments.*
  *     ChargeResponse from { attempt: attempt, outcome: outcome }
  * }
  *
- * ProcessorVerdict requires ((outcome == "approved") or (outcome == "declined")) or (outcome == "error")
- *
  */
 class ProcessorVerdictSpec : SpecSupport() {
 

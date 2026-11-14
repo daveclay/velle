@@ -56,6 +56,8 @@ transient act BillCustomer {
     due: Date
 }
 
+Status is one of "paid", "overdue", "open"
+
 shape Invoice {
     customer: one Customer
     due: Date
@@ -63,7 +65,7 @@ shape Invoice {
     issuedOn: timestamp on create
     total: Money = sum(lineItems, amount)
     balance: Money = total - sum(payments, amount)
-    status: text = if balance <= 0 then "paid" else if due < today then "overdue" else "open"
+    status: Status = if balance <= 0 then "paid" else if due < today then "overdue" else "open"
 }
 
 rule OpenInvoice when BillCustomer {

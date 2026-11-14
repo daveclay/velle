@@ -1310,6 +1310,8 @@ class Validator(private val model: Model) {
                 val rt = scalarTypeOf(item, scope)
                 if (!agrees(rt, item))
                     diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${Printer.expr(item)}' is not a ${registryName(lt) ?: "value of the left side's type"}"))
+                // a constant listed beside an extension type reads as the type (Reference §5): "boss" beside a Role is F2
+                else if (lt is VType.Ext) constantOf(item)?.let { constant -> extOf(lt)?.let { checkConstantAs(constant, it, item) } }
             }
             else -> when (val coll = scalarTypeOf(r, scope)) {
                 // `record in records` (Reference §7, "Walks"): the left side is a record of the collection's shape
@@ -1347,8 +1349,14 @@ class Validator(private val model: Model) {
     private fun extOf(t: VType?): VelleType<*>? = velle.extOf(t, model.registry)
 
     /** A type's name as this spec writes it, with its Kotlin class when it is an extension type, for an E3 sentence. */
-    private fun describe(t: VelleType<*>) =
-        if (model.registry.vtypeOf(t) is VType.Ext) "'${model.specNameOf(t)}' (${t::class.qualifiedName})" else "'${t.name}'"
+    private fun describe(t: VelleType<*>) = when {
+        t is EnumType -> "'${model.specNameOf(t)}'"
+        model.registry.vtypeOf(t) is VType.Ext -> "'${model.specNameOf(t)}' (${t::class.qualifiedName})"
+        else -> "'${t.name}'"
+    }
+
+    /** The sentence for an ordered use of a type declared by its words (Reference §5): the words have no order. */
+    private fun noOrder(t: EnumType, what: String) = "the words of '${model.specNameOf(t)}' have no order, so $what is not defined on them"
 
     /** Whether a constant of this form can be read as the type [name] names, builtin or registered. */
     private fun readsConstant(name: String, c: Pair<BigDecimal?, String?>): Boolean = velle.readsConstant(name, c, model.registry)
@@ -1431,7 +1439,9 @@ class Validator(private val model: Model) {
         if (lext == null && rext == null) { checkBuiltinComparison(e, l, r); return }
         val ordered = e.op in setOf("<", "<=", ">", ">=")
         for (t in listOfNotNull(lext, rext).distinct())
-            if (ordered && t !is Ordered<*>)
+            if (ordered && t is EnumType)
+                diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — ${noOrder(t, "'${e.op}'")}; compare with '==', '!=', or 'in' (Reference §5)"))
+            else if (ordered && t !is Ordered<*>)
                 diags.add(Diagnostic("E3", "'${Printer.expr(e)}' — ${describe(t)} declares no ordering, so '${e.op}' is not defined on it; " +
                     "implement `Ordered` on the type, or compare a field that is ordered"))
         when {
@@ -1636,7 +1646,8 @@ class Validator(private val model: Model) {
             else if (!isOrderable(m.type)) {
                 val ext = extOf(m.type)
                 if (ext != null)
-                    diags.add(Diagnostic("E3", "selector 'by $d' — ${describe(ext)} declares no ordering, so '$element.$d' cannot order a selector; declare `ordering` on the type"))
+                    if (ext is EnumType) diags.add(Diagnostic("F2", "selector 'by $d' — ${noOrder(ext, "'$element.$d'")}; order by another field (Reference §5)"))
+                    else diags.add(Diagnostic("E3", "selector 'by $d' — ${describe(ext)} declares no ordering, so '$element.$d' cannot order a selector; declare `ordering` on the type"))
                 else
                     diags.add(Diagnostic("F2", "selector 'by $d' — $element.$d is not orderable (Reference §10)"))
             }
@@ -3667,6 +3678,7 @@ class Validator(private val model: Model) {
                     } == true
                 }
             }
+            if (!bare && !complementPair && wordsAnswer(t, answers.filterNotNull())) continue
             if (!bare && !complementPair)
                 diags.add(Diagnostic("V18", "a '$t' can arrive that no rule or 'never' answers, and it is " +
                     "transient, so an unanswered one would be ignored with no record that it arrived. The compiler " +
@@ -3676,6 +3688,54 @@ class Validator(private val model: Model) {
                     "opposite condition whose reason is a conditional value (Reference §4)"))
         }
     }
+
+    /**
+     * V18 over a field declared by its words (Reference §5): the answers whose one condition
+     * names words of one such field of [act] cover it when every word is named. When some
+     * are named and others not, each missing word is reported by name, and the act counts
+     * as answered here so the general sentence is not added on top. Returns whether this
+     * case decided the act.
+     */
+    private fun wordsAnswer(act: String, answers: List<List<Expr>>): Boolean {
+        val decl = model.shapes[act] ?: return false
+        for (field in decl.members.filterIsInstance<StoredProp>()) {
+            val type = (field.type as? ScalarType)?.let { model.typeScope[it.name] } as? EnumType ?: continue
+            val named = answers.mapNotNull { it.singleOrNull() }.flatMap { wordsNamedBy(it, field.name) }.toSet()
+            if (named.isEmpty()) continue
+            val missing = type.words.filter { it !in named }
+            for (word in missing) diags.add(Diagnostic("V18", "a '$act' whose '${field.name}' is \"$word\" can arrive and no rule or 'never' answers it, " +
+                "and it is transient, so it would be ignored with no record that it arrived; the answers name " +
+                "${named.filter { it in type.words }.joinToString(" and ") { "\"$it\"" }} of the ${countWord(type.words.size)} words of '${type.name}'. " +
+                "Answer \"$word\" in a rule, or refuse it with 'never ($act where ${field.name} == \"$word\")' (Reference §4)"))
+            return true
+        }
+        return false
+    }
+
+    /** The words a condition names for [field]: `field == "w"`, `"w" == field`, `field in ["w", ...]`,
+     *  and `or` between those; empty when the condition is anything else. */
+    private fun wordsNamedBy(condition: Expr, field: String): List<String> {
+        fun isField(e: Expr) = e is PathExpr &&
+            (e.segs.isEmpty() && e.root == field || e.root == "this" && e.segs.size == 1 && e.segs.single().name == field)
+        if (condition !is Binary) return emptyList()
+        return when (condition.op) {
+            "==" -> when {
+                isField(condition.left) && condition.right is TextLit -> listOf((condition.right as TextLit).value)
+                isField(condition.right) && condition.left is TextLit -> listOf((condition.left as TextLit).value)
+                else -> emptyList()
+            }
+            "in" -> if (isField(condition.left) && condition.right is ListLit && (condition.right as ListLit).items.all { it is TextLit })
+                (condition.right as ListLit).items.map { (it as TextLit).value } else emptyList()
+            "or" -> {
+                val left = wordsNamedBy(condition.left, field)
+                val right = wordsNamedBy(condition.right, field)
+                if (left.isEmpty() || right.isEmpty()) emptyList() else left + right
+            }
+            else -> emptyList()
+        }
+    }
+
+    private fun countWord(n: Int) = when (n) { 1 -> "one"; 2 -> "two"; 3 -> "three"; 4 -> "four"; 5 -> "five"; 6 -> "six"; 7 -> "seven"; 8 -> "eight"; 9 -> "nine"; else -> n.toString() }
 
     // ── V23–V28: delete (OQ37) ───────────────────────────────────────────────
     //

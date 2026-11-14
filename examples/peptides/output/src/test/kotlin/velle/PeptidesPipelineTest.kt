@@ -143,7 +143,7 @@ open class PeptidesPipelineTest {
         assertEquals(dec("80"), sys.read(day14).diseaseSeverity)
 
         // a second control plot scored flat moves the live efficacy; the recorded verdict stands
-        val lateControl = s.plot(t, "B2", "control")
+        val lateControl = s.plot(t, "B2", Arm.control)
         for (day in listOf(0, 7, 14)) s.observe(lateControl, day, "0")
         assertEquals(dec("297.5"), sys.read(t.trial).meanControlAudpc.at(1), "(595 + 0) / 2")
         assertEquals(dec("47.06"), sys.read(t.trial).efficacy.at(2), "the live number moved")
@@ -392,7 +392,7 @@ open class PeptidesPipelineTest {
         sys.advanceDays(31)
         assertFalse(trial.isA("PermittedTrial"))
         assertTrue(trial.isA("PlantedTrial"))
-        accept(sys.commit(NewFieldPlot(trial, 1, "control")))
+        accept(sys.commit(NewFieldPlot(trial, 1, Arm.control)))
         refuse(sys.commit(NewPlantTrial(trial, s.today, "LOT-8")))
     }
 

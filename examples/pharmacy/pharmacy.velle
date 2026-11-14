@@ -65,16 +65,16 @@ visible to Staff
 -- velle: the actor (Reference §22, "The actor") — `by <Role>` in an act's
 -- header is the role gate, sugar for `requires actor to be <Role>`; the
 -- first administrator is seeded by the engineer, outside the trust boundary
+Role is one of "pharmacist", "technician", "admin"
+
 shape Staff {
     name: text
-    role: text
+    role: Role
 }
-
-Staff requires role == "pharmacist" or role == "technician" or role == "admin"
 
 transient act HireStaff by Administrator {
     name: text
-    role: text
+    role: Role
 }
 
 rule RecordHire when HireStaff {
@@ -155,14 +155,15 @@ shape LowStock    = Drug where onHand < reorderPoint
 -- velle: two `one Drug` fields on one shape — no inverse is inferred (checks
 -- V19); Drug.interactions above is the declared view, with `or` in its
 -- formula so the fact is found from either side
+Severity is one of "major", "moderate"
+
 act Interaction {
     drugA: one Drug
     drugB: one Drug
-    severity: text
+    severity: Severity
 }
 
 never (Interaction where drugA == drugB)
-Interaction requires severity == "major" or severity == "moderate"
 
 -- Prices change on a date, and the history matters for billing disputes:
 -- nothing is overwritten. The price in force is the latest change whose date
@@ -759,14 +760,15 @@ rule LogControlled when (Fill where lot.drug is Controlled) {
 -- fill they filled themselves; a fill is verified once.
 -- velle: the licence gate in the header reads a time-dependent refinement;
 -- an identity comparison between the actor and the fill's field
+Verdict is one of "approved", "rejected"
+
 transient act VerifyFill by LicensedPharmacist {
     fill: one Fill
-    outcome: text
+    outcome: Verdict
     note: text
 }
 
 never (VerifyFill where actor == fill.filledBy and fill.lot.drug is Controlled)
-VerifyFill requires outcome == "approved" or outcome == "rejected"
 
 -- A fill is verified once: a key on the verification record (Reference §21,
 -- "Keys"), since the request's own verification is the one that would make
@@ -774,7 +776,7 @@ VerifyFill requires outcome == "approved" or outcome == "rejected"
 shape Verification {
     fill: one Fill unique
     pharmacist: one Staff
-    outcome: text
+    outcome: Verdict
     note: text
     verifiedAt: timestamp on create
 }
@@ -1015,19 +1017,20 @@ rule SubmitClaim when (InsuredFill where not exists Claim for this) {
     Claim from { fill: this, plan: insurer, amount: total }
 }
 
+ClaimOutcome is one of "paid", "rejected"
+
 transient act Adjudication {
     claim: one Claim
-    outcome: text
+    outcome: ClaimOutcome
     paidAmount: decimal
     patientPays: decimal
 }
 
-Adjudication requires outcome == "paid" or outcome == "rejected"
 never (Adjudication where paidAmount < 0 or patientPays < 0)
 
 shape ClaimResponse {
     claim: one Claim
-    outcome: text
+    outcome: ClaimOutcome
     paidAmount: decimal
     patientPays: decimal
     respondedAt: timestamp on create

@@ -1,0 +1,11 @@
+-- A shape and a type declared by its words sharing one name.
+Role is one of "pharmacist", "admin"
+
+shape Role {
+    name: text
+}
+
+act Staff {
+    name: text
+    role: Role
+}
