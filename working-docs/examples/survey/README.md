@@ -8,9 +8,9 @@ one field's value, held as text because the field says what it means; a
 in OQ53, and OQ90 under "Expressions,
 refinements, and unions" in `QUESTIONS.md`; the transient-request finding (OQ43, settled) became
 Reference §4 "Transient fields of a kept act" and Reference §6 "A request that is not kept, with its parts"; the lookup finding (OQ74, settled) became
-the worked pattern "An act that names a record by its values" in `wiki/patterns.md`,
+the worked pattern "An act that names a record by its values" in `wiki/Normative/patterns.md`,
 the walk finding (OQ76, settled) became Reference §7 "Walks", the text-as-data
-finding (OQ75, settled) became the comparison rule in `wiki/checks.md` F2 and the
+finding (OQ75, settled) became the comparison rule in `wiki/Normative/checks.md` F2 and the
 `number`, `date`, and `datetime` functions in Reference §5, and the uniqueness
 finding (OQ77, settled) became the key, `unique`, in Reference §21 "Keys".
 

@@ -1,4 +1,4 @@
--- Probe for the lookup pattern (wiki/patterns.md, "An act that names a record by its values"): the same never over readings with nothing assigning Field.name.
+-- Probe for the lookup pattern (wiki/Normative/patterns.md, "An act that names a record by its values"): the same never over readings with nothing assigning Field.name.
 -- A field is named by its kind and its own name together: the key `unique (kindName, name)` (Reference §21, "Keys").
 act Field {
     kindName: text

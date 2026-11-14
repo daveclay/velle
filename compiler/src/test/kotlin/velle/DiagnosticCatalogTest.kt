@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The catalogue of what the compiler says (`wiki/diagnostics.md`), generated
+ * The catalogue of what the compiler says (`wiki/Normative/diagnostics.md`), generated
  * from the refused specs under `src/test/resources/diagnostics/`. Each file
  * is named `<check>-<slug>.velle` and opens with `--` comment lines saying
  * what it spells; the table holds that description and every message of
@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 class DiagnosticCatalogTest {
 
     private val specs = File("src/test/resources/diagnostics")
-    private val page = File("../wiki/diagnostics.md")
+    private val page = File("../wiki/Normative/diagnostics.md")
 
     private data class Row(val check: String, val spelling: String, val messages: List<String>)
 
@@ -65,6 +65,6 @@ class DiagnosticCatalogTest {
             return
         }
         assertEquals(expected, page.takeIf { it.exists() }?.readText(),
-            "wiki/diagnostics.md is out of date; regenerate it with VELLE_UPDATE_DIAGNOSTICS=true and review the diff")
+            "wiki/Normative/diagnostics.md is out of date; regenerate it with VELLE_UPDATE_DIAGNOSTICS=true and review the diff")
     }
 }

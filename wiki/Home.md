@@ -71,4 +71,5 @@ Walkthroughs that gather what the Reference and the normative documents settle, 
 ## Working notes
 
 - [[Velle UI|Velle-UI]] — notes toward a declarative UI layer
+- [[Personal notes|Intro]] — why Velle exists, in Dave's words: engineering over code, and the language as a philosophy of building systems
 - Open design questions and work items live in the repository under `working-docs/`, not in this wiki.

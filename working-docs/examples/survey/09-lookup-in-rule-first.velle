@@ -1,4 +1,4 @@
--- Probe for the lookup pattern (wiki/patterns.md, "An act that names a record by its values"): the lookup in a rule's `from`.
+-- Probe for the lookup pattern (wiki/Normative/patterns.md, "An act that names a record by its values"): the lookup in a rule's `from`.
 -- `key: text unique` is the key (Reference §21, "Keys"), so `(Entry where key == this.entryKey)` is one entry or absent and
 -- needs no `by`; the existence never keeps the absent case out at the door. `first(Entry where key == this.entryKey by key)`
 -- is the spelling for a shape without a key.

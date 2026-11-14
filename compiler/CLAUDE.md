@@ -50,7 +50,7 @@ No internal vocabulary (certificate, whitelist, witness, discharge, rung).
 One message per reason. V14's messages in `Validator.kt` (`SelfReadProblem`)
 are the model.
 
-Every message's text is pinned by `wiki/diagnostics.md`, which
+Every message's text is pinned by `wiki/Normative/diagnostics.md`, which
 `DiagnosticCatalogTest` generates from the refused specs under
 `compiler/src/test/resources/diagnostics/`, one file per message, named
 `<check>-<slug>.velle` and opening with `--` lines saying what it spells.
@@ -60,7 +60,7 @@ velle.DiagnosticCatalogTest`; the diff is the review.
 
 ## Checks
 
-Every check has a number in `wiki/checks.md` (V-series validator, F-series
+Every check has a number in `wiki/Normative/checks.md` (V-series validator, F-series
 functions and types, E-series extensions, A-series advisories) and a test
 that pins it. Add the `checks.md` entry and the test in the same change as
 the check. The header of `Validator.kt` lists the gaps still open; keep it

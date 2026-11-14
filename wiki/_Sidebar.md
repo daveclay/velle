@@ -52,3 +52,4 @@
 **Notes**
 
 - [[Velle UI|Velle-UI]]
+- [[Personal notes|Intro]]

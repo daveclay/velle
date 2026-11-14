@@ -46,7 +46,7 @@ message, and every chat message.
   list.
 - No shorthand, and never a term of your own invention. A term is a Velle
   keyword, an everyday word, or a term shared among professionals that is in
-  `wiki/GLOSSARY.md` and glossed at first use. A document-local term is
+  `wiki/Normative/GLOSSARY.md` and glossed at first use. A document-local term is
   defined in a sentence the first time it appears.
 - Every mention of example code names its file,
   `examples/<system>/<system>.velle` or

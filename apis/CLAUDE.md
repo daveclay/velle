@@ -14,8 +14,8 @@ instead: commit and push only when Dave asks.
 
 `json` is the spec-agnostic API over a `VelleSystem` (`VelleApi`, `Wire`,
 `Describe`), `graphql` the schema built from the model, `spring` the Spring
-Boot starter. The caller's side is `wiki/Serving-a-system.md`, the
-construction `wiki/API-layer.md`.
+Boot starter. The caller's side is `wiki/Guides/Serving-a-system.md`, the
+construction `wiki/Guides/API-layer.md`.
 
 Decisions to keep consistent:
 

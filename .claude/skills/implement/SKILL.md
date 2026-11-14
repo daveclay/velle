@@ -23,8 +23,8 @@ Directory rules load on their own when files are touched:
 3. **Wiki.** The Reference page, `checks.md`, `evaluation.md`, `grammar.md`,
    `patterns.md`, `GLOSSARY.md`, the guides, as the build section lists. The
    result is phrased positively, with no design history and no OQ tag on any
-   wiki page. Generated-Kotlin facts go in `wiki/Act-API.md` and
-   `wiki/Read-API.md`, never in the Reference.
+   wiki page. Generated-Kotlin facts go in `wiki/Guides/Act-API.md` and
+   `wiki/Guides/Read-API.md`, never in the Reference.
 4. **Examples.** A new feature gets an example that exercises it under
    `examples/`, or an existing one grows. Survey examples under
    `working-docs/examples/survey/` that showed the gap are rewritten to the

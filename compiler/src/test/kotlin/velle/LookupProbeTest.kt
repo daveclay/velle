@@ -6,7 +6,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * The lookup pattern (wiki/patterns.md, "An act that names a record by its
+ * The lookup pattern (wiki/Normative/patterns.md, "An act that names a record by its
  * values"): a selection written in a rule's `from`, finding the record an act's
  * identifying values mean, run through the runtime. The specs are those of
  * `working-docs/examples/survey/09-lookup-*.velle`. Each test prints what the
