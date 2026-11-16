@@ -1,6 +1,6 @@
 # OQ35 — Can several unrelated shapes share one declaration?
 
-**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D4 reframed on 2026-11-16. D1 to D7 await Dave. Nothing is removed from the language by any decision here.
+**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 decided 2026-11-16; D4 reframed the same day. D2 to D7 await Dave. Nothing is removed from the language by any decision here.
 
 **In plain terms:** a product owner says "a site visit or a plot inspection is overdue when its due date has passed" and "any change to an entry touches the entry". Each sentence is one rule over several kinds of record that have a field in common. Velle has no way to declare that field once for all of them, so the author writes the rule once per kind, or turns the records inside out so the common part is the container.
 
@@ -41,7 +41,7 @@ The two spellings that work today each break one of those: the per-shape spellin
 
 Nothing below removes a spelling that runs today. Every file in §1 that passes keeps passing.
 
-### D1. Does Velle get a construct that lets several unrelated shapes share one declaration?
+### D1. Does Velle get a construct that lets several unrelated shapes share one declaration? · Decided 2026-11-16
 
 Does Velle add a declaration that several shapes take, so that one field declared there is one declaration on every shape that takes it, and one refinement or one rule over the declaration covers all of them?
 
@@ -120,6 +120,8 @@ If the answer is no, this OQ settles with `17-shared-field-inverted-workaround.v
 - `checks.md` V17: the message stops naming OQ35 and names the construct.
 - `examples/gallery/gallery.velle`: `author` becomes one declaration and rule `NotifyAuthor` reads it directly.
 - `working-docs/examples/survey/17-shared-field-*.velle`: the three workaround and accepted files gain the direct spelling as a seventh file.
+
+**Decided:** yes, 2026-11-16. Velle gets the construct.
 
 ### D2. Does the shape name the declaration it takes, or does the union declare what its operands get?
 
