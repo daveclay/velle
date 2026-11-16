@@ -209,23 +209,97 @@ Does a shared shape appear on the generated surfaces exactly where a static unio
 
 **Decided:** yes, the same four answers, 2026-11-16. A shared shape appears exactly where a static union does today and nowhere else.
 
-### D5. The inverse of a reference declared in a shared declaration
+### D5. The inverse of a reference declared on a shared shape
 
-`EntryChange.entry: one Entry` is one declaration, taken by `RenameEntry` and `MoveEntry`. Does `Entry` get one inferred inverse, `entryChanges`, holding every rename and every move, named from the shared declaration as Reference §6 names an inverse from the declaring shape? Or is no inverse inferred, so an author who wants one declares a view per taking shape, `renames: many RenameEntry = (RenameEntry where entry == this)`?
+Reference §6 infers an inverse for every `one` field: `Comment.target: one Content` puts `comments` on the target, named from the declaring shape. A shared shape's field is one declaration taken by several shapes. Does `Entry` get one inferred inverse, `entryChanges`, holding every rename, move, and merge, named from the shared shape? Or is no inverse inferred, so an author who wants one declares a view per taker?
 
-Recommendation: infer it. Reference §6's rule for a field typed with a union is already "one declaration gives the inverse to everyone", and a field declared once on a shared declaration is one declaration. A per-shape view stays the derived spelling when the author wants one shape's changes.
+The spec, with the inverse inferred as recommended. Three acts take `EntryChange`; the third shows a taker with a reference of its own to the same shape.
+
+```
+shape Entry {
+    name: text unique                                           -- the entry's key (Reference §21)
+    changeCount: integer = count(entryChanges)                  -- proposed: reads the inferred inverse; renames, moves, and merges together
+    renames: many RenameEntry = (RenameEntry where entry == this)   -- one taker's changes: the derived view Reference §6 writes today, unchanged
+}
+
+shape EntryChange {                                             -- the shared shape (D4): no records of its own
+    entry: one Entry                                            -- proposed: one declaration; infers Entry.entryChanges, named from EntryChange
+}
+
+act RenameEntry is EntryChange {                                -- takes entry (D3)
+    newName: text
+}
+
+act MoveEntry is EntryChange {                                  -- takes entry
+    newSite: text
+}
+
+act MergeEntry is EntryChange {                                 -- takes entry: the entry merged away
+    into: one Entry                                             -- its own reference; infers Entry.mergeEntrys, named from MergeEntry, so it does not collide with entryChanges
+}
+```
+
+An element of `entryChanges` is read as an `EntryChange`: `entry` and `id` directly, `newName` only after narrowing by `is RenameEntry`, as an element of a union-typed collection is read today (Reference §9).
+
+The alternative, no inverse inferred, against the same `EntryChange` and the same three acts:
+
+```
+shape Entry {
+    name: text unique
+    renames: many RenameEntry = (RenameEntry where entry == this)   -- one view per taker, each written by the author
+    moves: many MoveEntry = (MoveEntry where entry == this)
+    merges: many MergeEntry = (MergeEntry where entry == this)
+    changeCount: integer = count(renames) + count(moves) + count(merges)   -- a fourth taker means a fourth view and a fourth term here
+}
+```
+
+What the inferred inverse cannot do: name a closure. The parts of a closure edge are of one shape (`checks.md` V22), and `entryChanges` holds three.
+
+```
+act Entry {
+    name: text unique
+} with entryChanges                                             -- refused: a closure edge's parts are of one shape, and entryChanges holds RenameEntry, MoveEntry, and MergeEntry (V22)
+```
+
+Because the inverse is named from the shared shape, the shared shape's name is the inverse's name. A second spec, where two shared shapes are taken at once and one carries the reference:
+
+```
+shape Site {
+    name: text unique
+    workCount: integer = count(siteWorks)                       -- proposed: visits and inspections together, through the one inverse
+}
+
+shape SiteWork {                                                -- shared; named as a noun, since Site.siteWorks is named from it
+    site: one Site                                              -- proposed: one declaration; infers Site.siteWorks
+}
+
+shape Dated {                                                   -- shared; carries no reference, so it names no inverse
+    due: Date
+}
+
+shape SiteVisit is SiteWork, Dated {                            -- takes site and due (D3: several, with commas)
+    visitor: text
+}
+
+shape PlotInspection is SiteWork, Dated {                       -- takes site and due
+    plot: text
+}
+```
+
+Recommendation: infer it. Reference §6's rule for a field typed with a union is already "one declaration gives the inverse to everyone", and a field declared once on a shared shape is one declaration. The per-taker view stays the derived spelling when the author wants one taker's records, exactly as written today.
 
 Costs:
 
-- The inverse's elements are of several shapes, so a read through it narrows per shape as a union-typed read does, and a closure naming it (`act Entry { ... } with entryChanges`) is refused, since a closure edge's parts are of one shape (`checks.md` V22).
-- V19's both-sides and collision checks run on the shared declaration's field once, and a taking shape that declares `entry` itself collides with it (Reference §9's same-name rule).
+- A read through the inverse narrows per taker, as a union-typed read does, and a closure naming it is refused (V22), as shown.
+- V19's both-sides and collision checks run once, on the shared shape's field. A taker that declares `entry` itself collides with the shared declaration (Reference §9's same-name rule). A taker's own reference to the same target, `MergeEntry.into`, is named from the taker and does not collide.
+- The shared shape's name becomes a plural on every target its references point at, so a shared shape that carries a reference wants a noun's name.
 
 Does `Entry` get `entryChanges`?
 
 #### Proposed changes
 
-- Reference §6: the inverse paragraph names a shared declaration's field as one declaring side.
-- `checks.md` V19 and V22: the two costs above, stated.
+- Reference §6: the inverse paragraph names a shared shape's field as one declaring side, with the inverse named from the shared shape.
+- `checks.md` V19 and V22: the first two costs above, stated.
 
 ### D6. May a shared declaration take another?
 
