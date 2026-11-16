@@ -1,6 +1,6 @@
 # OQ35 — Can several unrelated shapes share one declaration?
 
-**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 to D5 decided 2026-11-16, D4 after a reframe the same day. D6 and D7 await Dave. Nothing is removed from the language by any decision here.
+**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 to D6 decided 2026-11-16, D4 after a reframe the same day. D7 awaits Dave. Nothing is removed from the language by any decision here.
 
 **In plain terms:** a product owner says "a site visit or a plot inspection is overdue when its due date has passed" and "any change to an entry touches the entry". Each sentence is one rule over several kinds of record that have a field in common. Velle has no way to declare that field once for all of them, so the author writes the rule once per kind, or turns the records inside out so the common part is the container.
 
@@ -303,7 +303,7 @@ Does `Entry` get `entryChanges`?
 
 **Decided:** yes, 2026-11-16. `Entry` gets `entryChanges`, named from the shared shape.
 
-### D6. May a shared declaration take another?
+### D6. May a shared declaration take another? · Decided 2026-11-16
 
 May `shape Overdueable is Dated { ... }` be written where `Overdueable` is itself taken by other shapes, so that a shape taking `Overdueable` also takes `Dated`? Recommendation: no, refuse it for now. A shape that wants both names both, `shape SiteVisit is Dated, Sited`, and nothing in the three domains in §1 needs a chain. Allowing it brings the diamond, one declaration reached twice by two paths, which Reference §9 says is fine for a shared base, but there is nothing to test it against yet.
 
@@ -316,6 +316,8 @@ Is a shape that is taken, and itself takes another, refused?
 #### Proposed changes
 
 - `checks.md`: a shape that is taken and whose header has an `is` clause is refused, naming both lines (F3).
+
+**Decided:** yes, a chain is allowed, 2026-11-16, against the recommendation. `shape Overdueable is Dated { ... }` and `shape SiteVisit is Overdueable { ... }` make a site visit take `due` through the chain. The diamond, one declaration reached twice by two paths, is one declaration and fine, as Reference §9 already says for a shared base. A cycle is refused. The consequences are in §4.
 
 ### D7. A transient act that takes a shared declaration
 
@@ -341,6 +343,7 @@ Consequences, not decisions. Each is a sentence for the Reference or `checks.md`
 
 - A shared shape has no records of its own. Its members are the records of the shapes that take it, so narrowing by `is RenameEntry` over `EntryChange` is exhaustive over the taking shapes, and an `if` over a two-taker declaration narrows its `else` to the other taker, as Reference §10 does for a two-operand union.
 - Two shared declarations declaring the same name, taken by one shape, is Reference §9's same-name collision between distinct declarations: an error. A taking shape redeclaring a shared field collides the same way.
+- A chain (D6): a shape that is taken may itself take another, and takes everything along the chain. `SiteVisit is Overdueable` with `Overdueable is Dated` gives `SiteVisit` the fields of both, and a site visit is a member of `Overdueable` and of `Dated`. A shape that reaches one declaration twice, `SiteVisit is Overdueable, Dated` with `Overdueable is Dated`, takes it once: Reference §9's rule for a shared base. A cycle, `A is B` with `B is A`, is refused naming both lines. The members of a shape in the middle of a chain are the records of the shapes below it, as for any shared shape (D4).
 - Overlap, for `checks.md` V1, V5, V9, and V27: two shared declarations overlap on the shapes that take both; a shared declaration and a base shape overlap when the shape takes it; distinct base shapes stay disjoint.
 - An act that takes a shared declaration carries the shared stored fields in its generated input value as its own (Act API). `initially` and `timestamp` in a shared declaration taken by an act are the V21 errors they would be inline.
 - A derived property in a shared declaration reads the shared declaration's own fields, with `this` the taking record. One that needs a taker's own field belongs on the taker, or on a refinement of the shared declaration narrowed by `is <Taker>`.
