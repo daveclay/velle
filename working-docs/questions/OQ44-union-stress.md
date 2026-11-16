@@ -1,6 +1,6 @@
 # OQ44 — Stress-testing cross-base unions
 
-**Status:** opened 2026-09-13 at OQ29's close. Reviewed against HEAD on 2026-11-16, after OQ35 landed `is`: every case in §1 has a verdict and a checked-in probe. D1 and D2 decided 2026-11-16; their work items in §4 are ready to build. §4 holds the work items.
+**Status:** opened 2026-09-13 at OQ29's close. Reviewed against HEAD on 2026-11-16, after OQ35 landed `is`: every case in §1 has a verdict and a checked-in probe. D1 and D2 decided 2026-11-16; D3 awaits Dave. §4 is the build plan; §5 holds the work items. §4 holds the work items.
 
 **In plain terms:** a static union, `shape Content = Post or Photo`, lets one rule, one field, or one prohibition speak about records of two unrelated kinds. Most of the compiler's checks were written for records of one kind. This question asks, case by case, where a union breaks a check, the runtime, the generated code, or the diagrams, and what to do about each.
 
@@ -125,11 +125,54 @@ shape Chain = Escalation {
 
 **Decided:** yes, 2026-11-16. The walk ends where the link ends; `this` in an `until` condition is the record reached, and the condition is checked against the union.
 
+### D3. A union of refinements gets a view of its own
+
+Does `shape Notable = LongPost or Captioned`, a union whose operands are refinements of different shapes, get a view in the generated code, as a static union does?
+
+Today it is a legal rule subject and the runtime answers it, but the generated code has no `notables()`: a view is named after a base shape or a static union, and this composite has neither. The recommendation is yes. It is read exactly as `Content` is, as records of several shapes with the members they share, so the engineer's `read.notables()` and the GraphQL `notables` query should exist as `read.populars()` does for a refinement over a static union. The alternative refuses the composite as a rule subject and asks for a named static union with a `where`, `shape Notable = Content where (this is Post and length(body) > 10) or (this is Photo and caption != "")`, which says the same thing less plainly.
+
+Costs:
+
+- `Codegen.kt`, the GraphQL builder, and the store's typed reads treat a union of refinements as they treat a static union: an interface with the shared members, a query root, a membership flag on each operand's model object.
+- Reference §9 says a union of refinements is read like a union of shapes.
+
+This example is not in the example files:
+
+```
+act Member { name: text unique }
+act Post { author: one Member, body: text }
+act Photo { author: one Member, caption: text }
+shape Content = Post or Photo                       -- a static union: read.contents() exists
+shape LongPost = Post where length(body) > 10       -- a refinement of one shape: read.longPosts() exists
+shape Captioned = Photo where caption != ""
+shape Notable = LongPost or Captioned               -- a union of refinements: a rule subject today, no read.notables()
+shape Notice { about: one Content }
+rule Note when Notable { Notice from { about: this } }   -- fires for a long post and for a captioned photo
+```
+
+#### Proposed changes
+
+- `Codegen.kt`: a cross-base refinement whose operands are refinements gets the union interface, the view, and the membership flags a static union gets.
+- `apis/graphql/src/main/kotlin/velle/api/graphql/VelleGraphQL.kt`: the same composite becomes a GraphQL union with a query root.
+- Reference §9: one sentence saying a union of refinements is read as a union of their shapes.
+- `UnionStressTest.kt`: "a union of refinements generates no view of its own" asserts the view.
+
 ## 3. Method
 
 One adversarial spec per case, as a test in `compiler/src/test/kotlin/velle/UnionStressTest.kt` with the verdict recorded in §1. A test named `gap -` asserts today's behaviour and is rewritten when the gap closes. Rulings promote to the Reference and `checks.md` as they settle, and the work items in §4 close as the checks tighten.
 
-## 4. Work items
+## 4. The build
+
+In build order, gathering the decided decisions' proposed changes and the work items that need no decision. D3's changes join step 1 and step 3 when it is decided.
+
+1. **Compiler.** `Validator.kt`: name-check the predicate of a refinement or `never` over a cross-base union (B1); V10, V12, V15, V24 reason per operand and name the operand (D1); V11 narrows on `x is not A` and on the residual `else` of a union with three or more operands and of a nested union; V13 counts a union-typed field as matching a `for`; the element of a refinement-filtered collection is the refinement (P8); a walk's `until` condition is checked against the union with `this` as the record reached (D2); creating a union is refused naming its operands; the F1 message for a field the operands declare separately names both declarations and offers narrowing or `is`. `Model.collectExpr` carries narrowing into the read summary. `Evaluator.kt`: a walk ends at a record that lacks the walked field (D2). `ClassDiagramGen.kt` and `StateFlowGen.kt`: a box for a static union with its shared members and an arrow from each operand; a state-flow axis for a refinement over a union.
+2. **Regenerate** every example's output.
+3. **Wiki.** `checks.md` V10, V11, V12, V13, V15, V24, F1; Reference §7 "Walks" (where a walk through a union-typed field ends, `until` reads the record reached); Reference §10 (the residual `else`, `is not`); Reference §9 (creating a union is refused naming the operands); `diagrams.md` (the union box and axis); `diagnostics.md` regenerated from one refused spec per new message.
+4. **Examples.** `examples/gallery/gallery.velle` gains a walk through a union-typed field if a sentence of the gallery calls for one; otherwise the OQ's walk example moves into a new example. `working-docs/examples/survey/17-shared-field-union-predicate-accepted.velle` becomes `-refused` with its README row updated.
+5. **Tests.** Each `gap -` test in `UnionStressTest.kt` becomes an assertion of the diagnostic or the behaviour; the probes in §5 that are still open (a nested part with a union-typed field, spendability of a `never` over a union, the contention width A5) are run and their verdicts recorded, or rehomed as residue.
+6. **Settle.** The residue finds a home; the file is deleted in the settling commit.
+
+## 5. Work items
 
 - [ ] Name-check the predicate of a refinement or `never` whose subject is a cross-base union (`Validator.walkRefExpr` skips it when `Model.baseOf` has no single base), so a field the operands declare separately is the Reference §9 error and not a per-instance read at runtime (B1; `UnionStressTest`, "gap - the predicate of a refinement or never over a union is not name-checked").
 - [ ] Name both declarations in the diagnostic for a field the operands declare separately: `[F1] 'entry' is not a member of 'EntryChange'` says neither that `RenameEntry` and `MoveEntry` each declare `entry` nor what to write, and for the bare spelling adds "use this.<field> for the subject", which also fails (`working-docs/examples/survey/17-shared-field-union-rule-refused.velle`; Reference §9's per-shape read and the `is` clause are the spellings to offer).
@@ -144,7 +187,7 @@ One adversarial spec per case, as a test in `compiler/src/test/kotlin/velle/Unio
 - [ ] After D2: the walk through a union-typed field ends at a record without the relationship, and `this` in its `until` condition is the record reached ("gap - a walk through a union-typed reference fails at runtime on an operand that lacks the relationship").
 - [ ] Draw a static union and a refinement over it: a box for the union with its shared members and an arrow from each operand in the class diagram, and a state-flow axis for a refinement over a union, under each operand ("gap - the diagrams omit a static union and a refinement over it"; `diagrams.md`).
 - [ ] Refuse `Content from { ... }` naming the operands, as creating a shape other shapes take is refused naming its takers: "creates 'Content', which has no records of its own: Post and Photo are Content; create one of them" ("gap - creating a union names it an unknown shape").
-- [ ] Give a union of refinements, `shape Notable = LongPost or Captioned`, a view of its own with the shared members, or refuse it as a rule subject and ask for a named static union with a `where` ("a union of refinements generates no view of its own").
+- [ ] After D3: a union of refinements gets the view, the interface, the membership flags, and the GraphQL union a static union gets ("a union of refinements generates no view of its own").
 - [ ] Probe a union-typed field inside a nested part of a closure, `act Post with { comments with { reactions } }` where a reaction points at a `Content`.
 - [ ] Probe whether a `never` over a union is spendable by V1, V5, V15, and V16 (`checks.md` V10), and whether a narrowed read's contention width (A5) over every operand that declares the name is real.
 - [ ] Let a `never` over a shape a transient act takes with `is` narrow to that act (`this is RenameEntry`): V17's expression check allows the narrowing in a rule or refinement over the taken shape (`Validator.transientSubjectsBySite`) and still refuses it in a `never`, whose site the walker does not name (Reference §9, "Sharing a field across shapes").
