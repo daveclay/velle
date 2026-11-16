@@ -1,6 +1,6 @@
 # OQ35 — Can several unrelated shapes share one declaration?
 
-**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 to D7 await Dave. Nothing is removed from the language by any decision here.
+**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D4 reframed on 2026-11-16. D1 to D7 await Dave. Nothing is removed from the language by any decision here.
 
 **In plain terms:** a product owner says "a site visit or a plot inspection is overdue when its due date has passed" and "any change to an entry touches the entry". Each sentence is one rule over several kinds of record that have a field in common. Velle has no way to declare that field once for all of them, so the author writes the rule once per kind, or turns the records inside out so the common part is the container.
 
@@ -53,14 +53,14 @@ Costs:
 - Every check that OQ44 lists as keyed on one base shape meets a second kind of many-shape subject. The rulings in §4 say what each does.
 - Diagrams need a notation (`diagrams.md`).
 
-The refused file and the proposed spelling, against one spec. The words `is` and `shared` are D3's and D4's; the shape is what D1 decides.
+The refused file and the proposed spelling, against one spec. The word `is` is D3's, and that `EntryChange` is a plain `shape` is D4's; the construct is what D1 decides.
 
 ```
 shape Entry {
     name: text unique                     -- the entry's key (Reference §21)
 }
 
-shared shape EntryChange {                -- proposed: a declaration with no records of its own
+shape EntryChange {                       -- proposed: a plain shape; its records are the takers' records (D4)
     entry: one Entry                      -- proposed: one field, declared once; infers Entry.entryChanges (D5)
 }
 
@@ -85,7 +85,7 @@ rule TouchEntry when EntryChange {        -- proposed: fires once per RenameEntr
 The same for the dated case, replacing `17-shared-field-per-shape-workaround.velle`'s two refinements and two rules:
 
 ```
-shared shape Dated {                      -- proposed: no records of its own
+shape Dated {                             -- proposed: a plain shape; its records are the takers' records (D4)
     due: Date                             -- proposed: one declaration of the due date
 }
 
@@ -114,7 +114,7 @@ If the answer is no, this OQ settles with `17-shared-field-inverted-workaround.v
 
 #### Proposed changes
 
-- `wiki/Normative/grammar.md`: a shared declaration and the clause by which a shape or act takes one.
+- `wiki/Normative/grammar.md`: the clause by which a shape or act takes another shape's declarations (D3); no new declaration form (D4).
 - `compiler/`: the parser, model, validator, runtime, and generated Kotlin for it.
 - Reference §9: the section "Treating two shapes as one" gains the shared declaration as the way to share a field, beside the union as the way to share a name.
 - `checks.md` V17: the message stops naming OQ35 and names the construct.
@@ -133,7 +133,7 @@ Recommendation: the shape names it. Three reasons.
 
 Costs:
 
-- The shared declaration needs a form of its own (D4).
+- Whether anything marks the shape that is taken, and where it appears in the generated code, is D4.
 - Reference §9's union keeps its rule unchanged, so there are two constructs in the "one name for several shapes" family: the closed union, naming its operands and sharing nothing of its own, and the open shared declaration, sharing fields and named by what takes it. The two compose: `RenameEntry or MoveEntry` is a subset of `EntryChange` and exposes `entry`, because both operands have it from one declaration.
 
 #### Proposed changes
@@ -163,28 +163,43 @@ Does the shape take a shared declaration with `is`?
 
 - `wiki/Normative/grammar.md`: `shapeDecl` and `actDecl` gain `("is" ShapeName ("," ShapeName)*)?` after the name, before `byClause` on an act.
 
-### D4. How the shared declaration itself is declared
+### D4. Where a shared shape appears in the generated code
 
-A shape no act or rule creates is a legal declaration today: it is uncommittable, and a rule over it is the unfireable-rule error (Reference §11, `checks.md` V3). So `shape Dated { due: Date }` with nothing more cannot be the shared declaration, or the compiler cannot tell a shared declaration from a shape nobody has got round to creating, and cannot know its members are exactly the shapes that take it. Three candidates:
+A shape that other shapes take is written as a plain `shape`, `shape Dated { due: Date }`, with nothing marking it. It is shared because something says `is Dated`. A keyword marking it, `shared shape`, was proposed and withdrawn on 2026-11-16: the compiler reads sharing off the `is` clauses, and the one question the keyword stood in for is where the shape appears in what the compiler generates.
 
-```
-shared shape Dated { due: Date }          -- a modifier before shape, as transient is before act
-trait Dated { due: Date }                 -- the programmers' word for the construct
-shape Dated { due: Date }                 -- nothing; shared because something says "is Dated"
-```
+Does a shared shape appear on the generated surfaces exactly where a static union appears today, and nowhere else?
 
-Recommendation: `shared shape`. `shared` is an everyday word that says what the declaration is for, it follows the modifier form Velle already has in `transient act`, and the compiler can refuse `Dated from { ... }`, `act Dated`, and `when Dated` with no taker, each by name. `trait` is a programming term, which Velle avoids. The bare form makes the meaning of a declaration depend on a line elsewhere in the spec.
+What a static union gets at HEAD, by surface, from `examples/gallery/gallery.velle`'s `shape Content = Post or Photo`:
+
+- Read API: `read.contents` as a query root and `read.populars` for the refinement over it; `Content` an interface the operands' model objects implement, carrying the union's derived body (`examples/gallery/output/src/main/kotlin/velle/generated/Gallery.kt`).
+- GraphQL: a GraphQL union whose type resolver answers from the record's `shape` (the API layer guide).
+- Act API: no input class; a `with`-named field typed with the union takes an interface the creating input classes implement, `NewOrigin` in `examples/batches/batches.velle` (the Act API guide).
+- Store: nothing. `examples/gallery/output/src/main/kotlin/velle/generated/GalleryStore.kt` has no method for `Content`; the store has one table per shape, and a union-typed field carries the target's shape beside its key (the Store API guide).
+
+Recommendation: yes, the same four answers.
+
+- Read API: `read.dateds`, `read.overdues`, and a `Dated` interface with `due` on it. This is what the construct gives the engineer: one query for everything overdue, typed with the field the rule reads, instead of a `when` over the takers' classes.
+- GraphQL: an interface with its fields, GraphQL's own construct for a type with fields that several types implement, where a union has none.
+- Act API: `NewDated` where a `with`-named field is typed with it, and never an input class of its own. An act that `is Dated` keeps its own input class with `due` as one of its fields, supplied by the committer like any stored field.
+- Store: nothing. The runtime asks for rows of `SiteVisit` and of `PlotInspection`, as it asks per operand today. Whether `due` is a column on each taker's table or one table joined to them is the store's own layout choice, the freedom the Store API already gives a store for captures.
+
+So "a shared shape has no records of its own" is a statement about the generated code, not the database: there is never a `Dated` class, a `dated` table, or a `NewDated` input value, and a plain `Dated` cannot be constructed anywhere. In the spec, the compiler refuses `Dated from { ... }` and `act Dated` once anything takes `Dated`, naming the taker; a rule over `Dated` when nothing takes it is the unfireable-rule error as it stands (`checks.md` V3).
 
 Costs:
 
-- `shared` joins the keyword list.
+- A query over a shared shape fans out per taker in the store, as a union's does, and no store-side method for the shared shape is generated. An engineer who wants one dated table builds it inside their store binding, where the API never sees it.
+- A shape with a producing rule that later gains a taker: the producing rule becomes an error naming the taker, and the author chooses which line was wrong.
 
-Is the shared declaration written `shared shape`?
+Does a shared shape appear on the generated surfaces exactly where a static union does today, and nowhere else?
 
 #### Proposed changes
 
-- `wiki/Normative/grammar.md`: `sharedDecl := "shared" "shape" ShapeName "{" property* "}"`, and `shared` in the keyword list.
-- `checks.md`: a shared shape is never created, never an act, never a rule subject with no taker (the last as V3).
+- `wiki/Normative/grammar.md`: no new declaration form; a shape that is taken is an ordinary `shapeDecl`.
+- `checks.md`: creating a taken shape, or declaring one as an act, is refused naming the taker; V3 covers a rule over a shape nothing takes.
+- Read API guide: a shared shape is an interface on the model objects, with its fields, and a query root, as a static union is.
+- API layer guide: a shared shape becomes a GraphQL interface with its fields.
+- Act API guide: `New<Shape>` for a shared shape as for a union; an act that takes one carries the shape's fields in its own input class.
+- Store API guide: a shared shape has no table and no method; every read is asked per taker.
 
 ### D5. The inverse of a reference declared in a shared declaration
 
@@ -206,17 +221,17 @@ Does `Entry` get `entryChanges`?
 
 ### D6. May a shared declaration take another?
 
-May `shared shape Overdueable is Dated { ... }` be written, so that a shape taking `Overdueable` also takes `Dated`? Recommendation: no, refuse it for now. A shape that wants both names both, `shape SiteVisit is Dated, Sited`, and nothing in the three domains in §1 needs a chain. Allowing it brings the diamond, one declaration reached twice by two paths, which Reference §9 says is fine for a shared base, but there is nothing to test it against yet.
+May `shape Overdueable is Dated { ... }` be written where `Overdueable` is itself taken by other shapes, so that a shape taking `Overdueable` also takes `Dated`? Recommendation: no, refuse it for now. A shape that wants both names both, `shape SiteVisit is Dated, Sited`, and nothing in the three domains in §1 needs a chain. Allowing it brings the diamond, one declaration reached twice by two paths, which Reference §9 says is fine for a shared base, but there is nothing to test it against yet.
 
 Costs:
 
 - An author with a chain writes the list out on each shape.
 
-Is `shared shape X is Y` refused?
+Is a shape that is taken, and itself takes another, refused?
 
 #### Proposed changes
 
-- `checks.md`: a shared shape's header takes no `is` clause, as a position error (F3).
+- `checks.md`: a shape that is taken and whose header has an `is` clause is refused, naming both lines (F3).
 
 ### D7. A transient act that takes a shared declaration
 
