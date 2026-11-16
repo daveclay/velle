@@ -1,6 +1,6 @@
 # 9. Composing refinements (`and`, `or`, `not`)
 
-A refinement can be built from other named refinements instead of repeating their conditions. "Urgent" means overdue, high priority, and still open. When each word is already a [refinement](Reference-08-Refinements), the composite is their names joined by `and`, `or`, and `not`. After reading this page you can build refinements from smaller ones, know which properties a composite has, and use `or` to treat two shapes as one kind of record.
+A refinement can be built from other named refinements instead of repeating their conditions. "Urgent" means overdue, high priority, and still open. When each word is already a [refinement](Reference-08-Refinements), the composite is their names joined by `and`, `or`, and `not`. After reading this page you can build refinements from smaller ones, know which properties a composite has, use `or` to treat two shapes as one kind of record, and declare a field once for several shapes with `is`.
 
 ## Combining refinements of one shape
 
@@ -46,14 +46,86 @@ Three more rules apply to a union of shapes:
 
 - Its body may declare derived properties only. For `captured`, write `initially` on each shape. `undeletable` goes on a refinement of each shape.
 - A rule whose condition combines two shapes inline must name the union first.
-- A `transient act` may not be in a union.
+- A `transient act` may not be in a union. Two transient acts answered by one rule take the fields they share from one shape with `is`, below, and the rule is written over that shape.
+
+## Sharing a field across shapes (`is`)
+
+A field several shapes have in common is declared once, on a shape of its own, and each shape takes it by naming that shape after `is`. The field is then one declaration on every shape that takes it. A rule or a refinement over the taken shape covers every taker, and a union of the takers shares the field too.
+
+The gallery says "every post and every photo has an author". A post is a contribution, a photo is a contribution, and a contribution has an author. From `examples/gallery/gallery.velle`:
+
+```
+shape Contribution {
+    author: one Member
+}
+
+act Post is Contribution {
+    body: text
+}
+
+act Photo is Contribution {
+    caption: text
+}
+
+shape Content = Post or Photo
+
+rule NotifyAuthor when Comment {
+    CommentNotice from {
+        recipient: target.author
+        comment: this
+        excerpt: if target is Post then target.body else target.caption
+    }
+}
+```
+
+- `shape Contribution { author: one Member }` declares `author` once. A contribution has no records of its own: every record of it is a post or a photo, and a rule cannot create one.
+- `act Post is Contribution` takes the declaration. A post has `author` as if the line were in its own body: a committed post supplies it like any field, and `post.author` reads it. A shape may take several shapes, `act SiteVisit is Dated, Sited { ... }`, and a shape that is taken may itself take another, so a taker takes everything along the chain. A shape that reaches one declaration by two paths takes it once.
+- `Contribution` is read as a union of its takers, `Post or Photo`, with the shared field on it. A rule `when Contribution` fires once per post and once per photo. `shape Prolific = Contribution where count(comments) > 10` is a refinement over every taker. A field `one Contribution` holds a post or a photo. `is Post` narrows a contribution to a post's own fields, as it narrows a union.
+- `Member.contributions` is the one collection `author` infers, named from the taken shape and holding posts and photos alike ([§6](Reference-06-Relationships)). A member's posts alone is a view: `posts: many Post = (Post where author == this)`.
+- `Content = Post or Photo` has `author`, because both shapes take it from one declaration. The rule reads `target.author` directly; `body` and `caption` are declared separately, so those are read after narrowing.
+
+A refinement and a rule over a taken shape, where a site visit and a plot inspection each have a due date. This example is not in the example files:
+
+```
+shape Dated {
+    due: Date
+}
+
+act SiteVisit is Dated {
+    site: one Site
+}
+
+act PlotInspection is Dated {
+    site: one Site
+    plot: text
+}
+
+shape Overdue = Dated where due < today
+
+shape Reminder {
+    about: one Dated
+    sentOn: Date
+}
+
+rule RemindOverdue when Overdue on Daily {
+    Reminder from { about: this, sentOn: today }
+}
+```
+
+- `shape Overdue = Dated where due < today` is one refinement over every dated shape, and `RemindOverdue` is one rule. A third dated shape joins by writing `is Dated`, and the refinement and the rule cover it with no change.
+- `about: one Dated` holds a site visit or a plot inspection. The engineer's read returns the record as whichever it is ([Read API](Read-API)).
+
+When a `transient act` takes a shape, a rule over that shape fires inside each request's own commit, so one rule answers several requests ([§4](Reference-04-State-and-commits)). Nothing durable may then be typed with the taken shape, since a record of the act is gone when its commit ends.
 
 ## What the compiler checks
 
 - **It rejects** reading a field that is not shared across a union without narrowing first ([checks.md, V11](checks#v11--narrowing-analysis)).
 - **It rejects** `when leaving Content` over a union of base shapes, since a record enters one only by being created. The error offers `when deleted` ([checks.md, V3](checks#v3--unfireable-rule)).
 - **It warns** when `and` joins refinements of two base shapes. A record has one base shape, so the composite is always empty ([checks.md, A2](checks#a2--dead-machinery)).
-- **For one-writer**, a union overlaps each of its shapes, and two base shapes never overlap ([checks.md, V1](checks#v1--one-writer-disjointness)).
+- **For one-writer**, a union overlaps each of its shapes, and two base shapes never overlap ([checks.md, V1](checks#v1--one-writer-disjointness)). A taken shape overlaps each shape that takes it.
+- **It rejects** `is` naming a shape the spec does not declare, and a rule creating a taken shape, which has no records of its own ([checks.md, F1](checks#f1--name-resolution-and-casing)).
+- **It rejects** an `act` that other shapes take, two shapes taking each other, a shape taking one field name from two shapes, and a shape declaring a field it also takes ([checks.md, F3](checks#f3--position-rules)).
+- **It rejects** a field typed with a taken shape that a `transient act` takes ([checks.md, V17](checks#v17--transient-isolation)), and an act's closure naming the collection a taken shape's field infers, since its records are of several shapes ([checks.md, V22](checks#v22--closure-declaration-legality)).
 
 ## Related pages
 

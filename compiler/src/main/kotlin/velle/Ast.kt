@@ -13,6 +13,9 @@ data class ShapeDecl(
     val transient: Boolean = false,
     /** the act's closure — `act ... with` (Reference §6, "Inline part creation") */
     val with: List<WithEntry> = emptyList(),
+    /** The shapes this one takes its declarations from, `shape SiteVisit is Dated, Sited`
+     *  (Reference §9, "Sharing a field across shapes"); resolved by [SharedShapes]. */
+    val takes: List<String> = emptyList(),
 ) : Decl {
     /** The act's `by` clause, carried as a member (Reference §22, "The actor"); null when the act has no actor. */
     val actor: ActorProp? get() = members.filterIsInstance<ActorProp>().singleOrNull()
@@ -168,6 +171,9 @@ data class StoredProp(
     /** `name: text unique` (Reference §21, "Keys"): no two records share this field's value;
      *  the one-field spelling of [UniqueKey]. */
     val unique: Boolean = false,
+    /** The taken shape this field was declared on, when the owning shape took it with `is`
+     *  (Reference §9, "Sharing a field across shapes"); null for a field of the shape's own. */
+    val declaredOn: String? = null,
     /** `transient name: text` (Reference §4, "Transient fields of a kept act"): in the act's
      *  input and not in its record; read by what runs at the act's commit, never stored. */
     val transient: Boolean = false,
@@ -198,9 +204,17 @@ data class DerivedProp(
     val expr: Expr,
     val captured: Boolean = false,
     val visible: List<VisibleClause> = emptyList(),
+    /** The taken shape this property was declared on (Reference §9, "Sharing a field across shapes"). */
+    val declaredOn: String? = null,
 ) : Member
 
-data class TimestampProp(val name: String, val on: String, val visible: List<VisibleClause> = emptyList()) : Member // "create" | "update"
+data class TimestampProp(
+    val name: String,
+    val on: String, // "create" | "update"
+    val visible: List<VisibleClause> = emptyList(),
+    /** The taken shape this timestamp was declared on (Reference §9, "Sharing a field across shapes"). */
+    val declaredOn: String? = null,
+) : Member
 
 /**
  * The actor an act is committed by (Reference §22, "The actor"): the act's

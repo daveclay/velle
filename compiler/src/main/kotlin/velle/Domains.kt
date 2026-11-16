@@ -316,7 +316,7 @@ class DomainAnalysis(private val model: Model) {
                 else -> return
             }
             val m = model.membersOf(scope)[name] ?: return
-            m.inverse?.let { inv -> if (!inv.many) out.add(inv.shape to inv.field) }
+            m.inverse?.let { inv -> if (!inv.many) model.basesOf(inv.shape).forEach { declaring -> out.add(declaring to inv.field) } }
             m.derived?.let { d ->
                 if (seen.add("d:${m.owner}.${m.name}")) corrExpr(d.expr, m.owner, out, seen)
             }
@@ -381,7 +381,7 @@ class DomainAnalysis(private val model: Model) {
      *  instance. */
     private fun correlatable(shape: String, field: String, target: String): Boolean =
         model.membersOf(target).values.any {
-            it.inverse?.let { inv -> inv.shape == shape && inv.field == field && !inv.many } == true
+            it.inverse?.let { inv -> shape in model.basesOf(inv.shape) && inv.field == field && !inv.many } == true
         } || (shape to field) in bodyCorrelationFields ||
             watchers.any { (shape to field) in correlationFields(it) }
 
@@ -488,7 +488,7 @@ class DomainAnalysis(private val model: Model) {
     private fun bodyPath(p: PathExpr, scope: String, out: MutableSet<Pair<String, String>>, seen: MutableSet<String>) {
         fun step(sc: String?, name: String): String? {
             val m = model.membersOf(sc ?: return null)[name] ?: return null
-            m.inverse?.let { inv -> if (!inv.many) out.add(inv.shape to inv.field) }
+            m.inverse?.let { inv -> if (!inv.many) model.basesOf(inv.shape).forEach { declaring -> out.add(declaring to inv.field) } }
             m.derived?.let { d -> if (seen.add("d:${m.owner}.${m.name}")) bodyCorr(d.expr, m.owner, out, seen) }
             return m.type.instanceShape() ?: (m.type as? VType.Coll)?.shape
         }

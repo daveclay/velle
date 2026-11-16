@@ -3,27 +3,37 @@
 -- polymorphic association), the inverse it infers onto every operand, a derived
 -- body on the union, a refinement and a rule over the union, per-operand
 -- narrowing in a value expression and in a predicate, and the boundary's
--- type-level refusal of a reference outside the union.
+-- type-level refusal of a reference outside the union. And beside the union,
+-- a field two shapes share from one declaration (Reference §9, "Sharing a
+-- field across shapes"): a post and a photo are each a contribution, and
+-- `author` is declared once on the contribution.
 
 act Member {
     name: text
 }
 
-act Post {
+-- Every post and every photo has an author. Declared once, on a shape the two
+-- take with `is`: `author` is then one declaration on both, readable wherever
+-- the two are read as one, and `Member.contributions` is the one inverse it
+-- infers, holding posts and photos alike. A contribution has no records of its
+-- own: every record of it is a post or a photo.
+shape Contribution {
     author: one Member
+}
+
+act Post is Contribution {
     body: text
 }
 
-act Photo {
-    author: one Member
+act Photo is Contribution {
     caption: text
 }
 
 -- Content is a static union: a pure `or` of base shapes, so it is a stable
 -- field type. It exposes only what both operands inherit from ONE declaration —
--- `id`, and the `comments` inverse inferred through Comment.target below.
--- Post.author and Photo.author are two declarations that happen to agree; they
--- are not shared, and reach the union's readers only by narrowing (below).
+-- `id`, the `comments` inverse inferred through Comment.target below, and
+-- `author`, which both take from Contribution. A field the two declared
+-- separately would reach the union's readers only by narrowing (below).
 shape Content = Post or Photo {
     commentCount: integer = count(comments)     -- a derived body over the shared inverse
 }
@@ -53,8 +63,7 @@ rule NotePopularity when Popular {
 }
 
 -- Narrowing in a value expression: each branch reads its operand's own field.
--- `author` is one name on two declarations, so both branches read alike —
--- deliberately, until OQ35 lets the operands share one declaration.
+-- `author` is one declaration both operands take, so it is read directly.
 shape CommentNotice {
     recipient: one Member
     comment: one Comment
@@ -63,7 +72,7 @@ shape CommentNotice {
 
 rule NotifyAuthor when Comment {
     CommentNotice from {
-        recipient: if target is Post then target.author else target.author
+        recipient: target.author
         comment: this
         excerpt: if target is Post then target.body else target.caption
     }

@@ -1,7 +1,7 @@
 -- The two entry changes as requests that are answered and not kept: transient
 -- acts. A union over them is refused outright (checks V17), since every read
--- over it would be a branch per operand; the diagnostic names OQ35 as the
--- construct the refusal waits for.
+-- over it would be a branch per operand; the diagnostic offers a shape the acts
+-- take with `is`, the spelling in 17-shared-field-is-direct.velle.
 shape Entry {
     name: text unique
 }

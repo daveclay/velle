@@ -72,6 +72,11 @@ what Velle derives:
   inferred inverse collection where one exists (`invoice (inverse lineItems)`),
   with cardinalities from the declaration (`one` / `many` / optional).
   A transient act's relationship gets no inverse — the instances are not kept.
+- A shape other shapes take with `is` ([Reference §9](Reference-09-Composing-refinements),
+  "Sharing a field across shapes") is one class annotated `<<taken>>`, holding
+  the properties it declares and the relationships they draw; each taker points
+  at it with a dotted hollow-triangle arrow labelled `is`, and lists only what it
+  declares itself.
 
 ## State-flow diagrams
 

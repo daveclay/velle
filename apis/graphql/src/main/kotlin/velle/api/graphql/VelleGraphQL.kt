@@ -25,6 +25,7 @@ import graphql.schema.GraphQLFieldDefinition
 import graphql.schema.GraphQLInputObjectField
 import graphql.schema.GraphQLInputObjectType
 import graphql.schema.GraphQLInputType
+import graphql.schema.GraphQLInterfaceType
 import graphql.schema.GraphQLList
 import graphql.schema.GraphQLNonNull
 import graphql.schema.GraphQLObjectType
@@ -97,7 +98,11 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
 
     fun build(): GraphQLSchema {
         val readable = describe.readable()
-        for (r in readable) additional[r] = if (model.isCrossBase(r)) union(r) else objectType(r)
+        for (r in readable) additional[r] = when {
+            r in model.sharedShapes -> interfaceType(r)
+            model.isCrossBase(r) -> union(r)
+            else -> objectType(r)
+        }
         additional["Reference"] = referenceType()
         additional["RefInput"] = refInput()
         additional["Snapshot"] = snapshotType()
@@ -194,6 +199,23 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
         }
         if (scope in model.shapes) for (flag in api.wire.flagsOf(scope))
             type.field { it.name("is$flag").type(GraphQLNonNull.nonNull(Scalars.GraphQLBoolean)).description("Is the record a $flag now?") }
+        // a shape taken with `is` is an interface the taker implements (Reference §9, "Sharing a field across shapes")
+        for (taken in model.sharedShapes.keys.filter { scope in model.basesOf(it) && it in describe.readable() })
+            type.withInterface(GraphQLTypeReference.typeRef(taken))
+        return type.build()
+    }
+
+    /** A shape other shapes take with `is` (Reference §9): an interface carrying its own members, which every taker's type implements. */
+    private fun interfaceType(name: String): GraphQLInterfaceType {
+        val type = GraphQLInterfaceType.newInterface().name(name)
+        type.description("The shape $name, which ${model.basesOf(name).sorted().joinToString(" and ")} take: a record of any of them, read as a $name.")
+        type.field { it.name("shape").type(GraphQLNonNull.nonNull(Scalars.GraphQLString)).description("The record's own shape.") }
+        type.field { it.name("key").type(GraphQLNonNull.nonNull(Scalars.GraphQLID)).description("The store's key for the record.") }
+        for (member in model.membersOf(name).values) {
+            if (member.name == "id" || member.transient) continue
+            type.field { it.name(memberField(member.name)).type(outType(member.type, member.visible.isNotEmpty())) }
+        }
+        registry.typeResolver(name, TypeResolver { env -> env.schema.getObjectType((env.getObject<Map<String, Any?>>())["shape"] as String) })
         return type.build()
     }
 

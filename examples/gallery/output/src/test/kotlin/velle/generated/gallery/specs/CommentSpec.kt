@@ -8,7 +8,7 @@ import velle.generated.gallery.*
 
 /**
  * rule NotifyAuthor when Comment {
- *     CommentNotice from { recipient: if target is Post then target.author else target.author, comment: this, excerpt: if target is Post then target.body else target.caption }
+ *     CommentNotice from { recipient: target.author, comment: this, excerpt: if target is Post then target.body else target.caption }
  * }
  *
  * never (Comment where (target is Post) and (target.author == author))

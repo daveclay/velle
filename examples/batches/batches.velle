@@ -32,8 +32,9 @@
 -- record (B1–B8).
 --   · the direct translation. Three base shapes under a union share nothing
 --     they declare separately (Reference §9), so a common field like the
---     quantity is unreadable from the union by the Reference. That is the
---     cross-shape mixin gap, OQ35. (The validator does not enforce the rule on
+--     quantity is unreadable from the union by the Reference; declaring it once
+--     on a shape the three take with `is` is the spelling (Reference §9,
+--     "Sharing a field across shapes"). (The validator does not enforce the rule on
 --     a predicate over the union today, and the runtime then resolves the name
 --     per instance — the accepted-by-accident spelling Reference §9 rejects.)
 --   · "a mixture never contains itself, however many steps removed". Said

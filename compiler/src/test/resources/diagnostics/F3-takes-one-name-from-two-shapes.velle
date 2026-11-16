@@ -1,0 +1,12 @@
+-- A shape taking two shapes that each declare `due`.
+shape Dated {
+    due: Date
+}
+
+shape Deadlined {
+    due: Date
+}
+
+act SiteVisit is Dated, Deadlined {
+    visitor: text
+}

@@ -107,16 +107,20 @@ class Evaluator(private val system: VelleSystem) {
         m.inverse?.let { inv ->
             // inferred inverse collection: a view over the declared side (Reference §6);
             // liveIds excludes instances the current transaction deleted (OQ37)
+            // an inverse named from a taken shape holds every taker's records (Reference §9)
+            val declaringShapes = system.model.basesOf(inv.shape)
             return if (!inv.many) {
                 // one-to-many: children whose stored pointer references this instance
-                system.ensureReferencing(inv.shape, inv.field, id)
-                val ids = system.liveIds(inv.shape)
-                    .filter { (system.instance(it)?.fields?.get(inv.field) as? Value.VRef)?.id == id }
+                val ids = declaringShapes.flatMap { shape ->
+                    system.ensureReferencing(shape, inv.field, id)
+                    system.liveIds(shape).filter { (system.instance(it)?.fields?.get(inv.field) as? Value.VRef)?.id == id }
+                }
                 Value.VColl(ids, inv.shape)
             } else {
                 // many-to-many: owners whose declared edge set contains this instance
-                val ids = system.idsOf(inv.shape)
-                    .filter { (system.instance(it)?.fields?.get(inv.field) as? Value.VColl)?.ids?.contains(id) == true }
+                val ids = declaringShapes.flatMap { shape ->
+                    system.idsOf(shape).filter { (system.instance(it)?.fields?.get(inv.field) as? Value.VColl)?.ids?.contains(id) == true }
+                }
                 Value.VColl(ids, inv.shape)
             }
         }

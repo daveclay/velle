@@ -1,0 +1,16 @@
+-- A closure naming the inverse a taken shape's field infers, whose parts are of several shapes.
+act Entry {
+    name: text unique
+} with entryChanges
+
+shape EntryChange {
+    entry: one Entry
+}
+
+shape RenameEntry is EntryChange {
+    newName: text
+}
+
+shape MoveEntry is EntryChange {
+    newSite: text
+}

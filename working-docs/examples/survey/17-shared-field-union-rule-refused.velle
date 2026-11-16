@@ -2,7 +2,7 @@
 -- `entry: one Entry`; a union names them as one kind of change; one rule over
 -- the union reads `entry`. Reference §9 shares across a union only what both
 -- operands get from one declaration, and these are two declarations, so the
--- read is refused. The shared-declaration gap, OQ35.
+-- read is refused. The direct spelling is 17-shared-field-is-direct.velle.
 shape Entry {
     name: text unique
 }

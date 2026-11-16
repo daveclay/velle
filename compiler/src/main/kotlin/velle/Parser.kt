@@ -132,8 +132,10 @@ class Parser(private val tokens: List<Token>) {
     private fun parseShapeOrRefinement(): Decl {
         expectKw("shape")
         val name = expect(TokType.UIDENT).text
+        val takes = parseTakesClause()
         return when {
-            at(TokType.LBRACE) -> ShapeDecl(name, parseMemberBlock(refinementBody = false))
+            at(TokType.LBRACE) -> ShapeDecl(name, parseMemberBlock(refinementBody = false), takes = takes)
+            takes.isNotEmpty() -> fail("expected '{' after 'is ${takes.joinToString(", ")}' — a shape that takes another's declarations has a body of its own", peek())
             at(TokType.ASSIGN) -> {
                 next()
                 skipNewlines()
@@ -144,6 +146,16 @@ class Parser(private val tokens: List<Token>) {
             }
             else -> fail("expected '{' or '=' after shape name", peek())
         }
+    }
+
+    /** `is Dated, Sited` after a shape's or act's name (Reference §9, "Sharing a field across
+     *  shapes"): the shapes whose declarations this one takes. Empty when the clause is absent. */
+    private fun parseTakesClause(): List<String> {
+        if (!peek().isKw("is")) return emptyList()
+        next()
+        val takes = mutableListOf(expect(TokType.UIDENT).text)
+        while (at(TokType.COMMA)) { next(); skipNewlines(); takes.add(expect(TokType.UIDENT).text) }
+        return takes
     }
 
     private fun parseMemberBlock(refinementBody: Boolean): List<Member> {
@@ -593,6 +605,7 @@ class Parser(private val tokens: List<Token>) {
         val transient = if (peek().isKw("transient")) { next(); true } else false
         expectKw("act")
         val name = expect(TokType.UIDENT).text
+        val takes = parseTakesClause()
         // `by Shape [as name]` (Reference §22, "The actor"): who commits this act,
         // bound in the act's scope and stored on a durable act. An act without
         // the clause has no actor — a processor verdict arrives from a machine
@@ -608,7 +621,7 @@ class Parser(private val tokens: List<Token>) {
         if (!at(TokType.LBRACE))
             fail("expected '{' after the act's name — an act is a base shape declared with its fields, never a refinement", peek())
         val members = parseMemberBlock(refinementBody = false)
-        return ShapeDecl(name, listOfNotNull(actor) + members, exposed = true, transient = transient, with = parseWithClause())
+        return ShapeDecl(name, listOfNotNull(actor) + members, exposed = true, transient = transient, with = parseWithClause(), takes = takes)
     }
 
     // ── the exposure closure (Reference §6, "Inline part creation") ─────────────

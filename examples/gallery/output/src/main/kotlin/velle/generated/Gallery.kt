@@ -9,38 +9,26 @@ import java.time.LocalDate
 
 class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
-    /** Queue: system-wide.
-     *  System-wide over Post — reads Post.author with no path back to any key (unexamined (A5)).
-     *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
+    /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewMember): Commit<NewMember, Ref<Member>> =
         boundary("Member", input).carrying(input)
 
-    /** Queue keys: [post.author] — plus system-wide width below.
-     *  System-wide over Comment — reads Comment.target with no path back to any key (unexamined (A5)).
-     *  System-wide over Post — reads Post.author with no path back to any key (unexamined (A5)).
-     *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
+    /** Queue key: [post.author].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewPost): Commit<NewPost, Ref<Post>> =
         boundary("Post", input).carrying(input)
 
-    /** Queue keys: [photo.author] — plus system-wide width below.
-     *  System-wide over Comment — reads Comment.target with no path back to any key (unexamined (A5)).
-     *  System-wide over Post — reads Post.author with no path back to any key (unexamined (A5)).
-     *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
+    /** Queue key: [photo.author].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewPhoto): Commit<NewPhoto, Ref<Photo>> =
         boundary("Photo", input).carrying(input)
 
-    /** Queue keys: [comment.author], [comment.target] — plus system-wide width below.
-     *  System-wide over CommentNotice — creates CommentNotice referencing an instance the derivation cannot key (unexamined (A5)).
+    /** Queue keys: [comment.author], [comment.target], [comment.target.author] — plus system-wide width below.
      *  System-wide over Content — 'body' cannot be resolved on 'Content' (unexamined (A5)).
-     *  System-wide over Comment — reads Comment.target with no path back to any key (unexamined (A5)).
-     *  System-wide over Post — reads Post.author with no path back to any key (unexamined (A5)).
-     *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewComment): Commit<NewComment, Ref<Comment>> =
@@ -53,6 +41,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun comments(): List<Comment> = all("Comment") { materializeComment(it) }
     fun popularityNotices(): List<PopularityNotice> = all("PopularityNotice") { materializePopularityNotice(it) }
     fun commentNotices(): List<CommentNotice> = all("CommentNotice") { materializeCommentNotice(it) }
+    fun contributions(): List<Contribution> = all("Contribution") { materializeContribution(it) }
     fun contents(): List<Content> = all("Content") { materializeContent(it) }
     fun populars(): List<Popular> = all("Popular") { materializePopular(it) }
     fun postComments(): List<PostComment> = all("PostComment") { materializePostComment(it) }
@@ -98,6 +87,8 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         fun commentNotice(key: StoreKey): CommentNotice = byKey("CommentNotice", key)
         fun commentNotice(key: Long): CommentNotice = commentNotice(StoreKey(key))
 
+        val contributions: ContributionQuery get() = query("Contribution", ContributionFields()) { materializeContribution(it) }
+
         val contents: ContentQuery get() = query("Content", ContentFields()) { materializeContent(it) }
 
         val populars: PopularQuery get() = query("Popular", PopularFields()) { materializePopular(it) }
@@ -134,10 +125,9 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     private fun materializeMember(id: Long): Member = Member(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        posts = (system.get(id, "posts") as List<*>).map { system.refFor(it as Long) },
-        photos = (system.get(id, "photos") as List<*>).map { system.refFor(it as Long) },
         comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
         commentNotices = (system.get(id, "commentNotices") as List<*>).map { system.refFor(it as Long) },
+        contributions = (system.get(id, "contributions") as List<*>).map { system.refFor(it as Long) },
     )
 
     private fun materializePost(id: Long): Post = Post(
@@ -183,10 +173,13 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         excerpt = system.get(id, "excerpt") as String,
     )
 
+    private fun materializeContribution(id: Long): Contribution = materialize(id) as Contribution
+
     private fun materializeContent(id: Long): Content = materialize(id) as Content
 
     private fun materializePopular(id: Long): Popular = Popular(
         key = system.refFor(id).key,
+        author = system.refFor(system.get(id, "author") as Long),
         comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
         popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
         commentCount = (system.get(id, "commentCount") as BigDecimal).intValueExact(),
@@ -217,27 +210,37 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 -- polymorphic association), the inverse it infers onto every operand, a derived
 -- body on the union, a refinement and a rule over the union, per-operand
 -- narrowing in a value expression and in a predicate, and the boundary's
--- type-level refusal of a reference outside the union.
+-- type-level refusal of a reference outside the union. And beside the union,
+-- a field two shapes share from one declaration (Reference §9, "Sharing a
+-- field across shapes"): a post and a photo are each a contribution, and
+-- `author` is declared once on the contribution.
 
 act Member {
     name: text
 }
 
-act Post {
+-- Every post and every photo has an author. Declared once, on a shape the two
+-- take with `is`: `author` is then one declaration on both, readable wherever
+-- the two are read as one, and `Member.contributions` is the one inverse it
+-- infers, holding posts and photos alike. A contribution has no records of its
+-- own: every record of it is a post or a photo.
+shape Contribution {
     author: one Member
+}
+
+act Post is Contribution {
     body: text
 }
 
-act Photo {
-    author: one Member
+act Photo is Contribution {
     caption: text
 }
 
 -- Content is a static union: a pure `or` of base shapes, so it is a stable
 -- field type. It exposes only what both operands inherit from ONE declaration —
--- `id`, and the `comments` inverse inferred through Comment.target below.
--- Post.author and Photo.author are two declarations that happen to agree; they
--- are not shared, and reach the union's readers only by narrowing (below).
+-- `id`, the `comments` inverse inferred through Comment.target below, and
+-- `author`, which both take from Contribution. A field the two declared
+-- separately would reach the union's readers only by narrowing (below).
 shape Content = Post or Photo {
     commentCount: integer = count(comments)     -- a derived body over the shared inverse
 }
@@ -267,8 +270,7 @@ rule NotePopularity when Popular {
 }
 
 -- Narrowing in a value expression: each branch reads its operand's own field.
--- `author` is one name on two declarations, so both branches read alike —
--- deliberately, until OQ35 lets the operands share one declaration.
+-- `author` is one declaration both operands take, so it is read directly.
 shape CommentNotice {
     recipient: one Member
     comment: one Comment
@@ -277,7 +279,7 @@ shape CommentNotice {
 
 rule NotifyAuthor when Comment {
     CommentNotice from {
-        recipient: if target is Post then target.author else target.author
+        recipient: target.author
         comment: this
         excerpt: if target is Post then target.body else target.caption
     }
@@ -298,6 +300,7 @@ typealias PhotoQuery = TypedQuery<PhotoFields, Photo>
 typealias CommentQuery = TypedQuery<CommentFields, Comment>
 typealias PopularityNoticeQuery = TypedQuery<PopularityNoticeFields, PopularityNotice>
 typealias CommentNoticeQuery = TypedQuery<CommentNoticeFields, CommentNotice>
+typealias ContributionQuery = TypedQuery<ContributionFields, Contribution>
 typealias ContentQuery = TypedQuery<ContentFields, Content>
 typealias PopularQuery = TypedQuery<PopularFields, Popular>
 typealias PostCommentQuery = TypedQuery<PostCommentFields, PostComment>
@@ -376,10 +379,9 @@ data class Tick(
 data class Member(
     override val key: StoreKey,
     val name: String,
-    val posts: List<Ref<Post>>,
-    val photos: List<Ref<Photo>>,
     val comments: List<Ref<Comment>>,
     val commentNotices: List<Ref<CommentNotice>>,
+    val contributions: List<Ref<Contribution>>,
 ) : Ref<Member> {
     override val shape: String get() = "Member"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -388,30 +390,32 @@ data class Member(
 
 data class Post(
     override val key: StoreKey,
-    val author: Ref<Member>,
+    override val author: Ref<Member>,
     val body: String,
     override val comments: List<Ref<Comment>>,
     override val popularityNotices: List<Ref<PopularityNotice>>,
     override val commentCount: Int,
     /** membership of Popular at the moment of the read */
     override val isPopular: Boolean,
-) : Ref<Post>, Content {
+) : Ref<Post>, Contribution, Content {
     override val shape: String get() = "Post"
+    override val ref: Ref<Post> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
 data class Photo(
     override val key: StoreKey,
-    val author: Ref<Member>,
+    override val author: Ref<Member>,
     val caption: String,
     override val comments: List<Ref<Comment>>,
     override val popularityNotices: List<Ref<PopularityNotice>>,
     override val commentCount: Int,
     /** membership of Popular at the moment of the read */
     override val isPopular: Boolean,
-) : Ref<Photo>, Content {
+) : Ref<Photo>, Contribution, Content {
     override val shape: String get() = "Photo"
+    override val ref: Ref<Photo> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -453,9 +457,18 @@ data class CommentNotice(
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
+interface Contribution : Keyed {
+    /** this record as a reference typed by the union, for a parameter that takes one */
+    val ref: Ref<Contribution>
+    val author: Ref<Member>
+    val comments: List<Ref<Comment>>
+    val popularityNotices: List<Ref<PopularityNotice>>
+}
+
 interface Content : Keyed {
     /** this record as a reference typed by the union, for a parameter that takes one */
-    val ref: Ref<Content> get() = Ref.Persisted(shape, key)
+    val ref: Ref<Content>
+    val author: Ref<Member>
     val comments: List<Ref<Comment>>
     val popularityNotices: List<Ref<PopularityNotice>>
     val commentCount: Int
@@ -464,6 +477,7 @@ interface Content : Keyed {
 
 data class Popular(
     override val key: StoreKey,
+    val author: Ref<Member>,
     val comments: List<Ref<Comment>>,
     val popularityNotices: List<Ref<PopularityNotice>>,
     val commentCount: Int,
@@ -545,12 +559,18 @@ class CommentNoticeFields(path: List<String> = emptyList()) : Fields(path) {
     val excerpt: TextField get() = TextField(fieldPath + "excerpt")
 }
 
+class ContributionFields(path: List<String> = emptyList()) : Fields(path) {
+    val author: MemberFields get() = MemberFields(fieldPath + "author")
+}
+
 class ContentFields(path: List<String> = emptyList()) : Fields(path) {
+    val author: MemberFields get() = MemberFields(fieldPath + "author")
     val commentCount: NumField get() = NumField(fieldPath + "commentCount")
     fun isPopular(): Expr = isA("Popular")
 }
 
 class PopularFields(path: List<String> = emptyList()) : Fields(path) {
+    val author: MemberFields get() = MemberFields(fieldPath + "author")
     val commentCount: NumField get() = NumField(fieldPath + "commentCount")
 }
 

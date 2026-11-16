@@ -1,0 +1,8 @@
+-- A shape other shapes take with `is`, declared as an act.
+act Dated {
+    due: Date
+}
+
+act SiteVisit is Dated {
+    visitor: text
+}

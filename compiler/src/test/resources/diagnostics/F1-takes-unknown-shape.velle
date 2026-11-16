@@ -1,0 +1,4 @@
+-- `is` naming a shape the spec does not declare.
+act SiteVisit is Dated {
+    visitor: text
+}

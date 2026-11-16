@@ -457,14 +457,19 @@ class Validator(private val model: Model) {
      * A cross-base union (Reference §9 extended across unrelated bases): the
      * property rule is unchanged, so its body may carry derived properties only
      * (Reference §9 — `frozen` has no base to name, a creation-entered capture is
-     * `initially` on each operand), and a transient operand is refused until
-     * OQ35's mixin lands (Reference §9).
+     * `initially` on each operand), and a transient operand is refused: a shape
+     * the acts take with `is` is the spelling that answers several requests with
+     * one rule (Reference §9, "Sharing a field across shapes").
      */
     private fun checkCrossBaseUnion(name: String, r: RefinementDecl, bases: Set<String>) {
+        // a taken shape is one declaration its takers inherit, so a transient taker is what
+        // the refusal below waits for (Reference §9, "Sharing a field across shapes")
+        if (name in model.sharedShapes) return
         bases.filter { it in model.transients }.forEach {
             diags.add(Diagnostic("V17", "'$name' composes transient act '$it' with unrelated shapes — " +
-                "a union with a transient operand is refused until unrelated shapes can share a declaration " +
-                "(Reference §9; OQ35): give the acts one declaration to inherit, or write one rule per act"))
+                "a union with a transient operand is refused, since every read over it would be a branch per act; " +
+                "declare the field the acts share on a shape they take with 'is' and write the rule over that shape " +
+                "(Reference §9), or write one rule per act"))
         }
         for (m in r.members) when (m) {
             is DerivedProp -> if (m.captured)
@@ -808,6 +813,12 @@ class Validator(private val model: Model) {
 
     private fun checkCreation(rule: RuleDecl, scope: String, c: Creation) {
         val shape = model.shapes[c.shape]
+        if (c.shape in model.sharedShapes) {
+            val takers = model.basesOf(c.shape).joinToString(" and ")
+            diags.add(Diagnostic("F1", "rule '${rule.name}' creates '${c.shape}', which has no records of its own: " +
+                "$takers ${if (model.basesOf(c.shape).size == 1) "is" else "are"} ${c.shape}; create one of them"))
+            return
+        }
         if (shape == null) {
             diags.add(Diagnostic("F1", "rule '${rule.name}' creates unknown shape '${c.shape}'"))
             return
@@ -3605,6 +3616,16 @@ class Validator(private val model: Model) {
                     else -> continue
                 }
                 val rel = type as? RelType ?: continue
+                // a field typed with a taken shape that a transient act takes would reference
+                // the act's record (Reference §9, "Sharing a field across shapes")
+                if (rel.shape in model.sharedShapes) {
+                    model.basesOf(rel.shape).filter { it in model.transients }.forEach { act ->
+                        diags.add(Diagnostic("V17", "'$owner.$mName' is typed with '${rel.shape}', and transient act '$act' is ${rel.shape} — " +
+                            "a record of it exists only within its own commit's transaction, so nothing durable " +
+                            "may point at it; copy the fields the outcome needs instead"))
+                    }
+                    continue
+                }
                 if (rel.shape !in model.transients) continue
                 // a part of a transient act's closure points at its container, and two
                 // shapes of one closure may point at each other (Reference §6)
@@ -3618,7 +3639,11 @@ class Validator(private val model: Model) {
         model.refinements.forEach { (name, r) -> checkMembers(name, r.members) }
 
         // V17: the transient shape's name may appear in no expression — even
-        // from its own refinement family, that is a read across acts
+        // from its own refinement family, that is a read across acts. The one
+        // exception: a rule or refinement over a shape a transient act takes with
+        // `is` runs inside that act's own commit, so narrowing to the act there
+        // reads the record at hand (Reference §9, "Sharing a field across shapes")
+        val transientSubjectsAt = transientSubjectsBySite()
         forEachSpecExpr { site, e ->
             val mentioned = when (e) {
                 is PathExpr -> e.root.takeIf { it in model.transients }
@@ -3627,6 +3652,7 @@ class Validator(private val model: Model) {
                 is SingularFor -> e.shape.takeIf { it in model.transients }
                 is ShapeForSource -> e.shape.takeIf { it in model.transients }
                 is IsExpr -> e.refinement?.takeIf { (model.baseOf(it) ?: it) in model.transients }
+                    ?.takeIf { (model.baseOf(it) ?: it) !in transientSubjectsAt[site].orEmpty() }
                 else -> null
             } ?: return@forEachSpecExpr
             diags.add(Diagnostic("V17", "$site reads transient ${model.transientKind(mentioned)} '$mentioned' — " +
@@ -3645,8 +3671,8 @@ class Validator(private val model: Model) {
 
         // V17: rules over a transient act fire only at its one commit
         for (rule in model.rules.values) {
-            val base = subjectScope(rule)?.let { model.baseOf(it) } ?: continue
-            if (base !in model.transients) continue
+            val subject = subjectScope(rule) ?: continue
+            val base = model.basesOf(subject).firstOrNull { it in model.transients } ?: continue
             if (rule.leaving)
                 diags.add(Diagnostic("V17", "rule '${rule.name}' — 'when ${rule.trigger.keyword.trim()}' over transient ${model.transientKind(base)} '$base' " +
                     "is meaningless: its refinements are evaluated exactly once, at the commit; there are no exits"))
@@ -3661,16 +3687,16 @@ class Validator(private val model: Model) {
         // refused configuration gets its response as the commit's refusal,
         // with nothing kept (Reference §4; §21).
         for (t in model.transients.filter { model.transientClosureOf[it] == it }) {
+            // a rule or `never` over a taken shape the act takes answers it too (Reference §9)
             val handlers = model.rules.values.filter {
-                !it.leaving && subjectScope(it)?.let { s -> model.baseOf(s) } == t
+                !it.leaving && subjectScope(it)?.let { s -> t in model.basesOf(s) } == true
             }
-            val refusals = model.nevers.filter { model.baseOfExpr(it.target) == t }
+            val refusals = model.nevers.filter { t in model.basesOfExpr(it.target) }
             val answers: List<List<Expr>?> =
                 handlers.map { refPredicateConjuncts(it.condition) } +
                     refusals.map { refPredicateConjuncts(it.target) }
-            val bare =
-                handlers.any { (it.condition as? RefName)?.let { c -> c.name == t && c.where == null } == true } ||
-                    refusals.any { (it.target as? RefName)?.let { c -> c.name == t && c.where == null } == true }
+            fun bareOver(e: RefExpr) = (e as? RefName)?.let { c -> (c.name == t || c.name in model.sharedShapes) && c.where == null } == true
+            val bare = handlers.any { bareOver(it.condition) } || refusals.any { bareOver(it.target) }
             val complementPair = answers.any { a ->
                 answers.any { b ->
                     a !== b && a?.singleOrNull()?.let { p ->
@@ -3687,6 +3713,20 @@ class Validator(private val model: Model) {
                     "with no condition, refuse the rest with 'never ($t where not P)', or write one rule on the " +
                     "opposite condition whose reason is a conditional value (Reference §4)"))
         }
+    }
+
+    /** The transient acts each rule's and refinement's subject spans, by the site name
+     *  [forEachSpecExpr] reports: non-empty only for a subject that is a shape such an act
+     *  takes with `is`, or a refinement of one. */
+    private fun transientSubjectsBySite(): Map<String, Set<String>> {
+        val bySite = mutableMapOf<String, Set<String>>()
+        for (rule in model.rules.values) {
+            val subject = subjectScope(rule) ?: continue
+            bySite["rule '${rule.name}'"] = model.basesOf(subject).filter { it in model.transients }.toSet()
+        }
+        for (name in model.refinements.keys)
+            bySite["shape '$name'"] = model.basesOf(name).filter { it in model.transients }.toSet()
+        return bySite
     }
 
     /**

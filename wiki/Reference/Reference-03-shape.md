@@ -9,7 +9,7 @@ shape Customer {
 }
 ```
 
-Each line names a property and its [type](Reference-05-Scalars). Instances of a plain `shape` are created only by [rules](Reference-11-rule-when-on). A shape declared [`act`](Reference-04-State-and-commits) can also be submitted from outside the system.
+Each line names a property and its [type](Reference-05-Scalars). Instances of a plain `shape` are created only by [rules](Reference-11-rule-when-on). A shape declared [`act`](Reference-04-State-and-commits) can also be submitted from outside the system. A shape takes another shape's properties as its own by naming it after `is`, `shape SiteVisit is Dated { ... }` ([§9, "Sharing a field across shapes"](Reference-09-Composing-refinements#sharing-a-field-across-shapes-is)).
 
 Shape names start uppercase, property names lowercase ([checks.md, F1](checks#f1--name-resolution-and-casing)).
 

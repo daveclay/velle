@@ -4870,6 +4870,7 @@ data class Patient(
     val isMultiplePrescribers: Boolean,
 ) : Ref<Patient>, Recipient {
     override val shape: String get() = "Patient"
+    override val ref: Ref<Patient> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -4884,6 +4885,7 @@ data class Prescriber(
     val discontinuations: List<Ref<Discontinuation>>,
 ) : Ref<Prescriber>, Recipient {
     override val shape: String get() = "Prescriber"
+    override val ref: Ref<Prescriber> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -5661,7 +5663,7 @@ data class ReceivedPurchaseOrder(
 
 interface Recipient : Keyed {
     /** this record as a reference typed by the union, for a parameter that takes one */
-    val ref: Ref<Recipient> get() = Ref.Persisted(shape, key)
+    val ref: Ref<Recipient>
     val notices: List<Ref<Notice>>
 }
 

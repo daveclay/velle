@@ -112,7 +112,7 @@ Two whole businesses have been written against v0, each starting from the domain
 
 | # | finding | verdict | where it stands |
 |---|---|---|---|
-| B1 | a predicate over a cross-base union is not name-checked: a field the operands declare separately reads fine in a `never` over the union, against Reference §9, and the runtime resolves it per instance; a nonsense name passes too (`Validator.walkRefExpr` skips a subject with no single base) | GAP | OQ44 §2 item 10; the want behind it is OQ35 |
+| B1 | a predicate over a cross-base union is not name-checked: a field the operands declare separately reads fine in a `never` over the union, against Reference §9, and the runtime resolves it per instance; a nonsense name passes too (`Validator.walkRefExpr` skips a subject with no single base) | GAP | OQ44 §2 item 10; the want behind it is Reference §9 "Sharing a field across shapes" |
 | B2 (retired 2026-10-21 by OQ63: a `one` field named in `with` lets the origin arrive nested in the batch, Reference §6; the probe now shows the construct) | the batch and its origin cannot arrive in one commit: a closure creates parts pointing back at the act, the batch points forward; the unclaimed origin is reportable state (`UnclaimedOrigin`) and a `never` over it refuses the origin's own commit | TAX | OQ63 |
 | B3 | the inferred inverse of `PeptideBatch.origin` is `peptideBatchs` — Reference §6's "pluralized with `s`" is literal; the spec declares the view under the readable name on the union body | TAX | OQ92 |
 | B4 | `origin is Composition` does not license `origin.components` as a filter's source; the spec filters over the declared shape and matches the composition by comparison | TAX | OQ44 §3 (S14's form) |

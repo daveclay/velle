@@ -53,7 +53,10 @@ File boundaries carry no meaning. A spec may span any number of `.velle` files; 
 ## Shape declarations
 
 ```
-shapeDecl     := "shape" ShapeName "{" property* "}"
+shapeDecl     := "shape" ShapeName takesClause? "{" property* "}"
+
+takesClause   := "is" ShapeName ("," ShapeName)*    -- the shapes whose properties this one takes as its own
+                                                    -- (Reference §9, "Sharing a field across shapes")
 
 property      := storedProp | derivedProp | timestampProp | uniqueKey
 
@@ -205,7 +208,7 @@ The requirement spelling of a prohibition ([Reference §21](Reference-21-never))
 ## `act` declarations
 
 ```
-actDecl       := "transient"? "act" ShapeName byClause? "{" members "}" withClause?
+actDecl       := "transient"? "act" ShapeName takesClause? byClause? "{" members "}" withClause?
 
 byClause      := "by" ShapeName ("as" Identifier)?            -- the actor (Reference §22, "The actor")
 visibleClause := "visible" "to" (ShapeName ("as" Identifier)? ("where" predicate)? | "anyone")

@@ -57,7 +57,7 @@ Which fields get this type, and what `New` means on each, is fixed by the spec:
 | a `many` field typed by a shape that arrives elsewhere in the act's closure | each element is `Existing` or `New`; the list is a set |
 | any other `one` or `many` field | the field takes `Ref<T>`, or a list of them, and has no reference type |
 
-A field never has both meanings. When the target is a static union, or more than one input class creates it, the `New` case takes an interface the creating classes implement, named `New` followed by the target's name. From the batches example:
+A field never has both meanings. When the target is a static union, a shape other shapes take with `is`, or more than one input class creates it, the `New` case takes an interface the creating classes implement, named `New` followed by the target's name. An act that takes a shape with `is` carries the taken fields in its own input class, supplied like any other; the taken shape has no input class. From the batches example:
 
 ```kotlin
 val batch = NewPeptideBatch(

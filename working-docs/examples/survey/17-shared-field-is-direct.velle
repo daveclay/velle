@@ -1,0 +1,61 @@
+-- Both sentences said once. "Any change to an entry touches the entry": the
+-- two acts take `entry` from one shape with `is`, and one rule over that shape
+-- reads it directly. "A site visit or a plot inspection is overdue when its
+-- due date has passed": the two shapes take `due` from one shape, one
+-- refinement over it reads `due`, and one rule reminds. The taken shapes have
+-- no records of their own; `Entry.entryChanges` is the one inverse `entry`
+-- infers, holding renames and moves alike (Reference §9, "Sharing a field
+-- across shapes").
+act Entry {
+    name: text unique
+    changeCount: integer = count(entryChanges)
+}
+
+shape EntryChange {
+    entry: one Entry
+}
+
+act RenameEntry is EntryChange {
+    newName: text
+}
+
+act MoveEntry is EntryChange {
+    newSite: text
+}
+
+shape Touch {
+    entry: one Entry
+    touchedOn: timestamp on create
+}
+
+rule TouchEntry when EntryChange {
+    Touch from { entry: this.entry }
+}
+
+act Site {
+    name: text unique
+}
+
+shape Dated {
+    due: Date
+}
+
+act SiteVisit is Dated {
+    site: one Site
+}
+
+act PlotInspection is Dated {
+    site: one Site
+    plot: text
+}
+
+shape Overdue = Dated where due < today
+
+shape Reminder {
+    about: one Dated
+    sentOn: Date
+}
+
+rule RemindOverdue when Overdue on Daily {
+    Reminder from { about: this, sentOn: today }
+}

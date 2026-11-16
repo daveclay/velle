@@ -36,7 +36,14 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     }
 
     /** The spec's declarations behind Velle's own: the prelude is parsed into every model ahead of the spec. */
-    private val allDecls: List<Decl> = PRELUDE + rawDecls
+    /** The `is` clauses resolved (Reference §9, "Sharing a field across shapes"): takers carry
+     *  the taken members, and each taken shape is a static union over its takers. */
+    private val shared = SharedShapes(PRELUDE + rawDecls)
+
+    /** The shapes other shapes take with `is`, by name, as declared; none has records of its own. */
+    val sharedShapes: Map<String, ShapeDecl> get() = shared.taken
+
+    private val allDecls: List<Decl> = shared.rewritten
 
     /** The shapes Velle declares for every system, written in Velle ([PRELUDE]): `Tick`, the record of a schedule's run (Reference §17). */
     val builtin: Set<String> = PRELUDE.filterIsInstance<ShapeDecl>().map { it.name }.toSet()
@@ -107,6 +114,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     init {
         diagnostics.addAll(registry.diagnostics)
+        diagnostics.addAll(shared.diagnostics)
         val (scope, ambiguous) = resolveTypeScope()
         typeScope = scope
         ambiguousTypeNames = ambiguous
@@ -449,12 +457,12 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     /** The single base shape of a shape or ordinary refinement; null for a
      *  cross-base union (use [basesOf]) or an unresolvable name (F1). */
-    fun baseOf(name: String): String? = basesOf(name).singleOrNull()
+    fun baseOf(name: String): String? = if (name in sharedShapes) null else basesOf(name).singleOrNull()
 
     fun baseOfExpr(expr: RefExpr): String? = basesOfExpr(expr).singleOrNull()
 
     /** A refinement whose members span more than one base shape. */
-    fun isCrossBase(name: String): Boolean = basesOf(name).size > 1
+    fun isCrossBase(name: String): Boolean = name in sharedShapes || basesOf(name).size > 1
 
     /**
      * A static union: a named refinement that is a pure `or` of base shapes (or
@@ -463,7 +471,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
      * target type (Reference §6, the static-union field-type rule).
      */
     fun isStaticUnion(name: String): Boolean =
-        refinements[name]?.let { pureOr(it.expr) && basesOf(name).size > 1 } == true
+        name in sharedShapes || refinements[name]?.let { pureOr(it.expr) && basesOf(name).size > 1 } == true
 
     private fun pureOr(e: RefExpr): Boolean = when (e) {
         is RefName -> e.where == null && (e.name in shapes || isStaticUnion(e.name))
@@ -513,7 +521,10 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     private fun computeMembers(scope: String): Map<String, MemberInfo> {
         val out = linkedMapOf<String, MemberInfo>()
-        fun add(owner: String, m: Member) {
+        fun add(scopeName: String, m: Member) {
+            // a member taken from another shape with `is` is that shape's one declaration
+            // on every taker (Reference §9, "Sharing a field across shapes")
+            val owner = m.declaredOn ?: scopeName
             when (m) {
                 is StoredProp -> out[m.name] = MemberInfo(m.name, owner, typeOf(m.type), stored = true, visible = m.visible, transient = m.transient)
                 // a derived property that states no type holds `Unknown` until every member is in,
@@ -546,15 +557,15 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             // (Reference §6; the `Transfer` example).
             for ((otherName, other) in shapes) {
                 if (otherName in transients && !sameTransientClosure(otherName, scope)) continue
-                // a field typed with a static union targets every operand (Reference §9):
-                // `Comment.target: one Content` puts `comments` on each operand
-                val targeting = other.members.filterIsInstance<StoredProp>()
-                    .filter { (it.type as? RelType)?.shape?.let { t -> typeAccepts(t, scope) } == true }
-                if (targeting.size != 1) continue
-                val f = targeting.single()
-                val inverse = otherName.replaceFirstChar { it.lowercase() } + "s"
-                out.putIfAbsent(inverse, MemberInfo(inverse, scope, VType.Coll(otherName), stored = false,
-                    inverse = InverseInfo(otherName, f.name, (f.type as RelType).many)))
+                // a field taken from another shape infers its inverse under that shape's name, below
+                inferInverse(scope, otherName, other.members.filter { it.declaredOn == null }, out)
+            }
+            // a field declared on a taken shape is one declaration, so it infers one inverse
+            // named from the taken shape and spanning every taker (Reference §9, "Sharing a
+            // field across shapes"); none when a taker is transient, as for any transient shape
+            for ((takenName, takenShape) in sharedShapes) {
+                if (basesOf(takenName).any { it in transients }) continue
+                inferInverse(scope, takenName, takenShape.members, out)
             }
             out["id"] = MemberInfo("id", scope, VType.Id, stored = false)
             return resolveUntyped(scope, out)
@@ -572,6 +583,9 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
                     val first = infos.first()
                     val shared = infos.all { it.sameDeclarationAs(first) }
                     if (!shared) continue
+                    // over a taken shape, a taker's own member is never shared, even with one taker
+                    if (scope in sharedShapes && first.inverse == null && first.owner !in sharedShapes) continue
+                    if (scope in sharedShapes && first.inverse != null && !inverseCovers(first.inverse, scope)) continue
                     out[n] = if (first.inverse != null) first.copy(owner = scope) else first
                 }
                 out["id"] = MemberInfo("id", scope, VType.Id, stored = false)
@@ -582,6 +596,19 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             return resolveUntyped(scope, out)
         }
         return out
+    }
+
+    /** The inverse collection [declaringName]'s one field targeting [scope] infers onto it, if
+     *  exactly one does (Reference §6). A field typed with a static union targets every operand
+     *  (Reference §9): `Comment.target: one Content` puts `comments` on each operand. */
+    private fun inferInverse(scope: String, declaringName: String, members: List<Member>, out: LinkedHashMap<String, MemberInfo>) {
+        val targeting = members.filterIsInstance<StoredProp>()
+            .filter { (it.type as? RelType)?.shape?.let { t -> typeAccepts(t, scope) } == true }
+        if (targeting.size != 1) return
+        val field = targeting.single()
+        val inverse = declaringName.replaceFirstChar { it.lowercase() } + "s"
+        out.putIfAbsent(inverse, MemberInfo(inverse, scope, VType.Coll(declaringName), stored = false,
+            inverse = InverseInfo(declaringName, field.name, (field.type as RelType).many)))
     }
 
     /** Every member of [scope] with its type: a derived property that states none takes its
@@ -634,6 +661,15 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     /** The function dispatch (OQ66): a call resolves to the signature its arguments match. */
     val functionResolver: FunctionResolver by lazy { FunctionResolver(registry) { c -> scalarOf(c.name) } }
+
+    /** Whether the field behind an inverse is typed so that every record of [scope] is a target:
+     *  with the taken shape itself, or with a union of every taker. */
+    private fun inverseCovers(inverse: InverseInfo, scope: String): Boolean {
+        val declaring = shapes[inverse.shape] ?: sharedShapes[inverse.shape] ?: return false
+        val fieldType = (declaring.members.filterIsInstance<StoredProp>().firstOrNull { it.name == inverse.field }?.type as? RelType)?.shape
+            ?: return false
+        return fieldType == scope || basesOf(scope).all { typeAccepts(fieldType, it) }
+    }
 
     private fun MemberInfo.sameDeclarationAs(o: MemberInfo): Boolean = name == o.name && when {
         inverse != null || o.inverse != null -> inverse == o.inverse
@@ -701,7 +737,12 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
                 null
             }
             m.inverse != null ->
-                if (m.inverse.many) {
+                if (m.inverse.shape in sharedShapes) {
+                    error("V22", "'act ... with ${entry.name}': a closure edge's parts are of one shape, and '${entry.name}' holds " +
+                        basesOf(m.inverse.shape).joinToString(" and ") + ", every shape that is ${m.inverse.shape}; " +
+                        "name one of them with a view of its own, '<name>: many <Shape> = (<Shape> where ${m.inverse.field} == this)'")
+                    null
+                } else if (m.inverse.many) {
                     error("V22", "'act ... with ${entry.name}': the inverse of a declared `many` " +
                         "(an m2m edge set) cannot ride a closure — its members are existing instances, " +
                         "named by reference; $fix")

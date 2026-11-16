@@ -1,0 +1,9 @@
+-- A shape declaring `due` and taking it from another shape.
+shape Dated {
+    due: Date
+}
+
+act SiteVisit is Dated {
+    due: Date
+    visitor: text
+}

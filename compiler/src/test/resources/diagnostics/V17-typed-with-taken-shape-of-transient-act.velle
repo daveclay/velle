@@ -1,0 +1,20 @@
+-- A field typed with a taken shape that a transient act takes.
+act Entry {
+    name: text unique
+}
+
+shape EntryChange {
+    entry: one Entry
+}
+
+transient act RenameEntry is EntryChange {
+    newName: text
+}
+
+shape Touch {
+    change: one EntryChange
+}
+
+rule TouchEntry when EntryChange {
+    Touch from { change: this }
+}

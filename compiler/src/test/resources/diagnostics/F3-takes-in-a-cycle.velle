@@ -1,0 +1,8 @@
+-- Two shapes each taking the other.
+shape Scheduled is Dated {
+    slot: text
+}
+
+shape Dated is Scheduled {
+    due: Date
+}

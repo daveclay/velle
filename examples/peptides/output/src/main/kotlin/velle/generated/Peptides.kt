@@ -3448,6 +3448,7 @@ data class GreenhouseTrial(
     val isCompromisedTrial: Boolean,
 ) : Ref<GreenhouseTrial>, Trial {
     override val shape: String get() = "GreenhouseTrial"
+    override val ref: Ref<GreenhouseTrial> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -3698,6 +3699,7 @@ data class FieldTrial(
     val isHaltedTrial: Boolean,
 ) : Ref<FieldTrial>, Trial {
     override val shape: String get() = "FieldTrial"
+    override val ref: Ref<FieldTrial> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -4609,7 +4611,7 @@ data class HaltedTrial(
 
 interface Trial : Keyed {
     /** this record as a reference typed by the union, for a parameter that takes one */
-    val ref: Ref<Trial> get() = Ref.Persisted(shape, key)
+    val ref: Ref<Trial>
     val collectionTasks: List<Ref<CollectionTask>>
 }
 

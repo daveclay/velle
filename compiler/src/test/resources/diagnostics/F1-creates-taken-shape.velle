@@ -1,0 +1,20 @@
+-- A rule creating a shape other shapes take, which has no records of its own.
+act Site {
+    name: text unique
+}
+
+shape Dated {
+    due: Date
+}
+
+act SiteVisit is Dated {
+    site: one Site
+}
+
+act PlotInspection is Dated {
+    site: one Site
+}
+
+rule Mint when Site {
+    Dated from { due: today }
+}

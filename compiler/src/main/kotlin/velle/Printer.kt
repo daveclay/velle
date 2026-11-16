@@ -12,9 +12,10 @@ object Printer {
         is ShapeDecl -> buildString {
             append(if (d.exposed) (if (d.transient) "transient act " else "act ") else "shape ")
             append(d.name)
+            if (d.takes.isNotEmpty()) append(" is ${d.takes.joinToString(", ")}")
             d.actor?.let { append(" by ${it.shape}"); if (it.named) append(" as ${it.name}") }
             append(" {\n")
-            d.members.filterNot { it is ActorProp }.forEach { append("    ${member(it)}\n") }
+            d.members.filterNot { it is ActorProp || it.declaredOn != null }.forEach { append("    ${member(it)}\n") }
             append("}")
             if (d.with.isNotEmpty()) append(" with " + withClause(d.with))
         }

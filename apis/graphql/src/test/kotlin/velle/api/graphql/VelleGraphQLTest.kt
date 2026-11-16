@@ -247,6 +247,17 @@ class VelleGraphQLTest {
     }
 
     @Test
+    fun `a shape other shapes take with is becomes an interface with its fields, implemented by each taker`() {
+        val gallery = sdl("gallery")
+        assertTrue("\ninterface Contribution {" in gallery, gallery)
+        assertTrue("author: Member!" in gallery.substringAfter("\ninterface Contribution {").substringBefore("\n}"), gallery)
+        assertTrue("\ntype Post implements Contribution {" in gallery, gallery)
+        assertTrue("\ntype Photo implements Contribution {" in gallery, gallery)
+        assertTrue("contributions(after: String, first: Int, orderBy: [String!]!, where: String): ContributionPage!" in gallery, gallery)
+        assertTrue("\nunion Content = Photo | Post" in gallery, "the closed union stays a union: $gallery")
+    }
+
+    @Test
     fun `only a nested input has asNew`() {
         assertTrue("asNew" !in inputType(sdl("billing"), "SignUpInput"))
         assertTrue("\n  asNew: Int\n" in inputType(sdl("orders"), "OrderOrderLineInput"))

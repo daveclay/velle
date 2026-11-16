@@ -349,8 +349,9 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 -- record (B1–B8).
 --   · the direct translation. Three base shapes under a union share nothing
 --     they declare separately (Reference §9), so a common field like the
---     quantity is unreadable from the union by the Reference. That is the
---     cross-shape mixin gap, OQ35. (The validator does not enforce the rule on
+--     quantity is unreadable from the union by the Reference; declaring it once
+--     on a shape the three take with `is` is the spelling (Reference §9,
+--     "Sharing a field across shapes"). (The validator does not enforce the rule on
 --     a predicate over the union today, and the runtime then resolves the name
 --     per instance — the accepted-by-accident spelling Reference §9 rejects.)
 --   · "a mixture never contains itself, however many steps removed". Said
@@ -748,6 +749,7 @@ data class Fermentation(
     override val peptideBatches: List<Ref<PeptideBatch>>,
 ) : Ref<Fermentation>, Origin {
     override val shape: String get() = "Fermentation"
+    override val ref: Ref<Fermentation> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -760,6 +762,7 @@ data class ExternalOrder(
     override val peptideBatches: List<Ref<PeptideBatch>>,
 ) : Ref<ExternalOrder>, Origin {
     override val shape: String get() = "ExternalOrder"
+    override val ref: Ref<ExternalOrder> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -773,6 +776,7 @@ data class Composition(
     override val peptideBatches: List<Ref<PeptideBatch>>,
 ) : Ref<Composition>, Origin {
     override val shape: String get() = "Composition"
+    override val ref: Ref<Composition> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -827,7 +831,7 @@ data class DepletionNotice(
 
 interface Origin : Keyed {
     /** this record as a reference typed by the union, for a parameter that takes one */
-    val ref: Ref<Origin> get() = Ref.Persisted(shape, key)
+    val ref: Ref<Origin>
     val peptideBatchs: List<Ref<PeptideBatch>>
     val peptideBatches: List<Ref<PeptideBatch>>
 }

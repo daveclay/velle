@@ -1914,23 +1914,29 @@ class VelleSystem(
             // a tick deletes nothing: the deletion-side forms are transaction-bound
             // and the validator refuses them a schedule (V28)
             if (rule.trigger == Trigger.DELETED) continue
+            // the subjects come from every base shape the condition spans: one for an
+            // ordinary refinement, each operand for a union or a taken shape (Reference §9)
+            val bases = model.basesOfExpr(rule.condition)
+            if (bases.isEmpty()) continue
             val subjects: List<Long> =
                 if (rule.leaving) {
                     // leavers at the tick commit itself: member under the previous
                     // tick's clock, not a member now
-                    val base = model.baseOfExpr(rule.condition) ?: continue
-                    idsOf(base).filter {
-                        membershipAt(previous, it, rule.condition) &&
-                            !evaluator.memberOfRefExpr(it, rule.condition)
+                    bases.flatMap { base ->
+                        idsOf(base).filter {
+                            membershipAt(previous, it, rule.condition) &&
+                                !evaluator.memberOfRefExpr(it, rule.condition)
+                        }
                     }
                 } else {
                     // subject selection runs against settled state (each firing is
                     // its own later transaction), so the pre-filter is sound with
                     // no self-containment caveat: the resolver's candidate superset
                     // is re-checked by the authoritative predicate right here
-                    val base = model.baseOfExpr(rule.condition) ?: continue
-                    idsOfCandidates(base, queryCompiler().filterFor(rule.condition))
-                        .filter { evaluator.memberOfRefExpr(it, rule.condition) }
+                    val filter = queryCompiler().filterFor(rule.condition)
+                    bases.flatMap { base ->
+                        idsOfCandidates(base, filter).filter { evaluator.memberOfRefExpr(it, rule.condition) }
+                    }
                 }
             for (subject in subjects) {
                 // each firing is its own transaction; a straggler blocks only itself.

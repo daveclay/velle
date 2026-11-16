@@ -85,7 +85,7 @@ class UnionTest {
     }
 
     @Test
-    fun `a union with a transient operand is refused until OQ35`() {
+    fun `a union with a transient operand is refused, and a shape the acts take is the spelling offered`() {
         val src = base + """
             transient act ChangeName { member: one Member, newName: text }
             transient act ChangeEmail { member: one Member, newEmail: text }
@@ -96,6 +96,7 @@ class UnionTest {
             rule Remail when ChangeEmail { Touch from { touchedOn: now } }
         """.trimIndent()
         assertTrue("V17" in codes(src), "got: ${diags(src)}")
+        assertTrue(diags(src).any { it.code == "V17" && "take with 'is'" in it.message }, "got: ${diags(src)}")
     }
 
     @Test

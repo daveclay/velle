@@ -663,19 +663,22 @@ object Codegen {
                 }
                 line(") : ${supertypes.joinToString(", ")} {")
                 line("    override val shape: String get() = \"$target\"")
+                // one `ref` for every union this record is in: a `Ref<Post>` is a `Ref<Content>` and a `Ref<Contribution>` alike
+                if (unionNames.isNotEmpty()) line("    override val ref: Ref<$root> get() = this")
                 line("    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key")
                 line("    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()")
                 line("}")
             }
         }
 
-        /** A static union (Reference §9) as an interface its operands' model objects implement:
-         *  the shared members, the union's own derived members, and its membership flags.
-         *  Covariance makes a `Ref<Post>` a `Ref<Content>`, which is how an operand widens. */
+        /** A static union (Reference §9), or a shape others take with `is`, as an interface its
+         *  operands' model objects implement: the shared members, the union's own derived members,
+         *  and its membership flags. Covariance makes a `Ref<Post>` a `Ref<Content>`, which is how
+         *  an operand widens: a model object passes wherever a reference typed by the union is taken. */
         fun unionInterface(union: String) {
             line("interface $union : Keyed {")
             line("    /** this record as a reference typed by the union, for a parameter that takes one */")
-            line("    val ref: Ref<$union> get() = Ref.Persisted(shape, key)")
+            line("    val ref: Ref<$union>")
             for ((name, m) in dataMembers(union)) line("    val $name: ${unionFieldType(union, name, m.type)}")
             membershipsOf(union).forEach { r -> line("    val is$r: Boolean") }
             line("}")

@@ -24,18 +24,33 @@ internal object ClassDiagramGen {
                 "relationships, labeled with the declaring field (and the inferred inverse collection, " +
                 "where one exists). A hollow-triangle arrow reads \"is a refinement of\": membership is " +
                 "decided by the predicate in the attached note, instant by instant, not fixed at creation. " +
-                "Dashed arrows connect a composed refinement to the refinements it is built from."
+                "Dashed arrows connect a composed refinement to the refinements it is built from. " +
+                "A dotted hollow-triangle arrow reads \"is\": the shape takes the pointed-at shape's " +
+                "declarations as its own, and that shape has no records of its own."
         )
         appendLine()
         appendLine("```mermaid")
         appendLine("classDiagram")
         appendLine("    direction LR")
         val edges = mutableListOf<String>()
+        // a shape other shapes take with `is` (Reference §9): drawn once with its own members,
+        // and each taker points at it; the taker lists only what it declares itself
+        for ((name, shape) in model.sharedShapes) {
+            appendLine("    class $name {")
+            appendLine("        <<taken>>")
+            for (m in shape.members) {
+                if (m is StoredProp && m.type is RelType) { edges.add(relEdge(model, name, m.name, m.type)); continue }
+                memberLine(model, name, m)?.let { appendLine("        $it") }
+            }
+            appendLine("    }")
+        }
         for ((name, shape) in model.shapes) {
             appendLine("    class $name {")
             if (name in model.exposed)
                 appendLine("        <<${if (name in model.transients) "transient act" else "act"}>>")
+            shape.takes.forEach { taken -> edges.add("$taken <|.. $name : is") }
             for (m in shape.members) {
+                if (m.declaredOn != null) continue
                 if (m is StoredProp && m.type is RelType) {
                     edges.add(relEdge(model, name, m.name, m.type))
                     continue
