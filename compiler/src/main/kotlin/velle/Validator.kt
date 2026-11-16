@@ -14,9 +14,9 @@ import java.math.BigDecimal
  * Where checks.md calls for a prover (predicate disjointness, never-induction,
  * confluence), v0 proves the syntactic cases and fails closed on the rest —
  * calibration against realistic specs is OQ16's deferred work. Not yet
- * implemented (tracked in checks.md): V11's `not (x is A)`, V12
- * at-most-one proofs beyond the refinement slice (base-shape to-one-inverse
- * proofs stay runtime-enforced), and the A-series beyond A4/A5
+ * implemented (tracked in checks.md): V12 at-most-one proofs beyond the
+ * refinement slice (base-shape to-one-inverse proofs stay runtime-enforced),
+ * and the A-series beyond A4/A5
  * (drift-exposed partitions and contention — advisory, via Validator.advisories).
  */
 class Validator(private val model: Model) {
@@ -487,10 +487,9 @@ class Validator(private val model: Model) {
 
     private fun walkRefExpr(e: RefExpr) {
         when (e) {
-            is RefName -> {
-                val base = model.baseOf(e.name)
-                e.where?.let { if (base != null) checkExpr(it, e.name) }
-            }
+            // a predicate over a union reads the union's own members (Reference §9): what every
+            // operand takes from one declaration, the shared inverses, and anything narrowed
+            is RefName -> e.where?.let { if (model.basesOf(e.name).isNotEmpty()) checkExpr(it, e.name) }
             is RefNot -> walkRefExpr(e.inner)
             is RefAnd -> { walkRefExpr(e.left); walkRefExpr(e.right) }
             is RefOr -> { walkRefExpr(e.left); walkRefExpr(e.right) }
@@ -820,7 +819,10 @@ class Validator(private val model: Model) {
             return
         }
         if (shape == null) {
-            diags.add(Diagnostic("F1", "rule '${rule.name}' creates unknown shape '${c.shape}'"))
+            val operands = model.refinements[c.shape]?.let { model.basesOf(c.shape) }.orEmpty()
+            diags.add(if (operands.isEmpty()) Diagnostic("F1", "rule '${rule.name}' creates unknown shape '${c.shape}'")
+                else Diagnostic("F1", "rule '${rule.name}' creates '${c.shape}', which has no records of its own: " +
+                    "a record of it is a ${operands.joinToString(" or a ")}; create one of them (Reference §9)"))
             return
         }
         c.forExpr?.let { forE ->
@@ -881,6 +883,13 @@ class Validator(private val model: Model) {
      *  nested ones, so a collection filter's element scope never captures it. */
     private var thisScope: String? = null
 
+    /** Checks [body] with `this` naming a record of [scope]: a walk's condition is asked of each record reached. */
+    private inline fun withThisScope(scope: String, body: () -> Unit) {
+        val outer = thisScope
+        thisScope = scope
+        try { body() } finally { thisScope = outer }
+    }
+
     /** Name-resolution walk shared by predicates and values (F1, F2 closed list). */
     private fun checkExpr(e: Expr, scope: String, allowGenerator: Boolean = false) {
         val outer = thisScope
@@ -900,7 +909,7 @@ class Validator(private val model: Model) {
             is Binary -> {
                 checkExpr(e.left, scope)
                 // a conjunction narrows what follows it (Reference §10)
-                if (e.op == "and") withNarrowing(narrowingsOf(e.left)) { withPresence(e.left, holds = true, scope) { checkExpr(e.right, scope) } }
+                if (e.op == "and") withNarrowing(narrowingsOf(e.left, scope)) { withPresence(e.left, holds = true, scope) { checkExpr(e.right, scope) } }
                 else checkExpr(e.right, scope)
                 // the text operators take text on both sides (Reference §10; OQ51 R1);
                 // `values contains x` over a `many` of values takes an element (Reference §5)
@@ -953,7 +962,7 @@ class Validator(private val model: Model) {
             is NotExpr -> checkExpr(e.inner, scope)
             is IfExpr -> {
                 checkExpr(e.condition, scope)
-                withNarrowing(narrowingsOf(e.condition)) { withPresence(e.condition, holds = true, scope) { checkExpr(e.thenExpr, scope) } }
+                withNarrowing(narrowingsOf(e.condition, scope)) { withPresence(e.condition, holds = true, scope) { checkExpr(e.thenExpr, scope) } }
                 withNarrowing(complementNarrowingsOf(e.condition, scope)) { withPresence(e.condition, holds = false, scope) { checkExpr(e.elseExpr, scope) } }
             }
             is IsExpr -> {
@@ -1010,6 +1019,12 @@ class Validator(private val model: Model) {
                 checkExpr(e.forExpr, scope)
                 if (e.shape !in model.shapes && e.shape !in model.refinements)
                     diags.add(Diagnostic("F1", "unknown shape '${e.shape}'"))
+                else if (typeMatchedFields(e.shape, e.forExpr, scope).size > 1)
+                    // a field typed with a union matches an operand's record too (Reference §14)
+                    diags.add(Diagnostic("V13", "'(${e.shape} for ${Printer.expr(e.forExpr)})' — 'for' matches " +
+                        "${typeMatchedFields(e.shape, e.forExpr, scope).joinToString(" and ") { "'${e.shape}.$it'" }}, " +
+                        "and a singular reference names one field; select the record through the field meant, " +
+                        "first(${e.shape} where <field> == ${Printer.expr(e.forExpr)} by <field>) (Reference §14)"))
                 else valueKind(scalarTypeOf(e.forExpr, scope))?.let { kind ->
                     // the subject after `for` is a record (Reference §10); a value here means
                     // the author wants a record found by one of its fields, which is a selection
@@ -1064,7 +1079,9 @@ class Validator(private val model: Model) {
             else if (n == 1) diags.add(Diagnostic("A2", "'$spelled' — one step through '${e.rel}' is '${e.rel}' itself; " +
                 "read the relationship, or walk further", advisory = true))
         }
-        e.until?.let { checkExpr(it, scope) }
+        // the condition is asked of each record reached, so over a union it reads the union's
+        // members with `this` as that record (Reference §7; D2 of the union stress pass)
+        e.until?.let { cond -> if (model.isStaticUnion(target)) withThisScope(target) { checkExpr(cond, target) } else checkExpr(cond, scope) }
     }
 
     private fun isRegexType(t: VType?): Boolean = ((t as? VType.Optional)?.inner ?: t) == VType.Ext(RegexType.QUALIFIED_NAME)
@@ -1640,6 +1657,8 @@ class Validator(private val model: Model) {
             // and anything nested inside it (Reference §10, `as`)
             b.alias?.let { aliasScopes[it] = element; introduced.add(it) }
         }
+        // `(claims where PaidClaim)` holds members of `PaidClaim`, so its body properties are read on each (Reference §10)
+        c.where?.let { model.membershipAtomOf(it, element) }?.let { element = it }
         c.where?.let { checkExpr(it, element) }
         sumField?.let {
             val m = model.membersOf(element)[it]
@@ -1676,7 +1695,7 @@ class Validator(private val model: Model) {
     private fun resolvePath(p: PathExpr, scope: String) {
         // a narrowed prefix (`target is Post` governing this branch) resolves the
         // rest of the path against the narrowed scope — V11's union slice
-        narrowedPrefix(p)?.let { (k, sc) -> walkSegs(sc, p.segs.drop(k)); return }
+        narrowedPrefix(p)?.let { (k, sc) -> walkSegs(sc, p.segs.drop(k), p); return }
         // a rule's `by Shape?`: the actor may be absent on some path to the
         // trigger (V31), so a read through it needs an `is some` first, as any
         // optional does (Reference §10)
@@ -1700,27 +1719,41 @@ class Validator(private val model: Model) {
                     val hint = if (p.root == "actor" && model.shapes.values.any { it.actor != null })
                         " — 'actor' is what an act's `by` clause binds in the act's own scope, and what a rule reads " +
                         "when its header declares `by <Shape>?` (Reference §22, \"The actor\")" else ""
-                    diags.add(Diagnostic("F1", "'${p.root}' is not a member of '$scope' " +
+                    diags.add(declaredSeparately(p.root, scope, "this.${p.root}") ?: Diagnostic("F1", "'${p.root}' is not a member of '$scope' " +
                         "(bare names resolve in the innermost scope only — use this.<field> for the subject)$hint"))
                     return
                 }
                 m.type.instanceShape() ?: (m.type as? VType.Coll)?.shape
             }
         }
-        walkSegs(current, p.segs)
+        walkSegs(current, p.segs, p)
     }
 
-    private fun walkSegs(start: String?, segs: List<Seg>) {
+    private fun walkSegs(start: String?, segs: List<Seg>, path: PathExpr) {
         var current = start
         for (seg in segs) {
             val sc = current ?: return
             val m = model.membersOf(sc)[seg.name]
             if (m == null) {
-                diags.add(Diagnostic("F1", "'${seg.name}' is not a member of '$sc'"))
+                val read = Printer.expr(PathExpr(path.root, path.segs.take(path.segs.indexOf(seg) + 1)))
+                diags.add(declaredSeparately(seg.name, sc, read) ?: Diagnostic("F1", "'${seg.name}' is not a member of '$sc'"))
                 return
             }
             current = m.type.instanceShape() ?: (m.type as? VType.Coll)?.shape
         }
+    }
+
+    /** F1 over a union (Reference §9): a name each operand declares for itself is not one declaration,
+     *  so the message names the declarations and the two spellings, narrowing and `is`. */
+    private fun declaredSeparately(name: String, scope: String, read: String): Diagnostic? {
+        if (!model.isCrossBase(scope)) return null
+        val declaring = model.basesOf(scope).filter { name in model.membersOf(it) }
+        if (declaring.isEmpty()) return null
+        val first = declaring.first()
+        val spelled = declaring.joinToString(" and ") { "'$it'" }
+        return Diagnostic("F1", "'$name' is declared on $spelled separately, so it is not a member of '$scope'; " +
+            "read it after narrowing, 'if ${read.substringBeforeLast(".")} is $first then $read else ...', " +
+            "or declare '$name' once on a shape they take with 'is' (Reference §9)")
     }
 
     // ── narrowing (Reference §10; V11's union slice) ────────────────────────────
@@ -1742,8 +1775,10 @@ class Validator(private val model: Model) {
         return null
     }
 
-    private fun narrowingsOf(cond: Expr): List<Pair<PathExpr, String>> =
+    private fun narrowingsOf(cond: Expr, scope: String): List<Pair<PathExpr, String>> =
         predicateConjuncts(cond).mapNotNull { c ->
+            // `x is not A` holding is `x is A` failing: the rest of the union (Reference §10)
+            if (c is NotExpr) return@mapNotNull complementNarrowingsOf(c.inner, scope).singleOrNull()
             val i = c as? IsExpr ?: return@mapNotNull null
             val p = i.subject as? PathExpr ?: return@mapNotNull null
             when {
@@ -1755,7 +1790,10 @@ class Validator(private val model: Model) {
             }
         }
 
+    /** What a test failing shows: over a union, the operands it did not name (Reference §10). */
     private fun complementNarrowingsOf(cond: Expr, scope: String): List<Pair<PathExpr, String>> {
+        // `if x is not A then ... else <x is A>`
+        if (cond is NotExpr) return narrowingsOf(cond.inner, scope).filter { (_, to) -> cond.inner is IsExpr && (cond.inner as IsExpr).refinement == to }
         val i = cond as? IsExpr ?: return emptyList()
         val p = i.subject as? PathExpr ?: return emptyList()
         // `if actor is none then ... else <present>` on a rule's optional actor
@@ -1763,11 +1801,9 @@ class Validator(private val model: Model) {
             return listOf(p to ruleActor!!.shape)
         if (i.kind != "refinement") return emptyList()
         val declared = pathTypeName(p, scope) ?: return emptyList()
-        if (!model.isStaticUnion(declared)) return emptyList()
-        val operands = model.basesOf(declared)
         val named = i.refinement ?: return emptyList()
-        if (operands.size != 2 || named !in operands) return emptyList()
-        return listOf(p to (operands - named).single())
+        val rest = model.residualOf(declared, named) ?: return emptyList()
+        return listOf(p to rest)
     }
 
     /** The declared type name a path resolves to — a shape, refinement, or static union — or null. */
@@ -2663,7 +2699,8 @@ class Validator(private val model: Model) {
         when (e) {
             is RefName -> {
                 if (e.name in model.refinements) s.absorb(model.predicateSummary(e.name))
-                e.where?.let { model.collectExpr(it, model.baseOfExpr(e) ?: return, s) }
+                // the predicate reads the named scope's members: over a union, what every operand shares (Reference §9)
+                e.where?.let { model.collectExpr(it, if (e.name in model.shapes || e.name in model.refinements) e.name else model.baseOfExpr(e) ?: return, s) }
             }
             is RefNot -> collectComposite(e.inner, s)
             is RefAnd -> { collectComposite(e.left, s); collectComposite(e.right, s) }
@@ -2880,9 +2917,11 @@ class Validator(private val model: Model) {
         for (n in model.nevers) {
             val s = ReadSummary()
             collectComposite(n.target, s)
-            val written = writes.map { it.owner to it.member.name }.toSet()
+            // a write names the shape written; a read names the declaration, which for a field
+            // taken with `is` is the taken shape's (Reference §9), so match through the declaration
+            val written = writes.map { declarationOf(it.owner, it.member.name) }.toSet()
             (s.fields intersect written).forEach { (shape, field) ->
-                val writer = writes.first { it.owner == shape && it.member.name == field }.rule.name
+                val writer = writes.first { declarationOf(it.owner, it.member.name) == (shape to field) }.rule.name
                 diags.add(Diagnostic("V10", "a 'never' reads '$shape.$field', which rule '$writer' assigns, so it is a " +
                     "guarantee that the rules keep it true, and the compiler cannot yet prove one over every " +
                     "assignment; read a field no rule assigns, or derive '$field' from the records the rule " +
@@ -2890,6 +2929,10 @@ class Validator(private val model: Model) {
             }
         }
     }
+
+    /** The declaration a field of [shape] is read as: the taken shape's when it came by `is`. */
+    private fun declarationOf(shape: String, field: String): Pair<String, String> =
+        (model.membersOf(shape)[field]?.owner ?: shape) to field
 
     // ── V14: definition-graph well-foundedness (stratify, then prove each self-read ends) ──
     //
@@ -3336,7 +3379,8 @@ class Validator(private val model: Model) {
                 ?: "its captures record the entry"
 
             val pr = model.predicateSummary(refName)
-            val base = model.baseOf(refName)
+            // the shapes whose records are members: one base, or each operand of a union (Reference §9)
+            val bases = model.basesOf(refName)
             val polarities = refinementPolarities(refName).map
 
             /** How this rule can flip membership in [refName]: token → sign
@@ -3355,7 +3399,7 @@ class Validator(private val model: Model) {
                     .associate { "${it.first}.${it.second}" to 0 }
                 val createTokens = mutableMapOf<String, Int>()
                 for (s in created) {
-                    if (s == base && !freshCannotEnter(refName, created)) {
+                    if (s in bases && !freshCannotEnter(refName, created)) {
                         createTokens["creates '$s'"] = +1
                         continue
                     }
@@ -3369,7 +3413,7 @@ class Validator(private val model: Model) {
                 // unsatisfy a consult; the deleted base instance can only leave;
                 // reads through references at the shape flip value-dependently
                 for (s in deleted) {
-                    if (s == base) { createTokens["deletes '$s'"] = -1; continue }
+                    if (s in bases) { createTokens["deletes '$s'"] = -1; continue }
                     val signs = polarities.keys.filter { model.baseOf(it) == s }
                         .map { -polarities.getValue(it) }
                     val viaRef = (pr.fields + pr.collFields).any { (o, f) ->
@@ -3476,9 +3520,10 @@ class Validator(private val model: Model) {
         forEachSpecExpr { site, e ->
             if (e !is SingularFor || e.shape !in model.refinements) return@forEachSpecExpr
             val r = e.shape
-            val base = model.baseOf(r) ?: return@forEachSpecExpr
             val demand = "$site reads '($r for ...)' as one record"
             val selectFix = "select one with 'latest($r where ... by ...)' or 'first(...)' instead"
+            // over a union the proof runs for each operand's records (Reference §9)
+            for (base in model.basesOf(r)) {
             if (base in model.exposed)
                 diags.add(Diagnostic("V12", "$demand, but '$base' is an act, so a caller can commit a second " +
                     "'$r' while one exists; $selectFix"))
@@ -3494,6 +3539,7 @@ class Validator(private val model: Model) {
                             "checking that no '$r' exists for it, so two could exist at once; condition the rule " +
                             "on 'not exists $r for ...', or $selectFix"))
                 }
+            }
             }
         }
     }
@@ -3928,12 +3974,13 @@ class Validator(private val model: Model) {
                 if (refName in model.transients) continue // an act reads it within the commit — the last reader
                 for (f in referrer.members.filterIsInstance<StoredProp>()) {
                     val t = f.type as? RelType ?: continue
-                    if (t.shape != site.shape || t.many || t.optional) continue
+                    // a field typed with a union points at a record of any operand (Reference §6)
+                    if (!model.typeAccepts(t.shape, site.shape) || t.many || t.optional) continue
                     if (refName in cascaded) continue // resolved at the same commit (coarse C4)
                     diags.add(Diagnostic("V24", "${siteLabel(site)}, which strands " +
-                        "'$refName.${f.name}: one ${site.shape}' — deleting an instance required " +
+                        "'$refName.${f.name}: one ${t.shape}' — deleting an instance required " +
                         "references point at needs every referrer resolved: delete the referrer in the " +
-                        "same commit, declare the reference '${f.name}: one ${site.shape}? initially " +
+                        "same commit, declare the reference '${f.name}: one ${t.shape}? initially " +
                         "required' (it then absorbs the deletion by going absent), or copy the fields " +
                         "that must survive (OQ37)"))
                 }

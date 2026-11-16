@@ -34,9 +34,8 @@
 --     they declare separately (Reference §9), so a common field like the
 --     quantity is unreadable from the union by the Reference; declaring it once
 --     on a shape the three take with `is` is the spelling (Reference §9,
---     "Sharing a field across shapes"). (The validator does not enforce the rule on
---     a predicate over the union today, and the runtime then resolves the name
---     per instance — the accepted-by-accident spelling Reference §9 rejects.)
+--     "Sharing a field across shapes"). A predicate over the union reading the
+--     field is refused naming the three declarations.
 --   · "a mixture never contains itself, however many steps removed". Said
 --     with a walk (Reference §7): `drawnFrom` is the batches one step behind
 --     this one, `lineage` every batch behind those, and the books rule reads

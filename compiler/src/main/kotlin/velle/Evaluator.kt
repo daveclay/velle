@@ -193,6 +193,9 @@ class Evaluator(private val system: VelleSystem) {
         val base = if (target in model.refinements) model.viewScopeOf(target) ?: target else target
         fun next(id: Long): List<Long> {
             val inst = system.instance(id) ?: return emptyList()
+            // a record reached whose shape does not declare the relationship ends the walk: an
+            // alert at the root of a chain of escalations (Reference §7, "Walks")
+            if (model.membersOf(inst.shape)[e.rel] == null) return emptyList()
             return when (val v = readMemberAnyScope(id, inst.shape, e.rel)) {
                 is Value.VRef -> listOf(v.id)
                 is Value.VColl -> v.ids
@@ -203,7 +206,9 @@ class Evaluator(private val system: VelleSystem) {
             val visited = linkedSetOf(start)
             var at: Long? = start
             while (at != null) {
-                val here = ctx.copy(subjectScope = scope, subjectId = at, elements = emptyList())
+                // the condition is asked of the record reached, in that record's own scope
+                val reachedScope = system.instance(at)?.shape ?: scope
+                val here = ctx.copy(subjectScope = reachedScope, subjectId = at, elements = emptyList())
                 if (truthy(eval(cond, here))) return Value.VRef(at)
                 at = next(at).firstOrNull { visited.add(it) }
             }

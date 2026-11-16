@@ -49,7 +49,7 @@ class BatchesProbesTest {
         }
     """.trimIndent()
 
-    // ── B1: the direct translation — a cross-base union's predicates are not name-checked ──
+    // ── B1: the direct translation — a field declared three times is not shared by the union ──
 
     private val direct = """
         act Peptide { code: text }
@@ -60,29 +60,20 @@ class BatchesProbesTest {
     """.trimIndent()
 
     @Test
-    fun `B1 - a never over the union reading a field declared three times is accepted, against Reference 9`() {
-        // Reference §9: `Post.author` and `Photo.author` "are two declarations
-        // that happen to agree, and are *not* shared: a rule over `Content`
-        // reading `this.author` is a compile error." The rule-body read is
-        // caught (below); the predicate read is not, because the declaration
-        // walk skips a predicate whose subject has no single base
-        // (`Validator.walkRefExpr`, `Model.baseOf` null for a cross-base
-        // union). OQ35 is the construct that would make the read legal.
+    fun `B1 - a never over the union reading a field declared three times is refused naming the declarations`() {
+        // Reference §9: three declarations that happen to agree are not shared,
+        // so a prohibition over the union cannot read the field. The message
+        // names the declarations and the two spellings: narrowing, or one
+        // declaration on a shape the three take with `is`.
         val src = direct + "\nnever (PeptideBatch where quantityMg <= 0)"
-        assertEquals(emptyList(), codes(src), messages(src))
-
-        // and the runtime then resolves the name against each concrete
-        // instance — the by-coincidence sharing Reference §9 rejects
-        val sys = system(src)
-        sys.scope {
-            val pep = sys.accept("Peptide", "code" to "P")
-            assertIs<CommitResult.Refused>(sys.commit("Fermented", mapOf("peptide" to pep, "quantityMg" to BigDecimal.ZERO, "strain" to "x")))
-            sys.accept("Fermented", "peptide" to pep, "quantityMg" to BigDecimal.ONE, "strain" to "x")
-        }
+        val f1 = Validator.validate(src).filter { it.code == "F1" }
+        assertEquals(1, f1.size, messages(src))
+        assertTrue("'quantityMg' is declared on 'Fermented' and 'Ordered' and 'Composite' separately" in f1.single().message, f1.single().message)
+        assertTrue("take with 'is'" in f1.single().message, f1.single().message)
     }
 
     @Test
-    fun `B1 - the same read in a rule body is refused, and a nonsense name in a union predicate is not`() {
+    fun `B1 - the same read in a rule body is refused, and so is a nonsense name in a union predicate`() {
         val body = direct + """
 
             shape Label { batch: one PeptideBatch, mg: decimal }
@@ -91,7 +82,7 @@ class BatchesProbesTest {
         assertTrue(codes(body).contains("F1"), messages(body))
 
         val nonsense = inverted + "\nshape Odd = Origin where bogus is empty\nnever (Origin where alsoBogus > 1)"
-        assertEquals(emptyList(), codes(nonsense), "a predicate over a cross-base union is not name-checked: " + messages(nonsense))
+        assertEquals(listOf("F1", "F1"), codes(nonsense), messages(nonsense))
     }
 
     // ── B2, retired: the batch and its origin arrive in one commit (OQ63 §6.1) ──

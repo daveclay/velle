@@ -84,6 +84,8 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     val shapes = linkedMapOf<String, ShapeDecl>()
     val refinements = linkedMapOf<String, RefinementDecl>()
+    /** The unions narrowing leaves behind, by their spelling, never generated; see [residualOf]. */
+    private val residuals = linkedMapOf<String, RefinementDecl>()
     val rules = linkedMapOf<String, RuleDecl>()
     val nevers = mutableListOf<NeverDecl>()
     /** externally committable shapes — the `act` declarations (Reference §22) */
@@ -431,6 +433,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
      */
     fun basesOf(name: String): Set<String> = basesCache[name] ?: when {
         name in shapes -> setOf(name)
+        name in residuals -> basesOfExpr(residuals.getValue(name).expr)
         name in refinements -> {
             basesCache[name] = emptySet() // break cycles; V14 reports them
             basesOfExpr(refinements.getValue(name).expr)
@@ -471,7 +474,25 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
      * target type (Reference §6, the static-union field-type rule).
      */
     fun isStaticUnion(name: String): Boolean =
-        name in sharedShapes || refinements[name]?.let { pureOr(it.expr) && basesOf(name).size > 1 } == true
+        name in sharedShapes || name in residuals || refinements[name]?.let { pureOr(it.expr) && basesOf(name).size > 1 } == true
+
+    /**
+     * The operands of a static union a test did not name (Reference §10): `target is not Post`
+     * over `Content = Post or Photo or Clip` leaves `Photo or Clip`. One operand left is that
+     * operand; more are a union of their own, held here and never generated, that narrowing
+     * reads through; null when [named] is not an operand or nothing is left.
+     */
+    fun residualOf(union: String, named: String): String? {
+        if (!isStaticUnion(union)) return null
+        val rest = basesOf(union) - basesOf(named).takeIf { named in basesOf(union) || isStaticUnion(named) }.orEmpty()
+        if (named !in basesOf(union) && !isStaticUnion(named)) return null
+        if (rest.isEmpty() || rest.size == basesOf(union).size) return null
+        if (rest.size == 1) return rest.single()
+        val name = rest.joinToString(" or ")
+        residuals.getOrPut(name) { RefinementDecl(name, rest.map { RefName(it) }.reduce<RefExpr, RefExpr> { l, r -> RefOr(l, r) }) }
+        return name
+    }
+
 
     private fun pureOr(e: RefExpr): Boolean = when (e) {
         is RefName -> e.where == null && (e.name in shapes || isStaticUnion(e.name))
@@ -570,7 +591,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             out["id"] = MemberInfo("id", scope, VType.Id, stored = false)
             return resolveUntyped(scope, out)
         }
-        refinements[scope]?.let { r ->
+        (refinements[scope] ?: residuals[scope])?.let { r ->
             if (isCrossBase(scope)) {
                 // a cross-base union exposes only what every operand inherits from
                 // ONE declaration (Reference §9, unchanged): `id`, and the
@@ -948,9 +969,18 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             is TodayLit, is NowLit -> s.readsTime = true
             is PathExpr -> collectPath(e, subject, s, aliases, root)
             is UnaryMinus -> collectExpr(e.inner, subject, s, aliases, root)
-            is Binary -> { collectExpr(e.left, subject, s, aliases, root); collectExpr(e.right, subject, s, aliases, root) }
+            is Binary -> {
+                collectExpr(e.left, subject, s, aliases, root)
+                if (e.op == "and") withNarrowed(narrowedBy(e.left, holds = true, subject, aliases, root)) { collectExpr(e.right, subject, s, aliases, root) }
+                else collectExpr(e.right, subject, s, aliases, root)
+            }
             is NotExpr -> collectExpr(e.inner, subject, s, aliases, root)
-            is IfExpr -> { collectExpr(e.condition, subject, s, aliases, root); collectExpr(e.thenExpr, subject, s, aliases, root); collectExpr(e.elseExpr, subject, s, aliases, root) }
+            // a branch reads what its test narrowed to (Reference §10): `target.tags` after `target is Post`
+            is IfExpr -> {
+                collectExpr(e.condition, subject, s, aliases, root)
+                withNarrowed(narrowedBy(e.condition, holds = true, subject, aliases, root)) { collectExpr(e.thenExpr, subject, s, aliases, root) }
+                withNarrowed(narrowedBy(e.condition, holds = false, subject, aliases, root)) { collectExpr(e.elseExpr, subject, s, aliases, root) }
+            }
             is Interpolation -> e.pieces.forEach { piece -> collectExpr(piece, subject, s, aliases, root) }
             is IsExpr -> {
                 collectExpr(e.subject, subject, s, aliases, root)
@@ -1049,8 +1079,17 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
         // the shared `where` resolves bare names against the innermost element,
         // while `this` keeps naming the outermost subject (Reference §10)
         c.where?.let { collectExpr(it, elementScope ?: subject, s, env, root) }
-        return elementScope
+        // a filter that names a refinement, `(claims where PaidClaim)`, holds that refinement's members
+        return c.where?.let { w -> elementScope?.let { membershipAtomOf(w, it) } } ?: elementScope
     }
+
+    /** The refinement a filter names as a bare conjunct, `where PaidClaim` or `where PaidClaim and ...`,
+     *  when every record of [element] it holds is one of its bases; the element is then read as it (Reference §10). */
+    fun membershipAtomOf(where: Expr, element: String): String? =
+        andConjuncts(where).firstNotNullOfOrNull { c ->
+            (c as? PathExpr)?.takeIf { it.segs.isEmpty() && it.root in refinements && it.root != element }?.root
+                ?.takeIf { basesOf(element).let { b -> b.isNotEmpty() && b.all { base -> base in basesOf(it) } } }
+        }
 
     private fun collectPath(p: PathExpr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject) {
         val scope: String? = when {
@@ -1067,23 +1106,60 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
                 val m = membersOf(subject)[p.root]
                 if (m == null) { s.opaque = true; return }
                 record(subject, m, s)
-                m.type.instanceShape()
+                narrowedScope[listOf(p.root)] ?: m.type.instanceShape()
             }
         }
-        walkSegs(scope, p.segs, s)
+        walkSegs(scope, p.segs, s, pathPrefix(p, 0))
     }
 
-    private fun walkSegs(start: String?, segs: List<Seg>, s: ReadSummary) {
+    private fun walkSegs(start: String?, segs: List<Seg>, s: ReadSummary, prefix: List<String> = emptyList()) {
         var scope = start
+        val names = prefix.toMutableList()
         for (seg in segs) {
             val sc = scope
             if (sc == null) { s.opaque = true; return }
             val m = membersOf(sc)[seg.name]
             if (m == null) { s.opaque = true; return }
             record(sc, m, s)
-            scope = m.type.instanceShape()
+            names.add(seg.name)
+            scope = narrowedScope[names] ?: m.type.instanceShape()
         }
     }
+
+    // ── narrowing carried into the read summary (Reference §10) ──────────────
+
+    /** path, as its names → the shape a governing test narrowed it to, while a branch is collected */
+    private val narrowedScope = mutableMapOf<List<String>, String>()
+
+    private fun pathPrefix(p: PathExpr, segs: Int): List<String> =
+        (if (p.root == "this") emptyList() else listOf(p.root)) + p.segs.take(segs).map { it.name }
+
+    private fun pathNames(p: PathExpr): List<String> = pathPrefix(p, p.segs.size)
+
+    private inline fun withNarrowed(entries: Map<List<String>, String>, body: () -> Unit) {
+        val saved = entries.keys.associateWith { narrowedScope[it] }
+        narrowedScope.putAll(entries)
+        try { body() } finally { saved.forEach { (k, v) -> if (v == null) narrowedScope.remove(k) else narrowedScope[k] = v } }
+    }
+
+    /** What [cond] shows where it holds or fails: each `path is Shape` conjunct, and over a union the rest when it fails. */
+    private fun narrowedBy(cond: Expr, holds: Boolean, subject: String, aliases: Map<String, String>, root: String): Map<List<String>, String> {
+        val tests = if (holds) andConjuncts(cond) else listOf(cond)
+        val out = mutableMapOf<List<String>, String>()
+        for (t in tests) {
+            val negated = t is NotExpr
+            val test = (if (t is NotExpr) t.inner else t) as? IsExpr ?: continue
+            val path = test.subject as? PathExpr ?: continue
+            val named = test.refinement ?: continue
+            if (holds != negated) { out[pathNames(path)] = named; continue }
+            val declared = pathElementShape(path, subject, aliases, root) ?: continue
+            residualOf(declared, named)?.let { out[pathNames(path)] = it }
+        }
+        return out
+    }
+
+    private fun andConjuncts(e: Expr): List<Expr> =
+        if (e is Binary && e.op == "and") andConjuncts(e.left) + andConjuncts(e.right) else listOf(e)
 
     private fun record(scope: String, m: MemberInfo, s: ReadSummary) {
         if (m.stored) s.fields.add(m.owner to m.name)
@@ -1124,9 +1200,13 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             p.root in aliases -> VType.Inst(aliases.getValue(p.root))
             else -> membersOf(subject)[p.root]?.type
         }
+        var names = pathPrefix(p, 0)
+        narrowedScope[names]?.let { if (p.root != "this") type = VType.Inst(it) }
         for (seg in p.segs) {
             val scope = type?.let { it.instanceShape() ?: (it as? VType.Coll)?.shape } ?: return null
             type = membersOf(scope)[seg.name]?.type ?: return null
+            names = names + seg.name
+            narrowedScope[names]?.let { type = VType.Inst(it) }
         }
         return type
     }

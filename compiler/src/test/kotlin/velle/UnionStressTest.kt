@@ -6,9 +6,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * Adversarial probes of a static union (Reference §9), one per case of OQ44.
- * Each test records what the compiler and runtime do today; a test that pins
- * a gap says so in its name, and is rewritten when the gap closes.
+ * Adversarial probes of a static union (Reference §9), one per case of the
+ * union stress pass (OQ44): the checks that reason per operand, narrowing to
+ * the rest of a union, a walk through a union-typed field, the diagrams.
  */
 class UnionStressTest {
 
@@ -99,49 +99,51 @@ class UnionStressTest {
     }
 
     @Test
-    fun `gap - a walk through a union-typed reference fails at runtime on an operand that lacks the relationship`() {
+    fun `a walk through a union-typed reference ends at a record without the relationship, and until reads the record reached`() {
         val sys = system("""
             act Alert { title: text }
             act Escalation { source: one Trail, reason: text }
             shape Trail = Alert or Escalation
             shape Chain = Escalation {
                 above: many Trail = walk source
-                nearestAlert: one Trail? = walk source until source is Alert
+                root: one Trail? = walk source until this is Alert
             }
         """.trimIndent())
         sys.scope {
             val alert = sys.mustCommit("Alert", mapOf("title" to "smoke"))
             val first = sys.mustCommit("Escalation", mapOf("source" to alert, "reason" to "no answer"))
             val second = sys.mustCommit("Escalation", mapOf("source" to first, "reason" to "still none"))
-            val failure = runCatching { sys.getAs(second, "Chain", "above") }.exceptionOrNull()
-            assertIs<VelleRuntimeError>(failure, "the walk reads 'source' on the alert it reached")
-            assertTrue("'source' is not readable on 'Alert'" in failure.message!!, failure.message!!)
+            assertEquals(setOf(first, alert), (sys.getAs(second, "Chain", "above") as List<*>).toSet())
+            assertEquals(alert, sys.getAs(second, "Chain", "root"))
+        }
+        val readsAnOperandsField = """
+            act Alert { title: text }
+            act Escalation { source: one Trail, reason: text }
+            shape Trail = Alert or Escalation
+            shape Chain = Escalation { root: one Trail? = walk source until source is Alert }
+        """.trimIndent()
+        assertTrue(diags(readsAnOperandsField).any { it.code == "F1" && "'source' is declared on 'Escalation' separately" in it.message },
+            "the condition is asked of an alert too: ${diags(readsAnOperandsField)}")
+        run {
         }
     }
 
     @Test
-    fun `gap - a singular reference beside a union-typed and an operand-typed field has no diagnostic and fails on the first read`() {
-        val sys = system(content + """
+    fun `a singular reference beside a union-typed and an operand-typed field is refused as ambiguous`() {
+        val src = content + """
 
             act Comment { target: one Content, post: one Post, note: text }
             shape Summary = Post { latest: one Comment? = (Comment for this) }
-        """.trimIndent())
-        sys.scope {
-            val ada = sys.mustCommit("Member", mapOf("name" to "Ada"))
-            val targeted = sys.mustCommit("Post", mapOf("author" to ada, "body" to "a"))
-            val posted = sys.mustCommit("Post", mapOf("author" to ada, "body" to "b"))
-            sys.mustCommit("Comment", mapOf("target" to targeted, "post" to posted, "note" to "hi"))
-            // no diagnostic chose a field: the evaluator asks for the single field of Comment that
-            // accepts a Post, finds 'target' and 'post', and the first read throws
-            val failure = runCatching { sys.getAs(posted, "Summary", "latest") }.exceptionOrNull()
-            assertIs<IllegalArgumentException>(failure, "the read should have failed on two candidate fields")
-        }
+        """.trimIndent()
+        val v13 = diags(src).filter { it.code == "V13" }
+        assertEquals(1, v13.size, diags(src).toString())
+        assertTrue("'Comment.target' and 'Comment.post'" in v13.single().message, v13.single().message)
     }
 
     // ── the checks that skip a cross-base refinement (gaps) ──────────────────
 
     @Test
-    fun `gap - V12 proves at-most-one over a base and skips the same refinement over a union`() {
+    fun `V12 proves at-most-one for each operand of a refinement over a union`() {
         val overBase = """
             act Member { name: text unique }
             act Post { author: one Member, body: text }
@@ -160,11 +162,12 @@ class UnionStressTest {
             shape Popular = Content where count(comments) > 3
             shape Spotlight = Member { featured: one Content? = (Popular for this) }
         """.trimIndent()
-        assertEquals(emptyList(), diags(overUnion), "the same proof is skipped over the union")
+        val v12 = diags(overUnion).filter { it.code == "V12" }
+        assertTrue(v12.any { "'Post' is an act" in it.message } && v12.any { "'Photo' is an act" in it.message }, diags(overUnion).toString())
     }
 
     @Test
-    fun `gap - V24 sees a required operand-typed referrer and not a required union-typed one`() {
+    fun `V24 sees a required union-typed referrer of a deleted operand`() {
         val deletion = """
 
             act RemovePost { post: one Post? initially required }
@@ -173,11 +176,11 @@ class UnionStressTest {
         val operandTyped = content + "\nact Comment { target: one Post, note: text }\n" + deletion
         assertTrue("V24" in codes(operandTyped), diags(operandTyped).toString())
         val unionTyped = content + "\nact Comment { target: one Content, note: text }\n" + deletion
-        assertEquals(emptyList(), diags(unionTyped), "the stranded union-typed referrer is not seen")
+        assertTrue(diags(unionTyped).any { it.code == "V24" && "'Comment.target: one Content'" in it.message }, diags(unionTyped).toString())
     }
 
     @Test
-    fun `gap - V10 sees a rule writing what a never over a base reads, and not one over a union`() {
+    fun `V10 sees a rule writing on an operand what a never over a union reads`() {
         val overBase = """
             act Member { name: text unique }
             act Post { author: one Member, body: text, views: integer initially 0 }
@@ -196,12 +199,12 @@ class UnionStressTest {
             act Unview { post: one Post }
             rule Drop when Unview { post.views = post.views - 1 }
         """.trimIndent()
-        assertEquals(emptyList(), diags(overUnion), "the never's read of the shared field is not matched to the rule's write of Post.views")
+        assertTrue(diags(overUnion).any { it.code == "V10" && "rule 'Drop' assigns" in it.message }, diags(overUnion).toString())
     }
 
     @Test
-    fun `gap - the predicate of a refinement or never over a union is not name-checked`() {
-        assertEquals(emptyList(), diags(content + "\nshape Odd = Content where bogus is empty"))
+    fun `the predicate of a refinement or never over a union is name-checked, naming separate declarations`() {
+        assertTrue(diags(content + "\nshape Odd = Content where bogus is empty").any { it.code == "F1" && "'bogus'" in it.message })
         val perOperand = """
             act Member { name: text unique }
             act Post { author: one Member, body: text, views: integer }
@@ -209,14 +212,17 @@ class UnionStressTest {
             shape Content = Post or Photo
             never (Content where views < 0)
         """.trimIndent()
-        assertEquals(emptyList(), diags(perOperand), "a field the operands declare separately is read by name at runtime")
+        val f1 = diags(perOperand).filter { it.code == "F1" }
+        assertEquals(1, f1.size, diags(perOperand).toString())
+        assertTrue("'views' is declared on 'Post' and 'Photo' separately, so it is not a member of 'Content'" in f1.single().message, f1.single().message)
+        assertTrue("if this is Post then this.views else" in f1.single().message && "take with 'is'" in f1.single().message, f1.single().message)
     }
 
     @Test
-    fun `gap - narrowing by is not, and the residual else of a three-operand union, are refused`() {
+    fun `narrowing by is not, and the residual else of a three-operand or nested union, read the rest of the union`() {
         val isNot = content + "\nact Comment { target: one Content, note: text }\n" +
             "shape Excerpt = Comment { label: text = if target is not Post then target.caption else target.body }"
-        assertTrue(diags(isNot).any { it.code == "F1" && "'caption'" in it.message }, diags(isNot).toString())
+        assertEquals(emptyList(), diags(isNot))
         val residual = """
             act Member { name: text unique }
             act Post { author: one Member, body: text }
@@ -226,8 +232,18 @@ class UnionStressTest {
             act Comment { target: one Content, note: text }
             shape Excerpt = Comment { label: text = if target is Post then target.body else if target is Photo then target.caption else target.title }
         """.trimIndent()
-        assertEquals(listOf("F1"), codes(residual), diags(residual).toString())
-        assertTrue(diags(residual).single().message.contains("'title'"))
+        assertEquals(emptyList(), diags(residual))
+        val nested = content + """
+
+            act Video { author: one Member, title: text }
+            shape Media = Content or Video
+            act Reaction { about: one Media, kind: text }
+            shape Labelled = Reaction { label: text = if about is Content then "c" else about.title }
+        """.trimIndent()
+        assertEquals(emptyList(), diags(nested))
+        val stillRefused = content + "\nact Comment { target: one Content, note: text }\n" +
+            "shape Excerpt = Comment { label: text = if target is not Post then target.body else target.caption }"
+        assertTrue(diags(stillRefused).any { it.code == "F1" && "'body' is not a member of 'Photo'" in it.message }, diags(stillRefused).toString())
     }
 
     @Test
@@ -241,9 +257,13 @@ class UnionStressTest {
             act Photo { author: one Member, caption: text }
             shape Content = Post or Photo
             act Comment { target: one Content, note: text }
-            shape Tagged = Comment { tagCount: integer = if target is Post then count(target.tags) else 0 }
+            shape Tagged = Comment { tagCount: integer = if target is Post then length(target.body) else 0 }
         """.trimIndent()
         assertEquals(emptyList(), diags(sourcePath))
+        val model = Model(Parser.parse(sourcePath))
+        val tagCount = model.refinements.getValue("Tagged").members.filterIsInstance<DerivedProp>().single()
+        val reads = ReadSummary().also { model.collectExpr(tagCount.expr, "Tagged", it) }
+        assertTrue(!reads.opaque && ("Post" to "body") in reads.fields, "the narrowed read is carried into the summary: opaque=${reads.opaque} ${reads.fields}")
     }
 
     @Test
@@ -265,29 +285,38 @@ class UnionStressTest {
     }
 
     @Test
-    fun `gap - the element of a refinement-filtered collection is its base, not the refinement`() {
-        val src = """
+    fun `the element of a refinement-filtered collection is the refinement, so its body properties can be summed`() {
+        val sys = system("""
             act Member { name: text unique }
             act Claim { member: one Member, amount: integer, paid: boolean }
             shape PaidClaim = Claim where paid { patientPays: integer = amount / 2 }
             shape Account = Member { owed: integer = sum(claims where PaidClaim, patientPays) }
-        """.trimIndent()
-        assertTrue(diags(src).any { "'Claim' has no member 'patientPays'" in it.message }, diags(src).toString())
+        """.trimIndent())
+        sys.scope {
+            val ada = sys.mustCommit("Member", mapOf("name" to "Ada"))
+            sys.mustCommit("Claim", mapOf("member" to ada, "amount" to 10, "paid" to true))
+            sys.mustCommit("Claim", mapOf("member" to ada, "amount" to 30, "paid" to true))
+            sys.mustCommit("Claim", mapOf("member" to ada, "amount" to 100, "paid" to false))
+            assertEquals(java.math.BigDecimal(20), sys.getAs(ada, "Account", "owed"))
+        }
     }
 
     @Test
-    fun `gap - the diagrams omit a static union and a refinement over it`() {
+    fun `the diagrams draw a static union and a refinement over it`() {
         val gallery = java.io.File("../examples/gallery/gallery.velle").readText()
         val doc = DiagramGen.generate(gallery, "Gallery")
         assertTrue("class Contribution {" in doc, "a shape other shapes take has a box")
-        assertTrue("class Content {" !in doc, "the union has no box of its own")
-        assertTrue("class Popular {" !in doc, "the refinement over the union has no box")
-        assertTrue("**Popular**" !in doc, "the refinement over the union has no state-flow axis")
+        val classDiagram = doc.substringBefore("## State flow")
+        assertTrue("class Content {" in classDiagram && "<<union>>" in classDiagram, classDiagram)
+        assertTrue("Content <|-- Post : or" in classDiagram && "Content <|-- Photo : or" in classDiagram, classDiagram)
+        assertTrue("class Popular {" in classDiagram && "Content <|-- Popular" in classDiagram, classDiagram)
+        val stateFlow = doc.substringAfter("## State flow")
+        assertTrue("### Post" in stateFlow && "### Photo" in stateFlow && "**Popular**" in stateFlow, stateFlow)
     }
 
     @Test
-    fun `gap - creating a union names it an unknown shape`() {
+    fun `creating a union is refused naming its operands`() {
         val src = content + "\nact Flag { about: one Content }\nrule Make when Flag { Content from { author: about.author } }"
-        assertTrue(diags(src).any { "creates unknown shape 'Content'" in it.message }, diags(src).toString())
+        assertTrue(diags(src).any { "creates 'Content', which has no records of its own: a record of it is a Post or a Photo; create one of them" in it.message }, diags(src).toString())
     }
 }

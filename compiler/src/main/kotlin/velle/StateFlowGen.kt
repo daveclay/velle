@@ -34,8 +34,9 @@ internal object StateFlowGen {
     fun render(model: Model, catalog: KindCatalog): String {
         val byBase = linkedMapOf<String, MutableList<RefinementDecl>>()
         for (r in model.refinements.values) {
-            val base = model.baseOf(r.name) ?: continue
-            byBase.getOrPut(base) { mutableListOf() }.add(r)
+            if (model.isStaticUnion(r.name)) continue
+            // a refinement over a union is an axis of each operand (Reference §9)
+            for (base in model.basesOf(r.name)) byBase.getOrPut(base) { mutableListOf() }.add(r)
         }
         if (byBase.isEmpty()) return ""
         return buildString {
@@ -87,7 +88,7 @@ private class ShapeFlow(
 ) {
     /** Refinements of the form `base where <predicate>` become states; anything
      *  else (compositions, refinements of refinements) is a derived view. */
-    val atomics = refs.filter { (it.expr as? RefName)?.let { e -> e.name == base && e.where != null } == true }
+    val atomics = refs.filter { (it.expr as? RefName)?.let { e -> (e.name == base || model.isStaticUnion(e.name)) && e.where != null } == true }
     val composites = refs - atomics.toSet()
     val analysis = FlowAnalysis(model, catalog)
 

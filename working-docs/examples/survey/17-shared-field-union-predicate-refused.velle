@@ -1,10 +1,8 @@
 -- "A site visit or a plot inspection is overdue when its due date has passed."
 -- Two shapes each declare `due: Date`; a union names them; one refinement over
 -- the union reads `due`. Reference §9 does not admit the read, since `due` is
--- two declarations, but the compiler accepts it: the predicate of a
--- refinement over a cross-base union is not name-checked (OQ44 §2 item 10).
--- At runtime the name is resolved on each instance, so it works by the two
--- declarations happening to agree.
+-- two declarations, and the compiler refuses it naming both and offering the
+-- two spellings. The direct spelling is 17-shared-field-is-direct.velle.
 shape Site {
     name: text unique
 }

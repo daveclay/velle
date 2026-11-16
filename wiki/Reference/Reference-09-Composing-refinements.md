@@ -119,7 +119,9 @@ When a `transient act` takes a shape, a rule over that shape fires inside each r
 
 ## What the compiler checks
 
-- **It rejects** reading a field that is not shared across a union without narrowing first ([checks.md, V11](checks#v11--narrowing-analysis)).
+- **It rejects** reading a field that is not shared across a union without narrowing first ([checks.md, V11](checks#v11--narrowing-analysis)). When each operand declares the field for itself, the message names the declarations and offers narrowing and `is` ([checks.md, F1](checks#f1--name-resolution-and-casing)).
+- **It rejects** a rule creating a union, which has no records of its own; the message names the operands ([checks.md, F1](checks#f1--name-resolution-and-casing)).
+- **It reasons over each operand** of a refinement over a union: a prohibition's writers ([checks.md, V10](checks#v10--never-obligations-and-spend-tracking)), a singular reference's at-most-one proof ([checks.md, V12](checks#v12--singular-reference-proofs)), two rules flipping membership ([checks.md, V15](checks#v15--confluence-coarse)), and a required union-typed field stranded by a deletion ([checks.md, V24](checks#v24--referential-completeness)).
 - **It rejects** `when leaving Content` over a union of base shapes, since a record enters one only by being created. The error offers `when deleted` ([checks.md, V3](checks#v3--unfireable-rule)).
 - **It warns** when `and` joins refinements of two base shapes. A record has one base shape, so the composite is always empty ([checks.md, A2](checks#a2--dead-machinery)).
 - **For one-writer**, a union overlaps each of its shapes, and two base shapes never overlap ([checks.md, V1](checks#v1--one-writer-disjointness)). A taken shape overlaps each shape that takes it.

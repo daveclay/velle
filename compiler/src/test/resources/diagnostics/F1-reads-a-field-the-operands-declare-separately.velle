@@ -1,0 +1,20 @@
+-- A refinement over a union reading a field each operand declares for itself.
+act Member {
+    name: text unique
+}
+
+act Post {
+    author: one Member
+    body: text
+    views: integer
+}
+
+act Photo {
+    author: one Member
+    caption: text
+    views: integer
+}
+
+shape Content = Post or Photo
+
+shape Unseen = Content where views == 0

@@ -1,0 +1,24 @@
+-- A rule creating a union, which has no records of its own.
+act Member {
+    name: text unique
+}
+
+act Post {
+    author: one Member
+    body: text
+}
+
+act Photo {
+    author: one Member
+    caption: text
+}
+
+shape Content = Post or Photo
+
+act Flag {
+    about: one Content
+}
+
+rule Make when Flag {
+    Content from { author: about.author }
+}

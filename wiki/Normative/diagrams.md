@@ -77,13 +77,20 @@ what Velle derives:
   the properties it declares and the relationships they draw; each taker points
   at it with a dotted hollow-triangle arrow labelled `is`, and lists only what it
   declares itself.
+- A union of shapes ([Reference §9](Reference-09-Composing-refinements)) is one
+  class annotated `<<union>>`, listing what every operand shares, and each
+  operand points at it with a hollow-triangle arrow labelled `or`. A refinement
+  over the union is attached to the union's class, as a refinement of one shape
+  is attached to that shape. A union of refinements, with no union of shapes
+  behind it, is left out.
 
 ## State-flow diagrams
 
 A state is membership in a refinement — and memberships overlap (an invoice
 can be Issued *and* Overdue *and* Archived at once), so the honest rendering is
 not one flat state machine but one small machine per **axis** of membership,
-one section per base shape. Refinements share an axis only when the compiler
+one section per base shape; a refinement over a union of shapes is an axis in
+the section of each operand. Refinements share an axis only when the compiler
 proves their predicates disjoint (whole-expression complements, or
 complementary comparisons on the same reads — `balance <= 0` against
 `balance > 0`); everything else gets its own two-state axis. Where a proof is

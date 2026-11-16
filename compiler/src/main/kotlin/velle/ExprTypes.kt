@@ -302,9 +302,17 @@ class ExprTypes(private val model: Model) {
      *  `Kind where parentName is some` makes `parentName` present, `Comment where target is Post`
      *  reads `target` as a `Post`. A refinement over another inherits what it shows; an `or`
      *  keeps only what both sides show. */
-    fun narrowingOf(scope: String): Narrowing = narrowingCache.getOrPut(scope) {
-        model.refinements[scope]?.let { narrowingOf(it.expr, scope) } ?: Narrowing.NONE
+    fun narrowingOf(scope: String): Narrowing {
+        narrowingCache[scope]?.let { return it }
+        // a predicate's own `is not` test asks the path's type, which asks this scope's narrowing:
+        // while it is being computed, the scope narrows nothing
+        if (!narrowingInProgress.add(scope)) return Narrowing.NONE
+        val narrowing = try { model.refinements[scope]?.let { narrowingOf(it.expr, scope) } ?: Narrowing.NONE } finally { narrowingInProgress.remove(scope) }
+        narrowingCache[scope] = narrowing
+        return narrowing
     }
+
+    private val narrowingInProgress = mutableSetOf<String>()
 
     /** What a rule's condition shows for its body (Reference §10): the inline `where` of the trigger. */
     fun narrowingOf(expr: RefExpr, scope: String): Narrowing = when (expr) {
@@ -324,6 +332,8 @@ class ExprTypes(private val model: Model) {
      * it holds.
      */
     fun narrowingOf(cond: Expr, holds: Boolean, scope: String, env: TypeEnv): Narrowing = when {
+        // `x is not A` holding is `x is A` failing (Reference §10)
+        cond is NotExpr && cond.inner is IsExpr -> narrowingOf(cond.inner, !holds, scope, env)
         cond is Binary && cond.op == "and" && holds -> narrowingOf(cond.left, true, scope, env) + narrowingOf(cond.right, true, scope, env)
         // an `or` failing is both sides failing
         cond is Binary && cond.op == "or" && !holds -> narrowingOf(cond.left, false, scope, env) + narrowingOf(cond.right, false, scope, env)
@@ -343,13 +353,10 @@ class ExprTypes(private val model: Model) {
         else -> Narrowing.NONE
     }
 
-    /** Over a static union of exactly two operands, the operand a path is when it is not [named]. */
+    /** Over a static union, what a path is when it is not [named]: the other operand, or the union of the rest. */
     private fun complementOf(path: PathExpr, named: String, scope: String, env: TypeEnv): String? {
         val declared = (bareOrNull(of(path, scope, env)) as? VType.Inst)?.shape ?: return null
-        if (!model.isStaticUnion(declared)) return null
-        val operands = model.basesOf(declared)
-        if (operands.size != 2 || named !in operands) return null
-        return (operands - named).single()
+        return model.residualOf(declared, named)
     }
 
     /** A member's type: its declaration's, or, for a derived property that states none, its expression's (Reference §7). */

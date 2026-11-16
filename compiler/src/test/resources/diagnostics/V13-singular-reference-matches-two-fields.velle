@@ -1,0 +1,26 @@
+-- A singular reference beside a union-typed field and an operand-typed field that both match the subject.
+act Member {
+    name: text unique
+}
+
+act Post {
+    author: one Member
+    body: text
+}
+
+act Photo {
+    author: one Member
+    caption: text
+}
+
+shape Content = Post or Photo
+
+act Comment {
+    target: one Content
+    post: one Post
+    note: text
+}
+
+shape Summary = Post {
+    latest: one Comment? = (Comment for this)
+}

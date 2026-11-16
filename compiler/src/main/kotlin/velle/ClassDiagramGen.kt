@@ -26,7 +26,9 @@ internal object ClassDiagramGen {
                 "decided by the predicate in the attached note, instant by instant, not fixed at creation. " +
                 "Dashed arrows connect a composed refinement to the refinements it is built from. " +
                 "A dotted hollow-triangle arrow reads \"is\": the shape takes the pointed-at shape's " +
-                "declarations as its own, and that shape has no records of its own."
+                "declarations as its own, and that shape has no records of its own. A hollow-triangle arrow " +
+                "labelled `or` reads \"is one of\": the pointed-at box is a union of the shapes that point at it, " +
+                "listing what every one of them shares, and a refinement over it is attached to the union."
         )
         appendLine()
         appendLine("```mermaid")
@@ -65,8 +67,20 @@ internal object ClassDiagramGen {
             appendLine("    }")
         }
         edges.forEach { appendLine("    $it") }
+        // a static union (Reference §9): one box with what every operand shares, each operand pointing at it
+        for ((name, _) in model.refinements) {
+            if (!model.isStaticUnion(name) || name in model.sharedShapes) continue
+            appendLine("    class $name {")
+            appendLine("        <<union>>")
+            for (m in model.membersOf(name).values) if (m.name != "id" && m.inverse == null)
+                appendLine("        ${if (m.stored) "" else "/"}${m.name}: ${model.spell(m.type)}")
+            appendLine("    }")
+            for (operand in model.basesOf(name)) appendLine("    $name <|-- $operand : or")
+        }
         for ((name, r) in model.refinements) {
-            val base = model.baseOf(name) ?: continue
+            if (model.isStaticUnion(name)) continue
+            // a refinement over a union attaches to the union; one over nothing nameable is left out
+            val base = model.baseOf(name) ?: model.unionRootOf(name) ?: continue
             appendLine("    class $name {")
             appendLine("        <<refinement>>")
             for (m in r.members) memberLine(model, name, m)?.let { appendLine("        $it") }

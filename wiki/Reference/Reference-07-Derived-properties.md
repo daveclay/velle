@@ -79,6 +79,29 @@ shape Member {
 - `recruits` is an ordinary derived collection, one step down. `walk recruits` follows it every step. The relationship a walk follows may be stored or derived, `one` or `many`.
 - `walk recruits for 2 steps` is the same set cut off after two steps: recruits and their recruits. The number is a business fact and part of the meaning.
 
+A walk may follow a relationship typed with a union of shapes ([§9](Reference-09-Composing-refinements)). An escalation points at what it escalates, an alert or an earlier escalation. This example is not in the example files:
+
+```
+act Alert {
+    title: text
+}
+
+act Escalation {
+    source: one Trail
+    reason: text
+}
+
+shape Trail = Alert or Escalation
+
+shape Chain = Escalation {
+    above: many Trail = walk source
+    root: one Trail? = walk source until this is Alert
+}
+```
+
+- `walk source` reaches every escalation up the chain and the alert at its root. An alert has no `source`, so the walk ends there.
+- `walk source until this is Alert` answers the root. The condition is asked of each record reached, with `this` naming that record, so it reads what every shape of `Trail` shares and narrows with `is` for the rest ([§10](Reference-10-Predicate-expressions)). `until source is Alert` is refused, since an alert has no `source` to read.
+
 To walk only some of a relationship's records, declare the filtered collection as a derived property and walk that. To keep only some of the records a walk reaches, filter its set: `(walk recruits where tier == "gold")`.
 
 A walk's set may be read by a prohibition. From `examples/batches/batches.velle`, where a batch may be mixed from other batches:
@@ -131,6 +154,7 @@ In every other case the compiler rejects the property and says why: the step is 
 - The compiler rejects a required declaration computed from a value that may be absent by declaration: an optional field not tested with `is some`, a `none` branch, a function whose result may be absent. The message names the `?` to add and the test to write. A selection that matches nothing, `first`, `latest`, `(Shape for expr)`, is absent by data, which the runtime refuses at the read ([§14, "A required field given an absent value"](Reference-14-for#a-required-field-given-an-absent-value); [checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects a property that states no type when it reads none off the expression, `empty`, `none`, or a function whose result depends on an untyped argument, and two or more untyped properties that take their type from one another ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects a walk whose relationship is not a member of the shape the walk is written on ([checks.md, F1](checks#f1--name-resolution-and-casing)), or is not a relationship that points back at that shape ([checks.md, F2](checks#f2--type-checking)).
+- The compiler rejects an `until` condition over a walk through a union-typed relationship that reads a field only one shape of the union declares; narrow with `is` first ([checks.md, F1](checks#f1--name-resolution-and-casing)).
 - The compiler rejects `walk R until P` when `R` is a `many`. Two records at the same distance may both satisfy the condition, and "the nearest" has no single answer. The message says to walk a `one`, or to declare the set with `walk R` and select from it with `first(... by ...)` ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects `for 0 steps`, and warns on `for 1 steps`, which is the relationship itself ([checks.md, F2](checks#f2--type-checking); [A2](checks#a2--dead-machinery)).
 - The compiler rejects a walk property declared with a type other than the walk's: `many S` for a set, `one S?` for `until` ([checks.md, F2](checks#f2--type-checking)).

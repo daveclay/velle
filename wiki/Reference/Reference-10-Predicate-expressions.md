@@ -48,7 +48,7 @@ shape ProductOfFamily = Product where exists (SkuFamily where this.sku matches "
 
 A membership test is legal when the left side and the named refinement share a base shape, or when the named shape is an operand of the left side's static union ([§6](Reference-06-Relationships)): `target is Post` on a field `target: one Content`. A test between shapes with no base in common is a compile error, not a test that is always false.
 
-**A membership test also narrows.** Once `x is Refinement` holds earlier in the same `and` chain, the rest of the chain may read the refinement's own properties through `x` ([§8](Reference-08-Refinements); for a union operand's own fields, [§9](Reference-09-Composing-refinements)). In an `if` expression, the `else` branch of a test over a two-operand union narrows to the other operand, since a record has exactly one base.
+**A membership test also narrows.** Once `x is Refinement` holds earlier in the same `and` chain, the rest of the chain may read the refinement's own properties through `x` ([§8](Reference-08-Refinements); for a union operand's own fields, [§9](Reference-09-Composing-refinements)). In an `if` expression, the `else` branch of `x is A` over a union narrows to the operands the test did not name, since a record has exactly one base: the other operand of two, or the union of the rest, which a later test narrows further. `x is not A` narrows the branch it governs the same way, and its `else` narrows to `A`. A filter that names a refinement, `(claims where PaidClaim)`, holds members of `PaidClaim`, so a sum or a selector over it may read a property of `PaidClaim`'s body.
 
 ## Testing for related records with `exists`
 
