@@ -1,6 +1,6 @@
 # OQ35 — Can several unrelated shapes share one declaration?
 
-**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 to D4 decided 2026-11-16, D4 after a reframe the same day. D5 to D7 await Dave. Nothing is removed from the language by any decision here.
+**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 to D5 decided 2026-11-16, D4 after a reframe the same day. D6 and D7 await Dave. Nothing is removed from the language by any decision here.
 
 **In plain terms:** a product owner says "a site visit or a plot inspection is overdue when its due date has passed" and "any change to an entry touches the entry". Each sentence is one rule over several kinds of record that have a field in common. Velle has no way to declare that field once for all of them, so the author writes the rule once per kind, or turns the records inside out so the common part is the container.
 
@@ -209,7 +209,7 @@ Does a shared shape appear on the generated surfaces exactly where a static unio
 
 **Decided:** yes, the same four answers, 2026-11-16. A shared shape appears exactly where a static union does today and nowhere else.
 
-### D5. The inverse of a reference declared on a shared shape
+### D5. The inverse of a reference declared on a shared shape · Decided 2026-11-16
 
 Reference §6 infers an inverse for every `one` field: `Comment.target: one Content` puts `comments` on the target, named from the declaring shape. A shared shape's field is one declaration taken by several shapes. Does `Entry` get one inferred inverse, `entryChanges`, holding every rename, move, and merge, named from the shared shape? Or is no inverse inferred, so an author who wants one declares a view per taker?
 
@@ -300,6 +300,8 @@ Does `Entry` get `entryChanges`?
 
 - Reference §6: the inverse paragraph names a shared shape's field as one declaring side, with the inverse named from the shared shape.
 - `checks.md` V19 and V22: the first two costs above, stated.
+
+**Decided:** yes, 2026-11-16. `Entry` gets `entryChanges`, named from the shared shape.
 
 ### D6. May a shared declaration take another?
 
