@@ -1,0 +1,27 @@
+-- The same two acts and union as 17-shared-field-union-rule-refused, with the
+-- rule reading `entry` per operand: Reference §9's "a same-named field is read
+-- per shape", a branch per operand whose two arms are the same word.
+shape Entry {
+    name: text unique
+}
+
+act RenameEntry {
+    entry: one Entry
+    newName: text
+}
+
+act MoveEntry {
+    entry: one Entry
+    newSite: text
+}
+
+shape EntryChange = RenameEntry or MoveEntry
+
+shape Touch {
+    entry: one Entry
+    touchedOn: timestamp on create
+}
+
+rule TouchEntry when EntryChange {
+    Touch from { entry: if this is RenameEntry then this.entry else this.entry }
+}

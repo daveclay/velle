@@ -1,0 +1,38 @@
+-- The spelling that validates today for "a site visit or a plot inspection is
+-- overdue when its due date has passed": one refinement per shape with the
+-- same predicate, and one rule per refinement with the same body. The union
+-- still serves as the reminder's field type, a static union being an allowed
+-- target (Reference §6). What it gives up: the sentence is written twice, and
+-- a third dated shape means a third copy of each.
+shape Site {
+    name: text unique
+}
+
+shape SiteVisit {
+    site: one Site
+    due: Date
+}
+
+shape PlotInspection {
+    site: one Site
+    plot: text
+    due: Date
+}
+
+shape Dated = SiteVisit or PlotInspection
+
+shape OverdueVisit = SiteVisit where due < today
+shape OverdueInspection = PlotInspection where due < today
+
+shape Reminder {
+    about: one Dated
+    sentOn: Date
+}
+
+rule RemindOverdueVisit when OverdueVisit on Daily {
+    Reminder from { about: this, sentOn: today }
+}
+
+rule RemindOverdueInspection when OverdueInspection on Daily {
+    Reminder from { about: this, sentOn: today }
+}

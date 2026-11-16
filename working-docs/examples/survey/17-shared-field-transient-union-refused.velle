@@ -1,0 +1,28 @@
+-- The two entry changes as requests that are answered and not kept: transient
+-- acts. A union over them is refused outright (checks V17), since every read
+-- over it would be a branch per operand; the diagnostic names OQ35 as the
+-- construct the refusal waits for.
+shape Entry {
+    name: text unique
+}
+
+transient act RenameEntry {
+    entry: one Entry
+    newName: text
+}
+
+transient act MoveEntry {
+    entry: one Entry
+    newSite: text
+}
+
+shape EntryChange = RenameEntry or MoveEntry
+
+shape Touch {
+    entry: one Entry
+    touchedOn: timestamp on create
+}
+
+rule TouchEntry when EntryChange {
+    Touch from { entry: this.entry }
+}

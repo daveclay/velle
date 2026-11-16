@@ -1,0 +1,34 @@
+-- The hierarchy inverted, as examples/batches/batches.velle does: one act holds
+-- what every entry change has, `entry`, and the kind of change is a record of
+-- its own arriving inside it by value (Reference §6, "A reference supplied by
+-- value"). One rule reads `entry` from the one declaration. What it gives up:
+-- there is one act at the trust boundary instead of two, so one `by` clause
+-- and one set of refusals cover both kinds of change, and the kind is read by
+-- narrowing `change` instead of by the act's name.
+shape Entry {
+    name: text unique
+}
+
+shape Rename {
+    newName: text
+}
+
+shape Move {
+    newSite: text
+}
+
+shape Change = Rename or Move
+
+act EntryChange {
+    entry: one Entry
+    change: one Change
+} with change
+
+shape Touch {
+    entry: one Entry
+    touchedOn: timestamp on create
+}
+
+rule TouchEntry when EntryChange {
+    Touch from { entry: entry }
+}

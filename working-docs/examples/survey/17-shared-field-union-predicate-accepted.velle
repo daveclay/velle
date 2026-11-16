@@ -1,0 +1,34 @@
+-- "A site visit or a plot inspection is overdue when its due date has passed."
+-- Two shapes each declare `due: Date`; a union names them; one refinement over
+-- the union reads `due`. Reference §9 does not admit the read, since `due` is
+-- two declarations, but the compiler accepts it: the predicate of a
+-- refinement over a cross-base union is not name-checked (OQ44 §2 item 10).
+-- At runtime the name is resolved on each instance, so it works by the two
+-- declarations happening to agree.
+shape Site {
+    name: text unique
+}
+
+shape SiteVisit {
+    site: one Site
+    due: Date
+}
+
+shape PlotInspection {
+    site: one Site
+    plot: text
+    due: Date
+}
+
+shape Dated = SiteVisit or PlotInspection
+
+shape Overdue = Dated where due < today
+
+shape Reminder {
+    about: one Dated
+    sentOn: Date
+}
+
+rule RemindOverdue when Overdue on Daily {
+    Reminder from { about: this, sentOn: today }
+}
