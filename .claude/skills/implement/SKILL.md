@@ -84,7 +84,9 @@ or `visible to` must declare visibility on every readable shape or carry a
 top-level `visible to anyone`, or V32 fires; a fixture record no act can
 create is `sys.system.seed(shape, fields)`; inside a nested collection
 `where` the act's own actor is `this.actor`; compiler tests run each body
-inside `sys.scope { }`.
+inside `sys.scope { }`; `VelleSystem`'s clock starts at 2026-01-01T09:00Z unless
+`startTime` is passed, so a date meant to be "yesterday" is written against that,
+never against `LocalDate.now()`.
 
 ## 4. The settling commit
 
