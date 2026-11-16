@@ -1,62 +1,150 @@
 # OQ44 — Stress-testing cross-base unions
 
-**Status:** open (2026-09-13) — the construct is built and exercised by one cooperative example; nothing adversarial has been run against it
-**In plain terms:** where does a union of unrelated shapes break the checks that assume one base shape, the runtime, the generated output, or the diagrams? Each case below is a spec to write and a verdict to record: the check holds, it holds at a cost, or it has a gap.
-**See:** Reference §6 (a static union as a relationship target — the polymorphic association) · Reference §9 (`or` across unrelated bases; the unchanged property rule; what a union body and a union rule may do) · Reference §10 (narrowing by `is <Operand>`) · `checks.md` F2, F3, V1, V3, V11, V13, V17, A2 · `examples/gallery/gallery.velle` (the cooperative spec) · `compiler/src/test/kotlin/velle/UnionTest.kt`
+**Status:** opened 2026-09-13 at OQ29's close. Reviewed against HEAD on 2026-11-16, after OQ35 landed `is`: every case in §1 has a verdict and a checked-in probe. D1 and D2 decided 2026-11-16; their work items in §4 are ready to build. §4 holds the work items.
+
+**In plain terms:** a static union, `shape Content = Post or Photo`, lets one rule, one field, or one prohibition speak about records of two unrelated kinds. Most of the compiler's checks were written for records of one kind. This question asks, case by case, where a union breaks a check, the runtime, the generated code, or the diagrams, and what to do about each.
+
+**See:** Reference §6 (a static union as a field's type) · Reference §9 (`or` across unrelated shapes; the unchanged property rule; "Sharing a field across shapes") · Reference §10 (narrowing by `is <Operand>`, the `else` branch) · Reference §7 (walks) · Reference §14 (`for` with two matching fields) · `checks.md` F1, F3, V10, V11, V12, V13, V15, V24 · `compiler/src/test/kotlin/velle/UnionStressTest.kt` (one probe per case below, the gaps named `gap -`) · `compiler/src/test/kotlin/velle/UnionTest.kt` (the cooperative cases) · `examples/gallery/gallery.velle` (the cooperative spec) · OQ16 (B1, B4, S14, P8 in its calibration record)
 
 ---
 
-## 1. Why this needs a pass of its own
+## 1. What runs today
 
-The implementation resolved a refinement to a *set* of base shapes and taught the load-bearing paths to iterate it: member lookup, inverse inference, membership evaluation, watchers, reachability, co-firing, one-writer disjointness, the generated views. Every other check that keys on a single base was left as it was, and where it reads `baseOf` it now gets `null` for a cross-base refinement and skips — fail-open, against the language's fail-closed stance. Narrowing covers one shape of predicate. The generated surface assumes a cross-base refinement chains to a named static union. None of that has been pushed.
+Checked against HEAD on 2026-11-16. Verdicts use the stress-pass words in `GLOSSARY.md`: HOLDS, the design handles the case; TAX, it handles it at a cost; GAP, it fails or a check skips it. Every row names the test that pins it; a test named `gap -` asserts today's wrong behaviour and is rewritten when the gap closes.
 
-## 2. Gaps known by inspection
+### 1.1 The cases known by inspection when the question was opened
 
-Found while implementing; each wants a spec that demonstrates it and a ruling.
+| Case | What was asked | Verdict | Evidence |
+|---|---|---|---|
+| 1 | A union of refinements with no static union behind it, `shape Notable = LongPost or Captioned`, as a rule subject | TAX | It validates and generates; the composite gets no view of its own, and the generated rule spec checks membership by name. `UnionStressTest`, "a union of refinements generates no view of its own" |
+| 2 | A union-typed edge set, `items: many Content` | HOLDS | Each operand holds the records, each operand gets the inverse, a handle outside the union is refused at the boundary. `UnionStressTest`, "a union-typed edge set holds records of each operand, and each operand gets the inverse" |
+| 3 | A closure over the inverse of a union-typed field, `act Post { ... } with comments` where `Comment.target: one Content` | HOLDS | The part's `target` is the new post. `UnionStressTest`, "a closure over the inverse of a union-typed field fills the part's reference with the new operand". A union-typed field inside a nested part is not probed (work item) |
+| 4 | Deletion against a union-typed referrer | HOLDS at runtime, GAP in V24 | `target: one Content? initially required` goes absent when the post is deleted, `when deleted Content` fires once, and a rule over `target is none` sweeps the comment. V24 sees a required `target: one Post` stranded by `delete post` and not a required `target: one Content`. `UnionStressTest`, "deleting an operand record absorbs through a union-typed reference and fires when deleted over the union" and "gap - V24 sees a required operand-typed referrer and not a required union-typed one" |
+| 5 | `frozen`, `captured`, and `undeletable` on a refinement over a union | HOLDS | Each is refused by F3 with the per-operand spelling offered. `UnionTest`, "a union body admits derived properties only"; `checks.md` F3 |
+| 6 | A `never` over a union | GAP | `never (Content where views < 0)`, with `views` one declaration both operands take with `is`, draws no V10 when a rule assigns `post.views`; the same prohibition over `Post` does. The never's read of the shared field is not matched to the rule's write on the operand. `UnionStressTest`, "gap - V10 sees a rule writing what a never over a base reads, and not one over a union". Whether such a prohibition is spendable by V1, V5, V15, and V16 is not probed |
+| 7 | A singular reference over a refinement of a union, `(Popular for this)` | GAP | V12 refuses it over `Post` twice (an act can arrive again, membership can recur) and says nothing over `Content`. `UnionStressTest`, "gap - V12 proves at-most-one over a base and skips the same refinement over a union" |
+| 8 | A walk through a `one` typed with a union, `walk source` where `Trail = Alert or Escalation` and only `Escalation` has `source` | GAP | It validates and fails on the first read that reaches an alert: `'source' is not readable on 'Alert' instance 1`. The `until` condition is name-checked against the declaring shape only. `UnionStressTest`, "gap - a walk through a union-typed reference fails at runtime on an operand that lacks the relationship". D2 |
+| 9 | V15's third leg between a union rule and an operand rule flipping one refinement's membership | GAP by inspection | `checkTransitionInterference` in `compiler/src/main/kotlin/velle/Validator.kt` reads `model.baseOf(refName) ?: continue`, so a refinement over a union is skipped. A probe with `rule FlagNoisy when Noisy { flagged = true }` and `rule Unflag when Clear { post.flagged = false }` validates with no diagnostic; no test asserts it, since the right diagnostic is not yet defined |
+| 10 | The predicate of a refinement or `never` over a union is not name-checked (OQ16 B1) | GAP | `shape Odd = Content where bogus is empty` validates; `never (Content where views < 0)` with `views` declared separately on each operand validates and holds at runtime by coincidence of naming. `UnionStressTest`, "gap - the predicate of a refinement or never over a union is not name-checked"; `working-docs/examples/survey/17-shared-field-union-predicate-accepted.velle` |
 
-1. **A cross-base refinement with no static union behind it.** `shape NeedsAttention = OverdueTicket or Invoice` composes refinements of different bases. It is a legal rule subject, but no view is generated for it (there is no base and no static union to name the view after), and the generated per-rule spec names an `UnknownView` — the generated test does not compile. Rule: give such a composite a view of its own (shared members only), or refuse it as a rule subject and demand a named static union with a `where`.
-2. **A union-typed edge set.** `tags: many Content`. Inverse inference marks the inverse as many-to-many on every operand, the runtime's m2m inverse scan reads the owner's edge set, and the boundary converts each handle by acceptance — all by construction, none exercised.
-3. **A closure over a union-typed inverse.** `act Post { ... } with comments` where `Comment.target: one Content`: V22 must resolve the inverse to the part shape and the back-reference, and the closure commit must populate `target` with the pending `Post`. Nested: a union-typed field inside a part.
-4. **Deletion against a union-typed referrer.** Deleting a `Post` that a required `Comment.target` points at: V24's three discharges (delete the referrer, `? initially required`, copy) over a union field; `when deleted Content` as a trigger; the absorbing read of a union field whose target is gone.
-5. **Freezes, captures, and gates on a refinement over a union.** `shape Popular = Content where ... { frozen body }` — `frozen` names stored fields of "the base," and there is none; V5 today skips it silently. Same for a `captured` there (V6, V7 boundedness) and `undeletable` (V27). Rule per check: refuse, or reason per operand.
-6. **A `never` over a union.** `never (Content where count(comments) > 100)`: the runtime enforces it at transaction end; V10's induction and spend-tracking skip it. Is it spendable? Should it be?
-7. **A singular reference over a union subject.** `(Popular for x)`: V12's at-most-one proof skips cross-base refinements.
-8. **The escalation chain as a union.** `source: one Alert or Escalation` with a derived walk to the root alert: V14 well-foundedness meets a union-typed self-reference. The needed certificate — a creation-fixed reference to a pre-existing instance is acyclic — is not in the whitelist; `never (Escalation where source == this)` rules out length-one cycles only. Rides OQ16's certificate calibration; record the diagnostic as it stands. The batches pass met the same want through a `many` (a mixture's ancestor batches) and never reached V14: every spelling of the ancestor set reads a field through a collection, which the evaluator refuses, and V14 does not see the self-read at all (B5, B6 in OQ16's calibration record; `examples/batches/`). *Answered 2026-11-09 by the walk (Reference §7): `walk source until ...` names the chain and owes no certificate. Untested: a walk through a `one` typed with a static union, where a record reached may be of an operand that lacks the relationship.*
-9. **Transition interference.** V15's third leg between a union rule and an operand rule both flipping one refinement's membership.
-10. **A predicate over a cross-base union is not name-checked** (batches B1). `Validator.walkRefExpr` checks a refinement's or a `never`'s predicate only when `Model.baseOf` finds one base, so over a cross-base union nothing is checked: `shape Odd = Origin where bogus is empty` passes, and so does the direct subtype translation Reference §9 rejects — three acts each declaring `quantityMg`, a union over them, `never (PeptideBatch where quantityMg <= 0)`. The runtime then resolves the name against each instance, and the prohibition works by coincidence of naming. Rule: check the predicate against the union's own members (`id`, the shared inverses, the body) and report the per-operand read as Reference §9 says. Probe: `examples/batches/output/src/test/kotlin/velle/BatchesProbesTest.kt`.
+### 1.2 Narrowing
 
-## 3. Narrowing forms not covered
+| Form | Verdict | Evidence |
+|---|---|---|
+| `if target is not Post then target.caption else target.body` | GAP | Refused: `'caption' is not a member of 'Content'`, and `body` too. `UnionStressTest`, "gap - narrowing by is not, and the residual else of a three-operand union, are refused"; `Validator.kt`'s header lists V11's `not (x is A)` as unbuilt |
+| A narrowing inside a branch already narrowed | HOLDS | In `if target is Post then target.body else if target is Photo then target.caption else target.title`, the nested `target.caption` is licensed. Same test |
+| The `else` of a three-operand union, and of a nested union (`Media = Content or Video`, `if about is Content then ... else about.title`) | GAP | The residual is not narrowed: `'title' is not a member of 'Content'`, `'title' is not a member of 'Media'`. Reference §10 narrows the `else` of a two-operand union only. Same test |
+| Narrowing inside a collection filter, `count(Comment where target is Post and target.body != "")` | HOLDS | `UnionStressTest`, "narrowing inside a collection filter and on a filter's source path is licensed" |
+| Narrowing on a filter's source path, `if target is Post then count(target.tags) else 0` (OQ16 S14, B4) | HOLDS in the name check | Same test. Whether the read-summary collector (`Model.collectExpr`) carries the narrowing, so V15 does not pair the rule with everything, is not probed |
+| `Post or Post`, `Content or Post` | HOLDS by acceptance | Both validate and get a view (`twices()`, `mixeds()`). `UnionStressTest`, "a union of refinements generates no view of its own" |
+| The element of a refinement-filtered collection, `sum(claims where PaidClaim, patientPays)` (OQ16 P8) | GAP | `'Claim' has no member 'patientPays'`. `UnionStressTest`, "gap - the element of a refinement-filtered collection is its base, not the refinement" |
 
-Each is a compile-error today where it should license the read, or an unguarded read where it should not.
+### 1.3 Downstream of the model
 
-- `target is not Post` in a conjunction, and `if target is not Post then ...`.
-- Nested conditionals: narrowing inside a branch already narrowed.
-- Three-or-more-operand unions: the else-branch is the residual union, not one operand.
-- Narrowing inside a collection filter (`comments where target is Post and target.body == ""`) and of an `as` alias.
-- Narrowing on a collection filter's *source path* (also batches B4, `origin is Composition and exists (origin.components where ...)`): `if trial is GreenhouseTrial then count(trial.greenhousePlots where lastObservedDay < this.dayMark) else ...` — the name check resolves the source against the union and finds no element, and the read-summary collector (`Model.collectExpr`) has no narrowing at all, so the branch goes opaque and V15 pairs the rule with everything. Found by `examples/peptides/peptides.velle` (`CollectionTask.plotsPending`, spelled around by comparing each operand's plots to the union-typed reference; peptides S14 in OQ16's calibration record).
-- Nested static unions (`shape Media = Content or Video`): `is Content` on a `Media`-typed value, complement narrowing through the nesting, a field typed `one Media`.
-- Degenerate declarations: `Post or Post`, `Content or Post` — what `basesOf` and the generated views do.
-- The element of a refinement-filtered collection resolved as the base, not the refinement (pharmacy P8): `sum(claims where PaidClaim, patientPays)` reports "'Claim' has no member 'patientPays'" where `patientPays` is a body property of `PaidClaim`, even though every element is a member. The spec moved the property onto `Claim`. The filter is a narrowing the name check does not carry.
+| Case | Verdict | Evidence |
+|---|---|---|
+| Hydration and the store | HOLDS at a cost the store pays | `examples/gallery/output/src/test/kotlin/velle/GalleryOverSqliteTest.kt`: a union-typed column keeps the concrete shape beside the key, since keys are unique per table; `stores/sqlite/` |
+| Diagrams | GAP | On `examples/gallery/gallery.velle` with `--diagrams`, the class diagram draws `Content` as an edge target with no box of its own and omits `Popular`; the state flow has no axis for `Popular`, a refinement over the union; a shape another shape takes with `is` has its box and arrows. `UnionStressTest`, "gap - the diagrams omit a static union and a refinement over it" |
+| `(Comment for this)` where `Comment` has `target: one Content` and `post: one Post`, read on a `Post` | GAP | No V13, although Reference §14 says a `for` with two matching fields is refused and the filter form is the spelling; the evaluator asks for the single field accepting a `Post`, finds two, and the first read throws. `UnionStressTest`, "gap - a singular reference beside a union-typed and an operand-typed field has no diagnostic and fails on the first read" |
+| `Content from { ... }` in a rule | GAP in the message | Refused as `creates unknown shape 'Content'`; a shape other shapes take with `is` is refused naming its takers, and a union should be too. `UnionStressTest`, "gap - creating a union names it an unknown shape" |
+| `act Content { ... }` beside `shape Content = Post or Photo` | HOLDS | Refused as a duplicate name |
+| Contention (A5) | not probed | A narrowed read is attributed to every operand that declares the name; a `never` reading through a union-typed field widens to system-wide |
 
-## 4. Everything downstream of the model
+## 2. What to decide
 
-- **Hydration and the store.** Exercised 2026-09-14 (`examples/gallery/output/src/test/kotlin/velle/GalleryOverSqliteTest.kt`: the flows over SQLite through both the generic protocol and the generated `GalleryStore`, plus a cross-process round trip). Verdict: the protocol holds — `Ref.Persisted` carrying the concrete shape is exactly what the runtime needs — at a cost the store pays: a bare key cannot name the row behind a union-typed column (keys are unique per table), so the store keeps the concrete shape beside it, the join read matches on both, and the pre-filter's correlation through a union-typed back-reference binds the subject's shape (`stores/sqlite/`, `SqliteStore`). A union-typed edge set (case 2 above) rides the same discriminator in the junction table, still unexercised by any spec.
-- **Contention (A5).** A narrowed read is attributed to every operand that declares the name — an over-approximation; and a `never` reading through a union-typed field widens to system-wide, which may be the existing treatment of `never` reads rather than anything union-specific. Decide whether either width is real.
-- **Diagrams.** `--diagrams` on the gallery spec: the class diagram has no union notation, the state-flow generator groups `Popular` onto an axis of *one* base, the rule graph's cause edges through a union-typed field.
-- **`for` beside an operand-typed field.** `Comment for post` where `Comment` has both `target: one Content` and `post: one Post`: V13's two-field ambiguity, by acceptance.
-- **Accidental refusals.** `act Content { ... }` and `Content from { ... }` are refused today as "unknown shape" (F1) because a union is not in the shape table. Right verdict, wrong diagnostic: name the union and say why.
+### D1. A check that skips a refinement over a union reasons over each operand instead · Decided 2026-11-16
 
-## 5. Method
+Does every check that today skips a cross-base refinement (V10, V12, V15's third leg, V24) reason over each operand of the union and refuse when any operand fails?
 
-One adversarial spec per numbered case, either as a `UnionTest` case (a diagnostic expected) or under `examples/union-stress/` (a runtime behavior expected), with the verdict recorded here in the HOLDS / TAX / GAP vocabulary (`GLOSSARY.md`). Gaps that need a ruling get one here; rulings promote to the Reference and `checks.md` as they settle, and the work items in §6 close as the checks tighten.
+The alternative is to refuse the construct where the check would skip: a `never` over a union, a singular reference over a refinement of a union, a required union-typed referrer of a deletable record. Reasoning per operand keeps every spelling §1 found working, and the design principle in `CLAUDE.md` decides it by default: the compiler errors when a statement's meaning is undefined, and these meanings are defined, operand by operand. The recommendation is yes.
 
-## 6. Work items
+Costs:
 
-- [ ] Tighten V5, V6, V10, V12, V14, and V15's transition leg to reason per operand of a cross-base refinement (today: skipped, fail-open); rides OQ16's calibration.
-- [ ] Extend narrowing to `x is not A`, nested conditionals, and three-or-more-operand else-branches (`Validator.kt`, the narrowing block).
-- [ ] Carry narrowing into a collection filter's source path, in the name check and in the read-summary collector (`Model.collectExpr`) (S14, B4).
-- [ ] Name-check the predicate of a refinement or `never` whose subject is a cross-base union (`Validator.walkRefExpr` skips it when `Model.baseOf` has no single base), so a field the operands declare separately is the Reference §9 error and not a per-instance read at runtime (B1).
-- [ ] Resolve the element of a refinement-filtered collection as the refinement, so an aggregate or selector over `claims where PaidClaim` can read `PaidClaim`'s own body properties (P8).
-- [ ] Add a union notation to the class and state-flow diagrams (`diagrams.md`).
-- [ ] Name both declarations in the diagnostic for a field the operands declare separately: `[F1] 'entry' is not a member of 'EntryChange'` says neither that `RenameEntry` and `MoveEntry` each declare `entry` nor what to write, and for the bare spelling adds "use this.<field> for the subject", which also fails (`working-docs/examples/survey/17-shared-field-union-rule-refused.velle`; Reference §9's per-shape read is the spelling to offer).
+- One message per failing operand, naming the operand and the union, so an author sees which kind of record breaks the proof.
+- V12 over a refinement of a union proves at-most-one for each operand's records; a union with one act operand is refused as the base is today.
+- V24 over a required union-typed referrer offers the same three resolutions as over an operand-typed one.
+
+From `examples/gallery/gallery.velle`, with the prohibition this review added:
+
+```
+shape Contribution {                       -- one declaration both operands take (Reference §9)
+    author: one Member
+}
+act Post is Contribution { body: text }    -- a post has author
+act Photo is Contribution { caption: text }
+shape Content = Post or Photo              -- a record of either kind
+act Comment { target: one Content }        -- target holds a post or a photo
+shape Popular = Content where count(comments) >= 2   -- one refinement over both kinds
+
+shape Spotlight = Member {
+    featured: one Content? = (Popular for this)      -- today: validates, V12 silent; a member with two popular posts fails at the first read
+}                                                    -- after D1: V12 refuses it, naming Post, as it does for `(Popular for this)` over Post today
+```
+
+#### Proposed changes
+
+- `Validator.kt`: `checkNevers` matches a never's read of a field a taken shape declares against writes on every operand (V10); `checkSingularProofs` runs per operand of a cross-base refinement (V12); `checkTransitionInterference` runs per operand (V15); `checkDeleteStatements` counts a required union-typed field as a referrer of every operand (V24); each message names the operand.
+- `checks.md` V10, V12, V15, V24: one sentence each saying the check reasons per operand of a union.
+- `wiki/Normative/diagnostics.md`: one refused spec per new message under `compiler/src/test/resources/diagnostics/`.
+- `UnionStressTest.kt`: the four `gap -` tests become assertions of the diagnostic.
+
+**Decided:** yes, 2026-11-16. Dave: `(Popular for this)` names one of many and fails on its own terms, whatever the subject; the compiler says so at compile time over a union as it does over one shape.
+
+### D2. A walk through a union-typed reference stops at a record without the relationship · Decided 2026-11-16
+
+When a walk follows a `one` field typed with a union and reaches a record of an operand that does not declare the field, does the walk end there?
+
+Today the walk validates and the first read fails at runtime, case 8 in §1. Two spellings are possible: the walk ends at such a record, so "everything above me" is every escalation up the chain and the alert at its root; or the compiler refuses a walk through a union-typed field unless every operand declares the field, which with `is` means one declaration. The recommendation is the first. Reference §7 says a walk follows the relationship "one or more times"; a record with no such relationship has nothing to follow, and the chain ends there, as it ends at an absent optional. The business sentence, "every escalation above this one and the alert that started it", is the first reading.
+
+Costs:
+
+- The `until` condition is evaluated on each record reached, so it is name-checked against the union: `until source is Alert` is refused, since `Alert` has no `source`, and the spelling is `until this is Alert`. Today that spelling is refused by F2 as `'this is Alert' — a 'Chain' can never be a member of 'Alert'`, because the check types `this` in a walk's condition as the declaring shape and not as the record reached. That is a work item under either answer.
+- A walk's set is typed with the union, so reading it is narrowed per operand like any union-typed collection.
+
+This example is not in the example files:
+
+```
+act Alert { title: text }                              -- the root of a chain; declares no source
+act Escalation { source: one Trail, reason: text }     -- one step up, to an alert or to another escalation
+shape Trail = Alert or Escalation                      -- what a step may reach
+
+shape Chain = Escalation {
+    above: many Trail = walk source                    -- today: validates; reading it fails when the chain reaches an alert
+                                                       -- after D2: every escalation above and the alert; the alert ends the walk
+    root: one Trail? = walk source until this is Alert -- today: refused by F2, `this` typed as Chain
+                                                       -- after D2: the alert at the root, `this` being each record reached
+}
+```
+
+#### Proposed changes
+
+- `Evaluator.kt` (`evalWalk`): a record reached that does not declare the walked field ends the walk.
+- `Validator.kt`: the `until` condition of a walk through a union-typed field is name-checked against the union, with `this` typed as the record reached.
+- Reference §7, "Walks": one sentence saying where a walk through a union-typed field ends, and that `until` reads the record reached.
+- `UnionStressTest.kt`: the walk test asserts the set and the root.
+
+**Decided:** yes, 2026-11-16. The walk ends where the link ends; `this` in an `until` condition is the record reached, and the condition is checked against the union.
+
+## 3. Method
+
+One adversarial spec per case, as a test in `compiler/src/test/kotlin/velle/UnionStressTest.kt` with the verdict recorded in §1. A test named `gap -` asserts today's behaviour and is rewritten when the gap closes. Rulings promote to the Reference and `checks.md` as they settle, and the work items in §4 close as the checks tighten.
+
+## 4. Work items
+
+- [ ] Name-check the predicate of a refinement or `never` whose subject is a cross-base union (`Validator.walkRefExpr` skips it when `Model.baseOf` has no single base), so a field the operands declare separately is the Reference §9 error and not a per-instance read at runtime (B1; `UnionStressTest`, "gap - the predicate of a refinement or never over a union is not name-checked").
+- [ ] Name both declarations in the diagnostic for a field the operands declare separately: `[F1] 'entry' is not a member of 'EntryChange'` says neither that `RenameEntry` and `MoveEntry` each declare `entry` nor what to write, and for the bare spelling adds "use this.<field> for the subject", which also fails (`working-docs/examples/survey/17-shared-field-union-rule-refused.velle`; Reference §9's per-shape read and the `is` clause are the spellings to offer).
+- [ ] After D1: V10 matches a never's read of a field a taken shape declares against writes on each operand ("gap - V10 sees a rule writing what a never over a base reads, and not one over a union").
+- [ ] After D1: V12 proves at-most-one per operand of a refinement over a union ("gap - V12 proves at-most-one over a base and skips the same refinement over a union").
+- [ ] After D1: V24 counts a required union-typed field as a referrer of each operand a rule deletes ("gap - V24 sees a required operand-typed referrer and not a required union-typed one").
+- [ ] After D1: V15's third leg reasons per operand of a refinement over a union (`checkTransitionInterference`, `model.baseOf(refName) ?: continue`).
+- [ ] Extend narrowing to `x is not A` (V11's `not (x is A)`, listed as unbuilt in `Validator.kt`'s header) and to the residual `else` of a union with three or more operands and of a nested union, where the residual is the union of the operands not yet excluded ("gap - narrowing by is not, and the residual else of a three-operand union, are refused"; Reference §10's `else` sentence grows).
+- [ ] Carry narrowing into the read-summary collector (`Model.collectExpr`), so a rule narrowing a filter's source path is not paired with every rule by V15 (S14, B4); the name check already carries it ("narrowing inside a collection filter and on a filter's source path is licensed").
+- [ ] Resolve the element of a refinement-filtered collection as the refinement, so an aggregate or selector over `claims where PaidClaim` can read `PaidClaim`'s own body properties (P8; "gap - the element of a refinement-filtered collection is its base, not the refinement").
+- [ ] V13 counts a union-typed field as matching the subject of a `for`, so `(Comment for this)` beside `target: one Content` and `post: one Post` is refused with the filter form offered, as Reference §14 says, instead of failing on the first read ("gap - a singular reference beside a union-typed and an operand-typed field has no diagnostic and fails on the first read").
+- [ ] After D2: the walk through a union-typed field ends at a record without the relationship, and `this` in its `until` condition is the record reached ("gap - a walk through a union-typed reference fails at runtime on an operand that lacks the relationship").
+- [ ] Draw a static union and a refinement over it: a box for the union with its shared members and an arrow from each operand in the class diagram, and a state-flow axis for a refinement over a union, under each operand ("gap - the diagrams omit a static union and a refinement over it"; `diagrams.md`).
+- [ ] Refuse `Content from { ... }` naming the operands, as creating a shape other shapes take is refused naming its takers: "creates 'Content', which has no records of its own: Post and Photo are Content; create one of them" ("gap - creating a union names it an unknown shape").
+- [ ] Give a union of refinements, `shape Notable = LongPost or Captioned`, a view of its own with the shared members, or refuse it as a rule subject and ask for a named static union with a `where` ("a union of refinements generates no view of its own").
+- [ ] Probe a union-typed field inside a nested part of a closure, `act Post with { comments with { reactions } }` where a reaction points at a `Content`.
+- [ ] Probe whether a `never` over a union is spendable by V1, V5, V15, and V16 (`checks.md` V10), and whether a narrowed read's contention width (A5) over every operand that declares the name is real.
 - [ ] Let a `never` over a shape a transient act takes with `is` narrow to that act (`this is RenameEntry`): V17's expression check allows the narrowing in a rule or refinement over the taken shape (`Validator.transientSubjectsBySite`) and still refuses it in a `never`, whose site the walker does not name (Reference §9, "Sharing a field across shapes").
