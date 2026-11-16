@@ -1,6 +1,6 @@
 # OQ35 — Can several unrelated shapes share one declaration?
 
-**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 and D2 decided 2026-11-16; D4 reframed the same day. D3 to D7 await Dave. Nothing is removed from the language by any decision here.
+**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 to D3 decided 2026-11-16; D4 reframed the same day. D4 to D7 await Dave. Nothing is removed from the language by any decision here.
 
 **In plain terms:** a product owner says "a site visit or a plot inspection is overdue when its due date has passed" and "any change to an entry touches the entry". Each sentence is one rule over several kinds of record that have a field in common. Velle has no way to declare that field once for all of them, so the author writes the rule once per kind, or turns the records inside out so the common part is the container.
 
@@ -144,7 +144,7 @@ Costs:
 
 **Decided:** the shape names it, 2026-11-16.
 
-### D3. The word by which a shape takes a shared declaration
+### D3. The word by which a shape takes a shared declaration · Decided 2026-11-16
 
 Which word goes between the shape's name and the shared declaration's name? Three candidates, each on the same line of the D1 spec:
 
@@ -166,6 +166,8 @@ Does the shape take a shared declaration with `is`?
 #### Proposed changes
 
 - `wiki/Normative/grammar.md`: `shapeDecl` and `actDecl` gain `("is" ShapeName ("," ShapeName)*)?` after the name, before `byClause` on an act.
+
+**Decided:** `is`, 2026-11-16.
 
 ### D4. Where a shared shape appears in the generated code
 
