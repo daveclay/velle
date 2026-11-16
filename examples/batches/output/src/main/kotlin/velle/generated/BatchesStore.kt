@@ -144,16 +144,12 @@ interface BatchesStore {
     /** Serves never #2 — `PeptideBatch where quantityMg <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never2Candidates(): List<PeptideBatchRow>
-    /** Serves never #3 — `PeptideBatch where exists (Component where (composition == this.origin) and (source.peptide != this.peptide))`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never3Candidates(): List<PeptideBatchRow>
 }
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class BatchesStoreQuestions(model: Model) {
     val never1Candidates = QTemplate.of(model, "Component", model.nevers[0].target)
     val never2Candidates = QTemplate.of(model, "PeptideBatch", model.nevers[1].target)
-    val never3Candidates = QTemplate.of(model, "PeptideBatch", model.nevers[2].target)
 }
 
 /**
@@ -216,10 +212,6 @@ open class BatchesStoreOverGeneric(
     override fun never2Candidates(): List<PeptideBatchRow> =
         backend.fetchCandidates("PeptideBatch", questions.never2Candidates.instantiate(listOf()))
             .map { it.toPeptideBatchRow() }
-
-    override fun never3Candidates(): List<PeptideBatchRow> =
-        backend.fetchCandidates("PeptideBatch", questions.never3Candidates.instantiate(listOf()))
-            .map { it.toPeptideBatchRow() }
 }
 
 /** The bridge the runtime speaks through: generic protocol in, typed store out. */
@@ -278,8 +270,6 @@ class BatchesStoreResolver(
             questions.never1Candidates.match(filter)?.let { h -> return store.never1Candidates().map { it.toRow() } }
         if (shape == "PeptideBatch")
             questions.never2Candidates.match(filter)?.let { h -> return store.never2Candidates().map { it.toRow() } }
-        if (shape == "PeptideBatch")
-            questions.never3Candidates.match(filter)?.let { h -> return store.never3Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
 

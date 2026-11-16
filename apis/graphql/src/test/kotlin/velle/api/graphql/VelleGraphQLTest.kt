@@ -258,6 +258,16 @@ class VelleGraphQLTest {
     }
 
     @Test
+    fun `a union of refinements is a union of their shapes, with a query root and a flag on each operand`() {
+        val gallery = sdl("gallery")
+        assertTrue("\nunion Notable = Photo | Post" in gallery, gallery)
+        assertTrue("notables(after: String, first: Int, orderBy: [String!]!, where: String): NotablePage!" in gallery, gallery)
+        assertTrue("isNotable: Boolean!" in gallery.substringAfter("\ntype Post ").substringBefore("\n}"), gallery)
+        assertTrue("isNotable: Boolean!" in gallery.substringAfter("\ntype Photo ").substringBefore("\n}"), gallery)
+        assertTrue("isPopular: Boolean!" in gallery.substringAfter("\ntype Post ").substringBefore("\n}"), "a refinement over the static union flags its operands too: $gallery")
+    }
+
+    @Test
     fun `only a nested input has asNew`() {
         assertTrue("asNew" !in inputType(sdl("billing"), "SignUpInput"))
         assertTrue("\n  asNew: Int\n" in inputType(sdl("orders"), "OrderOrderLineInput"))

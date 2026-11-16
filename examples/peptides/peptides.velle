@@ -806,9 +806,9 @@ rule NoticeHalt when (HaltedTrial where not exists HaltNotice for this) {
 -- shape for both stages. The pending count reads each stage's plots by
 -- comparing their trial to the union-typed reference: a greenhouse task
 -- matches no field plot and a field task no greenhouse plot, so the two
--- counts sum without narrowing. (Narrowing the reference first —
--- `if trial is GreenhouseTrial then count(trial.greenhousePlots where ...)`
--- — is not carried into a collection filter's source path today; OQ44.)
+-- counts sum without narrowing; narrowing the reference first,
+-- `if trial is GreenhouseTrial then count(trial.greenhousePlots where ...)`,
+-- says the same in two branches.
 -- The task's day mark is read through `this.` two filters deep.
 shape Trial = GreenhouseTrial or FieldTrial
 

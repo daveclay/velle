@@ -126,14 +126,15 @@ class BatchesProbesTest {
         assertTrue(codes(readable).contains("F1"), messages(readable))
     }
 
-    // ── B4: narrowing is lost on a collection filter's source path ──
+    // ── B4: narrowing is carried onto a collection filter's source path ──
 
     @Test
-    fun `B4 - origin is Composition does not license origin dot components as a filter source`() {
-        // OQ44 §3 lists this form (peptides S14). The example filters over the
-        // declared shape instead: `exists (Component where composition == this.origin ...)`.
+    fun `B4 - origin is Composition licenses origin dot components as a filter source`() {
+        // Reference §10: a test to the left of `and` narrows what follows it, the
+        // source of a filter included. The example says it this way; filtering over
+        // the declared shape and matching the composition by comparison says the same.
         val narrowed = inverted + "\nnever (PeptideBatch where origin is Composition and exists (origin.components where source.peptide != this.peptide))"
-        assertTrue(codes(narrowed).contains("F1"), messages(narrowed))
+        assertEquals(emptyList(), codes(narrowed), messages(narrowed))
         val declared = inverted + "\nnever (PeptideBatch where exists (Component where composition == this.origin and source.peptide != this.peptide))"
         assertEquals(emptyList(), codes(declared), messages(declared))
     }

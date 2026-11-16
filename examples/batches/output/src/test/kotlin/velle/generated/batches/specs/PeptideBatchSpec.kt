@@ -9,7 +9,7 @@ import velle.generated.batches.*
 /**
  * never (PeptideBatch where quantityMg <= 0)
  *
- * never (PeptideBatch where exists (Component where (composition == this.origin) and (source.peptide != this.peptide)))
+ * never (PeptideBatch where (origin is Composition) and (exists (origin.components where source.peptide != this.peptide)))
  *
  * never (PeptideBatch where remainingMg < 0)
  *

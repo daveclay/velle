@@ -62,9 +62,10 @@ class Wire(private val system: VelleSystem) {
 
     private fun refOf(id: Long): Map<String, Any?> = ref(system.refFor(id))
 
-    /** The refinements a record of [shape] may be a member of, named as the generated model object's flags are. */
+    /** The refinements a record of [shape] may be a member of, named as the generated model object's flags are:
+     *  the refinements of the shape, and the refinements over a union the shape is an operand of (Reference §9). */
     fun flagsOf(shape: String): List<String> = flagCache.getOrPut(shape) {
-        model.refinements.keys.filter { r -> model.baseOf(r) == shape && model.basesOf(r).none { it in model.transients } }
+        model.refinements.keys.filter { r -> !model.isStaticUnion(r) && shape in model.basesOf(r) && model.basesOf(r).none { it in model.transients } }
     }
     private val flagCache = mutableMapOf<String, List<String>>()
 

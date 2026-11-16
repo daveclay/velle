@@ -101,6 +101,20 @@ interface GalleryStore {
     fun popularityNoticesByContent(target: Ref.Persisted): List<PopularityNoticeRow>
     fun commentNoticesByRecipient(target: Ref.Persisted): List<CommentNoticeRow>
     fun commentNoticesByComment(target: Ref.Persisted): List<CommentNoticeRow>
+
+    // ── candidate reads: one per condition with a testable part ──
+    /** Serves refinement LongPost — `LongPost`.
+     *  Superset contract: any superset of the matching rows is correct. */
+    fun longPostCandidates(): List<PostRow>
+    /** Serves refinement Captioned — `Captioned`.
+     *  Superset contract: any superset of the matching rows is correct. */
+    fun captionedCandidates(): List<PhotoRow>
+}
+
+/** The candidate questions as recognizable templates (QTemplate). */
+class GalleryStoreQuestions(model: Model) {
+    val longPostCandidates = QTemplate.of(model, "Post", RefName("LongPost"))
+    val captionedCandidates = QTemplate.of(model, "Photo", RefName("Captioned"))
 }
 
 /**
@@ -109,8 +123,9 @@ interface GalleryStore {
  */
 open class GalleryStoreOverGeneric(
     private val backend: StateResolver,
-    @Suppress("UNUSED_PARAMETER") model: Model,
+    model: Model,
 ) : GalleryStore {
+    private val questions = GalleryStoreQuestions(model)
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
@@ -144,13 +159,22 @@ open class GalleryStoreOverGeneric(
         backend.fetchReferencing("CommentNotice", "recipient", target).map { it.toCommentNoticeRow() }
     override fun commentNoticesByComment(target: Ref.Persisted): List<CommentNoticeRow> =
         backend.fetchReferencing("CommentNotice", "comment", target).map { it.toCommentNoticeRow() }
+
+    override fun longPostCandidates(): List<PostRow> =
+        backend.fetchCandidates("Post", questions.longPostCandidates.instantiate(listOf()))
+            .map { it.toPostRow() }
+
+    override fun captionedCandidates(): List<PhotoRow> =
+        backend.fetchCandidates("Photo", questions.captionedCandidates.instantiate(listOf()))
+            .map { it.toPhotoRow() }
 }
 
 /** The bridge the runtime speaks through: generic protocol in, typed store out. */
 class GalleryStoreResolver(
     private val store: GalleryStore,
-    @Suppress("UNUSED_PARAMETER") model: Model,
+    model: Model,
 ) : StateResolver {
+    private val questions = GalleryStoreQuestions(model)
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
@@ -188,6 +212,10 @@ class GalleryStoreResolver(
     }
 
     override fun fetchCandidates(shape: String, filter: QF): List<Row> {
+        if (shape == "Post")
+            questions.longPostCandidates.match(filter)?.let { h -> return store.longPostCandidates().map { it.toRow() } }
+        if (shape == "Photo")
+            questions.captionedCandidates.match(filter)?.let { h -> return store.captionedCandidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
 

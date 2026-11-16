@@ -42,6 +42,18 @@ A union shares only what both shapes get from one declaration: `id`, and inverse
 
 Over the union, a rule may read `id` and the shared inverses, create records whose fields are typed with the union, count, test `exists`, and delete. Anything else needs the record narrowed to one shape first. `target is Post` in an `if` condition, or to the left of an `and`, lets what follows read `Post`'s own fields, as in `never (Comment where target is Post and target.author == author)`. In an `if` over a two-shape union, the `else` branch is narrowed to the other shape. A same-named field is read per shape: `if target is Post then target.author else target.author`.
 
+`or` also joins refinements of different shapes. From `examples/gallery/gallery.velle`:
+
+```
+shape LongPost = Post where length(body) >= 40
+shape Captioned = Photo where caption != ""
+shape Notable = LongPost or Captioned
+```
+
+- `Notable` is read as a union of its shapes, `Post or Photo`: it carries what the two share, and a rule `when Notable` fires for a long post and for a captioned photo.
+- The generated code reads it as it reads `Content`: `notables` is a view, and a post and a photo each carry whether they are notable ([Read API](Read-API)).
+- It is not a field type. A field holds records of a union of shapes, whose members are fixed by declarations, never of a union of refinements, whose members change with the data ([§6](Reference-06-Relationships)).
+
 Three more rules apply to a union of shapes:
 
 - Its body may declare derived properties only. For `captured`, write `initially` on each shape. `undeletable` goes on a refinement of each shape.

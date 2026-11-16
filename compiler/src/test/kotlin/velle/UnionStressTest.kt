@@ -267,12 +267,12 @@ class UnionStressTest {
     }
 
     @Test
-    fun `a union of refinements generates no view of its own`() {
+    fun `a union of refinements is read as a union of its shapes, with a view and a flag on each operand`() {
         val composite = content + """
 
             shape LongPost = Post where length(body) > 10
             shape Captioned = Photo where caption != ""
-            shape Notable = LongPost or Captioned
+            shape Notable = LongPost or Captioned { tag: text = "notable" }
             shape Twice = Post or Post
             shape Mixed = Content or Post
             shape Notice { about: one Content }
@@ -281,7 +281,27 @@ class UnionStressTest {
         assertEquals(emptyList(), diags(composite))
         val kotlin = Codegen.generate(composite, "Ex")
         assertTrue("fun twices()" in kotlin && "fun mixeds()" in kotlin, "a degenerate union still gets a view")
-        assertTrue("fun notables()" !in kotlin, "a union of refinements has no base and no static union to name a view after")
+        assertTrue("fun notables(): List<Notable>" in kotlin, "the view of a union of refinements")
+        assertTrue("val notables: NotableQuery" in kotlin, "its query")
+        val view = kotlin.substringAfter("data class Notable(").substringBefore("\n}")
+        assertTrue("val notices: List<Ref<Notice>>" in view, "what the operands share, the inverse of Notice.about: $view")
+        assertTrue("val tag: String" in view, "its own body member: $view")
+        assertTrue("author" !in view && "body" !in view && "caption" !in view, "nothing the operands declare separately or alone: $view")
+        assertTrue(") : Ref<Keyed>" in view, "a reference to a record of any of its shapes: $view")
+        val post = kotlin.substringAfter("data class Post(").substringBefore("\n}")
+        val photo = kotlin.substringAfter("data class Photo(").substringBefore("\n}")
+        assertTrue("val isNotable: Boolean" in post && "val isNotable: Boolean" in photo, "a membership flag on each operand")
+        assertTrue("val isLongPost: Boolean" in post && "isLongPost" !in photo, "an operand's own refinement flags that operand only")
+        val sys = system(composite)
+        sys.scope {
+            val ada = sys.mustCommit("Member", mapOf("name" to "Ada"))
+            val long = sys.mustCommit("Post", mapOf("author" to ada, "body" to "a post long enough to be notable"))
+            sys.mustCommit("Post", mapOf("author" to ada, "body" to "short"))
+            val captioned = sys.mustCommit("Photo", mapOf("author" to ada, "caption" to "dawn"))
+            sys.mustCommit("Photo", mapOf("author" to ada, "caption" to ""))
+            assertEquals(setOf(long, captioned), sys.instancesOf("Notable").toSet())
+            assertEquals(setOf(long, captioned), sys.instancesOf("Notice").map { sys.get(it, "about") }.toSet())
+        }
     }
 
     @Test

@@ -46,6 +46,9 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun populars(): List<Popular> = all("Popular") { materializePopular(it) }
     fun postComments(): List<PostComment> = all("PostComment") { materializePostComment(it) }
     fun photoComments(): List<PhotoComment> = all("PhotoComment") { materializePhotoComment(it) }
+    fun longPosts(): List<LongPost> = all("LongPost") { materializeLongPost(it) }
+    fun captioneds(): List<Captioned> = all("Captioned") { materializeCaptioned(it) }
+    fun notables(): List<Notable> = all("Notable") { materializeNotable(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -102,6 +105,18 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         val photoComments: PhotoCommentQuery get() = query("PhotoComment", PhotoCommentFields()) { materializePhotoComment(it) }
         /** The record behind [ref] as a member of PhotoComment, or null when it is not one. */
         fun photoComment(ref: Ref<Comment>): PhotoComment? = member("PhotoComment", ref) { materializePhotoComment(it) }
+
+        val longPosts: LongPostQuery get() = query("LongPost", LongPostFields()) { materializeLongPost(it) }
+        /** The record behind [ref] as a member of LongPost, or null when it is not one. */
+        fun longPost(ref: Ref<Post>): LongPost? = member("LongPost", ref) { materializeLongPost(it) }
+
+        val captioneds: CaptionedQuery get() = query("Captioned", CaptionedFields()) { materializeCaptioned(it) }
+        /** The record behind [ref] as a member of Captioned, or null when it is not one. */
+        fun captioned(ref: Ref<Photo>): Captioned? = member("Captioned", ref) { materializeCaptioned(it) }
+
+        val notables: NotableQuery get() = query("Notable", NotableFields()) { materializeNotable(it) }
+        /** The record behind [ref] as a member of Notable, or null when it is not one. */
+        fun notable(ref: Ref<Keyed>): Notable? = member("Notable", ref) { materializeNotable(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -138,6 +153,8 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
         commentCount = (system.getAs(id, "Content", "commentCount") as BigDecimal).intValueExact(),
         isPopular = system.isMember(id, "Popular"),
+        isLongPost = system.isMember(id, "LongPost"),
+        isNotable = system.isMember(id, "Notable"),
     )
 
     private fun materializePhoto(id: Long): Photo = Photo(
@@ -148,6 +165,8 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
         commentCount = (system.getAs(id, "Content", "commentCount") as BigDecimal).intValueExact(),
         isPopular = system.isMember(id, "Popular"),
+        isCaptioned = system.isMember(id, "Captioned"),
+        isNotable = system.isMember(id, "Notable"),
     )
 
     private fun materializeComment(id: Long): Comment = Comment(
@@ -179,10 +198,14 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
     private fun materializePopular(id: Long): Popular = Popular(
         key = system.refFor(id).key,
+        shape = system.shapeOf(id),
         author = system.refFor(system.get(id, "author") as Long),
         comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
         popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
         commentCount = (system.get(id, "commentCount") as BigDecimal).intValueExact(),
+        isLongPost = system.isMember(id, "LongPost"),
+        isCaptioned = system.isMember(id, "Captioned"),
+        isNotable = system.isMember(id, "Notable"),
     )
 
     private fun materializePostComment(id: Long): PostComment = PostComment(
@@ -201,6 +224,37 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         body = system.get(id, "body") as String,
         commentNotices = (system.get(id, "commentNotices") as List<*>).map { system.refFor(it as Long) },
         isPostComment = system.isMember(id, "PostComment"),
+    )
+
+    private fun materializeLongPost(id: Long): LongPost = LongPost(
+        key = system.refFor(id).key,
+        author = system.refFor(system.get(id, "author") as Long),
+        body = system.get(id, "body") as String,
+        comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
+        popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
+        isPopular = system.isMember(id, "Popular"),
+        isNotable = system.isMember(id, "Notable"),
+    )
+
+    private fun materializeCaptioned(id: Long): Captioned = Captioned(
+        key = system.refFor(id).key,
+        author = system.refFor(system.get(id, "author") as Long),
+        caption = system.get(id, "caption") as String,
+        comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
+        popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
+        isPopular = system.isMember(id, "Popular"),
+        isNotable = system.isMember(id, "Notable"),
+    )
+
+    private fun materializeNotable(id: Long): Notable = Notable(
+        key = system.refFor(id).key,
+        shape = system.shapeOf(id),
+        author = system.refFor(system.get(id, "author") as Long),
+        comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
+        popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
+        isPopular = system.isMember(id, "Popular"),
+        isLongPost = system.isMember(id, "LongPost"),
+        isCaptioned = system.isMember(id, "Captioned"),
     )
 
     companion object {
@@ -288,6 +342,13 @@ rule NotifyAuthor when Comment {
 -- membership tests through a union-typed field
 shape PostComment  = Comment where target is Post
 shape PhotoComment = Comment where target is Photo
+
+-- A union of refinements: a post long enough to read and a photo with a
+-- caption are the gallery's notable content. It is read as a union of their
+-- shapes: `notables` is a view, and a post and a photo each carry `isNotable`.
+shape LongPost = Post where length(body) >= 40
+shape Captioned = Photo where caption != ""
+shape Notable = LongPost or Captioned
 """
     }
 }
@@ -305,6 +366,9 @@ typealias ContentQuery = TypedQuery<ContentFields, Content>
 typealias PopularQuery = TypedQuery<PopularFields, Popular>
 typealias PostCommentQuery = TypedQuery<PostCommentFields, PostComment>
 typealias PhotoCommentQuery = TypedQuery<PhotoCommentFields, PhotoComment>
+typealias LongPostQuery = TypedQuery<LongPostFields, LongPost>
+typealias CaptionedQuery = TypedQuery<CaptionedFields, Captioned>
+typealias NotableQuery = TypedQuery<NotableFields, Notable>
 
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
@@ -397,6 +461,10 @@ data class Post(
     override val commentCount: Int,
     /** membership of Popular at the moment of the read */
     override val isPopular: Boolean,
+    /** membership of LongPost at the moment of the read */
+    val isLongPost: Boolean,
+    /** membership of Notable at the moment of the read */
+    val isNotable: Boolean,
 ) : Ref<Post>, Contribution, Content {
     override val shape: String get() = "Post"
     override val ref: Ref<Post> get() = this
@@ -413,6 +481,10 @@ data class Photo(
     override val commentCount: Int,
     /** membership of Popular at the moment of the read */
     override val isPopular: Boolean,
+    /** membership of Captioned at the moment of the read */
+    val isCaptioned: Boolean,
+    /** membership of Notable at the moment of the read */
+    val isNotable: Boolean,
 ) : Ref<Photo>, Contribution, Content {
     override val shape: String get() = "Photo"
     override val ref: Ref<Photo> get() = this
@@ -477,12 +549,19 @@ interface Content : Keyed {
 
 data class Popular(
     override val key: StoreKey,
+    /** the record's own shape: a Popular is a record of Post or Photo */
+    override val shape: String,
     val author: Ref<Member>,
     val comments: List<Ref<Comment>>,
     val popularityNotices: List<Ref<PopularityNotice>>,
     val commentCount: Int,
+    /** membership of LongPost at the moment of the read */
+    val isLongPost: Boolean,
+    /** membership of Captioned at the moment of the read */
+    val isCaptioned: Boolean,
+    /** membership of Notable at the moment of the read */
+    val isNotable: Boolean,
 ) : Ref<Content> {
-    override val shape: String get() = "Content"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -515,6 +594,56 @@ data class PhotoComment(
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
+data class LongPost(
+    override val key: StoreKey,
+    val author: Ref<Member>,
+    val body: String,
+    val comments: List<Ref<Comment>>,
+    val popularityNotices: List<Ref<PopularityNotice>>,
+    /** membership of Popular at the moment of the read */
+    val isPopular: Boolean,
+    /** membership of Notable at the moment of the read */
+    val isNotable: Boolean,
+) : Ref<Post> {
+    override val shape: String get() = "Post"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+data class Captioned(
+    override val key: StoreKey,
+    val author: Ref<Member>,
+    val caption: String,
+    val comments: List<Ref<Comment>>,
+    val popularityNotices: List<Ref<PopularityNotice>>,
+    /** membership of Popular at the moment of the read */
+    val isPopular: Boolean,
+    /** membership of Notable at the moment of the read */
+    val isNotable: Boolean,
+) : Ref<Photo> {
+    override val shape: String get() = "Photo"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+data class Notable(
+    override val key: StoreKey,
+    /** the record's own shape: a Notable is a record of Post or Photo */
+    override val shape: String,
+    val author: Ref<Member>,
+    val comments: List<Ref<Comment>>,
+    val popularityNotices: List<Ref<PopularityNotice>>,
+    /** membership of Popular at the moment of the read */
+    val isPopular: Boolean,
+    /** membership of LongPost at the moment of the read */
+    val isLongPost: Boolean,
+    /** membership of Captioned at the moment of the read */
+    val isCaptioned: Boolean,
+) : Ref<Keyed> {
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 
 class TickFields(path: List<String> = emptyList()) : Fields(path) {
@@ -531,6 +660,8 @@ class PostFields(path: List<String> = emptyList()) : Fields(path) {
     val body: TextField get() = TextField(fieldPath + "body")
     val commentCount: NumField get() = NumField(fieldPath + "commentCount")
     fun isPopular(): Expr = isA("Popular")
+    fun isLongPost(): Expr = isA("LongPost")
+    fun isNotable(): Expr = isA("Notable")
 }
 
 class PhotoFields(path: List<String> = emptyList()) : Fields(path) {
@@ -538,6 +669,8 @@ class PhotoFields(path: List<String> = emptyList()) : Fields(path) {
     val caption: TextField get() = TextField(fieldPath + "caption")
     val commentCount: NumField get() = NumField(fieldPath + "commentCount")
     fun isPopular(): Expr = isA("Popular")
+    fun isCaptioned(): Expr = isA("Captioned")
+    fun isNotable(): Expr = isA("Notable")
 }
 
 class CommentFields(path: List<String> = emptyList()) : Fields(path) {
@@ -572,6 +705,9 @@ class ContentFields(path: List<String> = emptyList()) : Fields(path) {
 class PopularFields(path: List<String> = emptyList()) : Fields(path) {
     val author: MemberFields get() = MemberFields(fieldPath + "author")
     val commentCount: NumField get() = NumField(fieldPath + "commentCount")
+    fun isLongPost(): Expr = isA("LongPost")
+    fun isCaptioned(): Expr = isA("Captioned")
+    fun isNotable(): Expr = isA("Notable")
 }
 
 class PostCommentFields(path: List<String> = emptyList()) : Fields(path) {
@@ -586,6 +722,27 @@ class PhotoCommentFields(path: List<String> = emptyList()) : Fields(path) {
     val author: MemberFields get() = MemberFields(fieldPath + "author")
     val body: TextField get() = TextField(fieldPath + "body")
     fun isPostComment(): Expr = isA("PostComment")
+}
+
+class LongPostFields(path: List<String> = emptyList()) : Fields(path) {
+    val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val body: TextField get() = TextField(fieldPath + "body")
+    fun isPopular(): Expr = isA("Popular")
+    fun isNotable(): Expr = isA("Notable")
+}
+
+class CaptionedFields(path: List<String> = emptyList()) : Fields(path) {
+    val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val caption: TextField get() = TextField(fieldPath + "caption")
+    fun isPopular(): Expr = isA("Popular")
+    fun isNotable(): Expr = isA("Notable")
+}
+
+class NotableFields(path: List<String> = emptyList()) : Fields(path) {
+    val author: MemberFields get() = MemberFields(fieldPath + "author")
+    fun isPopular(): Expr = isA("Popular")
+    fun isLongPost(): Expr = isA("LongPost")
+    fun isCaptioned(): Expr = isA("Captioned")
 }
 
 fun main() {

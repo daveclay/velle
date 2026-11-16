@@ -87,7 +87,7 @@ Two whole businesses have been written against v0, each starting from the domain
 | S11 | generated boundary cases ignored `or` range prohibitions | GAP | fixed in `SpecGen.kt`; the relationship-`never` coupling is OQ56 |
 | S12 | every series rule widens to a whole-shape queue (A5) | TAX | OQ55 |
 | S13 | a duration cannot be built from data | TAX | OQ34 |
-| S14 | union as a task target; narrowing lost on a filter's source path | HOLDS / GAP | the gap is in OQ44 §3 |
+| S14 | union as a task target; narrowing carried onto a filter's source path (closed 2026-11-16) | HOLDS | Reference §10; `BatchesProbesTest.kt` B4 |
 
 **Pharmacy** (`examples/pharmacy/`, first pass 2026-10-11): a retail pharmacy — four kinds of people acting on the same records, a request that arrives as several records (the prescriber's order and its prescriptions, one closure), relationships that run both ways and across edge sets (interactions, allergies), role-gated acts, two kinds of answer at the counter, and time in the records rather than in the rules.
 
@@ -100,7 +100,7 @@ Two whole businesses have been written against v0, each starting from the domain
 | P5 | `never` over a rule-written field fails closed (V10) | TAX | OQ53; rides this question |
 | P6 | deleting an unfilled prescription strands fourteen referrers (V24) | TAX | by design; void as a record (reversal as data) |
 | P7 | disarm proof does not look through a refinement over `is not empty` (V2/V16) | TAX | OQ53 |
-| P8 | filtered aggregate cannot reach a refinement-body property | TAX | OQ44 §3 |
+| P8 | a filtered aggregate reaches a refinement-body property, `sum(claims where PaidClaim, patientPays)` (closed 2026-11-16) | HOLDS | Reference §10; `UnionStressTest.kt` |
 | P9 | closure, two-field view, edge-set join, two-hop view, captures, schedule-only exit, dated ledger, gated deletion, union recipient, refusals | HOLDS | `PharmacyFlowTest.kt` |
 | P10 | generator: closure part "not exposed"; one staff given for every role gate; schedule-only exit case asserts nothing | TAX | OQ56 |
 | P11 | 57 A5 widths; the allergy join's second binding resolved against the first binding's element | TAX | OQ55 |
@@ -115,8 +115,8 @@ Two whole businesses have been written against v0, each starting from the domain
 | B1 | a predicate over a cross-base union is name-checked (closed 2026-11-16): a field the operands declare separately is refused naming the declarations, and a nonsense name is unknown | HOLDS | `checks.md` F1; Reference §9 "Sharing a field across shapes" is the spelling; `BatchesProbesTest.kt` B1 |
 | B2 (retired 2026-10-21 by OQ63: a `one` field named in `with` lets the origin arrive nested in the batch, Reference §6; the probe now shows the construct) | the batch and its origin cannot arrive in one commit: a closure creates parts pointing back at the act, the batch points forward; the unclaimed origin is reportable state (`UnclaimedOrigin`) and a `never` over it refuses the origin's own commit | TAX | OQ63 |
 | B3 | the inferred inverse of `PeptideBatch.origin` is `peptideBatchs` — Reference §6's "pluralized with `s`" is literal; the spec declares the view under the readable name on the union body | TAX | OQ92 |
-| B4 | `origin is Composition` does not license `origin.components` as a filter's source; the spec filters over the declared shape and matches the composition by comparison | TAX | OQ44 §3 (S14's form) |
-| B5 | a field read through a `many` hop (`(Component where ...).source`, `origin.components.source`) validates and cannot be evaluated; so a derived set of ancestor batches, and the transitive "never draws from itself", has no spelling that runs; the one-step `never` stands, and the commit order makes it the only reachable case | GAP | OQ91; the acyclicity certificate is OQ44 §2 item 8 |
+| B4 | `origin is Composition` licenses `origin.components` as a filter's source (closed 2026-11-16); `examples/batches/batches.velle` says it that way | HOLDS | Reference §10; `BatchesProbesTest.kt` B4 |
+| B5 | a field read through a `many` hop (`(Component where ...).source`, `origin.components.source`) validates and cannot be evaluated; so a derived set of ancestor batches, and the transitive "never draws from itself", has no spelling that runs; the one-step `never` stands, and the commit order makes it the only reachable case | GAP | OQ91; no OQ asks for a compile-time proof that a batch never draws from itself |
 | B6 | a derived collection reading itself through a `many` hop draws no V14 — the self-read is not in V14's definition graph; masked by B5 | GAP | OQ53 |
 | B7 | the generator synthesized a boundary case for `never (PeptideBatch where remainingMg < 0)` with nothing to vary, since `remainingMg` is derived; the case failed | GAP | fixed in `SpecGen.kt` ("derived comparison subject"); `SPEC_INDEX-Batches.md` |
 | B8 | the inverted spelling: a union-typed field as the one-of-three, narrowing per operand at the surface, the kind as a derivation, refinements per kind, the closure for a mixture's components, what is left as a derivation over the inverse, four refusals and a depletion rule | HOLDS | `BatchesFlowTest.kt`, over SQLite twice |
@@ -146,7 +146,7 @@ V15 pairs the opener and the closer: both change membership in `OpenExcursion`, 
 - **The sibling-confluence audit's residue:** the induction from pairwise-sibling commutation to full-cascade commutation is argued, not proven; the order sweep is identity-versus-reversed, not N-permutations (seeded N-permutation sampling per commit is the extension; the knob is `VelleSystem.firingOrder`); the polarity and fresh-instance analyses are deliberately coarse (signed sums under positivity `never`s, `as`-aliased consult attribution, the cascade-induction write-up).
 - **The delete rulings' stress test** (Reference §12 "Deletion", `checks.md` V23–V28): adversarial use cases; anything that breaks reopens the ruling and changes the v0 implementation with it. Pharmacy P6 (V24's fourteen stranded referrers) is the first data point, resolved by modeling the void as a record. The three riders the rulings left open are OQ53: V25's accepted false positive and the data point its coarseness ruling asked for, V24 not reasoning from the deleter's scope, and deletion against a fold twin or a snapshot.
 - **Constructs the passes have not covered:** 3+-binding sibling joins; per-hop freeze depth (`LockedLineItem = LineItem where order is SettledOrder { frozen ... }`); the self-referential derived property beyond peptides' two uses (V14's descent certificates accept the recurrence); the declared `many` field beyond `examples/enrollment/`.
-- **Prior art still unstudied:** Eve, Alloy, CUE, SQL; term rewriting (critical pairs, Newman's lemma) and CHR confluence checking are load-bearing for this question. Datalog's first pass landed: stratification → V14, recursive predicates → self-reference; its residue, sum types, settled as cross-base `or` (OQ29), with the adversarial pass in OQ44.
+- **Prior art still unstudied:** Eve, Alloy, CUE, SQL; term rewriting (critical pairs, Newman's lemma) and CHR confluence checking are load-bearing for this question. Datalog's first pass landed: stratification → V14, recursive predicates → self-reference; its residue, sum types, settled as cross-base `or` (OQ29), with the adversarial pass settled as OQ44 (the settled table in `working-docs/QUESTIONS.md`).
 
 ## Work items
 

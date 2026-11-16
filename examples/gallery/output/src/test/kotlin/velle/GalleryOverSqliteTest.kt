@@ -45,7 +45,7 @@ class GalleryFlowOverTypedStoreTest : GalleryFlowTest() {
 }
 
 /**
- * What only storage can show (OQ44, "Hydration and the store"): a union-typed
+ * What only storage can show (Reference §9, §22): a union-typed
  * reference (Reference §9) persisted with its concrete shape and read back in a
  * second process — the polymorphic association, the inverse inferred through
  * it, and the join read telling Post#1 from Photo#1 behind one key.

@@ -137,6 +137,25 @@ open class GalleryFlowTest {
     }
 
     @Test
+    fun `a union of refinements - notables holds the long post and the captioned photo, and each operand carries the flag`() {
+        val ada = member("Ada")
+        val long = post(ada, "a post long enough to be worth reading, forty characters and more")
+        val short = post(ada, "hi")
+        val captioned = photo(ada, "sunset")
+        val bare = photo(ada, "")
+
+        val notables = sys.notables()
+        // a notable is the record it names: a post and a photo may share a key, so identity is shape and key
+        assertEquals(setOf<velle.Keyed>(long, captioned), notables.toSet<velle.Keyed>())
+        assertTrue(sys.read(long).isNotable && sys.read(captioned).isNotable)
+        assertTrue(!sys.read(short).isNotable && !sys.read(bare).isNotable)
+        assertTrue(sys.read(long).isLongPost && sys.read(captioned).isCaptioned)
+        // a notable is a reference to a record of either shape: reading it gives that shape's model object
+        assertEquals(setOf("Post", "Photo"), notables.map { sys.read(it).shape }.toSet())
+        assertEquals(long, sys.read(notables.single { it.shape == "Post" }) as? Post)
+    }
+
+    @Test
     fun `a reference outside the union cannot inhabit the field's type`() {
         val ada = member("Ada")
         val grace = member("Grace")

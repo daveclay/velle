@@ -1647,7 +1647,10 @@ class Validator(private val model: Model) {
                                 "`(${Printer.expr(src)} as value where ...)`, but not filtered by a member, summed, or ordered (Reference §5)"))
                             return
                         }
-                        model.pathElementShape(src, scope, aliasScopes, thisScope ?: scope)?.let { element = it }
+                        // a narrowed prefix (`origin is Composition and exists (origin.components where ...)`)
+                        // resolves the rest of the source path against the narrowed scope (Reference §10)
+                        val narrowedElement = narrowedPrefix(src)?.let { (k, sc) -> model.pathElementShape(PathExpr("this", src.segs.drop(k)), sc, emptyMap(), sc) }
+                        (narrowedElement ?: model.pathElementShape(src, scope, aliasScopes, thisScope ?: scope))?.let { element = it }
                     }
                 is ShapeForSource -> { checkExpr(src.forExpr, scope); element = src.shape }
                 is WalkExpr -> { checkExpr(src, scope); model.walkTarget(src, scope)?.let { element = it } }

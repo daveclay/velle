@@ -18,7 +18,7 @@ each case below is an executable test.
 ## Not yet generated
 
 - never #1: shape is not an act
-- never #3: non-comparison predicate
+- never #3: multi-conjunct predicate
 - never #4: derived comparison subject
 - never #5: derived comparison subject
 - unique #6: a key, origin: one Origin unique: no bound to cross

@@ -351,9 +351,8 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 --     they declare separately (Reference §9), so a common field like the
 --     quantity is unreadable from the union by the Reference; declaring it once
 --     on a shape the three take with `is` is the spelling (Reference §9,
---     "Sharing a field across shapes"). (The validator does not enforce the rule on
---     a predicate over the union today, and the runtime then resolves the name
---     per instance — the accepted-by-accident spelling Reference §9 rejects.)
+--     "Sharing a field across shapes"). A predicate over the union reading the
+--     field is refused naming the three declarations.
 --   · "a mixture never contains itself, however many steps removed". Said
 --     with a walk (Reference §7): `drawnFrom` is the batches one step behind
 --     this one, `lineage` every batch behind those, and the books rule reads
@@ -487,12 +486,10 @@ shape Composite = PeptideBatch where origin is Composition
 
 -- A mixture is of one peptide: every component was drawn from a batch of the
 -- peptide the mixture is labelled as.
--- velle: the filter runs over the declared shape and matches the composition
--- by comparison. The narrowed spelling — `origin is Composition and exists
--- (origin.components where ...)` — is refused today: narrowing is lost on a
--- filter's source path (OQ44 §3; probe B4). `this.` reaches the batch from
--- inside the filter.
-never (PeptideBatch where exists (Component where composition == this.origin and source.peptide != this.peptide))
+-- velle: `origin is Composition` narrows what follows it, so the filter's
+-- source may read `origin.components` (Reference §10). `this.` reaches the
+-- batch from inside the filter.
+never (PeptideBatch where origin is Composition and exists (origin.components where source.peptide != this.peptide))
 
 -- Nothing draws more than a batch holds. The components arrive in the
 -- commit of the batch they are mixed into, so this is checked once the whole

@@ -373,19 +373,23 @@ object Codegen {
         // reference field holds a `Ref<T>`; `read(ref)` resolves it. Nothing is
         // read *through* a reference.
 
-        /** The roots a query may name: every readable shape and refinement, static unions included (Reference §9). */
+        /** The roots a query may name: every readable shape and refinement, static unions and unions of refinements included (Reference §9). */
         val queryRoots: List<String> =
             model.shapes.keys.filterNot { it in model.transients } +
                 model.refinements.keys.filter { r ->
-                    model.viewScopeOf(r) != null && model.basesOf(r).none { it in model.transients }
+                    model.basesOf(r).isNotEmpty() && model.basesOf(r).none { it in model.transients }
                 }
 
         fun isRoot(name: String) = name in queryRoots
         fun isUnion(name: String) = name in model.refinements && model.isStaticUnion(name)
         /** The static unions a shape is an operand of. */
         fun unionsOf(shape: String): List<String> = model.refinements.keys.filter { isUnion(it) && shape in model.basesOf(it) }
-        /** The reference type a model object of [root] is: its base shape, or the union it is drawn from. */
-        fun refTarget(root: String): String = model.baseOf(root) ?: model.unionRootOf(root) ?: root
+        /** The reference type a model object of [root] is: its base shape, the static union it is drawn from,
+         *  or `Keyed` for a union of refinements, whose record is of any of its shapes and no one declared type. */
+        fun refTarget(root: String): String = model.baseOf(root) ?: model.unionRootOf(root) ?: "Keyed"
+        /** A model object over several shapes (a refinement over a union, or a union of refinements) carries the
+         *  record's own shape, read with it: `shape` is always the concrete base shape (`Keyed`). */
+        fun carriesShape(root: String): Boolean = root !in model.shapes && model.baseOf(root) == null && !isUnion(root)
 
         /** The members a model object carries and a fields class exposes: everything but `id`
          *  and a transient field, which is in the act's input and not in its record (Reference §4). */
@@ -403,8 +407,8 @@ object Codegen {
             val members = model.membersOf(root).keys + unionMembers(root).map { it.first }
             val over: (String) -> Boolean = when {
                 isUnion(root) -> { r -> model.isCrossBase(r) && model.unionRootOf(r) == root }
-                root in model.shapes -> { r -> model.baseOf(r) == root || (model.isCrossBase(r) && model.unionRootOf(r) in unionsOf(root)) }
-                else -> { r -> model.baseOf(r) == model.baseOf(root) }
+                root in model.shapes -> { r -> root in model.basesOf(r) }
+                else -> { r -> model.basesOf(r).any { it in model.basesOf(root) } }
             }
             // a member already named `isX` keeps its name; the flag yields
             return model.refinements.keys.filter { r -> isRoot(r) && r != root && !isUnion(r) && over(r) && "is$r" !in members }
@@ -583,6 +587,7 @@ object Codegen {
             line("        val hidden = system.hiddenFields(viewer, id, \"$root\")")
             line("        return $root(")
             line("            key = system.refFor(id).key,")
+            if (carriesShape(root)) line("            shape = system.shapeOf(id),")
             for ((name, m) in dataMembers(root)) {
                 val call = if (name in own) "system.getAs(id, \"$root\", \"$name\")" else "system.get(id, \"$name\")"
                 val read = readExpr(call, m.type)
@@ -626,6 +631,7 @@ object Codegen {
             val own = model.refinements[root]?.members?.filterIsInstance<DerivedProp>()?.map { it.name }?.toSet().orEmpty()
             line("    private fun materialize$root(id: Long): $root = $root(")
             line("        key = system.refFor(id).key,")
+            if (carriesShape(root)) line("        shape = system.shapeOf(id),")
             for ((name, m) in dataMembers(root)) {
                 val call = if (name in own) "system.getAs(id, \"$root\", \"$name\")" else "system.get(id, \"$name\")"
                 line("        $name = ${readExpr(call, m.type)},")
@@ -655,6 +661,8 @@ object Codegen {
                 val supertypes = listOf("Ref<$target>") + unionNames + viewerIfaces
                 line("data class $root(")
                 line("    override val key: StoreKey,")
+                if (carriesShape(root)) line("    /** the record's own shape: a $root is a record of ${model.basesOf(root).joinToString(" or ")} */")
+                if (carriesShape(root)) line("    override val shape: String,")
                 for ((name, m) in dataMembers(root)) line("    ${if (name in inherited || name in viewerMembers) "override " else ""}val $name: ${fieldType(m)},")
                 if (root in model.shapes) unionMembers(root).forEach { (name, _, t) -> line("    override val $name: ${kotlinType(t)},") }
                 membershipsOf(root).forEach { r ->
@@ -662,7 +670,7 @@ object Codegen {
                     line("    ${if ("is$r" in inherited || viewerIfaces.isNotEmpty()) "override " else ""}val is$r: Boolean,")
                 }
                 line(") : ${supertypes.joinToString(", ")} {")
-                line("    override val shape: String get() = \"$target\"")
+                if (!carriesShape(root)) line("    override val shape: String get() = \"$target\"")
                 // one `ref` for every union this record is in: a `Ref<Post>` is a `Ref<Content>` and a `Ref<Contribution>` alike
                 if (unionNames.isNotEmpty()) line("    override val ref: Ref<$root> get() = this")
                 line("    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key")

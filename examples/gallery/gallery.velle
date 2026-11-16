@@ -81,3 +81,10 @@ rule NotifyAuthor when Comment {
 -- membership tests through a union-typed field
 shape PostComment  = Comment where target is Post
 shape PhotoComment = Comment where target is Photo
+
+-- A union of refinements: a post long enough to read and a photo with a
+-- caption are the gallery's notable content. It is read as a union of their
+-- shapes: `notables` is a view, and a post and a photo each carry `isNotable`.
+shape LongPost = Post where length(body) >= 40
+shape Captioned = Photo where caption != ""
+shape Notable = LongPost or Captioned

@@ -242,7 +242,7 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
     }
 
     private fun union(name: String): GraphQLUnionType {
-        val b = GraphQLUnionType.newUnionType().name(name).description("The static union $name: one of its operands.")
+        val b = GraphQLUnionType.newUnionType().name(name).description("The union $name: a record of one of ${model.basesOf(name).sorted().joinToString(" or ")}.")
         for (op in model.basesOf(name).sorted()) b.possibleType(GraphQLTypeReference.typeRef(op))
         registry.typeResolver(name, TypeResolver { env -> env.schema.getObjectType((env.getObject<Map<String, Any?>>())["shape"] as String) })
         return b.build()
