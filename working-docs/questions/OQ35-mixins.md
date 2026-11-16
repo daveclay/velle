@@ -1,6 +1,6 @@
 # OQ35 — Can several unrelated shapes share one declaration?
 
-**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 to D3 decided 2026-11-16; D4 reframed the same day. D4 to D7 await Dave. Nothing is removed from the language by any decision here.
+**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 to D4 decided 2026-11-16, D4 after a reframe the same day. D5 to D7 await Dave. Nothing is removed from the language by any decision here.
 
 **In plain terms:** a product owner says "a site visit or a plot inspection is overdue when its due date has passed" and "any change to an entry touches the entry". Each sentence is one rule over several kinds of record that have a field in common. Velle has no way to declare that field once for all of them, so the author writes the rule once per kind, or turns the records inside out so the common part is the container.
 
@@ -169,7 +169,7 @@ Does the shape take a shared declaration with `is`?
 
 **Decided:** `is`, 2026-11-16.
 
-### D4. Where a shared shape appears in the generated code
+### D4. Where a shared shape appears in the generated code · Decided 2026-11-16
 
 A shape that other shapes take is written as a plain `shape`, `shape Dated { due: Date }`, with nothing marking it. It is shared because something says `is Dated`. A keyword marking it, `shared shape`, was proposed and withdrawn on 2026-11-16: the compiler reads sharing off the `is` clauses, and the one question the keyword stood in for is where the shape appears in what the compiler generates.
 
@@ -206,6 +206,8 @@ Does a shared shape appear on the generated surfaces exactly where a static unio
 - API layer guide: a shared shape becomes a GraphQL interface with its fields.
 - Act API guide: `New<Shape>` for a shared shape as for a union; an act that takes one carries the shape's fields in its own input class.
 - Store API guide: a shared shape has no table and no method; every read is asked per taker.
+
+**Decided:** yes, the same four answers, 2026-11-16. A shared shape appears exactly where a static union does today and nowhere else.
 
 ### D5. The inverse of a reference declared in a shared declaration
 
