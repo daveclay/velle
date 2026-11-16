@@ -1,6 +1,6 @@
 # OQ35 — Can several unrelated shapes share one declaration?
 
-**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 to D6 decided 2026-11-16, D4 after a reframe the same day. D7 awaits Dave. Nothing is removed from the language by any decision here.
+**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. Settled 2026-11-16, every decision answered; build pending. §5 is the plan. Nothing is removed from the language by any decision here.
 
 **In plain terms:** a product owner says "a site visit or a plot inspection is overdue when its due date has passed" and "any change to an entry touches the entry". Each sentence is one rule over several kinds of record that have a field in common. Velle has no way to declare that field once for all of them, so the author writes the rule once per kind, or turns the records inside out so the common part is the container.
 
@@ -319,7 +319,7 @@ Is a shape that is taken, and itself takes another, refused?
 
 **Decided:** yes, a chain is allowed, 2026-11-16, against the recommendation. `shape Overdueable is Dated { ... }` and `shape SiteVisit is Overdueable { ... }` make a site visit take `due` through the chain. The diamond, one declaration reached twice by two paths, is one declaration and fine, as Reference §9 already says for a shared base. A cycle is refused. The consequences are in §4.
 
-### D7. A transient act that takes a shared declaration
+### D7. A transient act that takes a shared declaration · Decided 2026-11-16
 
 `checks.md` V17 refuses a union with a transient operand "until unrelated shapes can share a declaration". Does a rule over a shared declaration fire for a transient act that takes it, so `17-shared-field-transient-union-refused.velle` written with `is EntryChange` passes, and one rule answers both requests?
 
@@ -336,6 +336,8 @@ Does a rule over a shared declaration fire for a transient act that takes it?
 
 - `checks.md` V17: the union refusal stays, its message now naming the construct; a field typed with a shared declaration that a transient act takes is refused with a connected diagnostic.
 - `checks.md` V18: a rule over a shared declaration answers each transient act that takes it.
+
+**Decided:** yes, 2026-11-16. A rule over a shared shape fires for a transient act that takes it.
 
 ## 4. What follows once D1 is yes
 
@@ -354,8 +356,27 @@ Consequences, not decisions. Each is a sentence for the Reference or `checks.md`
 
 ## 5. The build
 
-Written when D1 to D7 are decided, gathering each decision's proposed changes in build order.
+The proposed changes of D1 to D7 and the consequences in §4, in build order. The `implement` skill takes it from here.
+
+1. **Grammar and parser.** `wiki/Normative/grammar.md`: `shapeDecl` and `actDecl` gain `("is" ShapeName ("," ShapeName)*)?` after the name, before `byClause` on an act; no new declaration form (D3, D4). The parser in `compiler/` reads it into the model.
+2. **Model.** A shape's declarations include those of every shape it names after `is`, along the chain (D6); a shape that is named after `is` by any shape is shared, its base set is its takers, and a cycle is refused naming both lines. A shared shape's `one` and `many` fields infer their inverses on the target named from the shared shape (D5).
+3. **Validator.** Refuse creating a shared shape and declaring one as an act, naming the taker (D4); two shared shapes declaring one name taken by one shape, and a taker redeclaring a shared field (§4, Reference §9's same-name rule); `frozen` and `captured` in a shared shape's body (F3); `initially` and `timestamp` reaching an act through a shared shape (V21); a field typed with a shared shape that a transient act takes (V17, D7); a closure naming a shared shape's inverse (V22, D5). Count a rule over a shared shape as answering each transient act that takes it (V18, D7). State overlap for V1, V5, V9, and V27: two shared shapes overlap on the shapes taking both, a shared shape and a base overlap when the base takes it (§4). Narrowing by `is <Taker>` over a shared shape is exhaustive over its takers, with the two-taker `else` narrowed to the other (§4). The V17 union message stops naming OQ35 and names the construct (D1).
+4. **Runtime.** Membership of a shared shape is the records of its takers; a rule over it fires once per record of each taker, inside a transient act's own commit when the taker is transient (D7); the inferred inverse reads across takers (D5).
+5. **Generated Kotlin and the API layer.** An interface per shared shape with its fields, implemented by the takers' model objects, and a query root (D4, Read API); `New<Shape>` for a `with`-named field typed with a shared shape (Act API); a GraphQL interface with its fields in `apis/` (API layer); nothing in the store (Store API).
+6. **Tests.** A compiler test per diagnostic above and per generated surface, beside `compiler/src/test/kotlin/velle/UnionTest.kt`; `UnionTest`'s "refused until OQ35" case renamed for the message; `wiki/Normative/diagnostics.md` regenerated by `DiagnosticCatalogTest`.
+7. **Wiki.** Reference §9, "Treating two shapes as one": the shared shape as the way to share a field beside the union as the way to share a name, the two stated side by side (D1, D2). Reference §6: a shared shape's field as a declaring side, the inverse named from it (D5). `checks.md`: every refusal in step 3. The Read API, Act API, API layer, and Store API guides: one sentence each from D4. `diagrams.md`: a notation for a shared shape in the class diagram, and a refinement over one as one machine spanning takers.
+8. **Examples.** `examples/gallery/gallery.velle`: `author` becomes one declaration on a shared shape and rule `NotifyAuthor` reads it directly; the output regenerated with `gradle generate` and its tests run. Survey: a seventh file, `17-shared-field-is-direct.velle`, the direct spelling of both sentences, with its README row; the `-accepted` file's row notes that OQ44 §2 item 10 is what refuses it.
+9. **Settle.** Delete this file; the settled row at the top of the table in `QUESTIONS.md`, naming where each ruling retired.
 
 ## 6. Work items
 
-None until D1 to D7 are decided. The old item, to restore a Reference §22 mixin item that Reference §9 pointed at, was closed on 2026-11-15: neither page refers to the other on this topic at HEAD (§1).
+- [ ] Add the `is` clause to `shapeDecl` and `actDecl` in `wiki/Normative/grammar.md` and the parser.
+- [ ] Build the model: declarations taken along the chain, the shared shape's base set as its takers, cycle refusal, inverses named from the shared shape.
+- [ ] Add the validator refusals and rulings of §5 step 3, each with a test beside `UnionTest.kt`.
+- [ ] Make the runtime treat a shared shape's membership as its takers' records, firing per taker and inside a transient taker's commit.
+- [ ] Generate the interface, query root, `New<Shape>` interface, and GraphQL interface for a shared shape; nothing in the store.
+- [ ] Rename `UnionTest`'s "refused until OQ35" case and reword the V17 union message; regenerate `diagnostics.md`.
+- [ ] Rewrite Reference §9's union section and Reference §6's inverse paragraph; add the `checks.md` entries; add one sentence to each of the four guides; add the `diagrams.md` notation.
+- [ ] Rewrite `examples/gallery/gallery.velle`'s `author` as a shared declaration, regenerate its output, run its tests.
+- [ ] Write `working-docs/examples/survey/17-shared-field-is-direct.velle` with its README row, and note OQ44 on the `-accepted` row.
+- [ ] Delete this file in the settling commit and add the settled row to `QUESTIONS.md`.
