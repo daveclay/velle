@@ -1,6 +1,6 @@
 # OQ35 — Can several unrelated shapes share one declaration?
 
-**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 decided 2026-11-16; D4 reframed the same day. D2 to D7 await Dave. Nothing is removed from the language by any decision here.
+**Status:** opened 2026-09-13 at OQ29's close. Investigated against HEAD on 2026-11-15, six survey files. D1 and D2 decided 2026-11-16; D4 reframed the same day. D3 to D7 await Dave. Nothing is removed from the language by any decision here.
 
 **In plain terms:** a product owner says "a site visit or a plot inspection is overdue when its due date has passed" and "any change to an entry touches the entry". Each sentence is one rule over several kinds of record that have a field in common. Velle has no way to declare that field once for all of them, so the author writes the rule once per kind, or turns the records inside out so the common part is the container.
 
@@ -123,7 +123,7 @@ If the answer is no, this OQ settles with `17-shared-field-inverted-workaround.v
 
 **Decided:** yes, 2026-11-16. Velle gets the construct.
 
-### D2. Does the shape name the declaration it takes, or does the union declare what its operands get?
+### D2. Does the shape name the declaration it takes, or does the union declare what its operands get? · Decided 2026-11-16
 
 Two directions say the same thing. Does a shape name the shared declaration it takes, as `shape SiteVisit is Dated { ... }` with `Dated` declared once elsewhere, or does the union declare the fields its operands get, as `shape Dated = SiteVisit or PlotInspection { due: Date }`?
 
@@ -141,6 +141,8 @@ Costs:
 #### Proposed changes
 
 - Reference §9: states the two constructs side by side with those two sentences.
+
+**Decided:** the shape names it, 2026-11-16.
 
 ### D3. The word by which a shape takes a shared declaration
 
