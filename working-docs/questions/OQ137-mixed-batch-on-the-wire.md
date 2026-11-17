@@ -81,7 +81,7 @@ Recommendation: yes. The sentence in `checks.md` V22 that a closure edge's parts
 
 **Weighed either way:**
 
-- **Order is neither a cost nor a benefit.** The note that opened OQ136 gave "keeps the rows' order" as the reason for one list. Velle reads no order of a collection: a `many` is a set, `for each` has no defined order, and OQ16 is about results independent of order. If the order of the parts carries business meaning, it is a field, `position: integer` on the part, that a rule reads by name. That motivation is dropped.
+- **Order is neither a cost nor a benefit.** The note that opened OQ136 gave "keeps the rows' order" as the reason for one list. Velle reads no order of a collection: a `many` is a set, `for each` has no defined order, and OQ16 is about results independent of order. If the order of the parts carries business meaning, it is a field, `position: integer` on the part, that a rule reads by name. That motivation is dropped; Dave agreed on 2026-11-16 that order is not what is pertinent for a collection of mixed shapes.
 - **Not at risk either way.** Describing the parts: the taken shape appears in generated code exactly where a static union does (OQ35 D4, settled table), so a mixed edge is described as a list of `Row`, each a `CreateRow` or an `UpdateRow`. Totality (V18) and the door refusal are over the act and are the same either way. Serialization domains do not change, since it is one act.
 - **The cost of no.** The act restates its takers as views, one per shape, which `is` has already said. That is a spelling cost and not a proof cost, since a taker without an edge is refused rather than silently dropped.
 
