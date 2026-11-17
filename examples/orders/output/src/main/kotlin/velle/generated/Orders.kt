@@ -245,7 +245,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         key = system.refFor(id).key,
         source = system.get(id, "source") as String,
         sku = system.get(id, "sku") as String,
-        kind = system.get(id, "kind") as String,
+        kind = ChangeKind.of(system.get(id, "kind") as String),
         unitPrice = (system.get(id, "unitPrice") as BigDecimal).intValueExact(),
     )
 
@@ -432,10 +432,12 @@ shape PriceChange is Change {
 }
 
 -- what the update leaves behind: one line per change, saying which kind it was
+ChangeKind is one of "listing", "price change"
+
 shape CatalogueLine {
     source: text
     sku: text
-    kind: text
+    kind: ChangeKind
     unitPrice: integer
 }
 
@@ -484,6 +486,18 @@ typealias CatalogueLineQuery = TypedQuery<CatalogueLineFields, CatalogueLine>
 typealias PriceRecordQuery = TypedQuery<PriceRecordFields, PriceRecord>
 typealias ProductInFamilyQuery = TypedQuery<ProductInFamilyFields, ProductInFamily>
 typealias ProductOfFamilyQuery = TypedQuery<ProductOfFamilyFields, ProductOfFamily>
+
+// ── the types declared by their words: one enum class each, an entry per word ──
+enum class ChangeKind(val word: String) {
+    listing("listing"),
+    price_change("price change");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): ChangeKind = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"listing\", \"price change\"")
+    }
+}
 
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
@@ -794,7 +808,7 @@ data class CatalogueLine(
     override val key: StoreKey,
     val source: String,
     val sku: String,
-    val kind: String,
+    val kind: ChangeKind,
     val unitPrice: Int,
 ) : Ref<CatalogueLine> {
     override val shape: String get() = "CatalogueLine"
@@ -908,7 +922,7 @@ class QuoteLineFields(path: List<String> = emptyList()) : Fields(path) {
 class CatalogueLineFields(path: List<String> = emptyList()) : Fields(path) {
     val source: TextField get() = TextField(fieldPath + "source")
     val sku: TextField get() = TextField(fieldPath + "sku")
-    val kind: TextField get() = TextField(fieldPath + "kind")
+    val kind: EnumField<ChangeKind> get() = EnumField<ChangeKind>(fieldPath + "kind") { it.word }
     val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
 }
 

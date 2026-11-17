@@ -152,10 +152,12 @@ shape PriceChange is Change {
 }
 
 -- what the update leaves behind: one line per change, saying which kind it was
+ChangeKind is one of "listing", "price change"
+
 shape CatalogueLine {
     source: text
     sku: text
-    kind: text
+    kind: ChangeKind
     unitPrice: integer
 }
 

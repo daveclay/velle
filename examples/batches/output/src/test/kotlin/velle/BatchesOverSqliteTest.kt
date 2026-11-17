@@ -96,7 +96,7 @@ class BatchesPersistenceTest {
         val b1 = second.read.peptideBatch(1L)
         val b2 = second.read.peptideBatch(2L)
         val b3 = second.read.peptideBatch(3L)
-        assertEquals(listOf("fermented", "ordered", "composite"), listOf(b1, b2, b3).map { it.kind })
+        assertEquals(listOf(Kind.fermented, Kind.ordered, Kind.composite), listOf(b1, b2, b3).map { it.kind })
         assertIs<Fermentation>(second.read(b1.origin))
         assertIs<ExternalOrder>(second.read(b2.origin))
         val c = assertIs<Composition>(second.read(b3.origin))

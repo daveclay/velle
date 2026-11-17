@@ -227,7 +227,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         remainingMg = system.get(id, "remainingMg") as BigDecimal,
         drawnFrom = (system.get(id, "drawnFrom") as List<*>).map { system.refFor(it as Long) },
         lineage = (system.get(id, "lineage") as List<*>).map { system.refFor(it as Long) },
-        kind = system.get(id, "kind") as String,
+        kind = Kind.of(system.get(id, "kind") as String),
         components = (system.get(id, "components") as List<*>).map { system.refFor(it as Long) },
         depletionNotices = (system.get(id, "depletionNotices") as List<*>).map { system.refFor(it as Long) },
         isFermented = system.isMember(id, "Fermented"),
@@ -239,7 +239,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     private fun materializeDepletionNotice(id: Long): DepletionNotice = DepletionNotice(
         key = system.refFor(id).key,
         batch = system.refFor(system.get(id, "batch") as Long),
-        kind = system.get(id, "kind") as String,
+        kind = Kind.of(system.get(id, "kind") as String),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
@@ -254,7 +254,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         remainingMg = system.get(id, "remainingMg") as BigDecimal,
         drawnFrom = (system.get(id, "drawnFrom") as List<*>).map { system.refFor(it as Long) },
         lineage = (system.get(id, "lineage") as List<*>).map { system.refFor(it as Long) },
-        kind = system.get(id, "kind") as String,
+        kind = Kind.of(system.get(id, "kind") as String),
         components = (system.get(id, "components") as List<*>).map { system.refFor(it as Long) },
         depletionNotices = (system.get(id, "depletionNotices") as List<*>).map { system.refFor(it as Long) },
         isOrdered = system.isMember(id, "Ordered"),
@@ -271,7 +271,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         remainingMg = system.get(id, "remainingMg") as BigDecimal,
         drawnFrom = (system.get(id, "drawnFrom") as List<*>).map { system.refFor(it as Long) },
         lineage = (system.get(id, "lineage") as List<*>).map { system.refFor(it as Long) },
-        kind = system.get(id, "kind") as String,
+        kind = Kind.of(system.get(id, "kind") as String),
         components = (system.get(id, "components") as List<*>).map { system.refFor(it as Long) },
         depletionNotices = (system.get(id, "depletionNotices") as List<*>).map { system.refFor(it as Long) },
         isFermented = system.isMember(id, "Fermented"),
@@ -288,7 +288,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         remainingMg = system.get(id, "remainingMg") as BigDecimal,
         drawnFrom = (system.get(id, "drawnFrom") as List<*>).map { system.refFor(it as Long) },
         lineage = (system.get(id, "lineage") as List<*>).map { system.refFor(it as Long) },
-        kind = system.get(id, "kind") as String,
+        kind = Kind.of(system.get(id, "kind") as String),
         components = (system.get(id, "components") as List<*>).map { system.refFor(it as Long) },
         depletionNotices = (system.get(id, "depletionNotices") as List<*>).map { system.refFor(it as Long) },
         isFermented = system.isMember(id, "Fermented"),
@@ -305,7 +305,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         remainingMg = system.get(id, "remainingMg") as BigDecimal,
         drawnFrom = (system.get(id, "drawnFrom") as List<*>).map { system.refFor(it as Long) },
         lineage = (system.get(id, "lineage") as List<*>).map { system.refFor(it as Long) },
-        kind = system.get(id, "kind") as String,
+        kind = Kind.of(system.get(id, "kind") as String),
         components = (system.get(id, "components") as List<*>).map { system.refFor(it as Long) },
         depletionNotices = (system.get(id, "depletionNotices") as List<*>).map { system.refFor(it as Long) },
         isFermented = system.isMember(id, "Fermented"),
@@ -447,6 +447,9 @@ shape Origin = Fermentation or ExternalOrder or Composition {
 -- `origin` in `with` lets the reference be supplied by value: the batch arrives
 -- with its new origin nested inside it, and a composition arriving that way
 -- brings its components (Reference §6, "A reference supplied by value").
+-- the three kinds of batch, by their words (Reference §5)
+Kind is one of "fermented", "ordered", "composite"
+
 act PeptideBatch {
     peptide: one Peptide
     quantityMg: decimal
@@ -466,7 +469,7 @@ act PeptideBatch {
     -- the kind, read off the origin, never stored
     -- velle: narrowing in a conditional; with three operands the final else
     -- is the third operand (Reference §10)
-    kind: text = if origin is Fermentation then "fermented"
+    kind: Kind = if origin is Fermentation then "fermented"
                  else if origin is ExternalOrder then "ordered"
                  else "composite"
 } with { origin with { components } }
@@ -517,7 +520,7 @@ shape Depleted = PeptideBatch where remainingMg <= 0
 
 shape DepletionNotice {
     batch: one PeptideBatch
-    kind: text
+    kind: Kind
     noticedOn: DateTime
 }
 
@@ -545,6 +548,19 @@ typealias FermentedQuery = TypedQuery<FermentedFields, Fermented>
 typealias OrderedQuery = TypedQuery<OrderedFields, Ordered>
 typealias CompositeQuery = TypedQuery<CompositeFields, Composite>
 typealias DepletedQuery = TypedQuery<DepletedFields, Depleted>
+
+// ── the types declared by their words: one enum class each, an entry per word ──
+enum class Kind(val word: String) {
+    fermented("fermented"),
+    ordered("ordered"),
+    composite("composite");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): Kind = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"fermented\", \"ordered\", \"composite\"")
+    }
+}
 
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
@@ -798,7 +814,7 @@ data class PeptideBatch(
     val remainingMg: BigDecimal,
     val drawnFrom: List<Ref<PeptideBatch>>,
     val lineage: List<Ref<PeptideBatch>>,
-    val kind: String,
+    val kind: Kind,
     val components: List<Ref<Component>>,
     val depletionNotices: List<Ref<DepletionNotice>>,
     /** membership of Fermented at the moment of the read */
@@ -818,7 +834,7 @@ data class PeptideBatch(
 data class DepletionNotice(
     override val key: StoreKey,
     val batch: Ref<PeptideBatch>,
-    val kind: String,
+    val kind: Kind,
     val noticedOn: Instant,
 ) : Ref<DepletionNotice> {
     override val shape: String get() = "DepletionNotice"
@@ -842,7 +858,7 @@ data class Fermented(
     val remainingMg: BigDecimal,
     val drawnFrom: List<Ref<PeptideBatch>>,
     val lineage: List<Ref<PeptideBatch>>,
-    val kind: String,
+    val kind: Kind,
     val components: List<Ref<Component>>,
     val depletionNotices: List<Ref<DepletionNotice>>,
     /** membership of Ordered at the moment of the read */
@@ -866,7 +882,7 @@ data class Ordered(
     val remainingMg: BigDecimal,
     val drawnFrom: List<Ref<PeptideBatch>>,
     val lineage: List<Ref<PeptideBatch>>,
-    val kind: String,
+    val kind: Kind,
     val components: List<Ref<Component>>,
     val depletionNotices: List<Ref<DepletionNotice>>,
     /** membership of Fermented at the moment of the read */
@@ -890,7 +906,7 @@ data class Composite(
     val remainingMg: BigDecimal,
     val drawnFrom: List<Ref<PeptideBatch>>,
     val lineage: List<Ref<PeptideBatch>>,
-    val kind: String,
+    val kind: Kind,
     val components: List<Ref<Component>>,
     val depletionNotices: List<Ref<DepletionNotice>>,
     /** membership of Fermented at the moment of the read */
@@ -914,7 +930,7 @@ data class Depleted(
     val remainingMg: BigDecimal,
     val drawnFrom: List<Ref<PeptideBatch>>,
     val lineage: List<Ref<PeptideBatch>>,
-    val kind: String,
+    val kind: Kind,
     val components: List<Ref<Component>>,
     val depletionNotices: List<Ref<DepletionNotice>>,
     /** membership of Fermented at the moment of the read */
@@ -980,7 +996,7 @@ class PeptideBatchFields(path: List<String> = emptyList()) : Fields(path) {
     val origin: OriginFields get() = OriginFields(fieldPath + "origin")
     val consumedMg: NumField get() = NumField(fieldPath + "consumedMg")
     val remainingMg: NumField get() = NumField(fieldPath + "remainingMg")
-    val kind: TextField get() = TextField(fieldPath + "kind")
+    val kind: EnumField<Kind> get() = EnumField<Kind>(fieldPath + "kind") { it.word }
     fun isFermented(): Expr = isA("Fermented")
     fun isOrdered(): Expr = isA("Ordered")
     fun isComposite(): Expr = isA("Composite")
@@ -989,7 +1005,7 @@ class PeptideBatchFields(path: List<String> = emptyList()) : Fields(path) {
 
 class DepletionNoticeFields(path: List<String> = emptyList()) : Fields(path) {
     val batch: PeptideBatchFields get() = PeptideBatchFields(fieldPath + "batch")
-    val kind: TextField get() = TextField(fieldPath + "kind")
+    val kind: EnumField<Kind> get() = EnumField<Kind>(fieldPath + "kind") { it.word }
     val noticedOn: DateTimeField get() = DateTimeField(fieldPath + "noticedOn")
 }
 
@@ -1002,7 +1018,7 @@ class FermentedFields(path: List<String> = emptyList()) : Fields(path) {
     val origin: OriginFields get() = OriginFields(fieldPath + "origin")
     val consumedMg: NumField get() = NumField(fieldPath + "consumedMg")
     val remainingMg: NumField get() = NumField(fieldPath + "remainingMg")
-    val kind: TextField get() = TextField(fieldPath + "kind")
+    val kind: EnumField<Kind> get() = EnumField<Kind>(fieldPath + "kind") { it.word }
     fun isOrdered(): Expr = isA("Ordered")
     fun isComposite(): Expr = isA("Composite")
     fun isDepleted(): Expr = isA("Depleted")
@@ -1014,7 +1030,7 @@ class OrderedFields(path: List<String> = emptyList()) : Fields(path) {
     val origin: OriginFields get() = OriginFields(fieldPath + "origin")
     val consumedMg: NumField get() = NumField(fieldPath + "consumedMg")
     val remainingMg: NumField get() = NumField(fieldPath + "remainingMg")
-    val kind: TextField get() = TextField(fieldPath + "kind")
+    val kind: EnumField<Kind> get() = EnumField<Kind>(fieldPath + "kind") { it.word }
     fun isFermented(): Expr = isA("Fermented")
     fun isComposite(): Expr = isA("Composite")
     fun isDepleted(): Expr = isA("Depleted")
@@ -1026,7 +1042,7 @@ class CompositeFields(path: List<String> = emptyList()) : Fields(path) {
     val origin: OriginFields get() = OriginFields(fieldPath + "origin")
     val consumedMg: NumField get() = NumField(fieldPath + "consumedMg")
     val remainingMg: NumField get() = NumField(fieldPath + "remainingMg")
-    val kind: TextField get() = TextField(fieldPath + "kind")
+    val kind: EnumField<Kind> get() = EnumField<Kind>(fieldPath + "kind") { it.word }
     fun isFermented(): Expr = isA("Fermented")
     fun isOrdered(): Expr = isA("Ordered")
     fun isDepleted(): Expr = isA("Depleted")
@@ -1038,7 +1054,7 @@ class DepletedFields(path: List<String> = emptyList()) : Fields(path) {
     val origin: OriginFields get() = OriginFields(fieldPath + "origin")
     val consumedMg: NumField get() = NumField(fieldPath + "consumedMg")
     val remainingMg: NumField get() = NumField(fieldPath + "remainingMg")
-    val kind: TextField get() = TextField(fieldPath + "kind")
+    val kind: EnumField<Kind> get() = EnumField<Kind>(fieldPath + "kind") { it.word }
     fun isFermented(): Expr = isA("Fermented")
     fun isOrdered(): Expr = isA("Ordered")
     fun isComposite(): Expr = isA("Composite")

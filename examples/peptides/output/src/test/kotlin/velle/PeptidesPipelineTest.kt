@@ -79,13 +79,13 @@ open class PeptidesPipelineTest {
         assertTrue(experiment.isA("HitExperiment"))
         assertEquals(dec("72.5"), sys.read(experiment).meanPeakInhibition.at(1))
         assertEquals(1, sys.labHits().size)
-        assertEquals("lab-validated", sys.read(lab.peptide).stage)
+        assertEquals(Stage.lab_validated, sys.read(lab.peptide).stage)
 
         // a third plate that never inhibits: mean (70 + 75 + 0) / 3 < 60
         s.assay(experiment, 3, listOf(0 to "0", 48 to "0"))
         assertFalse(experiment.isA("HitExperiment"))
         assertEquals(1, sys.labHitRetractions().size, "`when leaving`: the retraction is on record")
-        assertEquals("candidate", sys.read(lab.peptide).stage)
+        assertEquals(Stage.candidate, sys.read(lab.peptide).stage)
 
         // a fourth plate at 100 restores the mean: (70 + 75 + 0 + 100) / 4 >= 60
         s.assay(experiment, 4, listOf(0 to "0", 48 to "100"))
@@ -130,7 +130,7 @@ open class PeptidesPipelineTest {
         assertEquals(dec("73.53"), sys.read(t.trial).efficacy.at(2))
         assertTrue(t.trial.isA("CompleteTrial"))
         assertTrue(t.trial.isA("EffectiveTrial"))
-        assertEquals("greenhouse-validated", sys.read(t.lab.peptide).stage)
+        assertEquals(Stage.greenhouse_validated, sys.read(t.lab.peptide).stage)
 
         val result = sys.greenhouseResults().single()
         assertEquals(dec("73.53"), sys.read(result).efficacy.at(2))
@@ -149,7 +149,7 @@ open class PeptidesPipelineTest {
         assertEquals(dec("47.06"), sys.read(t.trial).efficacy.at(2), "the live number moved")
         assertFalse(t.trial.isA("EffectiveTrial"), "and the live state with it")
         assertEquals(dec("73.53"), sys.read(sys.greenhouseResults().single()).efficacy.at(2), "the record did not")
-        assertEquals("greenhouse-validated", sys.read(t.lab.peptide).stage)
+        assertEquals(Stage.greenhouse_validated, sys.read(t.lab.peptide).stage)
     }
 
     @Test
@@ -354,7 +354,7 @@ open class PeptidesPipelineTest {
         assertFalse(lab.peptide.isA("Deprioritized"))
         s.evaluatedTrial(effective = false, lab = lab)
         assertTrue(lab.peptide.isA("Deprioritized"))
-        assertEquals("lab-validated", sys.read(lab.peptide).stage)
+        assertEquals(Stage.lab_validated, sys.read(lab.peptide).stage)
     }
 
     // ── field ────────────────────────────────────────────────────────────────
@@ -443,7 +443,7 @@ open class PeptidesPipelineTest {
         assertEquals(dec("25.00"), sys.read(f.trial).yieldGain.at(2))
         assertTrue(f.trial.isA("SuccessfulFieldTrial"))
         assertTrue(f.gh.lab.peptide.isA("FieldValidated"))
-        assertEquals("field-validated", sys.read(f.gh.lab.peptide).stage)
+        assertEquals(Stage.field_validated, sys.read(f.gh.lab.peptide).stage)
     }
 
     @Test
@@ -471,20 +471,20 @@ open class PeptidesPipelineTest {
         val crop = s.crop()
         val pathogen = s.pathogen(crop)
         val peptide = s.peptide()
-        assertEquals("candidate", sys.read(peptide).stage)
+        assertEquals(Stage.candidate, sys.read(peptide).stage)
         val experiment = s.experiment(peptide, pathogen)
         s.assay(experiment, 1, listOf(0 to "0", 48 to "70"))
-        assertEquals("candidate", sys.read(peptide).stage, "one replicate of two")
+        assertEquals(Stage.candidate, sys.read(peptide).stage, "one replicate of two")
         s.assay(experiment, 2, listOf(0 to "0", 48 to "75"))
-        assertEquals("lab-validated", sys.read(peptide).stage)
+        assertEquals(Stage.lab_validated, sys.read(peptide).stage)
 
         val lab = Scenario.Lab(crop, pathogen, peptide, experiment)
         val gh = s.observedToEnd(s.treat(s.laidOut(s.approvedTrial(lab))))
-        assertEquals("greenhouse-validated", sys.read(peptide).stage)
+        assertEquals(Stage.greenhouse_validated, sys.read(peptide).stage)
 
         val f = s.plantedFieldTrial(s.approvedFieldTrial(gh))
         s.harvest(f.treated, "5000"); s.harvest(f.control, "4000")
-        assertEquals("field-validated", sys.read(peptide).stage)
+        assertEquals(Stage.field_validated, sys.read(peptide).stage)
         assertNull(sys.fieldRefusals().firstOrNull())
     }
 }

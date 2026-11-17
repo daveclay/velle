@@ -194,7 +194,7 @@ open class OrdersFlowTest {
         )))
 
         val lines = sys.catalogueLines().map { sys.read(it) }
-        assertEquals(setOf("SKU-2:listing:5", "SKU-1:price change:12"), lines.map { "${it.sku}:${it.kind}:${it.unitPrice}" }.toSet())
+        assertEquals(setOf("SKU-2:listing:5", "SKU-1:price change:12"), lines.map { "${it.sku}:${it.kind.word}:${it.unitPrice}" }.toSet())
         val record = sys.read(sys.priceRecords().single())
         assertEquals(12, record.unitPrice)
         assertEquals("SKU-1", sys.read(record.product).sku)

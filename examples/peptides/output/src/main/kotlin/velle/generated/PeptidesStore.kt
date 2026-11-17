@@ -119,17 +119,17 @@ data class GreenhouseTrialRow(
     val requestKey: String,
     val peptide: Ref.Persisted,
     val pathogen: Ref.Persisted,
+    val approvedOn: Instant,
     val greenhouse: Ref.Persisted,
     val protocol: Ref.Persisted,
-    val approvedOn: Instant,
 )
 
 /** One stored GreenhouseRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class GreenhouseRefusalRow(
     val key: StoreKey,
-    val requestKey: String,
     val reason: String,
     val refusedOn: Instant,
+    val requestKey: String,
 )
 
 /** One stored GreenhousePlot row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -178,9 +178,9 @@ data class ObservationCorrectionRow(
 /** One stored CorrectionRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CorrectionRefusalRow(
     val key: StoreKey,
-    val observation: Ref.Persisted?,
     val reason: String,
     val refusedOn: Instant,
+    val observation: Ref.Persisted?,
 )
 
 /** One stored VoidRecord row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -196,17 +196,17 @@ data class VoidRecordRow(
 /** One stored VoidRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class VoidRefusalRow(
     val key: StoreKey,
-    val observation: Ref.Persisted?,
     val reason: String,
     val refusedOn: Instant,
+    val observation: Ref.Persisted?,
 )
 
 /** One stored MoveRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class MoveRefusalRow(
     val key: StoreKey,
-    val plot: Ref.Persisted,
     val reason: String,
     val refusedOn: Instant,
+    val plot: Ref.Persisted,
 )
 
 /** One stored ClimateExcursion row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -269,18 +269,18 @@ data class FieldTrialRow(
     val requestKey: String,
     val peptide: Ref.Persisted,
     val pathogen: Ref.Persisted,
+    val approvedOn: Instant,
     val crop: Ref.Persisted,
     val site: Ref.Persisted,
     val protocol: Ref.Persisted,
-    val approvedOn: Instant,
 )
 
 /** One stored FieldRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class FieldRefusalRow(
     val key: StoreKey,
-    val requestKey: String,
     val reason: String,
     val refusedOn: Instant,
+    val requestKey: String,
 )
 
 /** One stored Planting row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -367,9 +367,9 @@ data class TaskReminderRow(
 /** One stored RescheduleRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class RescheduleRefusalRow(
     val key: StoreKey,
-    val task: Ref.Persisted?,
     val reason: String,
     val refusedOn: Instant,
+    val task: Ref.Persisted?,
 )
 
 /** One stored TaskCancellation row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -384,9 +384,9 @@ data class TaskCancellationRow(
 /** One stored CancelRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CancelRefusalRow(
     val key: StoreKey,
-    val task: Ref.Persisted?,
     val reason: String,
     val refusedOn: Instant,
+    val task: Ref.Persisted?,
 )
 
 /**
@@ -1373,31 +1373,31 @@ fun Row.toGreenhouseTrialRow(): GreenhouseTrialRow = GreenhouseTrialRow(
     requestKey = fields["requestKey"] as String,
     peptide = fields["peptide"] as Ref.Persisted,
     pathogen = fields["pathogen"] as Ref.Persisted,
+    approvedOn = fields["approvedOn"] as Instant,
     greenhouse = fields["greenhouse"] as Ref.Persisted,
     protocol = fields["protocol"] as Ref.Persisted,
-    approvedOn = fields["approvedOn"] as Instant,
 )
 
 fun GreenhouseTrialRow.toRow(): Row = Row("GreenhouseTrial", key, buildMap {
     put("requestKey", requestKey)
     put("peptide", peptide)
     put("pathogen", pathogen)
+    put("approvedOn", approvedOn)
     put("greenhouse", greenhouse)
     put("protocol", protocol)
-    put("approvedOn", approvedOn)
 })
 
 fun Row.toGreenhouseRefusalRow(): GreenhouseRefusalRow = GreenhouseRefusalRow(
     key = key,
-    requestKey = fields["requestKey"] as String,
     reason = fields["reason"] as String,
     refusedOn = fields["refusedOn"] as Instant,
+    requestKey = fields["requestKey"] as String,
 )
 
 fun GreenhouseRefusalRow.toRow(): Row = Row("GreenhouseRefusal", key, buildMap {
-    put("requestKey", requestKey)
     put("reason", reason)
     put("refusedOn", refusedOn)
+    put("requestKey", requestKey)
 })
 
 fun Row.toGreenhousePlotRow(): GreenhousePlotRow = GreenhousePlotRow(
@@ -1473,15 +1473,15 @@ fun ObservationCorrectionRow.toRow(): Row = Row("ObservationCorrection", key, bu
 
 fun Row.toCorrectionRefusalRow(): CorrectionRefusalRow = CorrectionRefusalRow(
     key = key,
-    observation = fields["observation"] as Ref.Persisted?,
     reason = fields["reason"] as String,
     refusedOn = fields["refusedOn"] as Instant,
+    observation = fields["observation"] as Ref.Persisted?,
 )
 
 fun CorrectionRefusalRow.toRow(): Row = Row("CorrectionRefusal", key, buildMap {
-    observation?.let { put("observation", it) }
     put("reason", reason)
     put("refusedOn", refusedOn)
+    observation?.let { put("observation", it) }
 })
 
 fun Row.toVoidRecordRow(): VoidRecordRow = VoidRecordRow(
@@ -1503,28 +1503,28 @@ fun VoidRecordRow.toRow(): Row = Row("VoidRecord", key, buildMap {
 
 fun Row.toVoidRefusalRow(): VoidRefusalRow = VoidRefusalRow(
     key = key,
-    observation = fields["observation"] as Ref.Persisted?,
     reason = fields["reason"] as String,
     refusedOn = fields["refusedOn"] as Instant,
+    observation = fields["observation"] as Ref.Persisted?,
 )
 
 fun VoidRefusalRow.toRow(): Row = Row("VoidRefusal", key, buildMap {
-    observation?.let { put("observation", it) }
     put("reason", reason)
     put("refusedOn", refusedOn)
+    observation?.let { put("observation", it) }
 })
 
 fun Row.toMoveRefusalRow(): MoveRefusalRow = MoveRefusalRow(
     key = key,
-    plot = fields["plot"] as Ref.Persisted,
     reason = fields["reason"] as String,
     refusedOn = fields["refusedOn"] as Instant,
+    plot = fields["plot"] as Ref.Persisted,
 )
 
 fun MoveRefusalRow.toRow(): Row = Row("MoveRefusal", key, buildMap {
-    put("plot", plot)
     put("reason", reason)
     put("refusedOn", refusedOn)
+    put("plot", plot)
 })
 
 fun Row.toClimateExcursionRow(): ClimateExcursionRow = ClimateExcursionRow(
@@ -1619,33 +1619,33 @@ fun Row.toFieldTrialRow(): FieldTrialRow = FieldTrialRow(
     requestKey = fields["requestKey"] as String,
     peptide = fields["peptide"] as Ref.Persisted,
     pathogen = fields["pathogen"] as Ref.Persisted,
+    approvedOn = fields["approvedOn"] as Instant,
     crop = fields["crop"] as Ref.Persisted,
     site = fields["site"] as Ref.Persisted,
     protocol = fields["protocol"] as Ref.Persisted,
-    approvedOn = fields["approvedOn"] as Instant,
 )
 
 fun FieldTrialRow.toRow(): Row = Row("FieldTrial", key, buildMap {
     put("requestKey", requestKey)
     put("peptide", peptide)
     put("pathogen", pathogen)
+    put("approvedOn", approvedOn)
     put("crop", crop)
     put("site", site)
     put("protocol", protocol)
-    put("approvedOn", approvedOn)
 })
 
 fun Row.toFieldRefusalRow(): FieldRefusalRow = FieldRefusalRow(
     key = key,
-    requestKey = fields["requestKey"] as String,
     reason = fields["reason"] as String,
     refusedOn = fields["refusedOn"] as Instant,
+    requestKey = fields["requestKey"] as String,
 )
 
 fun FieldRefusalRow.toRow(): Row = Row("FieldRefusal", key, buildMap {
-    put("requestKey", requestKey)
     put("reason", reason)
     put("refusedOn", refusedOn)
+    put("requestKey", requestKey)
 })
 
 fun Row.toPlantingRow(): PlantingRow = PlantingRow(
@@ -1782,15 +1782,15 @@ fun TaskReminderRow.toRow(): Row = Row("TaskReminder", key, buildMap {
 
 fun Row.toRescheduleRefusalRow(): RescheduleRefusalRow = RescheduleRefusalRow(
     key = key,
-    task = fields["task"] as Ref.Persisted?,
     reason = fields["reason"] as String,
     refusedOn = fields["refusedOn"] as Instant,
+    task = fields["task"] as Ref.Persisted?,
 )
 
 fun RescheduleRefusalRow.toRow(): Row = Row("RescheduleRefusal", key, buildMap {
-    task?.let { put("task", it) }
     put("reason", reason)
     put("refusedOn", refusedOn)
+    task?.let { put("task", it) }
 })
 
 fun Row.toTaskCancellationRow(): TaskCancellationRow = TaskCancellationRow(
@@ -1810,13 +1810,13 @@ fun TaskCancellationRow.toRow(): Row = Row("TaskCancellation", key, buildMap {
 
 fun Row.toCancelRefusalRow(): CancelRefusalRow = CancelRefusalRow(
     key = key,
-    task = fields["task"] as Ref.Persisted?,
     reason = fields["reason"] as String,
     refusedOn = fields["refusedOn"] as Instant,
+    task = fields["task"] as Ref.Persisted?,
 )
 
 fun CancelRefusalRow.toRow(): Row = Row("CancelRefusal", key, buildMap {
-    task?.let { put("task", it) }
     put("reason", reason)
     put("refusedOn", refusedOn)
+    task?.let { put("task", it) }
 })

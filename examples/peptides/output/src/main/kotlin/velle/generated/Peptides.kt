@@ -199,9 +199,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     /** Queue keys: [requestFieldTrial.crop], [requestFieldTrial.pathogen], [requestFieldTrial.peptide], [requestFieldTrial.protocol], [requestFieldTrial.site] — plus system-wide width below.
      *  System-wide over GreenhouseResult — `GreenhouseResult` reads every GreenhouseResult and correlates to no key (unexamined (A5)).
-     *  System-wide over GreenhouseTrial — reads GreenhouseTrial.peptide with no path back to any key (unexamined (A5)).
+     *  System-wide over Trial — reads Trial.peptide with no path back to any key (unexamined (A5)).
      *  System-wide over GreenhouseResult — `GreenhouseResult` reads every GreenhouseResult and correlates to no key (unexamined (A5)).
-     *  System-wide over GreenhouseTrial — reads GreenhouseTrial.peptide with no path back to any key (unexamined (A5)).
+     *  System-wide over Trial — reads Trial.peptide with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewRequestFieldTrial): Commit<NewRequestFieldTrial, Nothing?> =
@@ -313,6 +313,8 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun completedAssays(): List<CompletedAssay> = all("CompletedAssay") { materializeCompletedAssay(it) }
     fun hitExperiments(): List<HitExperiment> = all("HitExperiment") { materializeHitExperiment(it) }
     fun labValidateds(): List<LabValidated> = all("LabValidated") { materializeLabValidated(it) }
+    fun trials(): List<Trial> = all("Trial") { materializeTrial(it) }
+    fun refusals(): List<Refusal> = all("Refusal") { materializeRefusal(it) }
     fun treatedTrials(): List<TreatedTrial> = all("TreatedTrial") { materializeTreatedTrial(it) }
     fun laidOutTrials(): List<LaidOutTrial> = all("LaidOutTrial") { materializeLaidOutTrial(it) }
     fun observedToEnds(): List<ObservedToEnd> = all("ObservedToEnd") { materializeObservedToEnd(it) }
@@ -337,7 +339,6 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun successfulFieldTrials(): List<SuccessfulFieldTrial> = all("SuccessfulFieldTrial") { materializeSuccessfulFieldTrial(it) }
     fun fieldValidateds(): List<FieldValidated> = all("FieldValidated") { materializeFieldValidated(it) }
     fun haltedTrials(): List<HaltedTrial> = all("HaltedTrial") { materializeHaltedTrial(it) }
-    fun trials(): List<Trial> = all("Trial") { materializeTrial(it) }
     fun doneTasks(): List<DoneTask> = all("DoneTask") { materializeDoneTask(it) }
     fun openTasks(): List<OpenTask> = all("OpenTask") { materializeOpenTask(it) }
     fun overdueTasks(): List<OverdueTask> = all("OverdueTask") { materializeOverdueTask(it) }
@@ -599,6 +600,10 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** The record behind [ref] as a member of LabValidated, or null when it is not one. */
         fun labValidated(ref: Ref<Peptide>): LabValidated? = member("LabValidated", ref) { materializeLabValidated(it) }
 
+        val trials: TrialQuery get() = query("Trial", TrialFields()) { materializeTrial(it) }
+
+        val refusals: RefusalQuery get() = query("Refusal", RefusalFields()) { materializeRefusal(it) }
+
         val treatedTrials: TreatedTrialQuery get() = query("TreatedTrial", TreatedTrialFields()) { materializeTreatedTrial(it) }
         /** The record behind [ref] as a member of TreatedTrial, or null when it is not one. */
         fun treatedTrial(ref: Ref<GreenhouseTrial>): TreatedTrial? = member("TreatedTrial", ref) { materializeTreatedTrial(it) }
@@ -695,8 +700,6 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** The record behind [ref] as a member of HaltedTrial, or null when it is not one. */
         fun haltedTrial(ref: Ref<FieldTrial>): HaltedTrial? = member("HaltedTrial", ref) { materializeHaltedTrial(it) }
 
-        val trials: TrialQuery get() = query("Trial", TrialFields()) { materializeTrial(it) }
-
         val doneTasks: DoneTaskQuery get() = query("DoneTask", DoneTaskFields()) { materializeDoneTask(it) }
         /** The record behind [ref] as a member of DoneTask, or null when it is not one. */
         fun doneTask(ref: Ref<CollectionTask>): DoneTask? = member("DoneTask", ref) { materializeDoneTask(it) }
@@ -780,18 +783,18 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         name = system.get(id, "name") as String,
         host = system.refFor(system.get(id, "host") as Long),
         labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
-        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
-        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
+        trials = (system.get(id, "trials") as List<*>).map { system.refFor(it as Long) },
     )
 
     private fun materializePeptide(id: Long): Peptide = Peptide(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
-        stage = system.get(id, "stage") as String,
-        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
         greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
+        stage = Stage.of(system.get(id, "stage") as String),
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
+        trials = (system.get(id, "trials") as List<*>).map { system.refFor(it as Long) },
         isLabValidated = system.isMember(id, "LabValidated"),
         isGreenhouseValidated = system.isMember(id, "GreenhouseValidated"),
         isDeprioritized = system.isMember(id, "Deprioritized"),
@@ -886,9 +889,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
@@ -911,9 +914,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     private fun materializeGreenhouseRefusal(id: Long): GreenhouseRefusal = GreenhouseRefusal(
         key = system.refFor(id).key,
-        requestKey = system.get(id, "requestKey") as String,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
+        requestKey = system.get(id, "requestKey") as String,
     )
 
     private fun materializeGreenhousePlot(id: Long): GreenhousePlot = GreenhousePlot(
@@ -968,9 +971,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     private fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
         key = system.refFor(id).key,
-        observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
+        observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
     )
 
     private fun materializeVoidRecord(id: Long): VoidRecord = VoidRecord(
@@ -984,16 +987,16 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     private fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
         key = system.refFor(id).key,
-        observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
+        observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
     )
 
     private fun materializeMoveRefusal(id: Long): MoveRefusal = MoveRefusal(
         key = system.refFor(id).key,
-        plot = system.refFor(system.get(id, "plot") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
+        plot = system.refFor(system.get(id, "plot") as Long),
     )
 
     private fun materializeClimateExcursion(id: Long): ClimateExcursion = ClimateExcursion(
@@ -1055,10 +1058,10 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         crop = system.refFor(system.get(id, "crop") as Long),
         site = system.refFor(system.get(id, "site") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
@@ -1079,9 +1082,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     private fun materializeFieldRefusal(id: Long): FieldRefusal = FieldRefusal(
         key = system.refFor(id).key,
-        requestKey = system.get(id, "requestKey") as String,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
+        requestKey = system.get(id, "requestKey") as String,
     )
 
     private fun materializePlanting(id: Long): Planting = Planting(
@@ -1172,9 +1175,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     private fun materializeRescheduleRefusal(id: Long): RescheduleRefusal = RescheduleRefusal(
         key = system.refFor(id).key,
-        task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
+        task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
     )
 
     private fun materializeTaskCancellation(id: Long): TaskCancellation = TaskCancellation(
@@ -1187,9 +1190,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     private fun materializeCancelRefusal(id: Long): CancelRefusal = CancelRefusal(
         key = system.refFor(id).key,
-        task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
+        task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
     )
 
     private fun materializeCompletedAssay(id: Long): CompletedAssay = CompletedAssay(
@@ -1216,23 +1219,28 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
-        stage = system.get(id, "stage") as String,
-        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
         greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
+        stage = Stage.of(system.get(id, "stage") as String),
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
+        trials = (system.get(id, "trials") as List<*>).map { system.refFor(it as Long) },
         isGreenhouseValidated = system.isMember(id, "GreenhouseValidated"),
         isDeprioritized = system.isMember(id, "Deprioritized"),
         isFieldValidated = system.isMember(id, "FieldValidated"),
     )
+
+    private fun materializeTrial(id: Long): Trial = materialize(id) as Trial
+
+    private fun materializeRefusal(id: Long): Refusal = materialize(id) as Refusal
 
     private fun materializeTreatedTrial(id: Long): TreatedTrial = TreatedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
@@ -1257,9 +1265,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
@@ -1284,9 +1292,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
@@ -1311,9 +1319,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
@@ -1338,9 +1346,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
@@ -1365,9 +1373,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
@@ -1391,10 +1399,11 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
-        stage = system.get(id, "stage") as String,
-        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
         greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
+        stage = Stage.of(system.get(id, "stage") as String),
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
+        trials = (system.get(id, "trials") as List<*>).map { system.refFor(it as Long) },
         isLabValidated = system.isMember(id, "LabValidated"),
         isDeprioritized = system.isMember(id, "Deprioritized"),
         isFieldValidated = system.isMember(id, "FieldValidated"),
@@ -1404,10 +1413,11 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
-        stage = system.get(id, "stage") as String,
-        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
         greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
+        stage = Stage.of(system.get(id, "stage") as String),
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
+        trials = (system.get(id, "trials") as List<*>).map { system.refFor(it as Long) },
         isLabValidated = system.isMember(id, "LabValidated"),
         isGreenhouseValidated = system.isMember(id, "GreenhouseValidated"),
         isFieldValidated = system.isMember(id, "FieldValidated"),
@@ -1443,9 +1453,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
@@ -1500,9 +1510,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
@@ -1539,10 +1549,10 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         crop = system.refFor(system.get(id, "crop") as Long),
         site = system.refFor(system.get(id, "site") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
@@ -1565,10 +1575,10 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         crop = system.refFor(system.get(id, "crop") as Long),
         site = system.refFor(system.get(id, "site") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
@@ -1600,10 +1610,10 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         crop = system.refFor(system.get(id, "crop") as Long),
         site = system.refFor(system.get(id, "site") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
@@ -1626,10 +1636,10 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         crop = system.refFor(system.get(id, "crop") as Long),
         site = system.refFor(system.get(id, "site") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
@@ -1652,10 +1662,10 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         crop = system.refFor(system.get(id, "crop") as Long),
         site = system.refFor(system.get(id, "site") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
@@ -1677,10 +1687,11 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
-        stage = system.get(id, "stage") as String,
-        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
         greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
+        stage = Stage.of(system.get(id, "stage") as String),
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
+        trials = (system.get(id, "trials") as List<*>).map { system.refFor(it as Long) },
         isLabValidated = system.isMember(id, "LabValidated"),
         isGreenhouseValidated = system.isMember(id, "GreenhouseValidated"),
         isDeprioritized = system.isMember(id, "Deprioritized"),
@@ -1691,10 +1702,10 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
         crop = system.refFor(system.get(id, "crop") as Long),
         site = system.refFor(system.get(id, "site") as Long),
         protocol = system.refFor(system.get(id, "protocol") as Long),
-        approvedOn = system.get(id, "approvedOn") as Instant,
         treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
         controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
@@ -1711,8 +1722,6 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHarvestedTrial = system.isMember(id, "HarvestedTrial"),
         isSuccessfulFieldTrial = system.isMember(id, "SuccessfulFieldTrial"),
     )
-
-    private fun materializeTrial(id: Long): Trial = materialize(id) as Trial
 
     private fun materializeDoneTask(id: Long): DoneTask = DoneTask(
         key = system.refFor(id).key,
@@ -1805,10 +1814,14 @@ act Pathogen {
 -- evidence each stage produces, below.
 -- velle: a derived property testing the instance's own refinement
 -- memberships (`this is FieldValidated`) — classification, not state
+Stage is one of "candidate", "lab-validated", "greenhouse-validated", "field-validated"
+
 act Peptide {
     code: text
     sequence: text
-    stage: text = if this is FieldValidated then "field-validated"
+    greenhouseTrials: many GreenhouseTrial = (GreenhouseTrial where peptide == this)   -- one kind of trial; `trials`, inferred from Trial.peptide, holds both
+    fieldTrials: many FieldTrial = (FieldTrial where peptide == this)
+    stage: Stage = if this is FieldValidated then "field-validated"
                   else if this is GreenhouseValidated then "greenhouse-validated"
                   else if this is LabValidated then "lab-validated"
                   else "candidate"
@@ -1968,13 +1981,19 @@ shape RefusedGreenhouseRequest = RequestGreenhouseTrial where
 -- inferred inverse; `sum` / `count` over a derived collection's derived field;
 -- an optional derived from a `first(...)` selector, absent while the trial
 -- is untreated with no `is empty` guard
-shape GreenhouseTrial {
+-- What every trial has, declared once and taken by both kinds with `is`
+-- (Reference §9, "Sharing a field across shapes"): a reference typed `one Trial`
+-- holds either kind, and `Peptide.trials` holds both.
+shape Trial {
     requestKey: text
     peptide: one Peptide
     pathogen: one Pathogen
+    approvedOn: timestamp on create
+}
+
+shape GreenhouseTrial is Trial {
     greenhouse: one Greenhouse
     protocol: one GreenhouseProtocol
-    approvedOn: timestamp on create
     treatedAt: DateTime? = first(treatments by treatedAt).treatedAt
     treatedPlots: many GreenhousePlot = (GreenhousePlot where trial == this and treatment == "peptide")
     controlPlots: many GreenhousePlot = (GreenhousePlot where trial == this and treatment == "control")
@@ -1984,10 +2003,15 @@ shape GreenhouseTrial {
                         else (meanControlAudpc - meanTreatedAudpc) / meanControlAudpc * 100
 }
 
-shape GreenhouseRefusal {
-    requestKey: text
+-- A refusal recorded as data (Reference §21): the reason and the moment, declared
+-- once and taken by every refusal record below with `is` (Reference §9).
+shape Refusal {
     reason: text
     refusedOn: timestamp on create
+}
+
+shape GreenhouseRefusal is Refusal {
+    requestKey: text
 }
 
 rule ApproveGreenhouseTrial when ApprovedGreenhouseRequest {
@@ -2141,10 +2165,8 @@ shape ObservationCorrection {
     correctedOn: timestamp on create
 }
 
-shape CorrectionRefusal {
+shape CorrectionRefusal is Refusal {
     observation: one PlotObservation? initially required
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableCorrection = CorrectObservation where observation is not LockedObservation
@@ -2180,10 +2202,8 @@ shape VoidRecord {
     voidedOn: timestamp on create
 }
 
-shape VoidRefusal {
+shape VoidRefusal is Refusal {
     observation: one PlotObservation? initially required
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableVoid = VoidObservation where observation is not LockedObservation
@@ -2217,10 +2237,8 @@ transient act MovePlot {
     bench: text
 }
 
-shape MoveRefusal {
+shape MoveRefusal is Refusal {
     plot: one GreenhousePlot
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableMove = MovePlot where plot is not TreatedPlot
@@ -2360,14 +2378,10 @@ shape ApprovedFieldRequest = RequestFieldTrial where
 shape RefusedFieldRequest = RequestFieldTrial where
     not exists (GreenhouseResult where effective and trial.peptide == this.peptide and trial.pathogen == this.pathogen)
 
-shape FieldTrial {
-    requestKey: text
-    peptide: one Peptide
-    pathogen: one Pathogen
+shape FieldTrial is Trial {
     crop: one Crop
     site: one FieldSite
     protocol: one FieldProtocol
-    approvedOn: timestamp on create
     treatedPlots: many FieldPlot = (FieldPlot where trial == this and treatment == "peptide")
     controlPlots: many FieldPlot = (FieldPlot where trial == this and treatment == "control")
     meanTreatedYield: decimal = if treatedPlots is empty then 0.0 else sum(treatedPlots, yieldKgPerHa) / count(treatedPlots)
@@ -2376,10 +2390,8 @@ shape FieldTrial {
                          else (meanTreatedYield - meanControlYield) / meanControlYield * 100
 }
 
-shape FieldRefusal {
+shape FieldRefusal is Refusal {
     requestKey: text
-    reason: text
-    refusedOn: timestamp on create
 }
 
 rule ApproveFieldTrial when ApprovedFieldRequest {
@@ -2567,8 +2579,6 @@ rule NoticeHalt when (HaltedTrial where not exists HaltNotice for this) {
 -- `if trial is GreenhouseTrial then count(trial.greenhousePlots where ...)`,
 -- says the same in two branches.
 -- The task's day mark is read through `this.` two filters deep.
-shape Trial = GreenhouseTrial or FieldTrial
-
 act CollectionTask {
     trial: one Trial
     dayMark: integer
@@ -2611,10 +2621,8 @@ transient act RescheduleTask {
     dueOn: Date
 }
 
-shape RescheduleRefusal {
+shape RescheduleRefusal is Refusal {
     task: one CollectionTask? initially required
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableReschedule = RescheduleTask where task is not DoneTask
@@ -2645,10 +2653,8 @@ shape TaskCancellation {
     cancelledOn: timestamp on create
 }
 
-shape CancelRefusal {
+shape CancelRefusal is Refusal {
     task: one CollectionTask? initially required
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableCancel = CancelTask where task is not DoneTask
@@ -2716,6 +2722,8 @@ typealias CancelRefusalQuery = TypedQuery<CancelRefusalFields, CancelRefusal>
 typealias CompletedAssayQuery = TypedQuery<CompletedAssayFields, CompletedAssay>
 typealias HitExperimentQuery = TypedQuery<HitExperimentFields, HitExperiment>
 typealias LabValidatedQuery = TypedQuery<LabValidatedFields, LabValidated>
+typealias TrialQuery = TypedQuery<TrialFields, Trial>
+typealias RefusalQuery = TypedQuery<RefusalFields, Refusal>
 typealias TreatedTrialQuery = TypedQuery<TreatedTrialFields, TreatedTrial>
 typealias LaidOutTrialQuery = TypedQuery<LaidOutTrialFields, LaidOutTrial>
 typealias ObservedToEndQuery = TypedQuery<ObservedToEndFields, ObservedToEnd>
@@ -2740,12 +2748,24 @@ typealias HarvestedTrialQuery = TypedQuery<HarvestedTrialFields, HarvestedTrial>
 typealias SuccessfulFieldTrialQuery = TypedQuery<SuccessfulFieldTrialFields, SuccessfulFieldTrial>
 typealias FieldValidatedQuery = TypedQuery<FieldValidatedFields, FieldValidated>
 typealias HaltedTrialQuery = TypedQuery<HaltedTrialFields, HaltedTrial>
-typealias TrialQuery = TypedQuery<TrialFields, Trial>
 typealias DoneTaskQuery = TypedQuery<DoneTaskFields, DoneTask>
 typealias OpenTaskQuery = TypedQuery<OpenTaskFields, OpenTask>
 typealias OverdueTaskQuery = TypedQuery<OverdueTaskFields, OverdueTask>
 
 // ── the types declared by their words: one enum class each, an entry per word ──
+enum class Stage(val word: String) {
+    candidate("candidate"),
+    lab_validated("lab-validated"),
+    greenhouse_validated("greenhouse-validated"),
+    field_validated("field-validated");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): Stage = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"candidate\", \"lab-validated\", \"greenhouse-validated\", \"field-validated\"")
+    }
+}
+
 enum class Arm(val word: String) {
     peptide("peptide"),
     control("control");
@@ -3259,8 +3279,7 @@ data class Pathogen(
     val name: String,
     val host: Ref<Crop>,
     val labExperiments: List<Ref<LabExperiment>>,
-    val greenhouseTrials: List<Ref<GreenhouseTrial>>,
-    val fieldTrials: List<Ref<FieldTrial>>,
+    val trials: List<Ref<Trial>>,
 ) : Ref<Pathogen> {
     override val shape: String get() = "Pathogen"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -3271,10 +3290,11 @@ data class Peptide(
     override val key: StoreKey,
     val code: String,
     val sequence: String,
-    val stage: String,
-    val labExperiments: List<Ref<LabExperiment>>,
     val greenhouseTrials: List<Ref<GreenhouseTrial>>,
     val fieldTrials: List<Ref<FieldTrial>>,
+    val stage: Stage,
+    val labExperiments: List<Ref<LabExperiment>>,
+    val trials: List<Ref<Trial>>,
     /** membership of LabValidated at the moment of the read */
     val isLabValidated: Boolean,
     /** membership of GreenhouseValidated at the moment of the read */
@@ -3414,12 +3434,12 @@ data class GreenhouseProtocol(
 
 data class GreenhouseTrial(
     override val key: StoreKey,
-    val requestKey: String,
-    val peptide: Ref<Peptide>,
-    val pathogen: Ref<Pathogen>,
+    override val requestKey: String,
+    override val peptide: Ref<Peptide>,
+    override val pathogen: Ref<Pathogen>,
+    override val approvedOn: Instant,
     val greenhouse: Ref<Greenhouse>,
     val protocol: Ref<GreenhouseProtocol>,
-    val approvedOn: Instant,
     val treatedAt: Instant?,
     val treatedPlots: List<Ref<GreenhousePlot>>,
     val controlPlots: List<Ref<GreenhousePlot>>,
@@ -3455,11 +3475,12 @@ data class GreenhouseTrial(
 
 data class GreenhouseRefusal(
     override val key: StoreKey,
+    override val reason: String,
+    override val refusedOn: Instant,
     val requestKey: String,
-    val reason: String,
-    val refusedOn: Instant,
-) : Ref<GreenhouseRefusal> {
+) : Ref<GreenhouseRefusal>, Refusal {
     override val shape: String get() = "GreenhouseRefusal"
+    override val ref: Ref<GreenhouseRefusal> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -3538,11 +3559,12 @@ data class ObservationCorrection(
 
 data class CorrectionRefusal(
     override val key: StoreKey,
+    override val reason: String,
+    override val refusedOn: Instant,
     val observation: Ref<PlotObservation>?,
-    val reason: String,
-    val refusedOn: Instant,
-) : Ref<CorrectionRefusal> {
+) : Ref<CorrectionRefusal>, Refusal {
     override val shape: String get() = "CorrectionRefusal"
+    override val ref: Ref<CorrectionRefusal> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -3562,22 +3584,24 @@ data class VoidRecord(
 
 data class VoidRefusal(
     override val key: StoreKey,
+    override val reason: String,
+    override val refusedOn: Instant,
     val observation: Ref<PlotObservation>?,
-    val reason: String,
-    val refusedOn: Instant,
-) : Ref<VoidRefusal> {
+) : Ref<VoidRefusal>, Refusal {
     override val shape: String get() = "VoidRefusal"
+    override val ref: Ref<VoidRefusal> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
 data class MoveRefusal(
     override val key: StoreKey,
+    override val reason: String,
+    override val refusedOn: Instant,
     val plot: Ref<GreenhousePlot>,
-    val reason: String,
-    val refusedOn: Instant,
-) : Ref<MoveRefusal> {
+) : Ref<MoveRefusal>, Refusal {
     override val shape: String get() = "MoveRefusal"
+    override val ref: Ref<MoveRefusal> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -3668,13 +3692,13 @@ data class FieldProtocol(
 
 data class FieldTrial(
     override val key: StoreKey,
-    val requestKey: String,
-    val peptide: Ref<Peptide>,
-    val pathogen: Ref<Pathogen>,
+    override val requestKey: String,
+    override val peptide: Ref<Peptide>,
+    override val pathogen: Ref<Pathogen>,
+    override val approvedOn: Instant,
     val crop: Ref<Crop>,
     val site: Ref<FieldSite>,
     val protocol: Ref<FieldProtocol>,
-    val approvedOn: Instant,
     val treatedPlots: List<Ref<FieldPlot>>,
     val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
@@ -3706,11 +3730,12 @@ data class FieldTrial(
 
 data class FieldRefusal(
     override val key: StoreKey,
+    override val reason: String,
+    override val refusedOn: Instant,
     val requestKey: String,
-    val reason: String,
-    val refusedOn: Instant,
-) : Ref<FieldRefusal> {
+) : Ref<FieldRefusal>, Refusal {
     override val shape: String get() = "FieldRefusal"
+    override val ref: Ref<FieldRefusal> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -3847,11 +3872,12 @@ data class TaskReminder(
 
 data class RescheduleRefusal(
     override val key: StoreKey,
+    override val reason: String,
+    override val refusedOn: Instant,
     val task: Ref<CollectionTask>?,
-    val reason: String,
-    val refusedOn: Instant,
-) : Ref<RescheduleRefusal> {
+) : Ref<RescheduleRefusal>, Refusal {
     override val shape: String get() = "RescheduleRefusal"
+    override val ref: Ref<RescheduleRefusal> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -3870,11 +3896,12 @@ data class TaskCancellation(
 
 data class CancelRefusal(
     override val key: StoreKey,
+    override val reason: String,
+    override val refusedOn: Instant,
     val task: Ref<CollectionTask>?,
-    val reason: String,
-    val refusedOn: Instant,
-) : Ref<CancelRefusal> {
+) : Ref<CancelRefusal>, Refusal {
     override val shape: String get() = "CancelRefusal"
+    override val ref: Ref<CancelRefusal> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -3911,10 +3938,11 @@ data class LabValidated(
     override val key: StoreKey,
     val code: String,
     val sequence: String,
-    val stage: String,
-    val labExperiments: List<Ref<LabExperiment>>,
     val greenhouseTrials: List<Ref<GreenhouseTrial>>,
     val fieldTrials: List<Ref<FieldTrial>>,
+    val stage: Stage,
+    val labExperiments: List<Ref<LabExperiment>>,
+    val trials: List<Ref<Trial>>,
     /** membership of GreenhouseValidated at the moment of the read */
     val isGreenhouseValidated: Boolean,
     /** membership of Deprioritized at the moment of the read */
@@ -3927,14 +3955,31 @@ data class LabValidated(
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
+interface Trial : Keyed {
+    /** this record as a reference typed by the union, for a parameter that takes one */
+    val ref: Ref<Trial>
+    val requestKey: String
+    val peptide: Ref<Peptide>
+    val pathogen: Ref<Pathogen>
+    val approvedOn: Instant
+    val collectionTasks: List<Ref<CollectionTask>>
+}
+
+interface Refusal : Keyed {
+    /** this record as a reference typed by the union, for a parameter that takes one */
+    val ref: Ref<Refusal>
+    val reason: String
+    val refusedOn: Instant
+}
+
 data class TreatedTrial(
     override val key: StoreKey,
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val greenhouse: Ref<Greenhouse>,
     val protocol: Ref<GreenhouseProtocol>,
-    val approvedOn: Instant,
     val treatedAt: Instant?,
     val treatedPlots: List<Ref<GreenhousePlot>>,
     val controlPlots: List<Ref<GreenhousePlot>>,
@@ -3970,9 +4015,9 @@ data class LaidOutTrial(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val greenhouse: Ref<Greenhouse>,
     val protocol: Ref<GreenhouseProtocol>,
-    val approvedOn: Instant,
     val treatedAt: Instant?,
     val treatedPlots: List<Ref<GreenhousePlot>>,
     val controlPlots: List<Ref<GreenhousePlot>>,
@@ -4008,9 +4053,9 @@ data class ObservedToEnd(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val greenhouse: Ref<Greenhouse>,
     val protocol: Ref<GreenhouseProtocol>,
-    val approvedOn: Instant,
     val treatedAt: Instant?,
     val treatedPlots: List<Ref<GreenhousePlot>>,
     val controlPlots: List<Ref<GreenhousePlot>>,
@@ -4046,9 +4091,9 @@ data class CompleteTrial(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val greenhouse: Ref<Greenhouse>,
     val protocol: Ref<GreenhouseProtocol>,
-    val approvedOn: Instant,
     val treatedAt: Instant?,
     val treatedPlots: List<Ref<GreenhousePlot>>,
     val controlPlots: List<Ref<GreenhousePlot>>,
@@ -4084,9 +4129,9 @@ data class EffectiveTrial(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val greenhouse: Ref<Greenhouse>,
     val protocol: Ref<GreenhouseProtocol>,
-    val approvedOn: Instant,
     val treatedAt: Instant?,
     val treatedPlots: List<Ref<GreenhousePlot>>,
     val controlPlots: List<Ref<GreenhousePlot>>,
@@ -4122,9 +4167,9 @@ data class EvaluatedTrial(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val greenhouse: Ref<Greenhouse>,
     val protocol: Ref<GreenhouseProtocol>,
-    val approvedOn: Instant,
     val treatedAt: Instant?,
     val treatedPlots: List<Ref<GreenhousePlot>>,
     val controlPlots: List<Ref<GreenhousePlot>>,
@@ -4159,10 +4204,11 @@ data class GreenhouseValidated(
     override val key: StoreKey,
     val code: String,
     val sequence: String,
-    val stage: String,
-    val labExperiments: List<Ref<LabExperiment>>,
     val greenhouseTrials: List<Ref<GreenhouseTrial>>,
     val fieldTrials: List<Ref<FieldTrial>>,
+    val stage: Stage,
+    val labExperiments: List<Ref<LabExperiment>>,
+    val trials: List<Ref<Trial>>,
     /** membership of LabValidated at the moment of the read */
     val isLabValidated: Boolean,
     /** membership of Deprioritized at the moment of the read */
@@ -4179,10 +4225,11 @@ data class Deprioritized(
     override val key: StoreKey,
     val code: String,
     val sequence: String,
-    val stage: String,
-    val labExperiments: List<Ref<LabExperiment>>,
     val greenhouseTrials: List<Ref<GreenhouseTrial>>,
     val fieldTrials: List<Ref<FieldTrial>>,
+    val stage: Stage,
+    val labExperiments: List<Ref<LabExperiment>>,
+    val trials: List<Ref<Trial>>,
     /** membership of LabValidated at the moment of the read */
     val isLabValidated: Boolean,
     /** membership of GreenhouseValidated at the moment of the read */
@@ -4233,9 +4280,9 @@ data class ActiveTrial(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val greenhouse: Ref<Greenhouse>,
     val protocol: Ref<GreenhouseProtocol>,
-    val approvedOn: Instant,
     val treatedAt: Instant?,
     val treatedPlots: List<Ref<GreenhousePlot>>,
     val controlPlots: List<Ref<GreenhousePlot>>,
@@ -4316,9 +4363,9 @@ data class CompromisedTrial(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val greenhouse: Ref<Greenhouse>,
     val protocol: Ref<GreenhouseProtocol>,
-    val approvedOn: Instant,
     val treatedAt: Instant?,
     val treatedPlots: List<Ref<GreenhousePlot>>,
     val controlPlots: List<Ref<GreenhousePlot>>,
@@ -4371,10 +4418,10 @@ data class PermittedTrial(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val crop: Ref<Crop>,
     val site: Ref<FieldSite>,
     val protocol: Ref<FieldProtocol>,
-    val approvedOn: Instant,
     val treatedPlots: List<Ref<FieldPlot>>,
     val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
@@ -4406,10 +4453,10 @@ data class PlantedTrial(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val crop: Ref<Crop>,
     val site: Ref<FieldSite>,
     val protocol: Ref<FieldProtocol>,
-    val approvedOn: Instant,
     val treatedPlots: List<Ref<FieldPlot>>,
     val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
@@ -4454,10 +4501,10 @@ data class NeverScouted(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val crop: Ref<Crop>,
     val site: Ref<FieldSite>,
     val protocol: Ref<FieldProtocol>,
-    val approvedOn: Instant,
     val treatedPlots: List<Ref<FieldPlot>>,
     val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
@@ -4489,10 +4536,10 @@ data class HarvestedTrial(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val crop: Ref<Crop>,
     val site: Ref<FieldSite>,
     val protocol: Ref<FieldProtocol>,
-    val approvedOn: Instant,
     val treatedPlots: List<Ref<FieldPlot>>,
     val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
@@ -4524,10 +4571,10 @@ data class SuccessfulFieldTrial(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val crop: Ref<Crop>,
     val site: Ref<FieldSite>,
     val protocol: Ref<FieldProtocol>,
-    val approvedOn: Instant,
     val treatedPlots: List<Ref<FieldPlot>>,
     val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
@@ -4558,10 +4605,11 @@ data class FieldValidated(
     override val key: StoreKey,
     val code: String,
     val sequence: String,
-    val stage: String,
-    val labExperiments: List<Ref<LabExperiment>>,
     val greenhouseTrials: List<Ref<GreenhouseTrial>>,
     val fieldTrials: List<Ref<FieldTrial>>,
+    val stage: Stage,
+    val labExperiments: List<Ref<LabExperiment>>,
+    val trials: List<Ref<Trial>>,
     /** membership of LabValidated at the moment of the read */
     val isLabValidated: Boolean,
     /** membership of GreenhouseValidated at the moment of the read */
@@ -4579,10 +4627,10 @@ data class HaltedTrial(
     val requestKey: String,
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
+    val approvedOn: Instant,
     val crop: Ref<Crop>,
     val site: Ref<FieldSite>,
     val protocol: Ref<FieldProtocol>,
-    val approvedOn: Instant,
     val treatedPlots: List<Ref<FieldPlot>>,
     val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
@@ -4607,12 +4655,6 @@ data class HaltedTrial(
     override val shape: String get() = "FieldTrial"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
-}
-
-interface Trial : Keyed {
-    /** this record as a reference typed by the union, for a parameter that takes one */
-    val ref: Ref<Trial>
-    val collectionTasks: List<Ref<CollectionTask>>
 }
 
 data class DoneTask(
@@ -4691,7 +4733,7 @@ class PathogenFields(path: List<String> = emptyList()) : Fields(path) {
 class PeptideFields(path: List<String> = emptyList()) : Fields(path) {
     val code: TextField get() = TextField(fieldPath + "code")
     val sequence: TextField get() = TextField(fieldPath + "sequence")
-    val stage: TextField get() = TextField(fieldPath + "stage")
+    val stage: EnumField<Stage> get() = EnumField<Stage>(fieldPath + "stage") { it.word }
     fun isLabValidated(): Expr = isA("LabValidated")
     fun isGreenhouseValidated(): Expr = isA("GreenhouseValidated")
     fun isDeprioritized(): Expr = isA("Deprioritized")
@@ -4766,9 +4808,9 @@ class GreenhouseTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
     val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
     val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
     val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
@@ -4784,9 +4826,9 @@ class GreenhouseTrialFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class GreenhouseRefusalFields(path: List<String> = emptyList()) : Fields(path) {
-    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val reason: TextField get() = TextField(fieldPath + "reason")
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
 }
 
 class GreenhousePlotFields(path: List<String> = emptyList()) : Fields(path) {
@@ -4830,9 +4872,9 @@ class ObservationCorrectionFields(path: List<String> = emptyList()) : Fields(pat
 }
 
 class CorrectionRefusalFields(path: List<String> = emptyList()) : Fields(path) {
-    val observation: PlotObservationFields get() = PlotObservationFields(fieldPath + "observation")
     val reason: TextField get() = TextField(fieldPath + "reason")
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+    val observation: PlotObservationFields get() = PlotObservationFields(fieldPath + "observation")
 }
 
 class VoidRecordFields(path: List<String> = emptyList()) : Fields(path) {
@@ -4844,15 +4886,15 @@ class VoidRecordFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class VoidRefusalFields(path: List<String> = emptyList()) : Fields(path) {
-    val observation: PlotObservationFields get() = PlotObservationFields(fieldPath + "observation")
     val reason: TextField get() = TextField(fieldPath + "reason")
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+    val observation: PlotObservationFields get() = PlotObservationFields(fieldPath + "observation")
 }
 
 class MoveRefusalFields(path: List<String> = emptyList()) : Fields(path) {
-    val plot: GreenhousePlotFields get() = GreenhousePlotFields(fieldPath + "plot")
     val reason: TextField get() = TextField(fieldPath + "reason")
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+    val plot: GreenhousePlotFields get() = GreenhousePlotFields(fieldPath + "plot")
 }
 
 class ClimateExcursionFields(path: List<String> = emptyList()) : Fields(path) {
@@ -4901,10 +4943,10 @@ class FieldTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val crop: CropFields get() = CropFields(fieldPath + "crop")
     val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
     val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
     val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
     val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
@@ -4917,9 +4959,9 @@ class FieldTrialFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class FieldRefusalFields(path: List<String> = emptyList()) : Fields(path) {
-    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val reason: TextField get() = TextField(fieldPath + "reason")
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
 }
 
 class PlantingFields(path: List<String> = emptyList()) : Fields(path) {
@@ -4992,9 +5034,9 @@ class TaskReminderFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class RescheduleRefusalFields(path: List<String> = emptyList()) : Fields(path) {
-    val task: CollectionTaskFields get() = CollectionTaskFields(fieldPath + "task")
     val reason: TextField get() = TextField(fieldPath + "reason")
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+    val task: CollectionTaskFields get() = CollectionTaskFields(fieldPath + "task")
 }
 
 class TaskCancellationFields(path: List<String> = emptyList()) : Fields(path) {
@@ -5005,9 +5047,9 @@ class TaskCancellationFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class CancelRefusalFields(path: List<String> = emptyList()) : Fields(path) {
-    val task: CollectionTaskFields get() = CollectionTaskFields(fieldPath + "task")
     val reason: TextField get() = TextField(fieldPath + "reason")
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+    val task: CollectionTaskFields get() = CollectionTaskFields(fieldPath + "task")
 }
 
 class CompletedAssayFields(path: List<String> = emptyList()) : Fields(path) {
@@ -5027,19 +5069,31 @@ class HitExperimentFields(path: List<String> = emptyList()) : Fields(path) {
 class LabValidatedFields(path: List<String> = emptyList()) : Fields(path) {
     val code: TextField get() = TextField(fieldPath + "code")
     val sequence: TextField get() = TextField(fieldPath + "sequence")
-    val stage: TextField get() = TextField(fieldPath + "stage")
+    val stage: EnumField<Stage> get() = EnumField<Stage>(fieldPath + "stage") { it.word }
     fun isGreenhouseValidated(): Expr = isA("GreenhouseValidated")
     fun isDeprioritized(): Expr = isA("Deprioritized")
     fun isFieldValidated(): Expr = isA("FieldValidated")
+}
+
+class TrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+}
+
+class RefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
 }
 
 class TreatedTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
     val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
     val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
     val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
@@ -5057,9 +5111,9 @@ class LaidOutTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
     val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
     val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
     val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
@@ -5077,9 +5131,9 @@ class ObservedToEndFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
     val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
     val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
     val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
@@ -5097,9 +5151,9 @@ class CompleteTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
     val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
     val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
     val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
@@ -5117,9 +5171,9 @@ class EffectiveTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
     val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
     val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
     val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
@@ -5137,9 +5191,9 @@ class EvaluatedTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
     val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
     val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
     val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
@@ -5156,7 +5210,7 @@ class EvaluatedTrialFields(path: List<String> = emptyList()) : Fields(path) {
 class GreenhouseValidatedFields(path: List<String> = emptyList()) : Fields(path) {
     val code: TextField get() = TextField(fieldPath + "code")
     val sequence: TextField get() = TextField(fieldPath + "sequence")
-    val stage: TextField get() = TextField(fieldPath + "stage")
+    val stage: EnumField<Stage> get() = EnumField<Stage>(fieldPath + "stage") { it.word }
     fun isLabValidated(): Expr = isA("LabValidated")
     fun isDeprioritized(): Expr = isA("Deprioritized")
     fun isFieldValidated(): Expr = isA("FieldValidated")
@@ -5165,7 +5219,7 @@ class GreenhouseValidatedFields(path: List<String> = emptyList()) : Fields(path)
 class DeprioritizedFields(path: List<String> = emptyList()) : Fields(path) {
     val code: TextField get() = TextField(fieldPath + "code")
     val sequence: TextField get() = TextField(fieldPath + "sequence")
-    val stage: TextField get() = TextField(fieldPath + "stage")
+    val stage: EnumField<Stage> get() = EnumField<Stage>(fieldPath + "stage") { it.word }
     fun isLabValidated(): Expr = isA("LabValidated")
     fun isGreenhouseValidated(): Expr = isA("GreenhouseValidated")
     fun isFieldValidated(): Expr = isA("FieldValidated")
@@ -5193,9 +5247,9 @@ class ActiveTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
     val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
     val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
     val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
@@ -5234,9 +5288,9 @@ class CompromisedTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
     val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
     val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
     val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
@@ -5261,10 +5315,10 @@ class PermittedTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val crop: CropFields get() = CropFields(fieldPath + "crop")
     val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
     val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
     val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
     val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
@@ -5279,10 +5333,10 @@ class PlantedTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val crop: CropFields get() = CropFields(fieldPath + "crop")
     val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
     val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
     val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
     val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
@@ -5304,10 +5358,10 @@ class NeverScoutedFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val crop: CropFields get() = CropFields(fieldPath + "crop")
     val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
     val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
     val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
     val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
@@ -5322,10 +5376,10 @@ class HarvestedTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val crop: CropFields get() = CropFields(fieldPath + "crop")
     val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
     val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
     val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
     val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
@@ -5340,10 +5394,10 @@ class SuccessfulFieldTrialFields(path: List<String> = emptyList()) : Fields(path
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val crop: CropFields get() = CropFields(fieldPath + "crop")
     val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
     val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
     val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
     val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
@@ -5357,7 +5411,7 @@ class SuccessfulFieldTrialFields(path: List<String> = emptyList()) : Fields(path
 class FieldValidatedFields(path: List<String> = emptyList()) : Fields(path) {
     val code: TextField get() = TextField(fieldPath + "code")
     val sequence: TextField get() = TextField(fieldPath + "sequence")
-    val stage: TextField get() = TextField(fieldPath + "stage")
+    val stage: EnumField<Stage> get() = EnumField<Stage>(fieldPath + "stage") { it.word }
     fun isLabValidated(): Expr = isA("LabValidated")
     fun isGreenhouseValidated(): Expr = isA("GreenhouseValidated")
     fun isDeprioritized(): Expr = isA("Deprioritized")
@@ -5367,10 +5421,10 @@ class HaltedTrialFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val crop: CropFields get() = CropFields(fieldPath + "crop")
     val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
     val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
-    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
     val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
     val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
     val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
@@ -5379,9 +5433,6 @@ class HaltedTrialFields(path: List<String> = emptyList()) : Fields(path) {
     fun isNeverScouted(): Expr = isA("NeverScouted")
     fun isHarvestedTrial(): Expr = isA("HarvestedTrial")
     fun isSuccessfulFieldTrial(): Expr = isA("SuccessfulFieldTrial")
-}
-
-class TrialFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class DoneTaskFields(path: List<String> = emptyList()) : Fields(path) {

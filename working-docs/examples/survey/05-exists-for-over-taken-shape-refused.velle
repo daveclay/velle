@@ -1,0 +1,25 @@
+-- OQ139. A field declared once on a shape two shapes take with `is`
+-- (Reference §9) is not found by `exists X for this` when X is the taken
+-- shape: V13 reports that `for` matches 0 fields of 'AttemptOutcome'.
+-- Reference §9 says a refinement over the taken shape covers every taker, so
+-- "no outcome yet" should be one test over both takers.
+-- From examples/payments/payments.velle, PendingAttempt.
+
+act ChargeAttempt {
+    amount: integer
+}
+
+shape AttemptOutcome {
+    attempt: one ChargeAttempt          -- declared once, taken by both outcomes below
+}
+
+shape ChargeResponse is AttemptOutcome {
+    approved: boolean
+}
+
+shape AttemptTimeout is AttemptOutcome {
+    noticedOn: DateTime
+}
+
+-- refused: [V13] 'for' matches 0 fields of 'AttemptOutcome'
+shape PendingAttempt = ChargeAttempt where not exists AttemptOutcome for this

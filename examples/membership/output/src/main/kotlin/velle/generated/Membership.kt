@@ -441,7 +441,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     private fun materializeAuditEntry(id: Long): AuditEntry = AuditEntry(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
-        review = (system.get(id, "review") as Long?)?.let { system.refFor(it) },
+        review = system.refFor(system.get(id, "review") as Long),
         note = system.get(id, "note") as String,
         loggedOn = system.get(id, "loggedOn") as Instant,
     )
@@ -1189,7 +1189,7 @@ shape ChronicDelinquent = Member where count(DelinquencyFlag where member == thi
 
 shape AuditEntry {
     member: one Member
-    review: one AccountReview?
+    review: one AccountReview
     note: text
     loggedOn: DateTime
 }
@@ -1728,7 +1728,7 @@ data class DelinquencyResolution(
 data class AuditEntry(
     override val key: StoreKey,
     val member: Ref<Member>,
-    val review: Ref<AccountReview>?,
+    val review: Ref<AccountReview>,
     val note: String,
     val loggedOn: Instant,
 ) : Ref<AuditEntry> {

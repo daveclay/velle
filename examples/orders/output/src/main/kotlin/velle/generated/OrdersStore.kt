@@ -97,7 +97,7 @@ data class CatalogueLineRow(
     val key: StoreKey,
     val source: String,
     val sku: String,
-    val kind: String,
+    val kind: ChangeKind,
     val unitPrice: Int,
 )
 
@@ -449,14 +449,14 @@ fun Row.toCatalogueLineRow(): CatalogueLineRow = CatalogueLineRow(
     key = key,
     source = fields["source"] as String,
     sku = fields["sku"] as String,
-    kind = fields["kind"] as String,
+    kind = ChangeKind.of(fields["kind"] as String),
     unitPrice = (fields["unitPrice"] as Number).toInt(),
 )
 
 fun CatalogueLineRow.toRow(): Row = Row("CatalogueLine", key, buildMap {
     put("source", source)
     put("sku", sku)
-    put("kind", kind)
+    put("kind", kind.word)
     put("unitPrice", unitPrice)
 })
 

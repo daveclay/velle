@@ -153,7 +153,7 @@ open class PharmacyFlowTest {
         val c = s.counter(patient = patient, drug = amoxicillin)
         assertTrue(c.prescription.isA("AllergyConflict"))
         assertFalse(c.prescription.isA("Cleared"))
-        assertEquals("allergy", sys.read(sys.pharmacistAlerts().single()).kind, "the pharmacist is alerted once")
+        assertEquals(AlertKind.allergy, sys.read(sys.pharmacistAlerts().single()).kind, "the pharmacist is alerted once")
 
         val key = s.requestFill(c.prescription, c.lot, c.technician)
         assertEquals(0, sys.fills().size)
@@ -187,7 +187,7 @@ open class PharmacyFlowTest {
         assertTrue(onAspirin.isA("InteractionConflict"))
         assertTrue(onWarfarin.isA("InteractionConflict"), "and the other way round")
         assertEquals(2, sys.pharmacistAlerts().size)
-        assertTrue(sys.pharmacistAlerts().all { sys.read(it).kind == "interaction" })
+        assertTrue(sys.pharmacistAlerts().all { sys.read(it).kind == AlertKind.interaction })
 
         // discontinuing the warfarin clears both
         accept(sys.commit(NewDiscontinuation(onWarfarin, dr, "stopped")))
@@ -407,7 +407,7 @@ open class PharmacyFlowTest {
         assertTrue(shortDated.isA("ExpiredLot"))
         assertFalse(shortDated.isA("UsableLot"))
         sys.tickNightly()
-        assertEquals("expired", sys.read(sys.quarantines().single()).reason)
+        assertEquals(QuarantineReason.expired, sys.read(sys.quarantines().single()).reason)
         assertTrue(shortDated.isA("QuarantinedLot"))
         sys.tickNightly()
         assertEquals(1, sys.quarantines().size)
@@ -425,7 +425,7 @@ open class PharmacyFlowTest {
 
         accept(sys.commit(NewRecall(c1.lot, "FDA-2026-007", s.today)))
         assertTrue(c1.lot.isA("RecalledLot"))
-        assertEquals("recalled", sys.read(sys.quarantines().single()).reason)
+        assertEquals(QuarantineReason.recalled, sys.read(sys.quarantines().single()).reason)
         assertEquals(2, sys.recallNotices().size, "one per fill from the lot, in the recall's transaction")
         assertEquals(setOf(c1.patient.key, c2.patient.key), sys.recallNotices().map { sys.read(it).patient.key }.toSet())
         assertTrue(sys.recallNotices().all { sys.read(it).reference == "FDA-2026-007" })
@@ -499,7 +499,7 @@ open class PharmacyFlowTest {
         accept(sys.commit(NewRequestRefill("R-1", c.prescription)))
         accept(sys.commit(NewRequestRefill("R-2", c.prescription)))
         assertEquals(0, sys.refillTasks().size)
-        assertEquals(listOf("no refills remaining", "no refills remaining"), sys.refillRefusals().map { sys.read(it).reason })
+        assertEquals(listOf(RefillReason.no_refills_remaining, RefillReason.no_refills_remaining), sys.refillRefusals().map { sys.read(it).reason })
         assertEquals(1, sys.authorisationRequests().size, "asked once however many times the patient asks")
         val fax = sys.notices().single { sys.read(it).subject == "refill authorisation requested for amoxicillin" }
         assertEquals(c.prescriber, (sys.read(sys.read(fax).recipient) as? Prescriber))
@@ -509,7 +509,7 @@ open class PharmacyFlowTest {
         val d = s.prescription(c.patient, c.drug, c.prescriber, c.technician)
         accept(sys.commit(NewDiscontinuation(d, c.prescriber, "stopped")))
         accept(sys.commit(NewRequestRefill("R-3", d)))
-        assertEquals("prescription discontinued", sys.read(sys.refillRefusals().last()).reason)
+        assertEquals(RefillReason.prescription_discontinued, sys.read(sys.refillRefusals().last()).reason)
         assertEquals(1, sys.authorisationRequests().size)
     }
 

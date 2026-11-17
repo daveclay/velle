@@ -85,7 +85,7 @@ data class PeptideBatchRow(
 data class DepletionNoticeRow(
     val key: StoreKey,
     val batch: Ref.Persisted,
-    val kind: String,
+    val kind: Kind,
     val noticedOn: Instant,
 )
 
@@ -389,12 +389,12 @@ fun PeptideBatchRow.toRow(): Row = Row("PeptideBatch", key, buildMap {
 fun Row.toDepletionNoticeRow(): DepletionNoticeRow = DepletionNoticeRow(
     key = key,
     batch = fields["batch"] as Ref.Persisted,
-    kind = fields["kind"] as String,
+    kind = Kind.of(fields["kind"] as String),
     noticedOn = fields["noticedOn"] as Instant,
 )
 
 fun DepletionNoticeRow.toRow(): Row = Row("DepletionNotice", key, buildMap {
     put("batch", batch)
-    put("kind", kind)
+    put("kind", kind.word)
     put("noticedOn", noticedOn)
 })

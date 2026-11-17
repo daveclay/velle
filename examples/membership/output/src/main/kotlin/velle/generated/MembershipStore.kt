@@ -114,7 +114,7 @@ data class DelinquencyResolutionRow(
 data class AuditEntryRow(
     val key: StoreKey,
     val member: Ref.Persisted,
-    val review: Ref.Persisted?,
+    val review: Ref.Persisted,
     val note: String,
     val loggedOn: Instant,
 )
@@ -811,14 +811,14 @@ fun DelinquencyResolutionRow.toRow(): Row = Row("DelinquencyResolution", key, bu
 fun Row.toAuditEntryRow(): AuditEntryRow = AuditEntryRow(
     key = key,
     member = fields["member"] as Ref.Persisted,
-    review = fields["review"] as Ref.Persisted?,
+    review = fields["review"] as Ref.Persisted,
     note = fields["note"] as String,
     loggedOn = fields["loggedOn"] as Instant,
 )
 
 fun AuditEntryRow.toRow(): Row = Row("AuditEntry", key, buildMap {
     put("member", member)
-    review?.let { put("review", it) }
+    put("review", review)
     put("note", note)
     put("loggedOn", loggedOn)
 })

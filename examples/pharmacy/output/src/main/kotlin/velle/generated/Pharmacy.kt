@@ -507,6 +507,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun scheduleTwos(): List<ScheduleTwo> = all("ScheduleTwo") { materializeScheduleTwo(it) }
     fun lowStocks(): List<LowStock> = all("LowStock") { materializeLowStock(it) }
     fun effectivePrices(): List<EffectivePrice> = all("EffectivePrice") { materializeEffectivePrice(it) }
+    fun refusals(): List<Refusal> = all("Refusal") { materializeRefusal(it) }
     fun expiredLots(): List<ExpiredLot> = all("ExpiredLot") { materializeExpiredLot(it) }
     fun quarantinedLots(): List<QuarantinedLot> = all("QuarantinedLot") { materializeQuarantinedLot(it) }
     fun recalledLots(): List<RecalledLot> = all("RecalledLot") { materializeRecalledLot(it) }
@@ -833,6 +834,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** The record behind [ref] as a member of EffectivePrice, or null when it is not one. */
         fun effectivePrice(ref: Ref<PriceChange>): EffectivePrice? = member("EffectivePrice", ref) { materializeEffectivePrice(it) }
 
+        val refusals: RefusalQuery get() = query("Refusal", RefusalFields()) { materializeRefusal(it) }
+
         val expiredLots: ExpiredLotQuery get() = query("ExpiredLot", ExpiredLotFields()) { materializeExpiredLot(it) }
         /** The record behind [ref] as a member of ExpiredLot, or null when it is not one. */
         fun expiredLot(ref: Ref<StockLot>): ExpiredLot? = member("ExpiredLot", ref) { materializeExpiredLot(it) }
@@ -1114,9 +1117,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     private fun materializePriceWithdrawalRefusal(id: Long): PriceWithdrawalRefusal = PriceWithdrawalRefusal(
         key = system.refFor(id).key,
-        priceChange = (system.get(id, "priceChange") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
+        priceChange = (system.get(id, "priceChange") as Long?)?.let { system.refFor(it) },
     )
 
     private fun materializeStockLot(id: Long): StockLot = StockLot(
@@ -1157,7 +1160,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeQuarantine(id: Long): Quarantine = Quarantine(
         key = system.refFor(id).key,
         lot = system.refFor(system.get(id, "lot") as Long),
-        reason = system.get(id, "reason") as String,
+        reason = QuarantineReason.of(system.get(id, "reason") as String),
         quarantinedOn = system.get(id, "quarantinedOn") as Instant,
     )
 
@@ -1285,9 +1288,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     private fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
         key = system.refFor(id).key,
-        prescription = system.refFor(system.get(id, "prescription") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
+        prescription = system.refFor(system.get(id, "prescription") as Long),
     )
 
     private fun materializeEntryVoid(id: Long): EntryVoid = EntryVoid(
@@ -1300,9 +1303,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     private fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
         key = system.refFor(id).key,
-        prescription = system.refFor(system.get(id, "prescription") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
+        prescription = system.refFor(system.get(id, "prescription") as Long),
     )
 
     private fun materializeConflictOverride(id: Long): ConflictOverride = ConflictOverride(
@@ -1315,7 +1318,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializePharmacistAlert(id: Long): PharmacistAlert = PharmacistAlert(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
-        kind = system.get(id, "kind") as String,
+        kind = AlertKind.of(system.get(id, "kind") as String),
         raisedOn = system.get(id, "raisedOn") as Instant,
     )
 
@@ -1359,10 +1362,10 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     private fun materializeFillRefusal(id: Long): FillRefusal = FillRefusal(
         key = system.refFor(id).key,
-        requestKey = system.get(id, "requestKey") as String,
-        prescription = system.refFor(system.get(id, "prescription") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
+        requestKey = system.get(id, "requestKey") as String,
+        prescription = system.refFor(system.get(id, "prescription") as Long),
     )
 
     private fun materializeControlledLogEntry(id: Long): ControlledLogEntry = ControlledLogEntry(
@@ -1432,7 +1435,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         prescription = system.refFor(system.get(id, "prescription") as Long),
-        reason = system.get(id, "reason") as String,
+        reason = RefillReason.of(system.get(id, "reason") as String),
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
@@ -1657,6 +1660,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         unitPrice = system.get(id, "unitPrice") as BigDecimal,
         priceWithdrawalRefusals = (system.get(id, "priceWithdrawalRefusals") as List<*>).map { system.refFor(it as Long) },
     )
+
+    private fun materializeRefusal(id: Long): Refusal = materialize(id) as Refusal
 
     private fun materializeExpiredLot(id: Long): ExpiredLot = ExpiredLot(
         key = system.refFor(id).key,
@@ -2805,6 +2810,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         val effectivePrices: EffectivePriceQuery get() = query("EffectivePrice", EffectivePriceFields()) { materializeEffectivePrice(it) }
         /** The record behind [ref] as a member of EffectivePrice, or null when it is not one or not shown to this viewer. */
         fun effectivePrice(ref: Ref<PriceChange>): EffectivePrice? = shown("EffectivePrice", ref) { materializeEffectivePrice(it) }
+        val refusals: RefusalQuery get() = query("Refusal", RefusalFields()) { materializeRefusal(it) }
         val expiredLots: ExpiredLotQuery get() = query("ExpiredLot", ExpiredLotFields()) { materializeExpiredLot(it) }
         /** The record behind [ref] as a member of ExpiredLot, or null when it is not one or not shown to this viewer. */
         fun expiredLot(ref: Ref<StockLot>): ExpiredLot? = shown("ExpiredLot", ref) { materializeExpiredLot(it) }
@@ -3109,10 +3115,15 @@ shape PriceWithdrawal {
     withdrawnOn: timestamp on create
 }
 
-shape PriceWithdrawalRefusal {
-    priceChange: one PriceChange? initially required
+-- A refusal recorded as data (Reference §21): the reason and the moment, declared
+-- once and taken by the refusal records below with `is` (Reference §9).
+shape Refusal {
     reason: text
     refusedOn: timestamp on create
+}
+
+shape PriceWithdrawalRefusal is Refusal {
+    priceChange: one PriceChange? initially required
 }
 
 shape ApplicableWithdrawal = WithdrawPriceChange where priceChange is not EffectivePrice
@@ -3220,9 +3231,11 @@ rule AdjustCount when DiscrepantCount {
 -- `not exists Quarantine for this`, not `this is not QuarantinedLot`: the
 -- disarm proof reads the `exists` atom and does not look through a named
 -- refinement over `is not empty`
+QuarantineReason is one of "expired", "recalled"
+
 shape Quarantine {
     lot: one StockLot
-    reason: text
+    reason: QuarantineReason
     quarantinedOn: timestamp on create
 }
 
@@ -3422,10 +3435,8 @@ transient act CorrectEntry by Staff {
     directions: text
 }
 
-shape CorrectionRefusal {
+shape CorrectionRefusal is Refusal {
     prescription: one Prescription
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableCorrection = CorrectEntry where prescription is not FilledPrescription
@@ -3457,10 +3468,8 @@ shape EntryVoid {
     voidedOn: timestamp on create
 }
 
-shape VoidRefusal {
+shape VoidRefusal is Refusal {
     prescription: one Prescription
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableVoid = VoidEntry where prescription is not FilledPrescription
@@ -3510,9 +3519,11 @@ shape Fillable = ActivePrescription and Cleared
 -- The pharmacist is alerted to each kind of conflict once per prescription.
 -- velle: two guarded rules whose witnesses are one shape told apart by a
 -- field, firing as siblings when a new prescription has both conflicts
+AlertKind is one of "allergy", "interaction"
+
 shape PharmacistAlert {
     prescription: one Prescription
-    kind: text
+    kind: AlertKind
     raisedOn: DateTime
 }
 
@@ -3612,11 +3623,9 @@ shape Fill {
     amountDue: decimal = if exists (claims where PaidClaim) then sum(claims where PaidClaim, patientPays) else total
 }
 
-shape FillRefusal {
+shape FillRefusal is Refusal {
     requestKey: text
     prescription: one Prescription
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableFill = FillPrescription where dispensable
@@ -3812,10 +3821,14 @@ shape RefillTask {
 shape OpenRefillTask    = RefillTask where prescription.fillsRecorded <= fillsAtRequest
 shape OverdueRefillTask = OpenRefillTask where requestedOn < today - 2 days
 
+-- a refill is refused for one of three reasons, so the reason is a word, not a
+-- text (Reference §5); AskPrescriber below reads one of the words
+RefillReason is one of "prescription expired", "prescription discontinued", "no refills remaining"
+
 shape RefillRefusal {
     requestKey: text
     prescription: one Prescription
-    reason: text
+    reason: RefillReason
     refusedOn: timestamp on create
 }
 
@@ -4043,6 +4056,7 @@ typealias ControlledQuery = TypedQuery<ControlledFields, Controlled>
 typealias ScheduleTwoQuery = TypedQuery<ScheduleTwoFields, ScheduleTwo>
 typealias LowStockQuery = TypedQuery<LowStockFields, LowStock>
 typealias EffectivePriceQuery = TypedQuery<EffectivePriceFields, EffectivePrice>
+typealias RefusalQuery = TypedQuery<RefusalFields, Refusal>
 typealias ExpiredLotQuery = TypedQuery<ExpiredLotFields, ExpiredLot>
 typealias QuarantinedLotQuery = TypedQuery<QuarantinedLotFields, QuarantinedLot>
 typealias RecalledLotQuery = TypedQuery<RecalledLotFields, RecalledLot>
@@ -4101,6 +4115,28 @@ enum class Severity(val word: String) {
     }
 }
 
+enum class QuarantineReason(val word: String) {
+    expired("expired"),
+    recalled("recalled");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): QuarantineReason = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"expired\", \"recalled\"")
+    }
+}
+
+enum class AlertKind(val word: String) {
+    allergy("allergy"),
+    interaction("interaction");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): AlertKind = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"allergy\", \"interaction\"")
+    }
+}
+
 enum class Verdict(val word: String) {
     approved("approved"),
     rejected("rejected");
@@ -4109,6 +4145,18 @@ enum class Verdict(val word: String) {
         /** The entry carrying [word]; a word the declaration does not list is an error. */
         fun of(word: String): Verdict = entries.firstOrNull { it.word == word }
             ?: throw IllegalArgumentException("\"$word\" is not one of \"approved\", \"rejected\"")
+    }
+}
+
+enum class RefillReason(val word: String) {
+    prescription_expired("prescription expired"),
+    prescription_discontinued("prescription discontinued"),
+    no_refills_remaining("no refills remaining");
+
+    companion object {
+        /** The entry carrying [word]; a word the declaration does not list is an error. */
+        fun of(word: String): RefillReason = entries.firstOrNull { it.word == word }
+            ?: throw IllegalArgumentException("\"$word\" is not one of \"prescription expired\", \"prescription discontinued\", \"no refills remaining\"")
     }
 }
 
@@ -4733,11 +4781,12 @@ data class PriceWithdrawal(
 
 data class PriceWithdrawalRefusal(
     override val key: StoreKey,
+    override val reason: String,
+    override val refusedOn: Instant,
     val priceChange: Ref<PriceChange>?,
-    val reason: String,
-    val refusedOn: Instant,
-) : Ref<PriceWithdrawalRefusal> {
+) : Ref<PriceWithdrawalRefusal>, Refusal {
     override val shape: String get() = "PriceWithdrawalRefusal"
+    override val ref: Ref<PriceWithdrawalRefusal> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -4796,7 +4845,7 @@ data class CountConfirmation(
 data class Quarantine(
     override val key: StoreKey,
     val lot: Ref<StockLot>,
-    val reason: String,
+    val reason: QuarantineReason,
     val quarantinedOn: Instant,
 ) : Ref<Quarantine> {
     override val shape: String get() = "Quarantine"
@@ -4985,11 +5034,12 @@ data class Discontinuation(
 
 data class CorrectionRefusal(
     override val key: StoreKey,
+    override val reason: String,
+    override val refusedOn: Instant,
     val prescription: Ref<Prescription>,
-    val reason: String,
-    val refusedOn: Instant,
-) : Ref<CorrectionRefusal> {
+) : Ref<CorrectionRefusal>, Refusal {
     override val shape: String get() = "CorrectionRefusal"
+    override val ref: Ref<CorrectionRefusal> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -5008,11 +5058,12 @@ data class EntryVoid(
 
 data class VoidRefusal(
     override val key: StoreKey,
+    override val reason: String,
+    override val refusedOn: Instant,
     val prescription: Ref<Prescription>,
-    val reason: String,
-    val refusedOn: Instant,
-) : Ref<VoidRefusal> {
+) : Ref<VoidRefusal>, Refusal {
     override val shape: String get() = "VoidRefusal"
+    override val ref: Ref<VoidRefusal> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -5031,7 +5082,7 @@ data class ConflictOverride(
 data class PharmacistAlert(
     override val key: StoreKey,
     val prescription: Ref<Prescription>,
-    val kind: String,
+    val kind: AlertKind,
     val raisedOn: Instant,
 ) : Ref<PharmacistAlert> {
     override val shape: String get() = "PharmacistAlert"
@@ -5094,12 +5145,13 @@ data class Fill(
 
 data class FillRefusal(
     override val key: StoreKey,
+    override val reason: String,
+    override val refusedOn: Instant,
     val requestKey: String,
     val prescription: Ref<Prescription>,
-    val reason: String,
-    val refusedOn: Instant,
-) : Ref<FillRefusal> {
+) : Ref<FillRefusal>, Refusal {
     override val shape: String get() = "FillRefusal"
+    override val ref: Ref<FillRefusal> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -5205,7 +5257,7 @@ data class RefillRefusal(
     override val key: StoreKey,
     val requestKey: String,
     val prescription: Ref<Prescription>,
-    val reason: String,
+    val reason: RefillReason,
     val refusedOn: Instant,
 ) : Ref<RefillRefusal> {
     override val shape: String get() = "RefillRefusal"
@@ -5531,6 +5583,13 @@ data class EffectivePrice(
     override val shape: String get() = "PriceChange"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+interface Refusal : Keyed {
+    /** this record as a reference typed by the union, for a parameter that takes one */
+    val ref: Ref<Refusal>
+    val reason: String
+    val refusedOn: Instant
 }
 
 data class ExpiredLot(
@@ -6807,9 +6866,9 @@ class PriceWithdrawalFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class PriceWithdrawalRefusalFields(path: List<String> = emptyList()) : Fields(path) {
-    val priceChange: PriceChangeFields get() = PriceChangeFields(fieldPath + "priceChange")
     val reason: TextField get() = TextField(fieldPath + "reason")
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+    val priceChange: PriceChangeFields get() = PriceChangeFields(fieldPath + "priceChange")
 }
 
 class StockLotFields(path: List<String> = emptyList()) : Fields(path) {
@@ -6841,7 +6900,7 @@ class CountConfirmationFields(path: List<String> = emptyList()) : Fields(path) {
 
 class QuarantineFields(path: List<String> = emptyList()) : Fields(path) {
     val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
-    val reason: TextField get() = TextField(fieldPath + "reason")
+    val reason: EnumField<QuarantineReason> get() = EnumField<QuarantineReason>(fieldPath + "reason") { it.word }
     val quarantinedOn: DateTimeField get() = DateTimeField(fieldPath + "quarantinedOn")
 }
 
@@ -6932,9 +6991,9 @@ class DiscontinuationFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class CorrectionRefusalFields(path: List<String> = emptyList()) : Fields(path) {
-    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
     val reason: TextField get() = TextField(fieldPath + "reason")
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
 }
 
 class EntryVoidFields(path: List<String> = emptyList()) : Fields(path) {
@@ -6945,9 +7004,9 @@ class EntryVoidFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class VoidRefusalFields(path: List<String> = emptyList()) : Fields(path) {
-    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
     val reason: TextField get() = TextField(fieldPath + "reason")
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
 }
 
 class ConflictOverrideFields(path: List<String> = emptyList()) : Fields(path) {
@@ -6958,7 +7017,7 @@ class ConflictOverrideFields(path: List<String> = emptyList()) : Fields(path) {
 
 class PharmacistAlertFields(path: List<String> = emptyList()) : Fields(path) {
     val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
-    val kind: TextField get() = TextField(fieldPath + "kind")
+    val kind: EnumField<AlertKind> get() = EnumField<AlertKind>(fieldPath + "kind") { it.word }
     val raisedOn: DateTimeField get() = DateTimeField(fieldPath + "raisedOn")
 }
 
@@ -6990,10 +7049,10 @@ class FillFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class FillRefusalFields(path: List<String> = emptyList()) : Fields(path) {
-    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
-    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
     val reason: TextField get() = TextField(fieldPath + "reason")
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
 }
 
 class ControlledLogEntryFields(path: List<String> = emptyList()) : Fields(path) {
@@ -7053,7 +7112,7 @@ class RefillTaskFields(path: List<String> = emptyList()) : Fields(path) {
 class RefillRefusalFields(path: List<String> = emptyList()) : Fields(path) {
     val requestKey: TextField get() = TextField(fieldPath + "requestKey")
     val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
-    val reason: TextField get() = TextField(fieldPath + "reason")
+    val reason: EnumField<RefillReason> get() = EnumField<RefillReason>(fieldPath + "reason") { it.word }
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
 }
 
@@ -7195,6 +7254,11 @@ class EffectivePriceFields(path: List<String> = emptyList()) : Fields(path) {
     val drug: DrugFields get() = DrugFields(fieldPath + "drug")
     val effectiveOn: DateField get() = DateField(fieldPath + "effectiveOn")
     val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+}
+
+class RefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
 }
 
 class ExpiredLotFields(path: List<String> = emptyList()) : Fields(path) {

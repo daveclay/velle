@@ -265,7 +265,7 @@ shape ChronicDelinquent = Member where count(DelinquencyFlag where member == thi
 
 shape AuditEntry {
     member: one Member
-    review: one AccountReview?
+    review: one AccountReview
     note: text
     loggedOn: DateTime
 }

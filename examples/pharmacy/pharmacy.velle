@@ -201,10 +201,15 @@ shape PriceWithdrawal {
     withdrawnOn: timestamp on create
 }
 
-shape PriceWithdrawalRefusal {
-    priceChange: one PriceChange? initially required
+-- A refusal recorded as data (Reference §21): the reason and the moment, declared
+-- once and taken by the refusal records below with `is` (Reference §9).
+shape Refusal {
     reason: text
     refusedOn: timestamp on create
+}
+
+shape PriceWithdrawalRefusal is Refusal {
+    priceChange: one PriceChange? initially required
 }
 
 shape ApplicableWithdrawal = WithdrawPriceChange where priceChange is not EffectivePrice
@@ -312,9 +317,11 @@ rule AdjustCount when DiscrepantCount {
 -- `not exists Quarantine for this`, not `this is not QuarantinedLot`: the
 -- disarm proof reads the `exists` atom and does not look through a named
 -- refinement over `is not empty`
+QuarantineReason is one of "expired", "recalled"
+
 shape Quarantine {
     lot: one StockLot
-    reason: text
+    reason: QuarantineReason
     quarantinedOn: timestamp on create
 }
 
@@ -514,10 +521,8 @@ transient act CorrectEntry by Staff {
     directions: text
 }
 
-shape CorrectionRefusal {
+shape CorrectionRefusal is Refusal {
     prescription: one Prescription
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableCorrection = CorrectEntry where prescription is not FilledPrescription
@@ -549,10 +554,8 @@ shape EntryVoid {
     voidedOn: timestamp on create
 }
 
-shape VoidRefusal {
+shape VoidRefusal is Refusal {
     prescription: one Prescription
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableVoid = VoidEntry where prescription is not FilledPrescription
@@ -602,9 +605,11 @@ shape Fillable = ActivePrescription and Cleared
 -- The pharmacist is alerted to each kind of conflict once per prescription.
 -- velle: two guarded rules whose witnesses are one shape told apart by a
 -- field, firing as siblings when a new prescription has both conflicts
+AlertKind is one of "allergy", "interaction"
+
 shape PharmacistAlert {
     prescription: one Prescription
-    kind: text
+    kind: AlertKind
     raisedOn: DateTime
 }
 
@@ -704,11 +709,9 @@ shape Fill {
     amountDue: decimal = if exists (claims where PaidClaim) then sum(claims where PaidClaim, patientPays) else total
 }
 
-shape FillRefusal {
+shape FillRefusal is Refusal {
     requestKey: text
     prescription: one Prescription
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableFill = FillPrescription where dispensable
@@ -904,10 +907,14 @@ shape RefillTask {
 shape OpenRefillTask    = RefillTask where prescription.fillsRecorded <= fillsAtRequest
 shape OverdueRefillTask = OpenRefillTask where requestedOn < today - 2 days
 
+-- a refill is refused for one of three reasons, so the reason is a word, not a
+-- text (Reference §5); AskPrescriber below reads one of the words
+RefillReason is one of "prescription expired", "prescription discontinued", "no refills remaining"
+
 shape RefillRefusal {
     requestKey: text
     prescription: one Prescription
-    reason: text
+    reason: RefillReason
     refusedOn: timestamp on create
 }
 

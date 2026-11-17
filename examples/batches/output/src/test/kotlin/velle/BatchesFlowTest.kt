@@ -61,7 +61,7 @@ open class BatchesFlowTest {
         val mixed = batch(pep, "30", composition(fermented to "20", ordered to "10"))
 
         // the kind is read off the origin, never stored
-        assertEquals(listOf("fermented", "ordered", "composite"), listOf(fermented, ordered, mixed).map { sys.read(it).kind })
+        assertEquals(listOf(Kind.fermented, Kind.ordered, Kind.composite), listOf(fermented, ordered, mixed).map { sys.read(it).kind })
         assertEquals("Fermentation", sys.read(fermented).origin.shape)
         assertTrue(sys.read(fermented).isFermented)
         assertTrue(sys.read(ordered).isOrdered)
@@ -131,7 +131,7 @@ open class BatchesFlowTest {
         assertTrue(sys.read(source).isDepleted)
         val notice = sys.depletionNotices().map { sys.read(it) }.single()
         assertEquals(source, notice.batch)
-        assertEquals("fermented", notice.kind)
+        assertEquals(Kind.fermented, notice.kind)
 
         // nothing draws more than a batch holds: the batch, its mixture, and the
         // mixture's components are one closure, refused whole

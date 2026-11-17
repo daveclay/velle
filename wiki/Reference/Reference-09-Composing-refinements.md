@@ -139,7 +139,7 @@ When a `transient act` takes a shape, a rule over that shape fires inside each r
 - **For one-writer**, a union overlaps each of its shapes, and two base shapes never overlap ([checks.md, V1](checks#v1--one-writer-disjointness)). A taken shape overlaps each shape that takes it.
 - **It rejects** `is` naming a shape the spec does not declare, and a rule creating a taken shape, which has no records of its own ([checks.md, F1](checks#f1--name-resolution-and-casing)).
 - **It rejects** an `act` that other shapes take, two shapes taking each other, a shape taking one field name from two shapes, and a shape declaring a field it also takes ([checks.md, F3](checks#f3--position-rules)).
-- **It rejects** a field typed with a taken shape that a `transient act` takes ([checks.md, V17](checks#v17--transient-isolation)), and an act's closure naming the collection a taken shape's field infers, since its records are of several shapes ([checks.md, V22](checks#v22--closure-declaration-legality)).
+- **It rejects** a field typed with a taken shape that a `transient act` takes ([checks.md, V17](checks#v17--transient-isolation)). An act's closure may name the collection a taken shape's back-reference infers; its parts are then of every shape that takes it, each saying which when it arrives ([§6, "A request that is not kept, with its parts"](Reference-06-Relationships#a-request-that-is-not-kept-with-its-parts); [checks.md, V22](checks#v22--closure-declaration-legality)).
 
 ## Related pages
 

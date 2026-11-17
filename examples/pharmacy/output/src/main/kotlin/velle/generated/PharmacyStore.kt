@@ -90,9 +90,9 @@ data class PriceWithdrawalRow(
 /** One stored PriceWithdrawalRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class PriceWithdrawalRefusalRow(
     val key: StoreKey,
-    val priceChange: Ref.Persisted?,
     val reason: String,
     val refusedOn: Instant,
+    val priceChange: Ref.Persisted?,
 )
 
 /** One stored StockLot row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -127,7 +127,7 @@ data class CountConfirmationRow(
 data class QuarantineRow(
     val key: StoreKey,
     val lot: Ref.Persisted,
-    val reason: String,
+    val reason: QuarantineReason,
     val quarantinedOn: Instant,
 )
 
@@ -220,9 +220,9 @@ data class DiscontinuationRow(
 /** One stored CorrectionRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CorrectionRefusalRow(
     val key: StoreKey,
-    val prescription: Ref.Persisted,
     val reason: String,
     val refusedOn: Instant,
+    val prescription: Ref.Persisted,
 )
 
 /** One stored EntryVoid row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -237,9 +237,9 @@ data class EntryVoidRow(
 /** One stored VoidRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class VoidRefusalRow(
     val key: StoreKey,
-    val prescription: Ref.Persisted,
     val reason: String,
     val refusedOn: Instant,
+    val prescription: Ref.Persisted,
 )
 
 /** One stored ConflictOverride row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -254,7 +254,7 @@ data class ConflictOverrideRow(
 data class PharmacistAlertRow(
     val key: StoreKey,
     val prescription: Ref.Persisted,
-    val kind: String,
+    val kind: AlertKind,
     val raisedOn: Instant,
 )
 
@@ -283,10 +283,10 @@ data class FillRow(
 /** One stored FillRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class FillRefusalRow(
     val key: StoreKey,
-    val requestKey: String,
-    val prescription: Ref.Persisted,
     val reason: String,
     val refusedOn: Instant,
+    val requestKey: String,
+    val prescription: Ref.Persisted,
 )
 
 /** One stored ControlledLogEntry row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -362,7 +362,7 @@ data class RefillRefusalRow(
     val key: StoreKey,
     val requestKey: String,
     val prescription: Ref.Persisted,
-    val reason: String,
+    val reason: RefillReason,
     val refusedOn: Instant,
 )
 
@@ -1610,15 +1610,15 @@ fun PriceWithdrawalRow.toRow(): Row = Row("PriceWithdrawal", key, buildMap {
 
 fun Row.toPriceWithdrawalRefusalRow(): PriceWithdrawalRefusalRow = PriceWithdrawalRefusalRow(
     key = key,
-    priceChange = fields["priceChange"] as Ref.Persisted?,
     reason = fields["reason"] as String,
     refusedOn = fields["refusedOn"] as Instant,
+    priceChange = fields["priceChange"] as Ref.Persisted?,
 )
 
 fun PriceWithdrawalRefusalRow.toRow(): Row = Row("PriceWithdrawalRefusal", key, buildMap {
-    priceChange?.let { put("priceChange", it) }
     put("reason", reason)
     put("refusedOn", refusedOn)
+    priceChange?.let { put("priceChange", it) }
 })
 
 fun Row.toStockLotRow(): StockLotRow = StockLotRow(
@@ -1671,13 +1671,13 @@ fun CountConfirmationRow.toRow(): Row = Row("CountConfirmation", key, buildMap {
 fun Row.toQuarantineRow(): QuarantineRow = QuarantineRow(
     key = key,
     lot = fields["lot"] as Ref.Persisted,
-    reason = fields["reason"] as String,
+    reason = QuarantineReason.of(fields["reason"] as String),
     quarantinedOn = fields["quarantinedOn"] as Instant,
 )
 
 fun QuarantineRow.toRow(): Row = Row("Quarantine", key, buildMap {
     put("lot", lot)
-    put("reason", reason)
+    put("reason", reason.word)
     put("quarantinedOn", quarantinedOn)
 })
 
@@ -1825,15 +1825,15 @@ fun DiscontinuationRow.toRow(): Row = Row("Discontinuation", key, buildMap {
 
 fun Row.toCorrectionRefusalRow(): CorrectionRefusalRow = CorrectionRefusalRow(
     key = key,
-    prescription = fields["prescription"] as Ref.Persisted,
     reason = fields["reason"] as String,
     refusedOn = fields["refusedOn"] as Instant,
+    prescription = fields["prescription"] as Ref.Persisted,
 )
 
 fun CorrectionRefusalRow.toRow(): Row = Row("CorrectionRefusal", key, buildMap {
-    put("prescription", prescription)
     put("reason", reason)
     put("refusedOn", refusedOn)
+    put("prescription", prescription)
 })
 
 fun Row.toEntryVoidRow(): EntryVoidRow = EntryVoidRow(
@@ -1853,15 +1853,15 @@ fun EntryVoidRow.toRow(): Row = Row("EntryVoid", key, buildMap {
 
 fun Row.toVoidRefusalRow(): VoidRefusalRow = VoidRefusalRow(
     key = key,
-    prescription = fields["prescription"] as Ref.Persisted,
     reason = fields["reason"] as String,
     refusedOn = fields["refusedOn"] as Instant,
+    prescription = fields["prescription"] as Ref.Persisted,
 )
 
 fun VoidRefusalRow.toRow(): Row = Row("VoidRefusal", key, buildMap {
-    put("prescription", prescription)
     put("reason", reason)
     put("refusedOn", refusedOn)
+    put("prescription", prescription)
 })
 
 fun Row.toConflictOverrideRow(): ConflictOverrideRow = ConflictOverrideRow(
@@ -1880,13 +1880,13 @@ fun ConflictOverrideRow.toRow(): Row = Row("ConflictOverride", key, buildMap {
 fun Row.toPharmacistAlertRow(): PharmacistAlertRow = PharmacistAlertRow(
     key = key,
     prescription = fields["prescription"] as Ref.Persisted,
-    kind = fields["kind"] as String,
+    kind = AlertKind.of(fields["kind"] as String),
     raisedOn = fields["raisedOn"] as Instant,
 )
 
 fun PharmacistAlertRow.toRow(): Row = Row("PharmacistAlert", key, buildMap {
     put("prescription", prescription)
-    put("kind", kind)
+    put("kind", kind.word)
     put("raisedOn", raisedOn)
 })
 
@@ -1930,17 +1930,17 @@ fun FillRow.toRow(): Row = Row("Fill", key, buildMap {
 
 fun Row.toFillRefusalRow(): FillRefusalRow = FillRefusalRow(
     key = key,
-    requestKey = fields["requestKey"] as String,
-    prescription = fields["prescription"] as Ref.Persisted,
     reason = fields["reason"] as String,
     refusedOn = fields["refusedOn"] as Instant,
+    requestKey = fields["requestKey"] as String,
+    prescription = fields["prescription"] as Ref.Persisted,
 )
 
 fun FillRefusalRow.toRow(): Row = Row("FillRefusal", key, buildMap {
-    put("requestKey", requestKey)
-    put("prescription", prescription)
     put("reason", reason)
     put("refusedOn", refusedOn)
+    put("requestKey", requestKey)
+    put("prescription", prescription)
 })
 
 fun Row.toControlledLogEntryRow(): ControlledLogEntryRow = ControlledLogEntryRow(
@@ -2059,14 +2059,14 @@ fun Row.toRefillRefusalRow(): RefillRefusalRow = RefillRefusalRow(
     key = key,
     requestKey = fields["requestKey"] as String,
     prescription = fields["prescription"] as Ref.Persisted,
-    reason = fields["reason"] as String,
+    reason = RefillReason.of(fields["reason"] as String),
     refusedOn = fields["refusedOn"] as Instant,
 )
 
 fun RefillRefusalRow.toRow(): Row = Row("RefillRefusal", key, buildMap {
     put("requestKey", requestKey)
     put("prescription", prescription)
-    put("reason", reason)
+    put("reason", reason.word)
     put("refusedOn", refusedOn)
 })
 

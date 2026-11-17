@@ -61,10 +61,12 @@ A relationship name on its own is one step and gives the flat list. `walk` in fr
 From `examples/loyalty/loyalty.velle`:
 
 ```
+Tier is one of "basic", "gold", "advocate"
+
 shape Member {
     name: text
     referrer: one Member?
-    tier: text initially "basic"
+    tier: Tier initially "basic"
 
     upline: many Member = walk referrer
     foundingReferrer: one Member? = walk referrer until referrer is none

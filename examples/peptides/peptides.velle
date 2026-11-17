@@ -48,10 +48,14 @@ act Pathogen {
 -- evidence each stage produces, below.
 -- velle: a derived property testing the instance's own refinement
 -- memberships (`this is FieldValidated`) — classification, not state
+Stage is one of "candidate", "lab-validated", "greenhouse-validated", "field-validated"
+
 act Peptide {
     code: text
     sequence: text
-    stage: text = if this is FieldValidated then "field-validated"
+    greenhouseTrials: many GreenhouseTrial = (GreenhouseTrial where peptide == this)   -- one kind of trial; `trials`, inferred from Trial.peptide, holds both
+    fieldTrials: many FieldTrial = (FieldTrial where peptide == this)
+    stage: Stage = if this is FieldValidated then "field-validated"
                   else if this is GreenhouseValidated then "greenhouse-validated"
                   else if this is LabValidated then "lab-validated"
                   else "candidate"
@@ -211,13 +215,19 @@ shape RefusedGreenhouseRequest = RequestGreenhouseTrial where
 -- inferred inverse; `sum` / `count` over a derived collection's derived field;
 -- an optional derived from a `first(...)` selector, absent while the trial
 -- is untreated with no `is empty` guard
-shape GreenhouseTrial {
+-- What every trial has, declared once and taken by both kinds with `is`
+-- (Reference §9, "Sharing a field across shapes"): a reference typed `one Trial`
+-- holds either kind, and `Peptide.trials` holds both.
+shape Trial {
     requestKey: text
     peptide: one Peptide
     pathogen: one Pathogen
+    approvedOn: timestamp on create
+}
+
+shape GreenhouseTrial is Trial {
     greenhouse: one Greenhouse
     protocol: one GreenhouseProtocol
-    approvedOn: timestamp on create
     treatedAt: DateTime? = first(treatments by treatedAt).treatedAt
     treatedPlots: many GreenhousePlot = (GreenhousePlot where trial == this and treatment == "peptide")
     controlPlots: many GreenhousePlot = (GreenhousePlot where trial == this and treatment == "control")
@@ -227,10 +237,15 @@ shape GreenhouseTrial {
                         else (meanControlAudpc - meanTreatedAudpc) / meanControlAudpc * 100
 }
 
-shape GreenhouseRefusal {
-    requestKey: text
+-- A refusal recorded as data (Reference §21): the reason and the moment, declared
+-- once and taken by every refusal record below with `is` (Reference §9).
+shape Refusal {
     reason: text
     refusedOn: timestamp on create
+}
+
+shape GreenhouseRefusal is Refusal {
+    requestKey: text
 }
 
 rule ApproveGreenhouseTrial when ApprovedGreenhouseRequest {
@@ -384,10 +399,8 @@ shape ObservationCorrection {
     correctedOn: timestamp on create
 }
 
-shape CorrectionRefusal {
+shape CorrectionRefusal is Refusal {
     observation: one PlotObservation? initially required
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableCorrection = CorrectObservation where observation is not LockedObservation
@@ -423,10 +436,8 @@ shape VoidRecord {
     voidedOn: timestamp on create
 }
 
-shape VoidRefusal {
+shape VoidRefusal is Refusal {
     observation: one PlotObservation? initially required
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableVoid = VoidObservation where observation is not LockedObservation
@@ -460,10 +471,8 @@ transient act MovePlot {
     bench: text
 }
 
-shape MoveRefusal {
+shape MoveRefusal is Refusal {
     plot: one GreenhousePlot
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableMove = MovePlot where plot is not TreatedPlot
@@ -603,14 +612,10 @@ shape ApprovedFieldRequest = RequestFieldTrial where
 shape RefusedFieldRequest = RequestFieldTrial where
     not exists (GreenhouseResult where effective and trial.peptide == this.peptide and trial.pathogen == this.pathogen)
 
-shape FieldTrial {
-    requestKey: text
-    peptide: one Peptide
-    pathogen: one Pathogen
+shape FieldTrial is Trial {
     crop: one Crop
     site: one FieldSite
     protocol: one FieldProtocol
-    approvedOn: timestamp on create
     treatedPlots: many FieldPlot = (FieldPlot where trial == this and treatment == "peptide")
     controlPlots: many FieldPlot = (FieldPlot where trial == this and treatment == "control")
     meanTreatedYield: decimal = if treatedPlots is empty then 0.0 else sum(treatedPlots, yieldKgPerHa) / count(treatedPlots)
@@ -619,10 +624,8 @@ shape FieldTrial {
                          else (meanTreatedYield - meanControlYield) / meanControlYield * 100
 }
 
-shape FieldRefusal {
+shape FieldRefusal is Refusal {
     requestKey: text
-    reason: text
-    refusedOn: timestamp on create
 }
 
 rule ApproveFieldTrial when ApprovedFieldRequest {
@@ -810,8 +813,6 @@ rule NoticeHalt when (HaltedTrial where not exists HaltNotice for this) {
 -- `if trial is GreenhouseTrial then count(trial.greenhousePlots where ...)`,
 -- says the same in two branches.
 -- The task's day mark is read through `this.` two filters deep.
-shape Trial = GreenhouseTrial or FieldTrial
-
 act CollectionTask {
     trial: one Trial
     dayMark: integer
@@ -854,10 +855,8 @@ transient act RescheduleTask {
     dueOn: Date
 }
 
-shape RescheduleRefusal {
+shape RescheduleRefusal is Refusal {
     task: one CollectionTask? initially required
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableReschedule = RescheduleTask where task is not DoneTask
@@ -888,10 +887,8 @@ shape TaskCancellation {
     cancelledOn: timestamp on create
 }
 
-shape CancelRefusal {
+shape CancelRefusal is Refusal {
     task: one CollectionTask? initially required
-    reason: text
-    refusedOn: timestamp on create
 }
 
 shape ApplicableCancel = CancelTask where task is not DoneTask

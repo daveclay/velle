@@ -130,6 +130,9 @@ shape Origin = Fermentation or ExternalOrder or Composition {
 -- `origin` in `with` lets the reference be supplied by value: the batch arrives
 -- with its new origin nested inside it, and a composition arriving that way
 -- brings its components (Reference §6, "A reference supplied by value").
+-- the three kinds of batch, by their words (Reference §5)
+Kind is one of "fermented", "ordered", "composite"
+
 act PeptideBatch {
     peptide: one Peptide
     quantityMg: decimal
@@ -149,7 +152,7 @@ act PeptideBatch {
     -- the kind, read off the origin, never stored
     -- velle: narrowing in a conditional; with three operands the final else
     -- is the third operand (Reference §10)
-    kind: text = if origin is Fermentation then "fermented"
+    kind: Kind = if origin is Fermentation then "fermented"
                  else if origin is ExternalOrder then "ordered"
                  else "composite"
 } with { origin with { components } }
@@ -200,7 +203,7 @@ shape Depleted = PeptideBatch where remainingMg <= 0
 
 shape DepletionNotice {
     batch: one PeptideBatch
-    kind: text
+    kind: Kind
     noticedOn: DateTime
 }
 
