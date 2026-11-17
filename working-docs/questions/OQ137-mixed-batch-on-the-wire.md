@@ -157,6 +157,45 @@ D1's proposed changes in build order. The by-value edge over a union-typed `one`
 8. Tests: `TransientClosureTest.kt`, a commit of one tagged list with parts of both shapes and values on each, and a refusal of an element without a tag or of a shape that is not a taker; a JSON API test for the tagged list; `DiagnosticCatalogTest` for the removed message.
 9. Settle: the row in the settled table, OQ54's item already filed, this file removed.
 
+### 3.1 The committer's surface, today and after the build
+
+Today, with one edge per shape, the generated input (`wiki/Guides/Act-API.md`, "Parts") is one list per edge, each element the part shape's own `New` class:
+
+```kotlin
+NewBatch(
+    note = "nightly",
+    createRows = listOf(NewCreateRow(identifier = "c1", newKey = "N1", rowValues = listOf(NewRowValue(name = "a")))),
+    updateRows = listOf(NewUpdateRow(identifier = "u1", key = "T1", rowValues = listOf(NewRowValue(name = "c")))),
+)
+```
+
+After the build, with `with rows`, the list is typed by the taken shape's input interface, which the generator already emits for a taken shape or a union in a creating position (`NewOrigin` in `examples/batches/output/src/main/kotlin/velle/generated/Batches.kt`), and each element is the concrete class for its shape. Nothing is tagged in Kotlin; the class is the shape:
+
+```kotlin
+sealed interface NewRow                                   // the taken shape's input interface; no input class of its own
+data class NewCreateRow(identifier, newKey, rowValues) : NewRow, NewValue
+data class NewUpdateRow(identifier, key, rowValues) : NewRow, NewValue
+data class NewBatch(val note: String, val rows: List<NewRow> = emptyList())
+
+NewBatch(
+    note = "nightly",
+    rows = listOf(
+        NewCreateRow(identifier = "c1", newKey = "N1", rowValues = listOf(NewRowValue(name = "a"))),
+        NewUpdateRow(identifier = "u1", key = "T1", rowValues = listOf(NewRowValue(name = "c"))),
+    ),
+)
+```
+
+In JSON each element says its shape, as a nested value at a union-typed field does today (`wiki/Guides/API-layer.md`, `Wire.nested`):
+
+```
+{ "note": "nightly",
+  "rows": [ { "@shape": "CreateRow", "identifier": "c1", "newKey": "N1", "rowValues": [ { "name": "a" } ] },
+            { "@shape": "UpdateRow", "identifier": "u1", "key": "T1",   "rowValues": [ { "name": "c" } ] } ] }
+```
+
+An element without `"@shape"`, or naming a shape that does not take `Row`, is refused at the door before the runtime is entered: `'rows' takes a CreateRow or an UpdateRow; say which with "@shape"`. The per-shape spelling keeps today's surface unchanged. How the GraphQL schema spells an input list over several shapes is checked in step 4 against what it does today for a union-typed nested value.
+
 ## 4. Work items
 
 - [ ] Build steps 1 to 4 of §3 (model, codegen, runtime, JSON).
