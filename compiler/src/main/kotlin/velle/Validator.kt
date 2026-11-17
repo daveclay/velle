@@ -3764,7 +3764,7 @@ class Validator(private val model: Model) {
         }
     }
 
-    /** The transient acts each rule's and refinement's subject spans, by the site name
+    /** The transient acts each rule's, refinement's, and `never`'s subject spans, by the site name
      *  [forEachSpecExpr] reports: non-empty only for a subject that is a shape such an act
      *  takes with `is`, or a refinement of one. */
     private fun transientSubjectsBySite(): Map<String, Set<String>> {
@@ -3775,6 +3775,8 @@ class Validator(private val model: Model) {
         }
         for (name in model.refinements.keys)
             bySite["shape '$name'"] = model.basesOf(name).filter { it in model.transients }.toSet()
+        for (never in model.nevers)
+            bySite[neverSite(never)] = model.basesOfExpr(never.target).filter { it in model.transients }.toSet()
         return bySite
     }
 
@@ -4656,6 +4658,10 @@ class Validator(private val model: Model) {
                 }
             }
         }
-        model.nevers.forEach { walkRef("never declaration", it.target) }
+        model.nevers.forEach { walkRef(neverSite(it), it.target) }
     }
+
+    /** The site name a `never` is walked under: its subject, so a message names what the author wrote. */
+    private fun neverSite(never: NeverDecl): String =
+        "'never' over '${(never.target as? RefName)?.name ?: Printer.refExpr(never.target)}'"
 }

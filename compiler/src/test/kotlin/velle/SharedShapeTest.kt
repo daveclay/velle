@@ -197,6 +197,32 @@ class SharedShapeTest {
     }
 
     @Test
+    fun `a never over a taken shape narrows to a transient taker and refuses at that taker's door`() {
+        val src = """
+            act Entry { name: text unique }
+            shape EntryChange { entry: one Entry }
+            transient act RenameEntry is EntryChange { newName: text }
+            transient act MoveEntry is EntryChange { newSite: text }
+            never (EntryChange where (this is RenameEntry and this.newName == "") or (this is MoveEntry and this.newSite == ""))
+            shape Touch { entry: one Entry, touchedOn: DateTime }
+            rule TouchEntry when EntryChange { Touch from { entry: this.entry, touchedOn: now } }
+        """.trimIndent()
+        assertEquals(emptyList(), diags(src))
+        val sys = system(src)
+        sys.scope {
+            val entry = sys.mustCommit("Entry", "name" to "oak")
+            assertIs<CommitResult.Refused>(sys.commit("RenameEntry", mapOf("entry" to entry, "newName" to "")))
+            assertIs<CommitResult.Refused>(sys.commit("MoveEntry", mapOf("entry" to entry, "newSite" to "")))
+            sys.mustCommit("RenameEntry", "entry" to entry, "newName" to "old oak")
+            sys.mustCommit("MoveEntry", "entry" to entry, "newSite" to "south")
+            assertEquals(2, sys.instancesOf("Touch").size)
+        }
+        // a never over an unrelated shape still may not name the act
+        val elsewhere = src + "\nact Note { body: text }\nnever (Note where count(RenameEntry) > 0)"
+        assertTrue("V17" in codes(elsewhere), "got: ${diags(elsewhere)}")
+    }
+
+    @Test
     fun `a rule over a taken shape fires inside a transient taker's own commit, and narrows to the taker's own fields`() {
         val src = """
             act Entry { name: text unique }
