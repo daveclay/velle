@@ -21,7 +21,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 
 ## Validator proofs
 
-- **OQ140** — Decide whether a `never` over a union or a taken shape is read as a presence fact (`checks.md` V11) on each operand or taker: today `never (Content where sourceLabel is some and source is none)` licenses nothing, since `PresenceFacts.kt` resolves no single base for it, so `source.name` under `sourceLabel is some` on `Post` is refused until the prohibition is written over `Post` (found 2026-11-17 probing OQ134).
+- **[OQ140](questions/OQ140-union-never-as-presence-fact.md)** — whether a `never` over a union or a taken shape shows a step present on each operand or taker (`checks.md` V11), as it is now enforced on each since OQ134 · opened 2026-11-17 as OQ134's residue; D1 awaits Dave; one work item
 - **OQ83** — The dead-`until` advisory: a `walk R until P` whose condition the record itself can never satisfy and no step can reach serves nothing; not built, A2 covers `for 1 steps` only (OQ76, settled table).
 - **OQ131** — Build or retract the second V4 check: Reference §18 "What the compiler checks" and `checks.md` V4 say a guard and backup schedule on a plain `on commit` rule is refused with "did you mean `after commit`?", and `Validator.kt` has no such check (found 2026-11-13 while rewriting the messages, OQ130 in the settled table).
 - **[OQ62](questions/OQ62-advisory-levels.md)** — whether the advisory series gains a quieter level that records what the spec entails without warning · deferred 2026-10-14 out of OQ52 §4 until a second case wants it

@@ -453,4 +453,21 @@ class UnionStressTest {
         assertTrue(advisories.none { it.code == "A5" }, advisories.toString())
         assertEquals(emptyMap(), DomainAnalysis(Model(Parser.parse(source))).commitWidenings())
     }
+
+    @Test
+    fun `a never over a union or a taken shape is not yet a presence fact on an operand`() {
+        // OQ140: V11 spends a prohibition over the operand itself and nothing wider
+        val credited = """
+            act Member { name: text unique }
+            shape Attributed { source: one Member?, sourceLabel: text? }
+            act Post is Attributed { body: text, credit: text = if sourceLabel is some then source.name else "" }
+            act Photo is Attributed { caption: text }
+            shape Content = Post or Photo
+        """.trimIndent()
+        fun refusesTheRead(prohibition: String) =
+            diags(credited + "\n" + prohibition).any { it.code == "V11" && "'source.name' reads through 'source'" in it.message }
+        assertTrue(refusesTheRead("never (Content where sourceLabel is some and source is none)"))
+        assertTrue(refusesTheRead("never (Attributed where sourceLabel is some and source is none)"))
+        assertTrue(!refusesTheRead("never (Post where sourceLabel is some and source is none)"))
+    }
 }
