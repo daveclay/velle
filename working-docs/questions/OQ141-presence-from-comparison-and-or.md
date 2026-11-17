@@ -1,6 +1,6 @@
 # OQ141 — Does a `?.` comparison that holds, or the right side of an `or`, show an optional step present?
 
-**Status:** opened 2026-11-17 from a stress pass of a domain spec, re-verified at commit 76cff78. D1 decided 2026-11-17, build pending; D2 awaits Dave.
+**Status:** opened 2026-11-17 from a stress pass of a domain spec, re-verified at commit 76cff78. D1 and D2 decided 2026-11-17, build pending.
 
 **In plain terms:** a rule says "a value whose attribute is a relation must name one of the attribute's relations", and another says "a value with units must have an attribute that has units". Both are refused, because each reads the attribute in a place where the attribute can only be present, but the compiler recognises only an `is some` or `is none` test as showing that. The author writes the longer spelling with the test added, or turns the `or` inside out.
 
@@ -79,7 +79,7 @@ Costs:
 
 **Decided:** yes, 2026-11-17. A comparison that holds shows the `?.` paths it reads present, on its holding side only; `!=` and `not in` show nothing.
 
-### D2. Whether the right side of an `or` is read under the failure of its left side
+### D2. Whether the right side of an `or` is read under the failure of its left side · Decided 2026-11-17
 
 Does `attr is none or not attr.hasUnits` let the right side read `attr.hasUnits` with a plain dot?
 
@@ -101,6 +101,25 @@ Costs:
 - `compiler/src/test/kotlin/velle/PresenceThroughPathTest.kt`: the second spec in §1 accepted; `attr is some or attr.hasUnits` still refused, since the right side runs when `attr` is absent.
 - `working-docs/examples/survey/18-presence-or-right-side-refused.velle` renamed without the suffix, the workaround file deleted, README lines updated.
 
-## 3. Work items
+**Decided:** yes, 2026-11-17. The right operand of `or` is checked under the negation of the left operand's facts.
 
-- [ ] Decide D2.
+## 3. The build
+
+In build order, gathered from D1 and D2:
+
+1. `compiler/src/main/kotlin/velle/ExprTypes.kt` (`narrowingOf`): a comparison with `==`, `in`, `<`, `<=`, `>`, or `>=` whose operand is a path with `?.` yields the presence facts of `is some` on that path, on its holding side only (D1); the right operand of `or` is read under the negation of the left operand's facts, for presence and for union narrowing alike (D2).
+2. `compiler/src/main/kotlin/velle/Validator.kt` (`withPresence`, `checkDotsLicensed`): the right operand of `or` checked under those facts (D2).
+3. Regenerate every example's output.
+4. `wiki/Reference/Reference-10-Predicate-expressions.md` "Reaching through relationships": the comparison sentence with the `attr?.kind == "relation"` example and the statement that `==` on an absent operand is false (D1); the `or` case beside the `and` case (D2).
+5. `wiki/Normative/checks.md` V11: the comparison and the right side of an `or` added to what shows a step present.
+6. `compiler/src/test/kotlin/velle/PresenceThroughPathTest.kt`: both §1 specs accepted; `!=` and `attr is some or attr.hasUnits` still refused.
+7. Survey: `18-presence-optional-comparison-refused.velle` and `18-presence-or-right-side-refused.velle` renamed to `-accepted`, the workaround file deleted, README lines updated.
+8. Settle: row in the settled table, file removed.
+
+## 4. Work items
+
+- [ ] Build the narrowing from a holding comparison (D1).
+- [ ] Build the right side of `or` under the left side's negation (D2).
+- [ ] Update Reference §10 and `checks.md` V11.
+- [ ] Rename the survey files and update the README.
+- [ ] Settle.
