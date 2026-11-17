@@ -165,6 +165,99 @@ class TransientClosureTest {
         }
     }
 
+    // ── variants of a part (Reference §9, "Sharing a field across shapes") ────
+    //
+    // A batch arrives with create rows and update rows. Each row kind takes the
+    // fields the two share from one shape and declares its own; the values of a
+    // row point at the shared shape, so one value shape serves both kinds.
+
+    private val batch = """
+        act Item { key: text unique }
+
+        transient act Batch {
+            note: text
+        } with { createRows with { rowValues }, updateRows with { rowValues } }
+
+        shape Row {
+            identifier: text
+        }
+
+        shape CreateRow is Row {
+            batch: one Batch
+            newKey: text
+        }
+
+        shape UpdateRow is Row {
+            batch: one Batch
+            key: text
+        }
+
+        shape RowValue {
+            row: one Row
+            name: text
+        }
+
+        shape Made { key: text, valueCount: integer }
+
+        rule HandleBatch when Batch {
+            for each row in createRows { Made from { key: row.newKey, valueCount: count(row.rowValues) } }
+            for each row in updateRows { Made from { key: row.key, valueCount: count(row.rowValues) } }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `a part may point at the shape its closure's variants take`() {
+        assertEquals(emptyList(), Validator.validate(batch), messages(batch))
+    }
+
+    @Test
+    fun `V17 - a durable shape may not point at the shape a closure's variants take`() {
+        val spec = batch + """
+
+            shape Flag { row: one Row }
+        """
+        assertEquals(listOf("V17", "V17"), codes(spec), messages(spec))
+        assertTrue("transient part 'CreateRow' is Row" in messages(spec), messages(spec))
+    }
+
+    @Test
+    fun `each variant's values are read through the shared shape at the commit`() {
+        val sys = system(batch)
+        sys.scope {
+            sys.commit("Item", mapOf("key" to "T1"))
+            val result = sys.commit(
+                "Batch",
+                mapOf("note" to "nightly"),
+                mapOf(
+                    "createRows" to listOf(mapOf("identifier" to "c1", "newKey" to "N1",
+                        "rowValues" to listOf(mapOf("name" to "a"), mapOf("name" to "b")))),
+                    "updateRows" to listOf(mapOf("identifier" to "u1", "key" to "T1",
+                        "rowValues" to listOf(mapOf("name" to "c")))),
+                ),
+            )
+            assertIs<CommitResult.Accepted>(result, "commit refused: $result")
+            val made = sys.instancesOf("Made").map { madeId -> "${sys.get(madeId, "key")}:${sys.get(madeId, "valueCount")}" }.toSet()
+            assertEquals(setOf("N1:2", "T1:1"), made)
+            assertEquals(emptyList(), sys.instancesOf("RowValue"))
+        }
+    }
+
+    @Test
+    fun `an input refusal of a part names the committer's own mistake, never the back-reference`() {
+        val sys = system(batch)
+        sys.scope {
+            fun refusal(row: Map<String, Any?>): String {
+                val result = sys.commit("Batch", mapOf("note" to "nightly"), mapOf("createRows" to listOf(row)))
+                return assertIs<CommitResult.Refused>(result, "expected a refusal: $result").reason
+            }
+            assertEquals("type: 'CreateRow' requires [newKey] (inline part)", refusal(mapOf("identifier" to "c1")))
+            assertEquals("type: 'CreateRow' does not declare [key] (inline part)",
+                refusal(mapOf("identifier" to "c1", "newKey" to "N1", "key" to "T1")))
+            val actResult = sys.commit("Batch", mapOf("note" to "nightly", "foo" to "bar"), emptyMap())
+            assertEquals("type: 'Batch' does not declare [foo]", assertIs<CommitResult.Refused>(actResult).reason)
+        }
+    }
+
     @Test
     fun `a never over the act reading its parts refuses the whole closure at the door`() {
         val sys = system(submission)

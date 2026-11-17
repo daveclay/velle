@@ -1294,7 +1294,7 @@ class VelleSystem(
         val nestedParts = children.associate { c -> c.prop to ((raw[c.prop] as? List<Map<String, Any?>>).orEmpty()) }
         val byValueHere = children.filter { it.byValue && nestedParts[it.prop]?.isNotEmpty() == true }.map { it.prop }.toSet()
         val converted = convertFields(decl, own, skipRequired = skipRequired + byValueHere + siblingRefs.map { it.first })
-            ?: throw PartRefusal(typeFailure(decl, own) + " ($what)")
+            ?: throw PartRefusal(typeFailure(decl, own, skipRequired = skipRequired + byValueHere + siblingRefs.map { it.first }) + " ($what)")
         val index = appendRecord(shape, converted + extra, nestedParts, children, build)
         (raw[NEW_KEY] as? Number)?.toInt()?.let { token ->
             if (build.tokens.put(token, index) != null)
@@ -1374,16 +1374,25 @@ class VelleSystem(
         }
     }
 
-    private fun typeFailure(decl: ShapeDecl, supplied: Map<String, Any?>): String {
-        val required = decl.members.filterIsInstance<StoredProp>()
+    /** Why [convertFields] refused [supplied] for [decl]: a required field missing, a field the
+     *  shape does not declare, or a value of the wrong type. [skipRequired] names the fields the
+     *  commit fills in itself, a part's back-reference or a sibling reference, which are never
+     *  the committer's to supply and so are never reported missing. */
+    private fun typeFailure(decl: ShapeDecl, supplied: Map<String, Any?>, skipRequired: Set<String> = emptySet()): String {
+        val stored = decl.members.filterIsInstance<StoredProp>()
+        val required = stored
             .filter { it.initially == null }
             .filter { it.initiallyRequired ||
                 ((it.type as? RelType)?.optional != true && (it.type as? ScalarType)?.optional != true) }
             .filterNot { (it.type as? RelType)?.many == true || (it.type as? ScalarType)?.many == true }
             .map { it.name }
-        val missing = required - supplied.keys
-        return if (missing.isNotEmpty()) "type: '${decl.name}' requires $missing"
-        else "type: unacceptable fields for '${decl.name}'"
+        val missing = required - supplied.keys - skipRequired
+        val undeclared = supplied.keys - stored.map { it.name }.toSet()
+        return when {
+            missing.isNotEmpty() -> "type: '${decl.name}' requires $missing"
+            undeclared.isNotEmpty() -> "type: '${decl.name}' does not declare $undeclared"
+            else -> "type: unacceptable fields for '${decl.name}'"
+        }
     }
 
     // ── one commit (evaluation.md, "Processing one commit") ──────────────────

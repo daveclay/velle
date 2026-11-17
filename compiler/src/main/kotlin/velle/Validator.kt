@@ -3666,13 +3666,16 @@ class Validator(private val model: Model) {
                 }
                 val rel = type as? RelType ?: continue
                 // a field typed with a taken shape that a transient act takes would reference
-                // the act's record (Reference §9, "Sharing a field across shapes")
+                // the act's record (Reference §9, "Sharing a field across shapes"), unless the
+                // field's owner is a part of that taker's own closure (Reference §6)
                 if (rel.shape in model.sharedShapes) {
-                    model.basesOf(rel.shape).filter { it in model.transients }.forEach { act ->
-                        diags.add(Diagnostic("V17", "'$owner.$mName' is typed with '${rel.shape}', and transient act '$act' is ${rel.shape} — " +
-                            "a record of it exists only within its own commit's transaction, so nothing durable " +
-                            "may point at it; copy the fields the outcome needs instead"))
-                    }
+                    model.basesOf(rel.shape)
+                        .filter { taker -> taker in model.transients && !model.sameTransientClosure(owner, taker) }
+                        .forEach { taker ->
+                            diags.add(Diagnostic("V17", "'$owner.$mName' is typed with '${rel.shape}', and transient ${model.transientKind(taker)} '$taker' is ${rel.shape} — " +
+                                "a record of it exists only within its own commit's transaction, so nothing durable " +
+                                "may point at it; copy the fields the outcome needs instead"))
+                        }
                     continue
                 }
                 if (rel.shape !in model.transients) continue
