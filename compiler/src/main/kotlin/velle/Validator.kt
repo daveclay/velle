@@ -3694,7 +3694,8 @@ class Validator(private val model: Model) {
         // from its own refinement family, that is a read across acts. Two
         // exceptions: a rule or refinement over a shape a transient act takes with
         // `is` runs inside that act's own commit, so narrowing to the act there
-        // reads the record at hand (Reference §9, "Sharing a field across shapes");
+        // reads the record at hand (Reference §9, "Sharing a field across shapes"),
+        // and a rule over the act narrows a part of its own closure the same way;
         // and a derived property of the act, or of a part of its closure, that reads
         // a shape of the same closure is read inside that commit too, as the inverse
         // a part's back-reference infers is (Reference §6, "A request that is not
@@ -3709,7 +3710,7 @@ class Validator(private val model: Model) {
                 is SingularFor -> e.shape.takeIf { it in model.transients }
                 is ShapeForSource -> e.shape.takeIf { it in model.transients }
                 is IsExpr -> e.refinement?.takeIf { (model.baseOf(it) ?: it) in model.transients }
-                    ?.takeIf { (model.baseOf(it) ?: it) !in transientSubjectsAt[site].orEmpty() }
+                    ?.takeIf { narrowed -> transientSubjectsAt[site].orEmpty().none { subject -> model.sameTransientClosure(subject, model.baseOf(narrowed) ?: narrowed) } }
                 else -> null
             } ?: return@forEachSpecExpr
             val readingShape = closureShapeAt[site]

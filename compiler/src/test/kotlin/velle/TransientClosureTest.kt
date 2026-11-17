@@ -340,4 +340,34 @@ class TransientClosureTest {
         """
         assertTrue(codes(spec).contains("V17"), messages(spec))
     }
+
+    @Test
+    fun `the act reads every kind of part through the inverse the shared shape infers, narrowing each with is`() {
+        // the spec of `batchReadThroughRow` with one rule over the act, walking the inverse `rows`
+        // that `Row.batch` infers on the act and narrowing each part to its own kind
+        val spec = batchReadThroughRow.substringBefore("rule HandleBatch") + """
+            shape Seen { identifier: text, kind: text }
+
+            rule SeeEveryRow when Batch {
+                for each row in rows {
+                    Seen from { identifier: row.identifier, kind: if row is CreateRow then "create" else "update" }
+                }
+            }
+        """
+        assertEquals(emptyList(), Validator.validate(spec), messages(spec))
+        val sys = system(spec)
+        sys.scope {
+            val result = sys.commit(
+                "Batch",
+                mapOf("note" to "nightly"),
+                mapOf(
+                    "createRows" to listOf(mapOf("identifier" to "c1", "newKey" to "N1")),
+                    "updateRows" to listOf(mapOf("identifier" to "u1", "key" to "T1")),
+                ),
+            )
+            assertIs<CommitResult.Accepted>(result, "commit refused: $result")
+            val seen = sys.instancesOf("Seen").map { seenId -> "${sys.get(seenId, "identifier")}:${sys.get(seenId, "kind")}" }.toSet()
+            assertEquals(setOf("c1:create", "u1:update"), seen)
+        }
+    }
 }

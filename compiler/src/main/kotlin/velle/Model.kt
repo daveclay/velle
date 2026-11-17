@@ -583,9 +583,11 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             }
             // a field declared on a taken shape is one declaration, so it infers one inverse
             // named from the taken shape and spanning every taker (Reference §9, "Sharing a
-            // field across shapes"); none when a taker is transient, as for any transient shape
+            // field across shapes"); none when a taker is transient and outside this scope's
+            // closure, as for any transient shape; within one closure the act reads every
+            // kind of its parts through it (Reference §6)
             for ((takenName, takenShape) in sharedShapes) {
-                if (basesOf(takenName).any { it in transients }) continue
+                if (basesOf(takenName).any { taker -> taker in transients && !sameTransientClosure(taker, scope) }) continue
                 inferInverse(scope, takenName, takenShape.members, out)
             }
             out["id"] = MemberInfo("id", scope, VType.Id, stored = false)

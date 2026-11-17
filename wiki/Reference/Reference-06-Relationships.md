@@ -257,7 +257,7 @@ shape RowValue {
 }
 ```
 
-`Row.batch: one Batch` is declared once, so `Row.note` reads the batch for a row of either kind, and `RowValue.note` reads it through `row` without asking which kind the row is. The committer sends one list per edge, `createRows` and `updateRows`.
+`Row.batch: one Batch` is declared once, so `Row.note` reads the batch for a row of either kind, and `RowValue.note` reads it through `row` without asking which kind the row is. The request also has `rows`, the collection `Row.batch` infers, holding every row of either kind; a rule over the request walks it and narrows each row with `is` where a kind's own fields are read. The committer sends one list per edge, `createRows` and `updateRows`.
 
 ## A reference supplied by value (`with` naming a `one` field)
 
