@@ -210,6 +210,16 @@ Each decision section:
   is not a decision, because there is nothing for Dave to answer. Describing
   is not asking (Dave, 2026-11-11).
 - Carries a recommendation.
+- Lists the costs as consequences for Velle, not only as implementation
+  work: what the compiler can no longer prove or must start checking (a
+  design in which a wrong state cannot be represented beats one in which it
+  is checked), what a product owner can no longer say or must now say, and
+  which design principle in the root `CLAUDE.md` the change leans on or
+  against, named. A motivation that Velle cannot read, such as the order of
+  a list on the wire, is not a cost or a benefit; say so and drop it (Dave,
+  2026-11-16, OQ137: "costs in terms of what velle can prove, describe, or
+  other things that might go against the philosophy of velle that I might
+  miss while I'm making these decisions").
 - Shows full-context Velle: the `shape` and `act` declarations with their
   field types in view, the `uses` lines, a comment per line saying what the
   compiler does with it, and the alternative spelled against the same spec.
