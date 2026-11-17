@@ -74,6 +74,67 @@ class UnionStressTest {
     }
 
     @Test
+    fun `a nested part under a union-typed closure edge lands with its own union-typed reference and the read back`() {
+        // OQ133: the first level rides the inverse of `Comment.target: one Content`, the
+        // nested level the inverse of `Reaction.comment`; a reaction also names a
+        // photo already on the books through `about: one Content`
+        val sys = system("""
+            act Member { name: text unique }
+            act Post { author: one Member, body: text } with { comments with { reactions } }
+            act Photo { author: one Member, caption: text }
+            shape Content = Post or Photo
+            shape Comment { target: one Content, note: text }
+            shape Reaction { comment: one Comment, by: one Member, about: one Content }
+        """.trimIndent())
+        sys.scope {
+            val ada = sys.mustCommit("Member", mapOf("name" to "Ada"))
+            val photo = sys.mustCommit("Photo", mapOf("author" to ada, "caption" to "sunset"))
+            val post = sys.mustCommit(
+                "Post",
+                mapOf("author" to ada, "body" to "hello"),
+                mapOf("comments" to listOf(mapOf("note" to "first", "reactions" to listOf(mapOf("by" to ada, "about" to photo))))),
+            )
+            val comment = sys.instancesOf("Comment").single()
+            val reaction = sys.instancesOf("Reaction").single()
+            assertEquals(post, sys.get(comment, "target"), "the union-typed back-reference holds the new post")
+            assertEquals(comment, sys.get(reaction, "comment"), "the nested back-reference holds the new comment")
+            assertEquals(photo, sys.get(reaction, "about"), "the nested part's own union-typed reference holds the photo named")
+            assertEquals(listOf(comment), sys.get(post, "comments"))
+            assertEquals(listOf(reaction), sys.get(comment, "reactions"))
+            assertEquals(listOf(reaction), sys.get(photo, "reactions"), "the photo's inverse of `about` sees the nested part")
+            assertEquals(emptyList<Long>(), sys.get(post, "reactions"), "the post's inverse of `about` sees nothing")
+            val stranger = sys.commit("Post", mapOf("author" to ada, "body" to "no"),
+                mapOf("comments" to listOf(mapOf("note" to "x", "reactions" to listOf(mapOf("by" to ada, "about" to ada))))))
+            assertTrue(assertIs<CommitResult.Refused>(stranger).reason.startsWith("type:"), "a member is no Content: $stranger")
+        }
+    }
+
+    @Test
+    fun `a nested part whose back-reference is union-typed is filled with the new record of the level above`() {
+        // OQ133: `reactions` on a comment is the inverse of `Reaction.subject: one Reactable`,
+        // a union of the comment and the post; the nested level fills `subject` with the comment
+        val sys = system("""
+            act Post { body: text } with { comments with { reactions } }
+            shape Comment { post: one Post, note: text }
+            shape Reactable = Comment or Post
+            shape Reaction { subject: one Reactable, emoji: text }
+        """.trimIndent())
+        sys.scope {
+            val post = sys.mustCommit(
+                "Post",
+                mapOf("body" to "hello"),
+                mapOf("comments" to listOf(mapOf("note" to "first", "reactions" to listOf(mapOf("emoji" to "+1"), mapOf("emoji" to "-1"))))),
+            )
+            val comment = sys.instancesOf("Comment").single()
+            val reactions = sys.instancesOf("Reaction")
+            assertEquals(2, reactions.size)
+            reactions.forEach { assertEquals(comment, sys.get(it, "subject"), "the union-typed back-reference holds the new comment") }
+            assertEquals(reactions.toSet(), (sys.get(comment, "reactions") as List<*>).toSet())
+            assertEquals(emptyList<Long>(), sys.get(post, "reactions"), "the post is a Reactable too, and nothing points at it")
+        }
+    }
+
+    @Test
     fun `deleting an operand record absorbs through a union-typed reference and fires when deleted over the union`() {
         val sys = system(content + """
 
