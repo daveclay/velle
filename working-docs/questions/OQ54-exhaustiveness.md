@@ -86,3 +86,4 @@ Until it lands, richer-state "only if" sentences are N `undeletable` declaration
 ## 3. Work items
 
 - [ ] Grow V18 beyond the complement slice once V9's exhaustiveness engine exists.
+- [ ] Check, once the engine exists, that a rule narrowing an element of a mixed collection with `is` (a `many` typed by a static union or a taken shape, or the inverse a taken shape's back-reference infers) names every shape the collection can hold, so a shape added later does not fall silently into an `else`; raised by OQ137 on 2026-11-16.
