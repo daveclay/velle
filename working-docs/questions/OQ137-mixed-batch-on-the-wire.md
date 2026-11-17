@@ -1,8 +1,8 @@
-# OQ137 — Does a batch whose rows come in several kinds arrive as one list per kind, or as one list of tagged rows?
+# OQ137 — May a closure edge carry parts of several shapes that take one shape with `is`, the committer sending one list in which each part names its shape?
 
 **Status:** opened 2026-11-16 as OQ136's residue. D1 awaits Dave. Not designed beyond the question.
 
-**In plain terms:** a client sends a batch of rows, some creating a record and some updating one. Today the spec declares one collection per kind on the batch, so the batch's input, in generated Kotlin and in JSON, is one list of create rows and one list of update rows. A client usually holds a mixed batch as one list, in the order the rows were written, each row saying which kind it is. The question is whether Velle should let the batch be declared, and so sent, that way.
+**In plain terms:** an act may arrive with records nested inside it, its parts, and the committer sends each list of parts as a list. Today every such list holds records of one shape. When the parts share their fields through one shape with `is` but come in several shapes, the author declares one list per shape and the committer sends one list per shape, so the order of the parts across the shapes is not in the input. The question is whether one list may hold parts of several shapes, each part saying which shape it is, as a nested value at a union-typed field already does.
 
 **See:** Reference §6 "A request that is not kept, with its parts" (the batch example, with one view per kind); Reference §9 "Sharing a field across shapes" (`is`); `checks.md` V22 (a closure edge's parts are of one shape); `wiki/Guides/Act-API.md` "Inline parts" (one list per part collection) and `wiki/Guides/API-layer.md` (`Wire`, the `"@shape"` tag on a nested value at a union-typed field); `compiler/src/test/kotlin/velle/TransientClosureTest.kt` "the batch's fields read once"; `working-docs/examples/survey/04-transient-variants-read-batch.velle`.
 
@@ -10,7 +10,7 @@
 
 ## 1. What runs today
 
-A closure edge's parts are of one shape. When a shape several part kinds take with `is` declares the back-reference, the collection it infers on the act holds every kind, and V22 refuses it as an edge and offers one view per kind. Since OQ136, that view compiles, and the batch is spelled as in `working-docs/examples/survey/04-transient-variants-read-batch.velle`:
+A closure edge's parts are of one shape (`checks.md` V22). The example throughout is the survey file named below, a request that is not kept arriving with rows of two shapes; the question is about the edge, not the example. When a shape several part kinds take with `is` declares the back-reference, the collection it infers on the act holds every kind, and V22 refuses it as an edge and offers one view per kind. Since OQ136, that view compiles, and the batch is spelled as in `working-docs/examples/survey/04-transient-variants-read-batch.velle`:
 
 ```
 transient act Batch {                                                     -- not kept; its rows and their values are removed with it
@@ -49,11 +49,11 @@ There is one place today where a nested value says which kind it is: a `one` fie
 
 ## 2. What to decide
 
-### D1. Whether a closure edge may hold parts of several kinds, sent as one list of tagged rows
+### D1. Whether a closure edge may be the collection a taken shape's back-reference infers, its parts of every shape that takes it
 
-Does a closure edge over a collection whose parts come in several kinds, every kind taking one shape with `is`, become legal, so that the committer sends one list of rows each tagged with its kind?
+Does a closure edge accept the collection a taken shape's back-reference infers on the act, whose parts are of every shape that takes it with `is`, the committer sending one list in which each part names its shape?
 
-Today's answer is no: V22 refuses `with { rows with { rowValues } }` and offers one view per kind. Keeping it costs nothing in the language and leaves the row order out of the input. Changing it would read, in the same spec:
+Today's answer is no: V22 refuses such an edge and offers one view per taking shape, and the committer sends one list per edge. Keeping that costs nothing in the language and leaves the parts' order across shapes out of the input. Changing it would read, in the spec of §1:
 
 ```
 transient act Batch {
@@ -82,7 +82,7 @@ rule HandleBatch when Batch {
 }
 ```
 
-with the JSON body one list, each row tagged as a nested value at a union-typed field is today:
+with the JSON body one list, each part tagged as a nested value at a union-typed field is today:
 
 ```
 { "note": "nightly",
@@ -94,10 +94,10 @@ and the generated Kotlin taking `rows: List<Row.New>` where `Row.New` is sealed 
 
 Recommendation: yes, as an addition. The spelling with one view per kind stays legal for an author who wants the kinds apart. Costs:
 
-- A `for each` over `rows` reads only the shared fields until the row is narrowed with `is`, so a rule that touches each kind's own fields is a branch per kind. Today's spelling gives the author one loop per kind with the kind's fields in view.
-- V22's message, which today offers the view per kind, would have to say both spellings are legal and when to pick each.
-- The order of parts in a list is not something Velle reads today; a rule cannot ask for "the row before this one". Keeping the order on the wire only matters once a rule can read it, which is a question of its own if it comes up.
-- A part shape that takes the shared shape and is also the target of its own view (`createRows`) and of the shared edge (`rows`) would arrive twice. The two spellings on one act would be refused, or `rows` would be the only edge.
+- A `for each` over such an edge reads only the taken shape's fields until a part is narrowed with `is`, so a rule that touches each shape's own fields is a branch per shape. Today's spelling gives the author one loop per shape with that shape's fields in view.
+- V22's message, which today offers the view per taking shape, would have to say both spellings are legal and when to pick each.
+- The order of parts in a list is not something Velle reads today; a rule cannot ask for "the part before this one". Keeping the order on the wire only matters once a rule can read it, which is a question of its own if it comes up.
+- A taking shape named by a view of its own and also reached through the taken shape's edge would arrive twice. The two spellings on one act would be refused, or the taken shape's edge would be the only one.
 
 #### Proposed changes
 
@@ -107,7 +107,7 @@ Recommendation: yes, as an addition. The spelling with one view per kind stays l
 - `Runtime.kt`: the closure commit creates each element as its tagged kind; the refusal of an element without a tag, or with a tag that is not a taker, names the edge and the kinds.
 - `checks.md` V22: the sentence "a closure edge's parts are of one shape" rewritten; the message no longer offers only the view per kind.
 - Reference §6 "A request that is not kept, with its parts": the batch example shown both ways; `wiki/Guides/Act-API.md` "Inline parts" and `wiki/Guides/API-layer.md` (`Wire`).
-- `TransientClosureTest.kt`: a commit of one tagged list with both kinds and values on each; a refusal of an untagged row; survey `04-transient-variants-read-batch.velle` gains the one-list spelling or a sibling file.
+- `TransientClosureTest.kt`: a commit of one tagged list with parts of both shapes and values on each; a refusal of an untagged part; survey `04-transient-variants-read-batch.velle` gains the one-list spelling or a sibling file.
 
 ## 3. Work items
 
