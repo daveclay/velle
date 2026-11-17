@@ -1,0 +1,26 @@
+-- A guarded rule over a shape two shapes take with `is`, whose body produces neither taker: `Sweep` fires for a pending attempt and records nothing that names it.
+act ChargeAttempt {
+    amount: integer
+}
+
+shape AttemptOutcome {
+    attempt: one ChargeAttempt
+}
+
+shape ChargeResponse is AttemptOutcome {
+    approved: boolean
+}
+
+shape AttemptTimeout is AttemptOutcome {
+    noticedOn: DateTime
+}
+
+shape PendingAttempt = ChargeAttempt where not exists AttemptOutcome for this
+
+shape SweepNote {
+    body: text
+}
+
+rule Sweep when PendingAttempt after commit, Hourly {
+    SweepNote from { body: "still pending" }
+}

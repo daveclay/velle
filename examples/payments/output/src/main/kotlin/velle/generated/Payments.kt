@@ -27,27 +27,30 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeAttempt — consults ChargeAttempt through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — consults AttemptTimeout through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
      *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -55,11 +58,13 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over SettlementReversal — creates SettlementReversal referencing an instance the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over DunningFlag — consults OpenDunningFlag through a path the derivation cannot key (unexamined (A5)).
@@ -72,21 +77,23 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: [customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
      *  System-wide over StockReservation — reads StockReservation.order with no path back to any key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
      *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -94,6 +101,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewCustomer): Commit<NewCustomer, Ref<Customer>> =
@@ -102,21 +110,23 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: [cardUpdate.card], [cardUpdate.customer], [cardUpdate.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
      *  System-wide over StockReservation — reads StockReservation.order with no path back to any key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
      *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -124,6 +134,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewCardUpdate): Commit<NewCardUpdate, Ref<CardUpdate>> =
@@ -132,21 +143,23 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: [placeOrder.customer], [placeOrder.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
      *  System-wide over StockReservation — reads StockReservation.order with no path back to any key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
      *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -154,6 +167,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewPlaceOrder): Commit<NewPlaceOrder, Nothing?> =
@@ -162,27 +176,30 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: [processorVerdict.attempt] — plus system-wide width below.
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — consults AttemptTimeout through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
      *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -190,11 +207,13 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over SettlementReversal — creates SettlementReversal referencing an instance the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over DunningFlag — consults OpenDunningFlag through a path the derivation cannot key (unexamined (A5)).
@@ -215,21 +234,23 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         boundary("ChangeShippingAddress", input).carrying(input)
 
     /** Queue keys: [issueRefund.order] — plus system-wide width below.
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
      *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -243,21 +264,23 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: [manualCharge.order], [manualCharge.order.customer], [manualCharge.order.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
      *  System-wide over StockReservation — reads StockReservation.order with no path back to any key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
      *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -265,6 +288,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewManualCharge): Commit<NewManualCharge, Ref<ManualCharge>> =
@@ -305,6 +329,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun unpaidOrders(): List<UnpaidOrder> = all("UnpaidOrder") { materializeUnpaidOrder(it) }
     fun refundedOrders(): List<RefundedOrder> = all("RefundedOrder") { materializeRefundedOrder(it) }
     fun chargeableOrders(): List<ChargeableOrder> = all("ChargeableOrder") { materializeChargeableOrder(it) }
+    fun attemptOutcomes(): List<AttemptOutcome> = all("AttemptOutcome") { materializeAttemptOutcome(it) }
     fun pendingAttempts(): List<PendingAttempt> = all("PendingAttempt") { materializePendingAttempt(it) }
     fun completedAttempts(): List<CompletedAttempt> = all("CompletedAttempt") { materializeCompletedAttempt(it) }
     fun successfulCharges(): List<SuccessfulCharge> = all("SuccessfulCharge") { materializeSuccessfulCharge(it) }
@@ -317,6 +342,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun reservedOrders(): List<ReservedOrder> = all("ReservedOrder") { materializeReservedOrder(it) }
     fun unshippedOrders(): List<UnshippedOrder> = all("UnshippedOrder") { materializeUnshippedOrder(it) }
     fun readyToShips(): List<ReadyToShip> = all("ReadyToShip") { materializeReadyToShip(it) }
+    fun addressChangeOutcomes(): List<AddressChangeOutcome> = all("AddressChangeOutcome") { materializeAddressChangeOutcome(it) }
     fun unhandledAddressChanges(): List<UnhandledAddressChange> = all("UnhandledAddressChange") { materializeUnhandledAddressChange(it) }
     fun applicableAddressChanges(): List<ApplicableAddressChange> = all("ApplicableAddressChange") { materializeApplicableAddressChange(it) }
     fun refusedAddressChanges(): List<RefusedAddressChange> = all("RefusedAddressChange") { materializeRefusedAddressChange(it) }
@@ -471,6 +497,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** The record behind [ref] as a member of ChargeableOrder, or null when it is not one. */
         fun chargeableOrder(ref: Ref<Order>): ChargeableOrder? = member("ChargeableOrder", ref) { materializeChargeableOrder(it) }
 
+        val attemptOutcomes: AttemptOutcomeQuery get() = query("AttemptOutcome", AttemptOutcomeFields()) { materializeAttemptOutcome(it) }
+
         val pendingAttempts: PendingAttemptQuery get() = query("PendingAttempt", PendingAttemptFields()) { materializePendingAttempt(it) }
         /** The record behind [ref] as a member of PendingAttempt, or null when it is not one. */
         fun pendingAttempt(ref: Ref<ChargeAttempt>): PendingAttempt? = member("PendingAttempt", ref) { materializePendingAttempt(it) }
@@ -518,6 +546,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         val readyToShips: ReadyToShipQuery get() = query("ReadyToShip", ReadyToShipFields()) { materializeReadyToShip(it) }
         /** The record behind [ref] as a member of ReadyToShip, or null when it is not one. */
         fun readyToShip(ref: Ref<Order>): ReadyToShip? = member("ReadyToShip", ref) { materializeReadyToShip(it) }
+
+        val addressChangeOutcomes: AddressChangeOutcomeQuery get() = query("AddressChangeOutcome", AddressChangeOutcomeFields()) { materializeAddressChangeOutcome(it) }
 
         val unhandledAddressChanges: UnhandledAddressChangeQuery get() = query("UnhandledAddressChange", UnhandledAddressChangeFields()) { materializeUnhandledAddressChange(it) }
         /** The record behind [ref] as a member of UnhandledAddressChange, or null when it is not one. */
@@ -659,9 +689,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         amount = system.get(id, "amount") as BigDecimal,
         attemptKey = system.get(id, "attemptKey") as String,
         requestedOn = system.get(id, "requestedOn") as Instant,
-        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { system.refFor(it as Long) },
-        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        attemptOutcomes = (system.get(id, "attemptOutcomes") as List<*>).map { system.refFor(it as Long) },
         isPendingAttempt = system.isMember(id, "PendingAttempt"),
         isCompletedAttempt = system.isMember(id, "CompletedAttempt"),
         isSuccessfulCharge = system.isMember(id, "SuccessfulCharge"),
@@ -713,8 +742,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         newAddress = system.get(id, "newAddress") as String,
-        addressChangeApplications = (system.get(id, "addressChangeApplications") as List<*>).map { system.refFor(it as Long) },
-        addressChangeRefusals = (system.get(id, "addressChangeRefusals") as List<*>).map { system.refFor(it as Long) },
+        addressChangeOutcomes = (system.get(id, "addressChangeOutcomes") as List<*>).map { system.refFor(it as Long) },
         isUnhandledAddressChange = system.isMember(id, "UnhandledAddressChange"),
         isApplicableAddressChange = system.isMember(id, "ApplicableAddressChange"),
         isRefusedAddressChange = system.isMember(id, "RefusedAddressChange"),
@@ -959,15 +987,16 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
+    private fun materializeAttemptOutcome(id: Long): AttemptOutcome = materialize(id) as AttemptOutcome
+
     private fun materializePendingAttempt(id: Long): PendingAttempt = PendingAttempt(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
         attemptKey = system.get(id, "attemptKey") as String,
         requestedOn = system.get(id, "requestedOn") as Instant,
-        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { system.refFor(it as Long) },
-        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        attemptOutcomes = (system.get(id, "attemptOutcomes") as List<*>).map { system.refFor(it as Long) },
         isCompletedAttempt = system.isMember(id, "CompletedAttempt"),
         isSuccessfulCharge = system.isMember(id, "SuccessfulCharge"),
         isFailedCharge = system.isMember(id, "FailedCharge"),
@@ -981,9 +1010,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         amount = system.get(id, "amount") as BigDecimal,
         attemptKey = system.get(id, "attemptKey") as String,
         requestedOn = system.get(id, "requestedOn") as Instant,
-        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { system.refFor(it as Long) },
-        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        attemptOutcomes = (system.get(id, "attemptOutcomes") as List<*>).map { system.refFor(it as Long) },
         outcome = Verdict.of(system.getAs(id, "CompletedAttempt", "outcome") as String),
         isPendingAttempt = system.isMember(id, "PendingAttempt"),
         isSuccessfulCharge = system.isMember(id, "SuccessfulCharge"),
@@ -998,9 +1026,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         amount = system.get(id, "amount") as BigDecimal,
         attemptKey = system.get(id, "attemptKey") as String,
         requestedOn = system.get(id, "requestedOn") as Instant,
-        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { system.refFor(it as Long) },
-        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        attemptOutcomes = (system.get(id, "attemptOutcomes") as List<*>).map { system.refFor(it as Long) },
         outcome = Verdict.of(system.get(id, "outcome") as String),
         isPendingAttempt = system.isMember(id, "PendingAttempt"),
         isCompletedAttempt = system.isMember(id, "CompletedAttempt"),
@@ -1015,9 +1042,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         amount = system.get(id, "amount") as BigDecimal,
         attemptKey = system.get(id, "attemptKey") as String,
         requestedOn = system.get(id, "requestedOn") as Instant,
-        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { system.refFor(it as Long) },
-        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        attemptOutcomes = (system.get(id, "attemptOutcomes") as List<*>).map { system.refFor(it as Long) },
         outcome = Verdict.of(system.get(id, "outcome") as String),
         isPendingAttempt = system.isMember(id, "PendingAttempt"),
         isCompletedAttempt = system.isMember(id, "CompletedAttempt"),
@@ -1032,9 +1058,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         amount = system.get(id, "amount") as BigDecimal,
         attemptKey = system.get(id, "attemptKey") as String,
         requestedOn = system.get(id, "requestedOn") as Instant,
-        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { system.refFor(it as Long) },
-        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        attemptOutcomes = (system.get(id, "attemptOutcomes") as List<*>).map { system.refFor(it as Long) },
         isPendingAttempt = system.isMember(id, "PendingAttempt"),
         isCompletedAttempt = system.isMember(id, "CompletedAttempt"),
         isSuccessfulCharge = system.isMember(id, "SuccessfulCharge"),
@@ -1090,9 +1115,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         amount = system.get(id, "amount") as BigDecimal,
         attemptKey = system.get(id, "attemptKey") as String,
         requestedOn = system.get(id, "requestedOn") as Instant,
-        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { system.refFor(it as Long) },
-        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { system.refFor(it as Long) },
         receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        attemptOutcomes = (system.get(id, "attemptOutcomes") as List<*>).map { system.refFor(it as Long) },
         isPendingAttempt = system.isMember(id, "PendingAttempt"),
         isCompletedAttempt = system.isMember(id, "CompletedAttempt"),
         isSuccessfulCharge = system.isMember(id, "SuccessfulCharge"),
@@ -1242,12 +1266,13 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
+    private fun materializeAddressChangeOutcome(id: Long): AddressChangeOutcome = materialize(id) as AddressChangeOutcome
+
     private fun materializeUnhandledAddressChange(id: Long): UnhandledAddressChange = UnhandledAddressChange(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         newAddress = system.get(id, "newAddress") as String,
-        addressChangeApplications = (system.get(id, "addressChangeApplications") as List<*>).map { system.refFor(it as Long) },
-        addressChangeRefusals = (system.get(id, "addressChangeRefusals") as List<*>).map { system.refFor(it as Long) },
+        addressChangeOutcomes = (system.get(id, "addressChangeOutcomes") as List<*>).map { system.refFor(it as Long) },
         isApplicableAddressChange = system.isMember(id, "ApplicableAddressChange"),
         isRefusedAddressChange = system.isMember(id, "RefusedAddressChange"),
     )
@@ -1256,8 +1281,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         newAddress = system.get(id, "newAddress") as String,
-        addressChangeApplications = (system.get(id, "addressChangeApplications") as List<*>).map { system.refFor(it as Long) },
-        addressChangeRefusals = (system.get(id, "addressChangeRefusals") as List<*>).map { system.refFor(it as Long) },
+        addressChangeOutcomes = (system.get(id, "addressChangeOutcomes") as List<*>).map { system.refFor(it as Long) },
         isUnhandledAddressChange = system.isMember(id, "UnhandledAddressChange"),
         isRefusedAddressChange = system.isMember(id, "RefusedAddressChange"),
     )
@@ -1266,8 +1290,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         newAddress = system.get(id, "newAddress") as String,
-        addressChangeApplications = (system.get(id, "addressChangeApplications") as List<*>).map { system.refFor(it as Long) },
-        addressChangeRefusals = (system.get(id, "addressChangeRefusals") as List<*>).map { system.refFor(it as Long) },
+        addressChangeOutcomes = (system.get(id, "addressChangeOutcomes") as List<*>).map { system.refFor(it as Long) },
         isUnhandledAddressChange = system.isMember(id, "UnhandledAddressChange"),
         isApplicableAddressChange = system.isMember(id, "ApplicableAddressChange"),
     )
@@ -1519,8 +1542,15 @@ transient act ProcessorVerdict {
     outcome: Verdict
 }
 
-shape ChargeResponse {
+-- What settles an attempt: a verdict from the processor, or a timeout noticed
+-- by the sweep. Both name the attempt, declared once on `AttemptOutcome` and
+-- taken with `is` (Reference §9, "Sharing a field across shapes"), so "no
+-- outcome yet" is one test over both kinds.
+shape AttemptOutcome {
     attempt: one ChargeAttempt
+}
+
+shape ChargeResponse is AttemptOutcome {
     outcome: Verdict
     respondedOn: timestamp on create
 }
@@ -1532,18 +1562,17 @@ rule RecordVerdict when ProcessorVerdict {
 -- A processor that stays silent past the window is timed out by the sweep
 -- below; the timeout is a fact, so a timed-out attempt stops counting as
 -- pending and the retry path unblocks.
-shape AttemptTimeout {
-    attempt: one ChargeAttempt
+shape AttemptTimeout is AttemptOutcome {
     noticedOn: DateTime
 }
 
--- The attempt's states: pending until a verdict or a timeout lands; completed
--- attempts split on the verdict.
+-- The attempt's states: pending until an outcome of either kind lands;
+-- completed attempts split on the verdict.
 -- velle: errors-are-refinements — outcome states are refinements, not control
 -- flow; `outcome` is a derived refinement-body property the child refinements
--- read through the chain
-shape PendingAttempt = ChargeAttempt where
-    not exists ChargeResponse for this and not exists AttemptTimeout for this
+-- read through the chain; `exists AttemptOutcome for this` reads the shared
+-- field over every shape that takes it (Reference §10)
+shape PendingAttempt = ChargeAttempt where not exists AttemptOutcome for this
 
 shape CompletedAttempt = ChargeAttempt where exists ChargeResponse for this {
     outcome: Verdict = latest(ChargeResponse where attempt == this by respondedOn).outcome
@@ -1680,19 +1709,22 @@ act ChangeShippingAddress {
     newAddress: text
 }
 
-shape AddressChangeApplication {
+-- A request is handled when it is applied or refused; both records name the
+-- request through the one field `AddressChangeOutcome` declares (Reference §9)
+shape AddressChangeOutcome {
     change: one ChangeShippingAddress
+}
+
+shape AddressChangeApplication is AddressChangeOutcome {
     appliedOn: DateTime
 }
 
-shape AddressChangeRefusal {
-    change: one ChangeShippingAddress
+shape AddressChangeRefusal is AddressChangeOutcome {
     reason: text
     refusedOn: DateTime
 }
 
-shape UnhandledAddressChange = ChangeShippingAddress where
-    not exists AddressChangeApplication for this and not exists AddressChangeRefusal for this
+shape UnhandledAddressChange = ChangeShippingAddress where not exists AddressChangeOutcome for this
 
 shape ApplicableAddressChange = UnhandledAddressChange where order is not ReadyToShip
 shape RefusedAddressChange    = UnhandledAddressChange where order is ReadyToShip
@@ -1853,6 +1885,7 @@ typealias NeverChargedQuery = TypedQuery<NeverChargedFields, NeverCharged>
 typealias UnpaidOrderQuery = TypedQuery<UnpaidOrderFields, UnpaidOrder>
 typealias RefundedOrderQuery = TypedQuery<RefundedOrderFields, RefundedOrder>
 typealias ChargeableOrderQuery = TypedQuery<ChargeableOrderFields, ChargeableOrder>
+typealias AttemptOutcomeQuery = TypedQuery<AttemptOutcomeFields, AttemptOutcome>
 typealias PendingAttemptQuery = TypedQuery<PendingAttemptFields, PendingAttempt>
 typealias CompletedAttemptQuery = TypedQuery<CompletedAttemptFields, CompletedAttempt>
 typealias SuccessfulChargeQuery = TypedQuery<SuccessfulChargeFields, SuccessfulCharge>
@@ -1865,6 +1898,7 @@ typealias ExhaustedOrderQuery = TypedQuery<ExhaustedOrderFields, ExhaustedOrder>
 typealias ReservedOrderQuery = TypedQuery<ReservedOrderFields, ReservedOrder>
 typealias UnshippedOrderQuery = TypedQuery<UnshippedOrderFields, UnshippedOrder>
 typealias ReadyToShipQuery = TypedQuery<ReadyToShipFields, ReadyToShip>
+typealias AddressChangeOutcomeQuery = TypedQuery<AddressChangeOutcomeFields, AddressChangeOutcome>
 typealias UnhandledAddressChangeQuery = TypedQuery<UnhandledAddressChangeFields, UnhandledAddressChange>
 typealias ApplicableAddressChangeQuery = TypedQuery<ApplicableAddressChangeFields, ApplicableAddressChange>
 typealias RefusedAddressChangeQuery = TypedQuery<RefusedAddressChangeFields, RefusedAddressChange>
@@ -2142,9 +2176,8 @@ data class ChargeAttempt(
     val amount: BigDecimal,
     val attemptKey: String,
     val requestedOn: Instant,
-    val chargeResponses: List<Ref<ChargeResponse>>,
-    val attemptTimeouts: List<Ref<AttemptTimeout>>,
     val receipts: List<Ref<Receipt>>,
+    val attemptOutcomes: List<Ref<AttemptOutcome>>,
     /** membership of PendingAttempt at the moment of the read */
     val isPendingAttempt: Boolean,
     /** membership of CompletedAttempt at the moment of the read */
@@ -2165,21 +2198,23 @@ data class ChargeAttempt(
 
 data class ChargeResponse(
     override val key: StoreKey,
-    val attempt: Ref<ChargeAttempt>,
+    override val attempt: Ref<ChargeAttempt>,
     val outcome: Verdict,
     val respondedOn: Instant,
-) : Ref<ChargeResponse> {
+) : Ref<ChargeResponse>, AttemptOutcome {
     override val shape: String get() = "ChargeResponse"
+    override val ref: Ref<ChargeResponse> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
 data class AttemptTimeout(
     override val key: StoreKey,
-    val attempt: Ref<ChargeAttempt>,
+    override val attempt: Ref<ChargeAttempt>,
     val noticedOn: Instant,
-) : Ref<AttemptTimeout> {
+) : Ref<AttemptTimeout>, AttemptOutcome {
     override val shape: String get() = "AttemptTimeout"
+    override val ref: Ref<AttemptTimeout> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -2231,8 +2266,7 @@ data class ChangeShippingAddress(
     override val key: StoreKey,
     val order: Ref<Order>,
     val newAddress: String,
-    val addressChangeApplications: List<Ref<AddressChangeApplication>>,
-    val addressChangeRefusals: List<Ref<AddressChangeRefusal>>,
+    val addressChangeOutcomes: List<Ref<AddressChangeOutcome>>,
     /** membership of UnhandledAddressChange at the moment of the read */
     val isUnhandledAddressChange: Boolean,
     /** membership of ApplicableAddressChange at the moment of the read */
@@ -2247,21 +2281,23 @@ data class ChangeShippingAddress(
 
 data class AddressChangeApplication(
     override val key: StoreKey,
-    val change: Ref<ChangeShippingAddress>,
+    override val change: Ref<ChangeShippingAddress>,
     val appliedOn: Instant,
-) : Ref<AddressChangeApplication> {
+) : Ref<AddressChangeApplication>, AddressChangeOutcome {
     override val shape: String get() = "AddressChangeApplication"
+    override val ref: Ref<AddressChangeApplication> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
 data class AddressChangeRefusal(
     override val key: StoreKey,
-    val change: Ref<ChangeShippingAddress>,
+    override val change: Ref<ChangeShippingAddress>,
     val reason: String,
     val refusedOn: Instant,
-) : Ref<AddressChangeRefusal> {
+) : Ref<AddressChangeRefusal>, AddressChangeOutcome {
     override val shape: String get() = "AddressChangeRefusal"
+    override val ref: Ref<AddressChangeRefusal> get() = this
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -2606,15 +2642,20 @@ data class ChargeableOrder(
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
+interface AttemptOutcome : Keyed {
+    /** this record as a reference typed by the union, for a parameter that takes one */
+    val ref: Ref<AttemptOutcome>
+    val attempt: Ref<ChargeAttempt>
+}
+
 data class PendingAttempt(
     override val key: StoreKey,
     val order: Ref<Order>,
     val amount: BigDecimal,
     val attemptKey: String,
     val requestedOn: Instant,
-    val chargeResponses: List<Ref<ChargeResponse>>,
-    val attemptTimeouts: List<Ref<AttemptTimeout>>,
     val receipts: List<Ref<Receipt>>,
+    val attemptOutcomes: List<Ref<AttemptOutcome>>,
     /** membership of CompletedAttempt at the moment of the read */
     val isCompletedAttempt: Boolean,
     /** membership of SuccessfulCharge at the moment of the read */
@@ -2637,9 +2678,8 @@ data class CompletedAttempt(
     val amount: BigDecimal,
     val attemptKey: String,
     val requestedOn: Instant,
-    val chargeResponses: List<Ref<ChargeResponse>>,
-    val attemptTimeouts: List<Ref<AttemptTimeout>>,
     val receipts: List<Ref<Receipt>>,
+    val attemptOutcomes: List<Ref<AttemptOutcome>>,
     val outcome: Verdict,
     /** membership of PendingAttempt at the moment of the read */
     val isPendingAttempt: Boolean,
@@ -2663,9 +2703,8 @@ data class SuccessfulCharge(
     val amount: BigDecimal,
     val attemptKey: String,
     val requestedOn: Instant,
-    val chargeResponses: List<Ref<ChargeResponse>>,
-    val attemptTimeouts: List<Ref<AttemptTimeout>>,
     val receipts: List<Ref<Receipt>>,
+    val attemptOutcomes: List<Ref<AttemptOutcome>>,
     val outcome: Verdict,
     /** membership of PendingAttempt at the moment of the read */
     val isPendingAttempt: Boolean,
@@ -2689,9 +2728,8 @@ data class FailedCharge(
     val amount: BigDecimal,
     val attemptKey: String,
     val requestedOn: Instant,
-    val chargeResponses: List<Ref<ChargeResponse>>,
-    val attemptTimeouts: List<Ref<AttemptTimeout>>,
     val receipts: List<Ref<Receipt>>,
+    val attemptOutcomes: List<Ref<AttemptOutcome>>,
     val outcome: Verdict,
     /** membership of PendingAttempt at the moment of the read */
     val isPendingAttempt: Boolean,
@@ -2715,9 +2753,8 @@ data class TimedOutAttempt(
     val amount: BigDecimal,
     val attemptKey: String,
     val requestedOn: Instant,
-    val chargeResponses: List<Ref<ChargeResponse>>,
-    val attemptTimeouts: List<Ref<AttemptTimeout>>,
     val receipts: List<Ref<Receipt>>,
+    val attemptOutcomes: List<Ref<AttemptOutcome>>,
     /** membership of PendingAttempt at the moment of the read */
     val isPendingAttempt: Boolean,
     /** membership of CompletedAttempt at the moment of the read */
@@ -2802,9 +2839,8 @@ data class StalePendingAttempt(
     val amount: BigDecimal,
     val attemptKey: String,
     val requestedOn: Instant,
-    val chargeResponses: List<Ref<ChargeResponse>>,
-    val attemptTimeouts: List<Ref<AttemptTimeout>>,
     val receipts: List<Ref<Receipt>>,
+    val attemptOutcomes: List<Ref<AttemptOutcome>>,
     /** membership of PendingAttempt at the moment of the read */
     val isPendingAttempt: Boolean,
     /** membership of CompletedAttempt at the moment of the read */
@@ -3027,12 +3063,17 @@ data class ReadyToShip(
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
+interface AddressChangeOutcome : Keyed {
+    /** this record as a reference typed by the union, for a parameter that takes one */
+    val ref: Ref<AddressChangeOutcome>
+    val change: Ref<ChangeShippingAddress>
+}
+
 data class UnhandledAddressChange(
     override val key: StoreKey,
     val order: Ref<Order>,
     val newAddress: String,
-    val addressChangeApplications: List<Ref<AddressChangeApplication>>,
-    val addressChangeRefusals: List<Ref<AddressChangeRefusal>>,
+    val addressChangeOutcomes: List<Ref<AddressChangeOutcome>>,
     /** membership of ApplicableAddressChange at the moment of the read */
     val isApplicableAddressChange: Boolean,
     /** membership of RefusedAddressChange at the moment of the read */
@@ -3047,8 +3088,7 @@ data class ApplicableAddressChange(
     override val key: StoreKey,
     val order: Ref<Order>,
     val newAddress: String,
-    val addressChangeApplications: List<Ref<AddressChangeApplication>>,
-    val addressChangeRefusals: List<Ref<AddressChangeRefusal>>,
+    val addressChangeOutcomes: List<Ref<AddressChangeOutcome>>,
     /** membership of UnhandledAddressChange at the moment of the read */
     val isUnhandledAddressChange: Boolean,
     /** membership of RefusedAddressChange at the moment of the read */
@@ -3063,8 +3103,7 @@ data class RefusedAddressChange(
     override val key: StoreKey,
     val order: Ref<Order>,
     val newAddress: String,
-    val addressChangeApplications: List<Ref<AddressChangeApplication>>,
-    val addressChangeRefusals: List<Ref<AddressChangeRefusal>>,
+    val addressChangeOutcomes: List<Ref<AddressChangeOutcome>>,
     /** membership of UnhandledAddressChange at the moment of the read */
     val isUnhandledAddressChange: Boolean,
     /** membership of ApplicableAddressChange at the moment of the read */
@@ -3527,6 +3566,10 @@ class ChargeableOrderFields(path: List<String> = emptyList()) : Fields(path) {
     fun isInGracePeriod(): Expr = isA("InGracePeriod")
 }
 
+class AttemptOutcomeFields(path: List<String> = emptyList()) : Fields(path) {
+    val attempt: ChargeAttemptFields get() = ChargeAttemptFields(fieldPath + "attempt")
+}
+
 class PendingAttemptFields(path: List<String> = emptyList()) : Fields(path) {
     val order: OrderFields get() = OrderFields(fieldPath + "order")
     val amount: NumField get() = NumField(fieldPath + "amount")
@@ -3722,6 +3765,10 @@ class ReadyToShipFields(path: List<String> = emptyList()) : Fields(path) {
     fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
     fun isOverdueOrder(): Expr = isA("OverdueOrder")
     fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class AddressChangeOutcomeFields(path: List<String> = emptyList()) : Fields(path) {
+    val change: ChangeShippingAddressFields get() = ChangeShippingAddressFields(fieldPath + "change")
 }
 
 class UnhandledAddressChangeFields(path: List<String> = emptyList()) : Fields(path) {

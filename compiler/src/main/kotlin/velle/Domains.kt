@@ -323,11 +323,11 @@ class DomainAnalysis(private val model: Model) {
         }
         fun forThis(shape: String?, forExpr: Expr?) {
             if (shape == null || forExpr != PathExpr("this")) return
-            val base = model.baseOf(shape) ?: return
             val subjBase = model.baseOf(scope) ?: return
-            model.shapes[base]?.members?.filterIsInstance<StoredProp>()
-                ?.filter { (it.type as? RelType)?.let { t -> !t.many && t.shape == subjBase } == true }
-                ?.singleOrNull()?.let { out.add(base to it.name) }
+            // the one field `for` names (Reference §10), on every base of the shape: a
+            // taken shape's or a static union's shared field keys each operand
+            val field = model.typeMatchedFields(shape, subjBase).singleOrNull() ?: return
+            model.basesOf(shape).forEach { base -> out.add(base to field) }
         }
         fun collection(c: CollectionExpr) {
             for (b in c.bindings) when (val src = b.source) {
@@ -426,16 +426,15 @@ class DomainAnalysis(private val model: Model) {
             if (shape == null) return
             refRoutes(shape)
             forExpr?.let { bodyCorr(it, scope, out, seen) }
-            val base = model.baseOf(shape) ?: return
-            val toOnes = model.shapes[base]?.members?.filterIsInstance<StoredProp>()
-                ?.filter { (it.type as? RelType)?.many == false } ?: return
             val tbase = (forExpr as? PathExpr)
                 ?.let { model.pathElementShape(it, scope) }?.let { model.baseOf(it) }
-            val matched = tbase?.let { t ->
-                toOnes.singleOrNull { p -> (p.type as RelType).shape.let { model.baseOf(it) ?: it } == t }
+            val matched = tbase?.let { target -> model.typeMatchedFields(shape, target).singleOrNull() }
+            for (base in model.basesOf(shape)) {
+                if (matched != null) { out.add(base to matched); continue }
+                model.shapes[base]?.members?.filterIsInstance<StoredProp>()
+                    ?.filter { (it.type as? RelType)?.many == false }
+                    ?.forEach { out.add(base to it.name) }
             }
-            if (matched != null) out.add(base to matched.name)
-            else toOnes.forEach { out.add(base to it.name) }
         }
         fun collection(c: CollectionExpr) {
             for (b in c.bindings) when (val src = b.source) {
@@ -605,8 +604,12 @@ class DomainAnalysis(private val model: Model) {
             }
         }
 
+        /** A width over a shape with no records of its own, one several shapes take with `is`
+         *  or a static union, is a width over every shape that has them (Reference §9): the
+         *  store serializes on shapes it holds rows of. */
         fun widen(shape: String, cause: String, decl: String, tolerated: Boolean) {
-            widenings.putIfAbsent(decl to shape, Widening(shape, cause, decl, tolerated))
+            val held = if (shape in model.shapes) listOf(shape) else model.basesOf(shape).toList()
+            for (heldShape in held) widenings.putIfAbsent(decl to heldShape, Widening(heldShape, cause, decl, tolerated))
         }
 
         fun toDomain() = SerializationDomain(
@@ -733,10 +736,7 @@ class DomainAnalysis(private val model: Model) {
             acc.key(anchor, base,
                 "consults $shape through a path the derivation cannot key", decl, tolerated)
             val back = target?.let { t ->
-                model.shapes[base]?.members?.filterIsInstance<StoredProp>()
-                    ?.singleOrNull { p ->
-                        (p.type as? RelType)?.let { r -> !r.many && r.shape == model.baseOf(t.name) } == true
-                    }?.name
+                model.baseOf(t.name)?.let { targetBase -> model.typeMatchedFields(shape, targetBase).singleOrNull() }
             }
             val elem = Scope(shape, Anchor.Corr(anchor, back))
             if (shape in model.refinements && expanding.add("src:$shape"))

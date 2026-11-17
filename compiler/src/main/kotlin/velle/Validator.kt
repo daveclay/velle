@@ -864,10 +864,7 @@ class Validator(private val model: Model) {
 
     private fun typeMatchedFields(shape: String, expr: Expr, scope: String): List<String> {
         val exprShape = exprInstanceShape(expr, scope) ?: return emptyList()
-        // a refinement's matchable to-one fields are its base's stored fields
-        return model.shapes[model.baseOf(shape) ?: shape]?.members?.filterIsInstance<StoredProp>()
-            ?.filter { (it.type as? RelType)?.let { t -> !t.many && model.typeAccepts(t.shape, exprShape) } == true }
-            ?.map { it.name } ?: emptyList()
+        return model.typeMatchedFields(shape, exprShape)
     }
 
     private fun exprInstanceShape(e: Expr, scope: String): String? = when (e) {
@@ -2552,10 +2549,17 @@ class Validator(private val model: Model) {
         }
 
     private fun disarmed(rule: RuleDecl, atom: GuardAtom): Boolean = when (atom) {
-        is GuardAtom.Witness -> rule.body.statements().filterIsInstance<Creation>().any { it.shape == atom.shape }
+        // a witness over a shape several shapes take with `is`, or a static union, is produced
+        // by a record of any of them (Reference §9)
+        is GuardAtom.Witness -> rule.body.statements().filterIsInstance<Creation>().any { model.typeAccepts(atom.shape, it.shape) }
         is GuardAtom.Flag -> rule.body.filterIsInstance<Assignment>()
             .any { it.target.segs.lastOrNull()?.name == atom.name || (it.target.segs.isEmpty() && it.target.root == atom.name) }
     }
+
+    /** The shapes a body can create to produce the witness: a shape with records of its own, or
+     *  every shape that takes a taken shape, or every operand of a static union (Reference §9). */
+    private fun witnessShapes(shape: String): List<String> =
+        if (shape in model.shapes) listOf(shape) else model.basesOf(shape).toList()
 
     /** V4: a rule behind the `after commit` boundary needs a guard, so a lost firing is found, and a backup schedule, so it is retried. */
     private fun afterCommitProblem(rule: RuleDecl, noGuard: Boolean, noSchedule: Boolean): String? {
@@ -2587,7 +2591,7 @@ class Validator(private val model: Model) {
             if (atoms.none { disarmed(rule, it) } && !deletesSubject(rule)) {
                 val what = atoms.joinToString(" or ") { atom ->
                     when (atom) {
-                        is GuardAtom.Witness -> "produce a '${atom.shape}'"
+                        is GuardAtom.Witness -> "produce a " + witnessShapes(atom.shape).joinToString(" or ") { "'$it'" }
                         is GuardAtom.Flag -> "assign '${atom.name}'"
                     }
                 }

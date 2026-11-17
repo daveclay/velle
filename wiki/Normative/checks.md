@@ -42,7 +42,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V2 — Disarm proof
 
-([§18](Reference-18-Run-once-guards).) A guarded rule's body must provably falsify its own trigger predicate — produce the witness the `not exists` reads, or assign the flag the predicate tests. Falsifying any one conjunct falsifies the conjunction, so one disarmed guard atom discharges the proof; the trigger's other `not`-atoms are conditions, not guards (`ActiveMember`'s `not suspended` owes no disarm to a rule guarded by a witness). Failure: "this rule never leaves its trigger state."
+([§18](Reference-18-Run-once-guards).) A guarded rule's body must provably falsify its own trigger predicate — produce the witness the `not exists` reads, or assign the flag the predicate tests. A witness over a shape several shapes take with `is`, or a static union ([§9](Reference-09-Composing-refinements)), is produced by a record of any of them, and the message names each. Falsifying any one conjunct falsifies the conjunction, so one disarmed guard atom discharges the proof; the trigger's other `not`-atoms are conditions, not guards (`ActiveMember`'s `not suspended` owes no disarm to a rule guarded by a witness). Failure: "this rule never leaves its trigger state."
 
 ### V3 — Unfireable rule
 
@@ -86,7 +86,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V13 — Ambiguity is a connected diagnostic
 
-([§14](Reference-14-for), [§22](Reference-22-Open-unresolved).) A field typed with a static union type-matches an expression of any operand's type ([§6](Reference-06-Relationships)). A declaration change that creates a new type-match ambiguity for an existing bare `for` reference (a shape gaining a second `Customer`-typed field) is reported as one diagnostic naming the declaration *and* every reference it broke — an incoherence of the spec, not a syntax error at one line. A singular reference `(Shape for expr)` whose shape has two fields that match, one of them typed with a union the value's shape is an operand of, is refused naming both fields and the filter form, `first(Shape where <field> == expr by <field>)`.
+([§14](Reference-14-for), [§22](Reference-22-Open-unresolved).) A field typed with a static union type-matches an expression of any operand's type ([§6](Reference-06-Relationships)). A declaration change that creates a new type-match ambiguity for an existing bare `for` reference (a shape gaining a second `Customer`-typed field) is reported as one diagnostic naming the declaration *and* every reference it broke — an incoherence of the spec, not a syntax error at one line. A singular reference `(Shape for expr)` whose shape has two fields that match, one of them typed with a union the value's shape is an operand of, is refused naming both fields and the filter form, `first(Shape where <field> == expr by <field>)`. Over a shape several shapes take with `is`, or a static union ([§9](Reference-09-Composing-refinements)), the fields that match are those every operand takes from one declaration; a field two operands each declare for themselves matches none, and `for` reports it so.
 
 ### V14 — Well-foundedness (*coarse*)
 

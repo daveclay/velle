@@ -199,9 +199,11 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     /** Queue keys: [requestFieldTrial.crop], [requestFieldTrial.pathogen], [requestFieldTrial.peptide], [requestFieldTrial.protocol], [requestFieldTrial.site] — plus system-wide width below.
      *  System-wide over GreenhouseResult — `GreenhouseResult` reads every GreenhouseResult and correlates to no key (unexamined (A5)).
-     *  System-wide over Trial — reads Trial.peptide with no path back to any key (unexamined (A5)).
+     *  System-wide over GreenhouseTrial — reads Trial.peptide with no path back to any key (unexamined (A5)).
+     *  System-wide over FieldTrial — reads Trial.peptide with no path back to any key (unexamined (A5)).
      *  System-wide over GreenhouseResult — `GreenhouseResult` reads every GreenhouseResult and correlates to no key (unexamined (A5)).
-     *  System-wide over Trial — reads Trial.peptide with no path back to any key (unexamined (A5)).
+     *  System-wide over GreenhouseTrial — reads Trial.peptide with no path back to any key (unexamined (A5)).
+     *  System-wide over FieldTrial — reads Trial.peptide with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewRequestFieldTrial): Commit<NewRequestFieldTrial, Nothing?> =

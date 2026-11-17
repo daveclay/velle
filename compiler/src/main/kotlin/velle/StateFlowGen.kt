@@ -443,7 +443,8 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
             if (!touchesExpr(e, k, subject)) Dir.NONE
             else {
                 val elem = e.shape ?: e.collection?.let { elementShapeOf(it, subject) }
-                if (k is CommitKind.Create && k.shape == elem) Dir.TOWARD_TRUE else Dir.UNKNOWN
+                // a record of any shape a taken shape or a static union covers makes it exist (Reference §9)
+                if (k is CommitKind.Create && elem != null && model.typeAccepts(elem, k.shape)) Dir.TOWARD_TRUE else Dir.UNKNOWN
             }
         }
         is IsExpr -> isDir(e, k, subject, guard)
@@ -566,7 +567,7 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
      *  door-checked nevers pin its sign. Anything else is unproven. */
     private fun aggDelta(e: AggCall, k: CommitKind, subject: String): SD {
         val elem = elementShapeOf(e.collection, subject) ?: return SD.UNKNOWN
-        if (k !is CommitKind.Create || k.shape != elem) return SD.UNKNOWN
+        if (k !is CommitKind.Create || !model.typeAccepts(elem, k.shape)) return SD.UNKNOWN
         return when (e.name) {
             "count" -> SD.NONNEG
             "sum" -> when (staticFieldSign(elem, e.field ?: return SD.UNKNOWN, mutableSetOf())) {

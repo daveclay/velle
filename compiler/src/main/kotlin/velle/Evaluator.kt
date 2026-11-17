@@ -327,21 +327,20 @@ class Evaluator(private val system: VelleSystem) {
     }
 
     /**
-     * Instances of [shape] whose unique type-matched to-one field references [id].
-     * A refinement name resolves to its base for the field lookup and instance
-     * scan, then filters by membership — the same resolution bindingCandidates
-     * applies to refinement roots in collection position.
+     * Instances of [shape] whose one type-matched to-one field references [id]: the
+     * field `Model.typeMatchedFields` names, which V13 proved unique. A union subject
+     * (Reference §9), a taken shape among them, scans each operand for that one field,
+     * and a refinement then filters by membership — the same resolution
+     * bindingCandidates applies to refinement roots in collection position.
      */
     private fun instancesReferencing(shape: String, id: Long): List<Long> {
         val targetShape = (system.instance(id) ?: throw VelleRuntimeError("missing instance $id")).shape
-        // a union subject (Reference §9) scans each operand; a field typed with a static
-        // union accepts an instance of any operand
+        val field = model.typeMatchedFields(shape, targetShape).singleOrNull()
+            ?: throw VelleRuntimeError("'$shape for this' names no one field of '$shape' typed with '$targetShape' (validator gap, V13)")
         val referencing = model.basesOf(shape).flatMap { base ->
-            val field = model.shapes.getValue(base).members.filterIsInstance<StoredProp>()
-                .single { (it.type as? RelType)?.let { t -> !t.many && model.typeAccepts(t.shape, targetShape) } == true }
-            system.ensureReferencing(base, field.name, id)
+            system.ensureReferencing(base, field, id)
             system.liveIds(base).filter {
-                (system.instance(it)?.fields?.get(field.name) as? Value.VRef)?.id == id
+                (system.instance(it)?.fields?.get(field) as? Value.VRef)?.id == id
             }
         }
         val found = if (shape in model.refinements) referencing.filter { memberOfRefExpr(it, RefName(shape)) }

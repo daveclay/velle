@@ -518,6 +518,17 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     fun typeAccepts(declared: String, actual: String): Boolean =
         declared == actual || actual in basesOf(declared)
 
+    /** The stored to-one fields of [shape] that accept a record of [targetShape]: the fields
+     *  `Shape for <record>` may name (Reference §10, "Testing for related records with exists").
+     *  Over a shape several shapes take with `is`, or a static union, a field counts only when
+     *  every operand takes it from one declaration (Reference §9), so the test covers every
+     *  taker through the one field; two takers each declaring a field of the type share none. */
+    fun typeMatchedFields(shape: String, targetShape: String): List<String> =
+        membersOf(shape).values
+            .filter { member -> member.stored && !member.actor && !member.transient }
+            .filter { member -> member.type.instanceShape()?.let { declared -> typeAccepts(declared, targetShape) } == true }
+            .map { member -> member.name }
+
     // ── member lookup ────────────────────────────────────────────────────────
 
     /**

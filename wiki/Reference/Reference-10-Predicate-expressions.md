@@ -54,6 +54,8 @@ A membership test is legal when the left side and the named refinement share a b
 
 `exists Receipt for this` asks whether any `Receipt` points at the current record, and `not exists AccountFlagResolved for this` that none does. `for` picks the field on `Receipt` whose type matches the subject.
 
+The shape after `for` may be one that several shapes take with `is`, or a static union ([§9](Reference-09-Composing-refinements)). `for` then picks the field every one of those shapes takes from one declaration, and the test covers a record of any of them: with `shape AttemptOutcome { attempt: one ChargeAttempt }` taken by `ChargeResponse` and `AttemptTimeout`, `not exists AttemptOutcome for this` on a charge attempt holds until a response or a timeout names it, as `PendingAttempt` in `examples/payments/payments.velle` says. A field two of the shapes each declare for themselves is not shared, so `for` does not find it; declare it once on the shape they take.
+
 That shorthand stops working when the shape has two fields of the matching type. Given `Referral { referrer: one Customer, referee: one Customer }`, `exists Referral for this` cannot say which field is meant. Write the general form, which filters the shape with `where`:
 
 ```

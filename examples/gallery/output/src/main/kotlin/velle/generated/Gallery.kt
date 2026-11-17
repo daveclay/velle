@@ -28,7 +28,8 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         boundary("Photo", input).carrying(input)
 
     /** Queue keys: [comment.author], [comment.target], [comment.target.author] — plus system-wide width below.
-     *  System-wide over Content — 'body' cannot be resolved on 'Content' (unexamined (A5)).
+     *  System-wide over Post — 'body' cannot be resolved on 'Content' (unexamined (A5)).
+     *  System-wide over Photo — 'body' cannot be resolved on 'Content' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewComment): Commit<NewComment, Ref<Comment>> =

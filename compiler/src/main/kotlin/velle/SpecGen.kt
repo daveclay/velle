@@ -166,7 +166,8 @@ object SpecGen {
                             ?: (inner.collection?.bindings?.singleOrNull()?.source as? PathExpr)
                                 ?.takeIf { it.segs.isEmpty() }?.root
                         val base = root?.let { model.baseOf(it) ?: it }
-                        base != null && rule.creations().any { it.shape == base }
+                        // a witness over a taken shape or a static union is any of its shapes (Reference §9)
+                        base != null && rule.creations().any { model.typeAccepts(base, it.shape) }
                     }
                     is PathExpr -> inner.segs.isEmpty() && rule.body.filterIsInstance<Assignment>().any {
                         it.target.segs.lastOrNull()?.name == inner.root ||

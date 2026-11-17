@@ -249,5 +249,79 @@ class SharedShapeTest {
             assertEquals(emptyList<Long>(), sys.instancesOf("RenameEntry"), "a transient act is not kept")
         }
     }
-}
 
+    // ── `for` over a taken shape (Reference §10, "Testing for related records with exists") ──
+
+    private val attemptOutcomes = """
+        act ChargeAttempt { amount: integer }
+        shape AttemptOutcome { attempt: one ChargeAttempt }
+        act ChargeResponse is AttemptOutcome { approved: boolean }
+        act AttemptTimeout is AttemptOutcome { noticedOn: DateTime }
+        shape PendingAttempt = ChargeAttempt where not exists AttemptOutcome for this
+        shape StillPending = ChargeAttempt where not exists (AttemptOutcome where attempt == this)
+    """.trimIndent()
+
+    @Test
+    fun `'for' over a taken shape names the field the takers take from one declaration`() {
+        assertEquals(emptyList(), diags(attemptOutcomes))
+        val model = Model(Parser.parse(attemptOutcomes))
+        assertEquals(listOf("attempt"), model.typeMatchedFields("AttemptOutcome", "ChargeAttempt"))
+        assertEquals(listOf("attempt"), model.typeMatchedFields("ChargeResponse", "ChargeAttempt"))
+    }
+
+    @Test
+    fun `'for' over a taken shape matches no field two takers each declare for themselves`() {
+        val separate = """
+            act ChargeAttempt { amount: integer }
+            shape AttemptOutcome { recordedOn: DateTime }
+            shape ChargeResponse is AttemptOutcome { attempt: one ChargeAttempt, approved: boolean }
+            shape AttemptTimeout is AttemptOutcome { attempt: one ChargeAttempt }
+            shape PendingAttempt = ChargeAttempt where not exists AttemptOutcome for this
+        """.trimIndent()
+        assertTrue(messages(separate).any { "'for' matches 0 fields of 'AttemptOutcome'" in it }, "got: ${diags(separate)}")
+    }
+
+    @Test
+    fun `'for' over a taken shape that declares two fields of the subject's type is refused naming both`() {
+        val two = """
+            act Customer { name: text }
+            shape Referral { referrer: one Customer, referee: one Customer }
+            shape EmailReferral is Referral { address: text }
+            shape CardReferral is Referral { code: text }
+            shape Referred = Customer where exists Referral for this
+        """.trimIndent()
+        assertTrue(messages(two).any { "'for' matches 2 fields of 'Referral'" in it }, "got: ${diags(two)}")
+    }
+
+    @Test
+    fun `an exists over a taken shape, in the for form and the where form, sees a record of either taker`() {
+        val sys = system(attemptOutcomes)
+        sys.scope {
+            val answered = sys.mustCommit("ChargeAttempt", "amount" to 10)
+            val timedOut = sys.mustCommit("ChargeAttempt", "amount" to 20)
+            val open = sys.mustCommit("ChargeAttempt", "amount" to 30)
+            sys.mustCommit("ChargeResponse", "attempt" to answered, "approved" to true)
+            sys.mustCommit("AttemptTimeout", "attempt" to timedOut, "noticedOn" to java.time.Instant.parse("2026-01-01T10:00:00Z"))
+            for (refinement in listOf("PendingAttempt", "StillPending")) {
+                assertEquals(listOf(open), sys.instancesOf(refinement), "$refinement holds only the attempt with no outcome of either kind")
+                assertTrue(!sys.isMember(answered, refinement), "$refinement: a response is an outcome")
+                assertTrue(!sys.isMember(timedOut, refinement), "$refinement: a timeout is an outcome")
+            }
+        }
+    }
+
+    @Test
+    fun `a rule guarded by 'not exists' over a taken shape is disarmed by producing either taker`() {
+        val sweep = """
+            act ChargeAttempt { amount: integer }
+            shape AttemptOutcome { attempt: one ChargeAttempt }
+            shape ChargeResponse is AttemptOutcome { approved: boolean }
+            shape AttemptTimeout is AttemptOutcome { noticedOn: DateTime }
+            shape PendingAttempt = ChargeAttempt where not exists AttemptOutcome for this
+            rule TimeOut when PendingAttempt on Hourly { AttemptTimeout from { attempt: this, noticedOn: now } }
+        """.trimIndent()
+        assertEquals(emptyList(), diags(sweep))
+        val idle = sweep.replace("AttemptTimeout from { attempt: this, noticedOn: now }", "ChargeResponse from { attempt: this, approved: false }")
+        assertEquals(emptyList(), diags(idle))
+    }
+}

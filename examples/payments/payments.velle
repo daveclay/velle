@@ -122,8 +122,15 @@ transient act ProcessorVerdict {
     outcome: Verdict
 }
 
-shape ChargeResponse {
+-- What settles an attempt: a verdict from the processor, or a timeout noticed
+-- by the sweep. Both name the attempt, declared once on `AttemptOutcome` and
+-- taken with `is` (Reference §9, "Sharing a field across shapes"), so "no
+-- outcome yet" is one test over both kinds.
+shape AttemptOutcome {
     attempt: one ChargeAttempt
+}
+
+shape ChargeResponse is AttemptOutcome {
     outcome: Verdict
     respondedOn: timestamp on create
 }
@@ -135,18 +142,17 @@ rule RecordVerdict when ProcessorVerdict {
 -- A processor that stays silent past the window is timed out by the sweep
 -- below; the timeout is a fact, so a timed-out attempt stops counting as
 -- pending and the retry path unblocks.
-shape AttemptTimeout {
-    attempt: one ChargeAttempt
+shape AttemptTimeout is AttemptOutcome {
     noticedOn: DateTime
 }
 
--- The attempt's states: pending until a verdict or a timeout lands; completed
--- attempts split on the verdict.
+-- The attempt's states: pending until an outcome of either kind lands;
+-- completed attempts split on the verdict.
 -- velle: errors-are-refinements — outcome states are refinements, not control
 -- flow; `outcome` is a derived refinement-body property the child refinements
--- read through the chain
-shape PendingAttempt = ChargeAttempt where
-    not exists ChargeResponse for this and not exists AttemptTimeout for this
+-- read through the chain; `exists AttemptOutcome for this` reads the shared
+-- field over every shape that takes it (Reference §10)
+shape PendingAttempt = ChargeAttempt where not exists AttemptOutcome for this
 
 shape CompletedAttempt = ChargeAttempt where exists ChargeResponse for this {
     outcome: Verdict = latest(ChargeResponse where attempt == this by respondedOn).outcome
@@ -283,19 +289,22 @@ act ChangeShippingAddress {
     newAddress: text
 }
 
-shape AddressChangeApplication {
+-- A request is handled when it is applied or refused; both records name the
+-- request through the one field `AddressChangeOutcome` declares (Reference §9)
+shape AddressChangeOutcome {
     change: one ChangeShippingAddress
+}
+
+shape AddressChangeApplication is AddressChangeOutcome {
     appliedOn: DateTime
 }
 
-shape AddressChangeRefusal {
-    change: one ChangeShippingAddress
+shape AddressChangeRefusal is AddressChangeOutcome {
     reason: text
     refusedOn: DateTime
 }
 
-shape UnhandledAddressChange = ChangeShippingAddress where
-    not exists AddressChangeApplication for this and not exists AddressChangeRefusal for this
+shape UnhandledAddressChange = ChangeShippingAddress where not exists AddressChangeOutcome for this
 
 shape ApplicableAddressChange = UnhandledAddressChange where order is not ReadyToShip
 shape RefusedAddressChange    = UnhandledAddressChange where order is ReadyToShip

@@ -287,9 +287,6 @@ interface PaymentsStore {
     /** Serves refinement ChargeableOrder — `ChargeableOrder`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun chargeableOrderCandidates(expiresOnAtLeast: LocalDate): List<OrderRow>
-    /** Serves refinement PendingAttempt — `PendingAttempt`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun pendingAttemptCandidates(): List<ChargeAttemptRow>
     /** Serves refinement CompletedAttempt; refinement SuccessfulCharge; refinement FailedCharge — `CompletedAttempt`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun completedAttemptCandidates(): List<ChargeAttemptRow>
@@ -308,9 +305,6 @@ interface PaymentsStore {
     /** Serves refinement UnshippedOrder; refinement ReadyToShip — `UnshippedOrder`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun unshippedOrderCandidates(): List<OrderRow>
-    /** Serves refinement UnhandledAddressChange; refinement ApplicableAddressChange — `UnhandledAddressChange`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun unhandledAddressChangeCandidates(): List<ChangeShippingAddressRow>
     /** Serves refinement RefusedAddressChange — `RefusedAddressChange`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun refusedAddressChangeCandidates(): List<ChangeShippingAddressRow>
@@ -342,14 +336,12 @@ class PaymentsStoreQuestions(model: Model) {
     val neverChargedCandidates = QTemplate.of(model, "Order", RefName("NeverCharged"))
     val refundedOrderCandidates = QTemplate.of(model, "Order", RefName("RefundedOrder"))
     val chargeableOrderCandidates = QTemplate.of(model, "Order", RefName("ChargeableOrder"))
-    val pendingAttemptCandidates = QTemplate.of(model, "ChargeAttempt", RefName("PendingAttempt"))
     val completedAttemptCandidates = QTemplate.of(model, "ChargeAttempt", RefName("CompletedAttempt"))
     val timedOutAttemptCandidates = QTemplate.of(model, "ChargeAttempt", RefName("TimedOutAttempt"))
     val activeReservationCandidates = QTemplate.of(model, "StockReservation", RefName("ActiveReservation"))
     val retryableOrderCandidates = QTemplate.of(model, "Order", RefName("RetryableOrder"))
     val stalePendingAttemptCandidates = QTemplate.of(model, "ChargeAttempt", RefName("StalePendingAttempt"))
     val unshippedOrderCandidates = QTemplate.of(model, "Order", RefName("UnshippedOrder"))
-    val unhandledAddressChangeCandidates = QTemplate.of(model, "ChangeShippingAddress", RefName("UnhandledAddressChange"))
     val refusedAddressChangeCandidates = QTemplate.of(model, "ChangeShippingAddress", RefName("RefusedAddressChange"))
     val overdueOrderCandidates = QTemplate.of(model, "Order", RefName("OverdueOrder"))
     val openDunningFlagCandidates = QTemplate.of(model, "DunningFlag", RefName("OpenDunningFlag"))
@@ -481,10 +473,6 @@ open class PaymentsStoreOverGeneric(
         backend.fetchCandidates("Order", questions.chargeableOrderCandidates.instantiate(listOf(QConst.QDate(expiresOnAtLeast))))
             .map { it.toOrderRow() }
 
-    override fun pendingAttemptCandidates(): List<ChargeAttemptRow> =
-        backend.fetchCandidates("ChargeAttempt", questions.pendingAttemptCandidates.instantiate(listOf()))
-            .map { it.toChargeAttemptRow() }
-
     override fun completedAttemptCandidates(): List<ChargeAttemptRow> =
         backend.fetchCandidates("ChargeAttempt", questions.completedAttemptCandidates.instantiate(listOf()))
             .map { it.toChargeAttemptRow() }
@@ -508,10 +496,6 @@ open class PaymentsStoreOverGeneric(
     override fun unshippedOrderCandidates(): List<OrderRow> =
         backend.fetchCandidates("Order", questions.unshippedOrderCandidates.instantiate(listOf()))
             .map { it.toOrderRow() }
-
-    override fun unhandledAddressChangeCandidates(): List<ChangeShippingAddressRow> =
-        backend.fetchCandidates("ChangeShippingAddress", questions.unhandledAddressChangeCandidates.instantiate(listOf()))
-            .map { it.toChangeShippingAddressRow() }
 
     override fun refusedAddressChangeCandidates(): List<ChangeShippingAddressRow> =
         backend.fetchCandidates("ChangeShippingAddress", questions.refusedAddressChangeCandidates.instantiate(listOf()))
@@ -646,8 +630,6 @@ class PaymentsStoreResolver(
         if (shape == "Order")
             questions.chargeableOrderCandidates.match(filter)?.let { h -> return store.chargeableOrderCandidates(h.date(0)).map { it.toRow() } }
         if (shape == "ChargeAttempt")
-            questions.pendingAttemptCandidates.match(filter)?.let { h -> return store.pendingAttemptCandidates().map { it.toRow() } }
-        if (shape == "ChargeAttempt")
             questions.completedAttemptCandidates.match(filter)?.let { h -> return store.completedAttemptCandidates().map { it.toRow() } }
         if (shape == "ChargeAttempt")
             questions.timedOutAttemptCandidates.match(filter)?.let { h -> return store.timedOutAttemptCandidates().map { it.toRow() } }
@@ -659,8 +641,6 @@ class PaymentsStoreResolver(
             questions.stalePendingAttemptCandidates.match(filter)?.let { h -> return store.stalePendingAttemptCandidates(h.instant(0)).map { it.toRow() } }
         if (shape == "Order")
             questions.unshippedOrderCandidates.match(filter)?.let { h -> return store.unshippedOrderCandidates().map { it.toRow() } }
-        if (shape == "ChangeShippingAddress")
-            questions.unhandledAddressChangeCandidates.match(filter)?.let { h -> return store.unhandledAddressChangeCandidates().map { it.toRow() } }
         if (shape == "ChangeShippingAddress")
             questions.refusedAddressChangeCandidates.match(filter)?.let { h -> return store.refusedAddressChangeCandidates().map { it.toRow() } }
         if (shape == "Order")
