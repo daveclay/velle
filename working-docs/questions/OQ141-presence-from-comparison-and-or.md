@@ -1,6 +1,6 @@
 # OQ141 — Does a `?.` comparison that holds, or the right side of an `or`, show an optional step present?
 
-**Status:** opened 2026-11-17 from a stress pass of a domain spec, re-verified at commit 76cff78. D1 and D2 await Dave.
+**Status:** opened 2026-11-17 from a stress pass of a domain spec, re-verified at commit 76cff78. D1 decided 2026-11-17, build pending; D2 awaits Dave.
 
 **In plain terms:** a rule says "a value whose attribute is a relation must name one of the attribute's relations", and another says "a value with units must have an attribute that has units". Both are refused, because each reads the attribute in a place where the attribute can only be present, but the compiler recognises only an `is some` or `is none` test as showing that. The author writes the longer spelling with the test added, or turns the `or` inside out.
 
@@ -55,7 +55,7 @@ Why: V11 shows a step present only by an `is some` or `is none` test in the same
 
 ## 2. What to decide
 
-### D1. Whether `a?.f == <value>` holding shows `a` present
+### D1. Whether `a?.f == <value>` holding shows `a` present · Decided 2026-11-17
 
 Does `attr?.kind == "relation"` holding, in the same conjunction, let a later plain dot read `attr.relations`?
 
@@ -76,6 +76,8 @@ Costs:
 - `wiki/Normative/checks.md` V11: the comparison added to the list of what shows a step present.
 - `compiler/src/test/kotlin/velle/PresenceThroughPathTest.kt`: the first spec in §1 accepted; the same with `!=` still refused.
 - `working-docs/examples/survey/18-presence-optional-comparison-refused.velle` renamed without the suffix and its README line updated.
+
+**Decided:** yes, 2026-11-17. A comparison that holds shows the `?.` paths it reads present, on its holding side only; `!=` and `not in` show nothing.
 
 ### D2. Whether the right side of an `or` is read under the failure of its left side
 
@@ -101,5 +103,4 @@ Costs:
 
 ## 3. Work items
 
-- [ ] Decide D1.
 - [ ] Decide D2.
