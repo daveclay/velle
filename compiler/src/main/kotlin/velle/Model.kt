@@ -727,8 +727,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
      *  join [transients] under the act, and the members computed before the marking
      *  are recomputed against it. */
     private fun markTransientParts(resolved: Map<String, List<ClosureEdge>>) {
-        fun partsOf(edge: ClosureEdge): List<String> =
-            (if (edge.byValue) basesOf(edge.partShape) else listOf(edge.partShape)) + edge.children.flatMap(::partsOf)
+        fun partsOf(edge: ClosureEdge): List<String> = basesOf(edge.partShape).toList() + edge.children.flatMap(::partsOf)
         for ((act, edges) in resolved) {
             if (act !in transients) continue
             for (part in edges.flatMap(::partsOf)) {
@@ -760,16 +759,16 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
                 null
             }
             m.inverse != null ->
-                if (m.inverse.shape in sharedShapes) {
-                    error("V22", "'act ... with ${entry.name}': a closure edge's parts are of one shape, and '${entry.name}' holds " +
-                        basesOf(m.inverse.shape).joinToString(" and ") + ", every shape that is ${m.inverse.shape}; " +
-                        "name one of them with a view of its own, '<name>: many <Shape> = (<Shape> where ${m.inverse.field} == this)'")
-                    null
-                } else if (m.inverse.many) {
+                if (m.inverse.many) {
                     error("V22", "'act ... with ${entry.name}': the inverse of a declared `many` " +
                         "(an m2m edge set) cannot ride a closure — its members are existing instances, " +
                         "named by reference; $fix")
                     null
+                } else if (m.inverse.shape in sharedShapes) {
+                    // the back-reference is declared on a shape several shapes take with `is`
+                    // (Reference §9), so the parts are of every taker, each saying its shape
+                    // when it arrives, as a value at a union-typed field does (Reference §6)
+                    return resolveMixedPartEdge(scope, entry, m.inverse.shape, m.inverse.field)
                 } else m.inverse.shape to m.inverse.field
             m.derived != null -> recognizedInverse(scope, m.derived).also {
                 if (it == null) error("V22", "'act ... with ${entry.name}': $fix — " +
@@ -790,6 +789,42 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     }
 
     /**
+     * The inverse of a back-reference declared on [taken], a shape several shapes take with
+     * `is` (Reference §9), named in `with`: one edge whose parts are of every taker, each
+     * arriving with its shape named. The entry's own `with` children are resolved on each
+     * taker that has them, and each child edge records its [ClosureEdge.owner].
+     */
+    private fun resolveMixedPartEdge(scope: String, entry: WithEntry, taken: String, backRef: String): ClosureEdge? {
+        val takers = basesOf(taken)
+        takers.filter { it in transients }.forEach {
+            error("V22", "'act ... with ${entry.name}': part shape '$it' is a transient act — " +
+                "closure parts are durable records created at the commit")
+            return null
+        }
+        val children = resolveChildrenPerOperand(scope, entry, taken, takers)
+        return ClosureEdge(entry.name, taken, backRef, children, owner = scope)
+    }
+
+    /** The children of a `with` entry whose parts or value may be of several [operands]: each child
+     *  resolved on every operand that has it, owned by that operand. */
+    private fun resolveChildrenPerOperand(scope: String, entry: WithEntry, target: String, operands: Collection<String>): List<ClosureEdge> {
+        entry.children.groupBy { it.name }.filterValues { it.size > 1 }.keys.forEach {
+            error("V22", "'act ... with': closure edge '$it' declared twice under '$scope.${entry.name}'")
+        }
+        val children = mutableListOf<ClosureEdge>()
+        for (child in entry.children.distinctBy { it.name }) {
+            val owners = operands.filter { membersOf(it).containsKey(child.name) }
+            if (owners.isEmpty()) {
+                val none = if (target in sharedShapes) "no shape that is a '$target'" else "no operand of '$target'"
+                error("V22", "'act ... with ${entry.name} with { ${child.name} }': $none has '${child.name}'")
+                continue
+            }
+            for (owner in owners) resolveClosureEdge(owner, child)?.let { children.add(it) }
+        }
+        return children
+    }
+
+    /**
      * A `one` field named in `with` (Reference §6, "a reference supplied by value"):
      * the committer may nest a new [target] record at the field instead of naming
      * an existing one. For a union-typed field the nested value is one of the
@@ -807,18 +842,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             error("V22", "'act ... with ${entry.name}': '$it' is a transient act — a value arriving nested is a durable record created at the commit")
             return null
         }
-        entry.children.groupBy { it.name }.filterValues { it.size > 1 }.keys.forEach {
-            error("V22", "'act ... with': closure edge '$it' declared twice under '$scope.${entry.name}'")
-        }
-        val children = mutableListOf<ClosureEdge>()
-        for (child in entry.children.distinctBy { it.name }) {
-            val owners = operands.filter { membersOf(it).containsKey(child.name) }
-            if (owners.isEmpty()) {
-                error("V22", "'act ... with ${entry.name} with { ${child.name} }': no operand of '$target' has '${child.name}'")
-                continue
-            }
-            for (owner in owners) resolveClosureEdge(owner, child)?.let { children.add(it) }
-        }
+        val children = resolveChildrenPerOperand(scope, entry, target, operands)
         return ClosureEdge(entry.name, target, backRef = "", children = children, byValue = true, owner = scope)
     }
 
@@ -829,7 +853,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     fun closureShapes(act: String): Set<String> {
         val out = linkedSetOf(act)
         fun visit(e: ClosureEdge) {
-            if (e.byValue) out.addAll(basesOf(e.partShape)) else out.add(e.partShape)
+            out.addAll(basesOf(e.partShape))
             e.children.forEach { visit(it) }
         }
         closures[act].orEmpty().forEach { visit(it) }
@@ -1250,7 +1274,10 @@ data class ClosureEdge(
     /** A `one` field named in `with` (Reference §6; OQ63 §6.1): the committer supplies the
      *  reference by value, one [partShape] record nested at [prop]; no back-reference. For a
      *  union-typed field [partShape] is the union, and [children] carry the edges resolved on
-     *  each operand, each marked with its [owner]. */
+     *  each operand, each marked with its [owner]. A part edge whose [partShape] is a shape
+     *  several shapes take with `is` (Reference §9) is read the same way: its parts are of
+     *  every taker, and [children] are resolved per taker. `Model.basesOf(partShape)` is the
+     *  concrete shapes of either. */
     val byValue: Boolean = false,
     /** The shape this edge was resolved on: the enclosing level, or, for a child of a
      *  union-typed by-value edge, the operand that declares it. */

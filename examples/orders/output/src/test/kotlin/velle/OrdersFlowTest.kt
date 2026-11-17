@@ -178,5 +178,26 @@ open class OrdersFlowTest {
         assertTrue(sys.read(order).orderLines.isEmpty())
         assertEquals(0, sys.read(order).total)
     }
+
+    @Test
+    fun `a catalogue update arrives as one list of changes of two kinds, each its own class, and is not kept`() {
+        val sys = newSystem()
+        val prod = sys.read(accept(sys.commit(NewProduct("SKU-1", unitPrice = 10))).ref)
+
+        // one list typed by the shape both kinds take; the class of each element is its kind
+        accept(sys.commit(NewCatalogueUpdate(
+            source = "feed",
+            changes = listOf(
+                NewListing(sku = "SKU-2", unitPrice = 5, name = "Widget"),
+                NewPriceChange(sku = "SKU-1", unitPrice = 12, product = prod),
+            ),
+        )))
+
+        val lines = sys.catalogueLines().map { sys.read(it) }
+        assertEquals(setOf("SKU-2:listing:5", "SKU-1:price change:12"), lines.map { "${it.sku}:${it.kind}:${it.unitPrice}" }.toSet())
+        val record = sys.read(sys.priceRecords().single())
+        assertEquals(12, record.unitPrice)
+        assertEquals("SKU-1", sys.read(record.product).sku)
+    }
 }
 

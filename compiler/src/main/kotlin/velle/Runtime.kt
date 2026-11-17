@@ -1269,11 +1269,30 @@ class VelleSystem(
                 if (edge.backRef in raw)
                     throw PartRefusal("type: '${edge.partShape}.${edge.backRef}' is language-populated — " +
                         "a back-reference cannot be claimed by the committer (Reference §6)")
-                appendValue(edge.partShape, raw, edge.childrenFor(edge.partShape), build, "inline part",
+                val concrete = partShapeOf(shape, edge, raw)
+                appendValue(concrete, raw, edge.childrenFor(concrete), build, "inline part",
                     extra = mapOf(edge.backRef to Value.VPendingRef(index)), skipRequired = setOf(edge.backRef))
             }
         }
         return index
+    }
+
+    /**
+     * The shape one part arriving at [edge] of [container] is. A part of an edge over a shape
+     * several shapes take with `is` (Reference §9) says which with [SHAPE_KEY], as a value at a
+     * union-typed field does; an edge over one shape needs no tag, and a tag it carries must
+     * be that shape.
+     */
+    private fun partShapeOf(container: String, edge: ClosureEdge, raw: Map<String, Any?>): String {
+        val kinds = model.basesOf(edge.partShape)
+        val named = raw[SHAPE_KEY] as? String
+            ?: kinds.singleOrNull()
+            ?: throw PartRefusal("type: a part of '$container.${edge.prop}' names which of " +
+                kinds.sorted().joinToString(" or ") + " it is with '$SHAPE_KEY'")
+        if (named !in kinds)
+            throw PartRefusal("type: a '$named' cannot arrive at '$container.${edge.prop}', which takes " +
+                (if (kinds.size == 1) "a ${edge.partShape}" else "a ${edge.partShape}: " + kinds.sorted().joinToString(" or ")))
+        return named
     }
 
     /** Convert one raw nested value (a part or a by-value record) and append it with its own closure. */

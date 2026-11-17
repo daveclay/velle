@@ -117,7 +117,7 @@ class SharedShapeTest {
     }
 
     @Test
-    fun `a field typed with a taken shape that a transient act takes is refused, and a closure over its inverse is refused`() {
+    fun `a field typed with a taken shape that a transient act takes is refused, and a closure over its inverse carries every taker`() {
         val typed = """
             act Entry { name: text unique }
             shape EntryChange { entry: one Entry }
@@ -133,7 +133,12 @@ class SharedShapeTest {
             shape RenameEntry is EntryChange { newName: text }
             shape MoveEntry is EntryChange { newSite: text }
         """.trimIndent()
-        assertTrue("V22" in codes(closure), "got: ${diags(closure)}")
+        assertEquals(emptyList(), diags(closure))
+        // one edge over the taken shape, its parts of every taker (Reference §6, §9)
+        val edge = Model(Parser.parse(closure)).closures.getValue("Entry").single()
+        assertEquals("EntryChange", edge.partShape)
+        assertEquals("entry", edge.backRef)
+        assertEquals(setOf("RenameEntry", "MoveEntry"), Model(Parser.parse(closure)).basesOf(edge.partShape).toSet())
     }
 
     @Test

@@ -443,10 +443,26 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
         return if (prop.type.isMany) GraphQLList.list(GraphQLNonNull.nonNull(one)) else one
     }
 
-    private fun partsField(act: String, shape: String, edge: ClosureEdge): GraphQLInputObjectField =
-        GraphQLInputObjectField.newInputObjectField().name(edge.prop)
+    private fun partsField(act: String, shape: String, edge: ClosureEdge): GraphQLInputObjectField {
+        val element = if (edge.partShape in model.shapes) nestedInput(act, edge.partShape, edge.childrenFor(edge.partShape), edge.backRef)
+        else mixedPartInput(act, edge)
+        return GraphQLInputObjectField.newInputObjectField().name(edge.prop)
             .description("The ${edge.partShape} parts created with this ${shape}.")
-            .type(GraphQLList.list(GraphQLNonNull.nonNull(nestedInput(act, edge.partShape, edge.childrenFor(edge.partShape), edge.backRef)))).build()
+            .type(GraphQLList.list(GraphQLNonNull.nonNull(element))).build()
+    }
+
+    /** One part of an edge over a shape several shapes take with `is`: exactly one `new<Taker>` carrying the part, which names its shape. */
+    private fun mixedPartInput(act: String, edge: ClosureEdge): GraphQLInputType {
+        val name = "$act${edge.prop.replaceFirstChar { it.uppercase() }}PartInput"
+        additional.getOrPut(name) {
+            val b = GraphQLInputObjectType.newInputObject().name(name)
+                .description("One of the ${edge.prop} of a $act: exactly one `new...`, naming which shape that takes ${edge.partShape} the part is.")
+            for (taker in model.basesOf(edge.partShape).sorted())
+                b.field { it.name("new$taker").type(nestedInput(act, taker, edge.childrenFor(taker), edge.backRef)) }
+            b.build()
+        }
+        return GraphQLTypeReference.typeRef(name)
+    }
 
     private fun asNewField(): GraphQLInputObjectField = GraphQLInputObjectField.newInputObjectField().name("asNew").type(Scalars.GraphQLInt)
         .description("Tag this value with a number so a sibling field may point at it with `{new: n}`.").build()

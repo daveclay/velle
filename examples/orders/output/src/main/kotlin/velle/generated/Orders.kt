@@ -41,6 +41,12 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
     fun commit(input: NewPriceRequest): Commit<NewPriceRequest, Nothing?> =
         boundary("PriceRequest", input).carryingNoRecord(input)
 
+    /** Queue keys: none — this commit contends with no other work.
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
+    fun commit(input: NewCatalogueUpdate): Commit<NewCatalogueUpdate, Nothing?> =
+        boundary("CatalogueUpdate", input).carryingNoRecord(input)
+
     fun ticks(): List<Tick> = all("Tick") { materializeTick(it) }
     fun customers(): List<Customer> = all("Customer") { materializeCustomer(it) }
     fun products(): List<Product> = all("Product") { materializeProduct(it) }
@@ -52,6 +58,8 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
     fun reservations(): List<Reservation> = all("Reservation") { materializeReservation(it) }
     fun quotes(): List<Quote> = all("Quote") { materializeQuote(it) }
     fun quoteLines(): List<QuoteLine> = all("QuoteLine") { materializeQuoteLine(it) }
+    fun catalogueLines(): List<CatalogueLine> = all("CatalogueLine") { materializeCatalogueLine(it) }
+    fun priceRecords(): List<PriceRecord> = all("PriceRecord") { materializePriceRecord(it) }
     fun productInFamilys(): List<ProductInFamily> = all("ProductInFamily") { materializeProductInFamily(it) }
     fun productOfFamilys(): List<ProductOfFamily> = all("ProductOfFamily") { materializeProductOfFamily(it) }
 
@@ -115,6 +123,16 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         fun quoteLine(key: StoreKey): QuoteLine = byKey("QuoteLine", key)
         fun quoteLine(key: Long): QuoteLine = quoteLine(StoreKey(key))
 
+        val catalogueLines: CatalogueLineQuery get() = query("CatalogueLine", CatalogueLineFields()) { materializeCatalogueLine(it) }
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun catalogueLine(key: StoreKey): CatalogueLine = byKey("CatalogueLine", key)
+        fun catalogueLine(key: Long): CatalogueLine = catalogueLine(StoreKey(key))
+
+        val priceRecords: PriceRecordQuery get() = query("PriceRecord", PriceRecordFields()) { materializePriceRecord(it) }
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun priceRecord(key: StoreKey): PriceRecord = byKey("PriceRecord", key)
+        fun priceRecord(key: Long): PriceRecord = priceRecord(StoreKey(key))
+
         val productInFamilys: ProductInFamilyQuery get() = query("ProductInFamily", ProductInFamilyFields()) { materializeProductInFamily(it) }
         /** The record behind [ref] as a member of ProductInFamily, or null when it is not one. */
         fun productInFamily(ref: Ref<Product>): ProductInFamily? = member("ProductInFamily", ref) { materializeProductInFamily(it) }
@@ -137,6 +155,8 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         "Reservation" -> materializeReservation(id)
         "Quote" -> materializeQuote(id)
         "QuoteLine" -> materializeQuoteLine(id)
+        "CatalogueLine" -> materializeCatalogueLine(id)
+        "PriceRecord" -> materializePriceRecord(id)
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
@@ -159,6 +179,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         unitPrice = (system.get(id, "unitPrice") as BigDecimal).intValueExact(),
         orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
         quoteLines = (system.get(id, "quoteLines") as List<*>).map { system.refFor(it as Long) },
+        priceRecords = (system.get(id, "priceRecords") as List<*>).map { system.refFor(it as Long) },
         isProductInFamily = system.isMember(id, "ProductInFamily"),
         isProductOfFamily = system.isMember(id, "ProductOfFamily"),
     )
@@ -220,12 +241,28 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         unitPrice = (system.get(id, "unitPrice") as BigDecimal).intValueExact(),
     )
 
+    private fun materializeCatalogueLine(id: Long): CatalogueLine = CatalogueLine(
+        key = system.refFor(id).key,
+        source = system.get(id, "source") as String,
+        sku = system.get(id, "sku") as String,
+        kind = system.get(id, "kind") as String,
+        unitPrice = (system.get(id, "unitPrice") as BigDecimal).intValueExact(),
+    )
+
+    private fun materializePriceRecord(id: Long): PriceRecord = PriceRecord(
+        key = system.refFor(id).key,
+        product = system.refFor(system.get(id, "product") as Long),
+        unitPrice = (system.get(id, "unitPrice") as BigDecimal).intValueExact(),
+        recordedOn = system.get(id, "recordedOn") as Instant,
+    )
+
     private fun materializeProductInFamily(id: Long): ProductInFamily = ProductInFamily(
         key = system.refFor(id).key,
         sku = system.get(id, "sku") as String,
         unitPrice = (system.get(id, "unitPrice") as BigDecimal).intValueExact(),
         orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
         quoteLines = (system.get(id, "quoteLines") as List<*>).map { system.refFor(it as Long) },
+        priceRecords = (system.get(id, "priceRecords") as List<*>).map { system.refFor(it as Long) },
         isProductOfFamily = system.isMember(id, "ProductOfFamily"),
     )
 
@@ -235,6 +272,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         unitPrice = (system.get(id, "unitPrice") as BigDecimal).intValueExact(),
         orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
         quoteLines = (system.get(id, "quoteLines") as List<*>).map { system.refFor(it as Long) },
+        priceRecords = (system.get(id, "priceRecords") as List<*>).map { system.refFor(it as Long) },
         isProductInFamily = system.isMember(id, "ProductInFamily"),
     )
 
@@ -365,6 +403,67 @@ rule QuoteRequest when PriceRequest {
         QuoteLine from { quote: quote, product: item.product, quantity: item.quantity, unitPrice: item.product.unitPrice }
     }
 }
+
+-- A catalogue update: one list of changes, each a new listing or a price
+-- change, answered and not kept. The two kinds take the SKU, the price, and
+-- the back-reference from `Change`, declared once with `is`
+-- (Reference §9, "Sharing a field across shapes"), so the update's one closure
+-- edge is the collection that back-reference infers, holding changes of both
+-- kinds, and each change says which kind it is when it arrives (Reference §6,
+-- "A request that is not kept, with its parts").
+transient act CatalogueUpdate {
+    source: text
+} with changes
+
+shape Change {
+    catalogueUpdate: one CatalogueUpdate   -- the back-reference, declared once for both kinds; it infers `changes` on the update
+    sku: text
+    unitPrice: integer
+}
+
+-- a product the catalogue did not have: its name arrives with it
+shape Listing is Change {
+    name: text
+}
+
+-- a product already listed: the change names it
+shape PriceChange is Change {
+    product: one Product
+}
+
+-- what the update leaves behind: one line per change, saying which kind it was
+shape CatalogueLine {
+    source: text
+    sku: text
+    kind: text
+    unitPrice: integer
+}
+
+-- a price change is also recorded against its product
+shape PriceRecord {
+    product: one Product
+    unitPrice: integer
+    recordedOn: timestamp on create
+}
+
+never (CatalogueUpdate where count(changes) == 0)
+
+-- one rule over the update walks every change, of either kind, and narrows where a kind is asked
+rule RecordCatalogue when CatalogueUpdate {
+    for each change in changes {
+        CatalogueLine from {
+            source: this.source,
+            sku: change.sku,
+            unitPrice: change.unitPrice,
+            kind: if change is Listing then "listing" else "price change"
+        }
+    }
+}
+
+-- one rule over one kind fires per change of that kind, at the update's commit
+rule RecordPriceChange when PriceChange {
+    PriceRecord from { product: this.product, unitPrice: this.unitPrice }
+}
 """
     }
 }
@@ -381,6 +480,8 @@ typealias CustomizationQuery = TypedQuery<CustomizationFields, Customization>
 typealias ReservationQuery = TypedQuery<ReservationFields, Reservation>
 typealias QuoteQuery = TypedQuery<QuoteFields, Quote>
 typealias QuoteLineQuery = TypedQuery<QuoteLineFields, QuoteLine>
+typealias CatalogueLineQuery = TypedQuery<CatalogueLineFields, CatalogueLine>
+typealias PriceRecordQuery = TypedQuery<PriceRecordFields, PriceRecord>
 typealias ProductInFamilyQuery = TypedQuery<ProductInFamilyFields, ProductInFamily>
 typealias ProductOfFamilyQuery = TypedQuery<ProductOfFamilyFields, ProductOfFamily>
 
@@ -461,6 +562,22 @@ data class NewPriceRequest(
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + parts(system, reg) + ("@shape" to "PriceRequest") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
+data class NewCatalogueUpdate(
+    val source: String,
+    val changes: List<NewChange> = emptyList(),
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+        put("source", source)
+    }
+    override fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {
+        put("changes", changes.map { it.asValue(system, reg) })
+    }
+    override fun register(reg: NewRegistry) {
+        changes.forEach { reg.add(it); it.register(reg) }
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + parts(system, reg) + ("@shape" to "CatalogueUpdate") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
+}
+
 // ── closure input values (Reference §6, "Inline part creation") ──
 data class NewCustomization(
     val note: String,
@@ -502,6 +619,44 @@ data class NewRequestedItem(
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "RequestedItem") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
+data class NewListing(
+    val sku: String,
+    val unitPrice: Int,
+    val name: String,
+) : NewChange, NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+        put("sku", sku)
+        put("unitPrice", unitPrice)
+        put("name", name)
+    }
+    override fun register(reg: NewRegistry) {
+    }
+    override fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Listing") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
+}
+
+data class NewPriceChange(
+    val sku: String,
+    val unitPrice: Int,
+    val product: Ref<Product>,
+) : NewChange, NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+        put("sku", sku)
+        put("unitPrice", unitPrice)
+        put("product", system.idOf(product))
+    }
+    override fun register(reg: NewRegistry) {
+    }
+    override fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "PriceChange") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
+}
+
+// ── references to new records (Reference §6): a `one` field named in `with`, or typed by a shape
+// arriving elsewhere in the act, takes `Existing(ref)`, a record on the books, or `New(value)` ──
+/** A new Change: one of NewListing, NewPriceChange. */
+sealed interface NewChange {
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?>
+    fun register(reg: NewRegistry)
+}
+
 
 // ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
@@ -535,6 +690,7 @@ data class Product(
     val unitPrice: Int,
     val orderLines: List<Ref<OrderLine>>,
     val quoteLines: List<Ref<QuoteLine>>,
+    val priceRecords: List<Ref<PriceRecord>>,
     /** membership of ProductInFamily at the moment of the read */
     val isProductInFamily: Boolean,
     /** membership of ProductOfFamily at the moment of the read */
@@ -634,12 +790,36 @@ data class QuoteLine(
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
+data class CatalogueLine(
+    override val key: StoreKey,
+    val source: String,
+    val sku: String,
+    val kind: String,
+    val unitPrice: Int,
+) : Ref<CatalogueLine> {
+    override val shape: String get() = "CatalogueLine"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+data class PriceRecord(
+    override val key: StoreKey,
+    val product: Ref<Product>,
+    val unitPrice: Int,
+    val recordedOn: Instant,
+) : Ref<PriceRecord> {
+    override val shape: String get() = "PriceRecord"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
 data class ProductInFamily(
     override val key: StoreKey,
     val sku: String,
     val unitPrice: Int,
     val orderLines: List<Ref<OrderLine>>,
     val quoteLines: List<Ref<QuoteLine>>,
+    val priceRecords: List<Ref<PriceRecord>>,
     /** membership of ProductOfFamily at the moment of the read */
     val isProductOfFamily: Boolean,
 ) : Ref<Product> {
@@ -654,6 +834,7 @@ data class ProductOfFamily(
     val unitPrice: Int,
     val orderLines: List<Ref<OrderLine>>,
     val quoteLines: List<Ref<QuoteLine>>,
+    val priceRecords: List<Ref<PriceRecord>>,
     /** membership of ProductInFamily at the moment of the read */
     val isProductInFamily: Boolean,
 ) : Ref<Product> {
@@ -724,6 +905,19 @@ class QuoteLineFields(path: List<String> = emptyList()) : Fields(path) {
     val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
 }
 
+class CatalogueLineFields(path: List<String> = emptyList()) : Fields(path) {
+    val source: TextField get() = TextField(fieldPath + "source")
+    val sku: TextField get() = TextField(fieldPath + "sku")
+    val kind: TextField get() = TextField(fieldPath + "kind")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+}
+
+class PriceRecordFields(path: List<String> = emptyList()) : Fields(path) {
+    val product: ProductFields get() = ProductFields(fieldPath + "product")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    val recordedOn: DateTimeField get() = DateTimeField(fieldPath + "recordedOn")
+}
+
 class ProductInFamilyFields(path: List<String> = emptyList()) : Fields(path) {
     val sku: TextField get() = TextField(fieldPath + "sku")
     val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
@@ -739,7 +933,7 @@ class ProductOfFamilyFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = OrdersSystem()
     println("Velle MockHarness — Orders")
-    println("Commits: commit(NewCustomer(...)), commit(NewProduct(...)), commit(NewSkuFamily(...)), commit(NewOrder(...)), commit(NewPriceRequest(...))")
+    println("Commits: commit(NewCustomer(...)), commit(NewProduct(...)), commit(NewSkuFamily(...)), commit(NewOrder(...)), commit(NewPriceRequest(...)), commit(NewCatalogueUpdate(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>
@@ -755,4 +949,6 @@ fun main() {
     println("Reservation: " + sys.reservations().size)
     println("Quote: " + sys.quotes().size)
     println("QuoteLine: " + sys.quoteLines().size)
+    println("CatalogueLine: " + sys.catalogueLines().size)
+    println("PriceRecord: " + sys.priceRecords().size)
 }

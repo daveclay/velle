@@ -370,4 +370,90 @@ class TransientClosureTest {
             assertEquals(setOf("c1:create", "u1:update"), seen)
         }
     }
+
+    // ── one closure edge over the shape the kinds take (Reference §6, §9) ─────
+    //
+    // The collection `Row.batch` infers on the act holds rows of both kinds, and
+    // the act names it as its one closure edge. Each row arriving says which kind
+    // it is; the committer sends one list.
+
+    private val mixedBatch = """
+        transient act Batch {
+            note: text
+        } with { rows with { rowValues } }
+
+        shape Row {
+            batch: one Batch
+            identifier: text
+            note: text = batch.note
+        }
+
+        shape CreateRow is Row { newKey: text }
+        shape UpdateRow is Row { key: text }
+
+        shape RowValue {
+            row: one Row
+            name: text
+            note: text = row.note
+        }
+
+        shape Made { key: text, kind: text, valuesWithNote: integer }
+
+        rule HandleBatch when Batch {
+            for each row in rows {
+                Made from {
+                    key: if row is CreateRow then row.newKey else row.key,
+                    kind: if row is CreateRow then "create" else "update",
+                    valuesWithNote: count(row.rowValues where note == "nightly")
+                }
+            }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `a closure edge over the shape the kinds take validates`() {
+        assertEquals(emptyList(), Validator.validate(mixedBatch), messages(mixedBatch))
+    }
+
+    @Test
+    fun `parts of both kinds arrive in one list, each saying its shape`() {
+        val sys = system(mixedBatch)
+        sys.scope {
+            val result = sys.commit(
+                "Batch",
+                mapOf("note" to "nightly"),
+                mapOf(
+                    "rows" to listOf(
+                        mapOf("@shape" to "CreateRow", "identifier" to "c1", "newKey" to "N1",
+                            "rowValues" to listOf(mapOf("name" to "a"), mapOf("name" to "b"))),
+                        mapOf("@shape" to "UpdateRow", "identifier" to "u1", "key" to "T1",
+                            "rowValues" to listOf(mapOf("name" to "c"))),
+                    ),
+                ),
+            )
+            assertIs<CommitResult.Accepted>(result, "commit refused: $result")
+            val made = sys.instancesOf("Made")
+                .map { madeId -> "${sys.get(madeId, "key")}:${sys.get(madeId, "kind")}:${sys.get(madeId, "valuesWithNote")}" }
+                .toSet()
+            assertEquals(setOf("N1:create:2", "T1:update:1"), made)
+            assertEquals(emptyList(), sys.instancesOf("RowValue"))
+            assertEquals(emptyList(), sys.instancesOf("CreateRow"))
+        }
+    }
+
+    @Test
+    fun `a part of a mixed edge that does not say its shape, or names one that does not take it, is refused`() {
+        val sys = system(mixedBatch)
+        sys.scope {
+            fun refusal(row: Map<String, Any?>): String {
+                val result = sys.commit("Batch", mapOf("note" to "nightly"), mapOf("rows" to listOf(row)))
+                return assertIs<CommitResult.Refused>(result, "expected a refusal: $result").reason
+            }
+            val untagged = refusal(mapOf("identifier" to "c1", "newKey" to "N1"))
+            assertTrue("@shape" in untagged && "CreateRow" in untagged && "UpdateRow" in untagged, untagged)
+            val wrongShape = refusal(mapOf("@shape" to "Made", "identifier" to "c1", "newKey" to "N1"))
+            assertTrue("Made" in wrongShape && "Row" in wrongShape, wrongShape)
+            assertEquals(emptyList(), sys.instancesOf("Made"))
+        }
+    }
 }

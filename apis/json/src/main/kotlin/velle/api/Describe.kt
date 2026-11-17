@@ -73,12 +73,24 @@ class Describe(private val model: Model) {
 
     private fun actOf(edges: List<ClosureEdge>, fallback: String): String = edges.firstOrNull()?.owner ?: fallback
 
-    private fun part(owner: String, e: ClosureEdge): Map<String, Any?> = linkedMapOf(
-        "field" to e.prop,
-        "shape" to e.partShape,
-        "fields" to fields(e.partShape, e.childrenFor(e.partShape), e.backRef),
-        "parts" to e.childrenFor(e.partShape).filter { !it.byValue }.map { part(e.partShape, it) },
-    )
+    /** One part edge: the fields and parts of its shape, or, when the parts are of every shape that
+     *  takes one shape with `is` (Reference §9), one entry per kind under `kinds`. */
+    private fun part(owner: String, e: ClosureEdge): Map<String, Any?> {
+        val out = linkedMapOf<String, Any?>("field" to e.prop, "shape" to e.partShape)
+        if (e.partShape in model.shapes) {
+            out["fields"] = fields(e.partShape, e.childrenFor(e.partShape), e.backRef)
+            out["parts"] = e.childrenFor(e.partShape).filter { !it.byValue }.map { part(e.partShape, it) }
+        } else {
+            out["kinds"] = model.basesOf(e.partShape).sorted().map { kind ->
+                linkedMapOf(
+                    "shape" to kind,
+                    "fields" to fields(kind, e.childrenFor(kind), e.backRef),
+                    "parts" to e.childrenFor(kind).filter { !it.byValue }.map { part(kind, it) },
+                )
+            }
+        }
+        return out
+    }
 
     fun shape(name: String): Map<String, Any?> {
         val refinement = name in model.refinements

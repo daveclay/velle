@@ -232,32 +232,62 @@ rule QuoteRequest when PriceRequest {
 
 A part that arrives with a transient request is not kept, so everything [§4](Reference-04-State-and-commits#transient-acts-transient-act) says a transient act may not do holds for the part: no shape may hold a relationship to it, its name appears in no expression, and a rule over it fires only at the commit ([checks.md, V17](checks#v17--transient-isolation)). The request owes one answer in every situation, as any transient act does. Its parts owe none.
 
-The request reads its parts inside its own commit, through the collection a part's back-reference gives it. A derived property of the request, or of one of its parts, may name a shape of the same closure for the same reason. When the parts come in several shapes that take one shape with `is` ([§9, "Sharing a field across shapes"](Reference-09-Composing-refinements#sharing-a-field-across-shapes-is)), the collection the taken shape's back-reference gives the request holds every kind, and a closure edge's parts are of one shape, so the request declares one view per kind and names each as an edge:
+The parts of one request may come in several shapes. A catalogue update arrives as one list of changes, some listing a product the catalogue did not have and some changing the price of one it has. The two kinds share the SKU, the price, and the reference back to the update through one shape they take with `is` ([§9, "Sharing a field across shapes"](Reference-09-Composing-refinements#sharing-a-field-across-shapes-is)), and the update names the collection that back-reference infers as its one closure edge. From `examples/orders/orders.velle`:
 
 ```
-transient act Batch {
-    note: text
-    createRows: many CreateRow = (CreateRow where batch == this)
-    updateRows: many UpdateRow = (UpdateRow where batch == this)
-} with { createRows with { rowValues }, updateRows with { rowValues } }
+transient act CatalogueUpdate {
+    source: text
+} with changes
 
-shape Row {
-    batch: one Batch
-    identifier: text
-    note: text = batch.note
+shape Change {
+    catalogueUpdate: one CatalogueUpdate
+    sku: text
+    unitPrice: integer
 }
 
-shape CreateRow is Row { newKey: text }
-shape UpdateRow is Row { key: text }
-
-shape RowValue {
-    row: one Row
+shape Listing is Change {
     name: text
-    note: text = row.note
+}
+
+shape PriceChange is Change {
+    product: one Product
+}
+
+shape CatalogueLine {
+    source: text
+    sku: text
+    kind: text
+    unitPrice: integer
+}
+
+shape PriceRecord {
+    product: one Product
+    unitPrice: integer
+    recordedOn: timestamp on create
+}
+
+never (CatalogueUpdate where count(changes) == 0)
+
+rule RecordCatalogue when CatalogueUpdate {
+    for each change in changes {
+        CatalogueLine from {
+            source: this.source,
+            sku: change.sku,
+            unitPrice: change.unitPrice,
+            kind: if change is Listing then "listing" else "price change"
+        }
+    }
+}
+
+rule RecordPriceChange when PriceChange {
+    PriceRecord from { product: this.product, unitPrice: this.unitPrice }
 }
 ```
 
-`Row.batch: one Batch` is declared once, so `Row.note` reads the batch for a row of either kind, and `RowValue.note` reads it through `row` without asking which kind the row is. The request also has `rows`, the collection `Row.batch` infers, holding every row of either kind; a rule over the request walks it and narrows each row with `is` where a kind's own fields are read. The committer sends one list per edge, `createRows` and `updateRows`.
+- `Change.catalogueUpdate: one CatalogueUpdate` is declared once, so it gives the update one collection, `changes`, holding every change of either kind, and `with changes` says the changes arrive with the update as values. Each change says which kind it is when it arrives, as a value at a union-typed field does ("A reference supplied by value", above); one that says no kind, or a kind that is not a `Change`, is refused at the door.
+- `rule RecordCatalogue when CatalogueUpdate` walks every change through `changes`, reads `change.sku` and `change.unitPrice` without asking which kind the change is, and narrows with `is` where the kind matters.
+- `rule RecordPriceChange when PriceChange` fires once per price change, at the update's commit, with that kind's own fields in view.
+- When the kinds are better kept apart, the request declares a view over one kind, `listings: many Listing = (Listing where catalogueUpdate == this)`, and names that as the edge instead; the view reads the request's own parts inside its commit, which is allowed for a view on the request or on one of its parts and for nothing durable ([checks.md, V17](checks#v17--transient-isolation), [V22](checks#v22--closure-edge-resolution)).
 
 ## A reference supplied by value (`with` naming a `one` field)
 

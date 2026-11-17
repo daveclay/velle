@@ -22,4 +22,10 @@ interface RequiredGivens {
 
     /** Commit ONE new 'PriceRequest' that enters 'PriceRequest' at its commit. The act is transient — nothing to return. */
     fun priceRequest()
+
+    /** Commit ONE new 'CatalogueUpdate' that enters 'CatalogueUpdate' at its commit. The act is transient — nothing to return. */
+    fun catalogueUpdate()
+
+    /** Commit ONE new 'PriceChange' that enters 'PriceChange' at its commit. The act is transient — nothing to return. */
+    fun priceChange()
 }

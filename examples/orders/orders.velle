@@ -123,3 +123,64 @@ rule QuoteRequest when PriceRequest {
         QuoteLine from { quote: quote, product: item.product, quantity: item.quantity, unitPrice: item.product.unitPrice }
     }
 }
+
+-- A catalogue update: one list of changes, each a new listing or a price
+-- change, answered and not kept. The two kinds take the SKU, the price, and
+-- the back-reference from `Change`, declared once with `is`
+-- (Reference §9, "Sharing a field across shapes"), so the update's one closure
+-- edge is the collection that back-reference infers, holding changes of both
+-- kinds, and each change says which kind it is when it arrives (Reference §6,
+-- "A request that is not kept, with its parts").
+transient act CatalogueUpdate {
+    source: text
+} with changes
+
+shape Change {
+    catalogueUpdate: one CatalogueUpdate   -- the back-reference, declared once for both kinds; it infers `changes` on the update
+    sku: text
+    unitPrice: integer
+}
+
+-- a product the catalogue did not have: its name arrives with it
+shape Listing is Change {
+    name: text
+}
+
+-- a product already listed: the change names it
+shape PriceChange is Change {
+    product: one Product
+}
+
+-- what the update leaves behind: one line per change, saying which kind it was
+shape CatalogueLine {
+    source: text
+    sku: text
+    kind: text
+    unitPrice: integer
+}
+
+-- a price change is also recorded against its product
+shape PriceRecord {
+    product: one Product
+    unitPrice: integer
+    recordedOn: timestamp on create
+}
+
+never (CatalogueUpdate where count(changes) == 0)
+
+-- one rule over the update walks every change, of either kind, and narrows where a kind is asked
+rule RecordCatalogue when CatalogueUpdate {
+    for each change in changes {
+        CatalogueLine from {
+            source: this.source,
+            sku: change.sku,
+            unitPrice: change.unitPrice,
+            kind: if change is Listing then "listing" else "price change"
+        }
+    }
+}
+
+-- one rule over one kind fires per change of that kind, at the update's commit
+rule RecordPriceChange when PriceChange {
+    PriceRecord from { product: this.product, unitPrice: this.unitPrice }
+}

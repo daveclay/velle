@@ -205,6 +205,28 @@ class VelleGraphQLTest {
     }
 
     @Test
+    fun `parts of several shapes that take one shape arrive in one list, each under the field naming its shape`() {
+        val sdl = sdl("orders")
+        val part = inputType(sdl, "CatalogueUpdateChangesPartInput")
+        assertTrue("newListing: CatalogueUpdateListingInput" in part && "newPriceChange: CatalogueUpdatePriceChangeInput" in part, part)
+        assertTrue("changes: [CatalogueUpdateChangesPartInput!]" in inputType(sdl, "CatalogueUpdateInput"), sdl)
+        assertTrue("catalogueUpdate" !in inputType(sdl, "CatalogueUpdateListingInput"), "a part's input leaves out the back-reference")
+
+        val o = engine("orders")
+        val p = o.run("""mutation { product(input: {sku: "A-1", unitPrice: 10}) { ref { key } } }""")
+        val r = o.run("""mutation(${'$'}p: ID!) { catalogueUpdate(input: {source: "feed", changes: [
+            {newListing: {sku: "A-2", unitPrice: 5, name: "Widget"}}, {newPriceChange: {sku: "A-1", unitPrice: 12, product: ${'$'}p}}
+        ]}) { accepted } }""", mapOf("p" to p.at("product", "ref", "key")))
+        assertEquals(true, r.at("catalogueUpdate", "accepted"))
+        val lines = o.run("""{ catalogueLines(orderBy: ["sku"]) { items { sku kind unitPrice } } }""")
+        assertEquals(listOf("A-1:price change:12", "A-2:listing:5"),
+            (lines.at("catalogueLines", "items") as List<Map<String, Any?>>).map { "${it["sku"]}:${it["kind"]}:${it["unitPrice"]}" })
+
+        val both = o.errors("""mutation { catalogueUpdate(input: {source: "feed", changes: [{newListing: {sku: "x", unitPrice: 1, name: "n"}, newPriceChange: {sku: "y", unitPrice: 1, product: "1"}}]}) { accepted } }""")
+        assertEquals("BAD_REQUEST", both.single().extensions["kind"])
+    }
+
+    @Test
     fun `an input field is nullable when its type is optional or many, or it is a part or a value created with the act`() {
         val student = inputType(sdl("enrollment"), "StudentInput")
         assertTrue("\n  name: String!\n" in student, student)

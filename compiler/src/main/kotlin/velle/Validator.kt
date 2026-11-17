@@ -98,7 +98,7 @@ class Validator(private val model: Model) {
 
         for (rule in model.rules.values) {
             val base = model.baseOfExpr(rule.condition) ?: continue
-            for (edge in parts.filter { it.partShape == base }) {
+            for (edge in parts.filter { base in model.basesOf(it.partShape) }) {
                 for (item in rule.body.filterIsInstance<Assignment>()) {
                     val p = item.target
                     val throughBackRef =
@@ -2645,9 +2645,9 @@ class Validator(private val model: Model) {
         // creation"): the closure commit creates them, so they join the trigger,
         // reachability, and co-firability analyses as ordinary creations
         fun addClosure(container: String, e: ClosureEdge) {
-            // a by-value edge creates one of its target's operands (OQ63 §6.1)
-            if (e.byValue) model.basesOf(e.partShape).forEach { kinds.add(CommitKind.Creates(it, source = "act $container with ${e.prop}")) }
-            else kinds.add(CommitKind.Creates(e.partShape, source = "act $container with ${e.prop}"))
+            // a by-value edge creates one of its target's operands (OQ63 §6.1), and a part edge
+            // over a shape several shapes take creates one of its takers (Reference §9)
+            model.basesOf(e.partShape).forEach { kinds.add(CommitKind.Creates(it, source = "act $container with ${e.prop}")) }
             e.children.forEach { addClosure(container, it) }
         }
         model.closures.forEach { (container, edges) -> edges.forEach { addClosure(container, it) } }

@@ -92,6 +92,23 @@ data class QuoteLineRow(
     val unitPrice: Int,
 )
 
+/** One stored CatalogueLine row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class CatalogueLineRow(
+    val key: StoreKey,
+    val source: String,
+    val sku: String,
+    val kind: String,
+    val unitPrice: Int,
+)
+
+/** One stored PriceRecord row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class PriceRecordRow(
+    val key: StoreKey,
+    val product: Ref.Persisted,
+    val unitPrice: Int,
+    val recordedOn: Instant,
+)
+
 /**
  * Every question the Orders spec can ask of storage, typed. Keyed and join
  * reads must be exact; every `...Candidates` read is under the superset
@@ -116,6 +133,8 @@ interface OrdersStore {
     fun reservation(key: StoreKey): ReservationRow?
     fun quote(key: StoreKey): QuoteRow?
     fun quoteLine(key: StoreKey): QuoteLineRow?
+    fun catalogueLine(key: StoreKey): CatalogueLineRow?
+    fun priceRecord(key: StoreKey): PriceRecordRow?
 
     // ── scan floor: all rows of a shape ──
     fun allTicks(): List<TickRow>
@@ -129,6 +148,8 @@ interface OrdersStore {
     fun allReservations(): List<ReservationRow>
     fun allQuotes(): List<QuoteRow>
     fun allQuoteLines(): List<QuoteLineRow>
+    fun allCatalogueLines(): List<CatalogueLineRow>
+    fun allPriceRecords(): List<PriceRecordRow>
 
     // ── join reads: rows referencing a target through a to-one field ──
     fun ordersByCustomer(target: Ref.Persisted): List<OrderRow>
@@ -140,6 +161,7 @@ interface OrdersStore {
     fun quotesByCustomer(target: Ref.Persisted): List<QuoteRow>
     fun quoteLinesByQuote(target: Ref.Persisted): List<QuoteLineRow>
     fun quoteLinesByProduct(target: Ref.Persisted): List<QuoteLineRow>
+    fun priceRecordsByProduct(target: Ref.Persisted): List<PriceRecordRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement ProductInFamily; refinement ProductOfFamily — `ProductInFamily`.
@@ -179,6 +201,8 @@ open class OrdersStoreOverGeneric(
     override fun reservation(key: StoreKey): ReservationRow? = backend.fetchByKey("Reservation", key)?.toReservationRow()
     override fun quote(key: StoreKey): QuoteRow? = backend.fetchByKey("Quote", key)?.toQuoteRow()
     override fun quoteLine(key: StoreKey): QuoteLineRow? = backend.fetchByKey("QuoteLine", key)?.toQuoteLineRow()
+    override fun catalogueLine(key: StoreKey): CatalogueLineRow? = backend.fetchByKey("CatalogueLine", key)?.toCatalogueLineRow()
+    override fun priceRecord(key: StoreKey): PriceRecordRow? = backend.fetchByKey("PriceRecord", key)?.toPriceRecordRow()
 
     override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allCustomers(): List<CustomerRow> = backend.fetchAll("Customer").map { it.toCustomerRow() }
@@ -191,6 +215,8 @@ open class OrdersStoreOverGeneric(
     override fun allReservations(): List<ReservationRow> = backend.fetchAll("Reservation").map { it.toReservationRow() }
     override fun allQuotes(): List<QuoteRow> = backend.fetchAll("Quote").map { it.toQuoteRow() }
     override fun allQuoteLines(): List<QuoteLineRow> = backend.fetchAll("QuoteLine").map { it.toQuoteLineRow() }
+    override fun allCatalogueLines(): List<CatalogueLineRow> = backend.fetchAll("CatalogueLine").map { it.toCatalogueLineRow() }
+    override fun allPriceRecords(): List<PriceRecordRow> = backend.fetchAll("PriceRecord").map { it.toPriceRecordRow() }
 
     override fun ordersByCustomer(target: Ref.Persisted): List<OrderRow> =
         backend.fetchReferencing("Order", "customer", target).map { it.toOrderRow() }
@@ -210,6 +236,8 @@ open class OrdersStoreOverGeneric(
         backend.fetchReferencing("QuoteLine", "quote", target).map { it.toQuoteLineRow() }
     override fun quoteLinesByProduct(target: Ref.Persisted): List<QuoteLineRow> =
         backend.fetchReferencing("QuoteLine", "product", target).map { it.toQuoteLineRow() }
+    override fun priceRecordsByProduct(target: Ref.Persisted): List<PriceRecordRow> =
+        backend.fetchReferencing("PriceRecord", "product", target).map { it.toPriceRecordRow() }
 
     override fun productInFamilyCandidates(): List<ProductRow> =
         backend.fetchCandidates("Product", questions.productInFamilyCandidates.instantiate(listOf()))
@@ -241,6 +269,8 @@ class OrdersStoreResolver(
         "Reservation" -> store.reservation(key)?.toRow()
         "Quote" -> store.quote(key)?.toRow()
         "QuoteLine" -> store.quoteLine(key)?.toRow()
+        "CatalogueLine" -> store.catalogueLine(key)?.toRow()
+        "PriceRecord" -> store.priceRecord(key)?.toRow()
         else -> null
     }
 
@@ -256,6 +286,8 @@ class OrdersStoreResolver(
         "Reservation" -> store.allReservations().map { it.toRow() }
         "Quote" -> store.allQuotes().map { it.toRow() }
         "QuoteLine" -> store.allQuoteLines().map { it.toRow() }
+        "CatalogueLine" -> store.allCatalogueLines().map { it.toRow() }
+        "PriceRecord" -> store.allPriceRecords().map { it.toRow() }
         else -> emptyList()
     }
 
@@ -269,6 +301,7 @@ class OrdersStoreResolver(
         shape == "Quote" && field == "customer" -> store.quotesByCustomer(target).map { it.toRow() }
         shape == "QuoteLine" && field == "quote" -> store.quoteLinesByQuote(target).map { it.toRow() }
         shape == "QuoteLine" && field == "product" -> store.quoteLinesByProduct(target).map { it.toRow() }
+        shape == "PriceRecord" && field == "product" -> store.priceRecordsByProduct(target).map { it.toRow() }
         else -> emptyList()
     }
 
@@ -410,4 +443,32 @@ fun QuoteLineRow.toRow(): Row = Row("QuoteLine", key, buildMap {
     put("product", product)
     put("quantity", quantity)
     put("unitPrice", unitPrice)
+})
+
+fun Row.toCatalogueLineRow(): CatalogueLineRow = CatalogueLineRow(
+    key = key,
+    source = fields["source"] as String,
+    sku = fields["sku"] as String,
+    kind = fields["kind"] as String,
+    unitPrice = (fields["unitPrice"] as Number).toInt(),
+)
+
+fun CatalogueLineRow.toRow(): Row = Row("CatalogueLine", key, buildMap {
+    put("source", source)
+    put("sku", sku)
+    put("kind", kind)
+    put("unitPrice", unitPrice)
+})
+
+fun Row.toPriceRecordRow(): PriceRecordRow = PriceRecordRow(
+    key = key,
+    product = fields["product"] as Ref.Persisted,
+    unitPrice = (fields["unitPrice"] as Number).toInt(),
+    recordedOn = fields["recordedOn"] as Instant,
+)
+
+fun PriceRecordRow.toRow(): Row = Row("PriceRecord", key, buildMap {
+    put("product", product)
+    put("unitPrice", unitPrice)
+    put("recordedOn", recordedOn)
 })

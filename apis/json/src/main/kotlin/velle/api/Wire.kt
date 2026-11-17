@@ -227,10 +227,14 @@ class Wire(private val system: VelleSystem) {
     @Suppress("UNCHECKED_CAST")
     private fun parts(edge: ClosureEdge, v: Any?, here: String): List<Map<String, Any?>> {
         val list = v as? List<*> ?: throw bad("$here: a list of new ${edge.partShape} values")
-        val decl = model.shapes.getValue(edge.partShape)
-        return list.mapIndexed { i, item ->
-            val m = item as? Map<String, Any?> ?: throw bad("$here[$i]: a new ${edge.partShape} value")
-            nested(decl, m, edge.childrenFor(edge.partShape), edge.backRef, "$here[$i]") + ("@shape" to edge.partShape)
+        // the parts of an edge over a shape several shapes take with `is` each say which (Reference §9)
+        val kinds = model.basesOf(edge.partShape)
+        return list.mapIndexed { position, item ->
+            val element = item as? Map<String, Any?> ?: throw bad("$here[$position]: a new ${edge.partShape} value")
+            val concrete = (element["@shape"] as? String) ?: kinds.singleOrNull()
+                ?: throw bad("$here[$position]: a new ${edge.partShape} names which of ${kinds.sorted()} it is with '@shape'")
+            if (concrete !in kinds) throw bad("$here[$position]: a '$concrete' cannot arrive in '$here', which takes ${edge.partShape} parts")
+            nested(model.shapes.getValue(concrete), element, edge.childrenFor(concrete), edge.backRef, "$here[$position]") + ("@shape" to concrete)
         }
     }
 

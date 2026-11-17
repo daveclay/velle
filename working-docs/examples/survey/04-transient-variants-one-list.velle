@@ -1,0 +1,39 @@
+-- A batch arrives with create rows and update rows, answered and not kept. Each kind takes the
+-- fields the two share, among them the back-reference to the batch, from one shape with `is`,
+-- and the batch names the collection that back-reference infers, holding rows of both kinds, as
+-- its one closure edge. Each row says which kind it is when it arrives; the committer sends one
+-- list. The spelling with one view per kind is `04-transient-variants-read-batch`.
+transient act Batch {
+    note: text
+} with { rows with { rowValues } }
+
+shape Row {
+    batch: one Batch
+    identifier: text
+    note: text = batch.note
+}
+
+shape CreateRow is Row { newKey: text }
+shape UpdateRow is Row { key: text }
+
+shape RowValue {
+    row: one Row
+    name: text
+    note: text = row.note
+}
+
+shape Made {
+    key: text
+    kind: text
+    valuesWithNote: integer
+}
+
+rule HandleBatch when Batch {
+    for each row in rows {
+        Made from {
+            key: if row is CreateRow then row.newKey else row.key,
+            kind: if row is CreateRow then "create" else "update",
+            valuesWithNote: count(row.rowValues where note == "nightly")
+        }
+    }
+}

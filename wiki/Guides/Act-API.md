@@ -34,6 +34,20 @@ NewOrder(
 )
 ```
 
+When the parts of one edge come in several shapes that take one shape with `is` ([§9](Reference-09-Composing-refinements), "Sharing a field across shapes"), the list is typed by that shape's `New` interface, and each element is the class of its own shape. Nothing is tagged: the class says what the part is, and the Kotlin compiler refuses a class that does not take the shape. From `examples/orders/orders.velle`, where a catalogue update arrives with listings and price changes that take `Change`:
+
+```kotlin
+NewCatalogueUpdate(
+    source = "feed",
+    changes = listOf(
+        NewListing(sku = "SKU-2", unitPrice = 5, name = "Widget"),
+        NewPriceChange(sku = "SKU-1", unitPrice = 12, product = product),
+    ),
+)
+```
+
+`NewChange` is the interface, implemented by `NewListing` and `NewPriceChange`. The taken shape has no input class of its own, and the fields it declares are supplied on each taker's class.
+
 ## References to new records
 
 A `one` field that may take a new record is typed by a reference type named after its target, with two cases:

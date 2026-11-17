@@ -145,7 +145,16 @@ object Codegen {
             var valueType: String = ""
             /** The interface the creating classes implement, or null when the single class is the value type. */
             var iface: String? = null
+            /** Whether a field refers to the target, so `<Target>Reference` is emitted; a target that is only
+             *  the element type of a part list over a shape several shapes take needs the interface alone. */
+            var referenced: Boolean = false
         }
+
+        /** A part edge whose parts are of every shape that takes [ClosureEdge.partShape] with `is` (Reference §9). */
+        fun isMixedPart(edge: ClosureEdge) = !edge.byValue && edge.partShape in model.sharedShapes
+
+        /** The edge one taker's parts of a mixed part edge are: the taker's own stored fields, its children, the back-reference. */
+        fun partEdgeFor(edge: ClosureEdge, taker: String) = ClosureEdge("", taker, edge.backRef, edge.childrenFor(taker), owner = taker)
         val referenceTypes = linkedMapOf<String, ReferenceType>()
         /** input class name → the `New<Target>` interfaces it implements */
         val supertypesOf = mutableMapOf<String, MutableSet<String>>()
@@ -161,11 +170,21 @@ object Codegen {
                     for (e in edges) {
                         if (e.byValue) {
                             val r = referenceTypes.getOrPut(e.partShape) { ReferenceType(e.partShape) }
+                            r.referenced = true
                             for (op in model.basesOf(e.partShape).sorted()) {
                                 val c = valueClassName(e, op, act)
                                 r.classes.add(c)
                                 creators.getOrPut(op) { linkedSetOf() }.add(c)
                                 level(op, e.childrenFor(op), null)
+                            }
+                        } else if (isMixedPart(e)) {
+                            // the list's element type is the taken shape's `New` interface; one class per taker
+                            val r = referenceTypes.getOrPut(e.partShape) { ReferenceType(e.partShape) }
+                            for (taker in model.basesOf(e.partShape).sorted()) {
+                                val className = closureClassName(partEdgeFor(e, taker), act)
+                                r.classes.add(className)
+                                creators.getOrPut(taker) { linkedSetOf() }.add(className)
+                                level(taker, e.childrenFor(taker), e.backRef)
                             }
                         } else {
                             val c = closureClassName(e, act)
@@ -177,12 +196,14 @@ object Codegen {
                 level(act, model.closures[act].orEmpty(), null)
                 for (t in siblingTargets) {
                     val r = referenceTypes.getOrPut(t) { ReferenceType(t) }
+                    r.referenced = true
                     model.basesOf(t).forEach { op -> creators[op]?.let { r.classes.addAll(it) } }
                 }
             }
             for (r in referenceTypes.values) {
-                val single = !isUnion(r.target) && r.classes.size == 1
-                r.iface = if (single) null else if (isUnion(r.target)) "New${r.target}" else "New${r.target}Value"
+                val several = isUnion(r.target) || r.target in model.sharedShapes
+                val single = !several && r.classes.size == 1
+                r.iface = if (single) null else if (several) "New${r.target}" else "New${r.target}Value"
                 r.valueType = r.iface ?: r.classes.single()
                 r.iface?.let { i -> r.classes.forEach { supertypesOf.getOrPut(it) { linkedSetOf() }.add(i) } }
             }
@@ -231,7 +252,7 @@ object Codegen {
             refFields.filter { !isOptional(it.type) }.forEach { line("    val ${it.name}: ${refType(it)},") }
             optional.forEach { line("    val ${it.name}: ${paramType(it.type).removeSuffix("?")}? = null,") }
             refFields.filter { isOptional(it.type) }.forEach { line("    val ${it.name}: ${refType(it)} = null,") }
-            parts.forEach { line("    val ${it.prop}: List<${closureClassName(it, act)}> = emptyList(),") }
+            parts.forEach { line("    val ${it.prop}: List<${partElementType(it, act)}> = emptyList(),") }
             line(")$implements {")
             line("    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {")
             required.forEach { line("        put(\"${it.name}\", ${rawExpr(it.name, it.type)})") }
@@ -265,6 +286,11 @@ object Codegen {
             line()
         }
 
+        /** The element type of a part list: the part shape's input class, or, for parts of several
+         *  shapes that take one shape with `is`, that shape's `New` interface. */
+        fun partElementType(edge: ClosureEdge, act: String): String =
+            if (isMixedPart(edge)) referenceTypes.getValue(edge.partShape).valueType else closureClassName(edge, act)
+
         fun actInputTypes() {
             if (model.exposed.isEmpty()) return
             line("// ── act inputs (Reference §22, \"External input\"): one typed value per act,")
@@ -292,6 +318,12 @@ object Codegen {
                         if (cls !in actInputNames.values)
                             toEmit.putIfAbsent(cls, ClosureEdge("", operand, "", edge.childrenFor(operand), byValue = true, owner = operand) to act)
                     }
+                } else if (isMixedPart(edge)) {
+                    // one class per taker, each without the back-reference
+                    for (taker in model.basesOf(edge.partShape).sorted()) {
+                        val partEdge = partEdgeFor(edge, taker)
+                        toEmit.putIfAbsent(closureClassName(partEdge, act), partEdge to act)
+                    }
                 } else toEmit.putIfAbsent(closureClassName(edge, act), edge to act)
             }
             model.exposed.forEach { shape -> model.closures[shape].orEmpty().forEach { visit(it, shape) } }
@@ -313,6 +345,7 @@ object Codegen {
                     line("    fun register(reg: NewRegistry)")
                     line("}")
                 }
+                if (!r.referenced) { line(); continue }
                 line("sealed interface ${r.target}Reference {")
                 line("    /** A ${r.target} already on the books. */")
                 line("    data class Existing(val ref: Ref<${r.target}>) : ${r.target}Reference")

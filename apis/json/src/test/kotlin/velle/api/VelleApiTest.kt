@@ -295,6 +295,34 @@ class VelleApiTest {
         assertEquals(false, claimed["accepted"]) // a batch never claims another's origin: refused at the door, as data
     }
 
+    @Test
+    @Suppress("UNCHECKED_CAST")
+    fun `parts of several shapes that take one shape arrive in one list, each naming its shape`() {
+        val api = VelleApi(system(example("orders")), clock)
+        val product = accepted(api.commit("Product", mapOf("sku" to "A-1", "unitPrice" to 10), null)).ref()["key"]!!
+        accepted(api.commit("CatalogueUpdate", mapOf("source" to "feed", "changes" to listOf(
+            mapOf("@shape" to "Listing", "sku" to "A-2", "unitPrice" to 5, "name" to "Widget"),
+            mapOf("@shape" to "PriceChange", "sku" to "A-1", "unitPrice" to 12, "product" to product),
+        )), null))
+        assertEquals(2, api.count("CatalogueLine", null, null))
+        assertEquals(1, api.count("PriceRecord", null, null))
+
+        val untagged = assertFailsWith<ApiException> { api.commit("CatalogueUpdate", mapOf("source" to "feed",
+            "changes" to listOf(mapOf("sku" to "A-3", "unitPrice" to 1, "name" to "x"))), null) }
+        assertTrue("@shape" in untagged.message!! && "Listing" in untagged.message!! && "PriceChange" in untagged.message!!, untagged.message)
+        val wrong = assertFailsWith<ApiException> { api.commit("CatalogueUpdate", mapOf("source" to "feed",
+            "changes" to listOf(mapOf("@shape" to "Product", "sku" to "A-3", "unitPrice" to 1))), null) }
+        assertTrue("Product" in wrong.message!! && "Change" in wrong.message!!, wrong.message)
+
+        // the description lists the kinds the part list takes, each with its own fields
+        val acts = (api.description["acts"] as List<Map<String, Any?>>).associateBy { it["name"] }
+        val changes = (acts.getValue("CatalogueUpdate")["parts"] as List<Map<String, Any?>>).single()
+        assertEquals("Change", changes["shape"])
+        val kinds = (changes["kinds"] as List<Map<String, Any?>>).associateBy { it["shape"] }
+        assertEquals(setOf("Listing", "PriceChange"), kinds.keys)
+        assertEquals(setOf("sku", "unitPrice", "name"), (kinds.getValue("Listing")["fields"] as List<Map<String, Any?>>).map { it["name"] }.toSet())
+    }
+
     private val PLATE = """
         act ContainerType { name: text, wellsPerContainer: integer }
 
