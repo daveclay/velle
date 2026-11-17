@@ -938,6 +938,8 @@ class Validator(private val model: Model) {
                 checkExpr(e.left, scope)
                 // a conjunction narrows what follows it (Reference §10)
                 if (e.op == "and") withNarrowing(narrowingsOf(e.left, scope)) { withPresence(e.left, holds = true, scope) { checkExpr(e.right, scope) } }
+                // the right side of an `or` is read only where its left side failed (Reference §10)
+                else if (e.op == "or") withNarrowing(complementNarrowingsOf(e.left, scope)) { withPresence(e.left, holds = false, scope) { checkExpr(e.right, scope) } }
                 else checkExpr(e.right, scope)
                 // the text operators take text on both sides (Reference §10; OQ51 R1);
                 // `values contains x` over a `many` of values takes an element (Reference §5)

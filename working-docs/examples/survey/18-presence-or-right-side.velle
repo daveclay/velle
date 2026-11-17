@@ -1,5 +1,5 @@
 -- 2. The right side of an `or` runs only when the left side failed, so
---    `attr is none or not attr.hasUnits` reads `attr` only when it is present.
+--    `attr is none or not attr.hasUnits` reads `attr` where it is present (Reference §10).
 act Attr { hasUnits: boolean }
 act Value { attr: one Attr?, units: text? }
 never (Value where units is some and (attr is none or not attr.hasUnits))

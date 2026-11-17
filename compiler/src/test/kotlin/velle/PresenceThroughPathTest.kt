@@ -2,6 +2,7 @@ package velle
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
@@ -174,5 +175,102 @@ class PresenceThroughPathTest {
                 Placement from { submission: this, plot: (Plot where code == this.site.code) }
             }
         """))
+    }
+
+    // ── a comparison that holds, and the right side of an `or` (Reference §10) ───────────────
+
+    private val valueWithAttr = """
+        act Attr {
+            kind: text?
+            weight: integer?
+            relations: many text
+            hasUnits: boolean
+        }
+        act Value {
+            attr: one Attr?
+            x: text
+            units: text?
+            PROPERTY
+        }
+        PROHIBITION
+    """
+
+    private fun withProperty(declaration: String) = valueWithAttr.replace("PROPERTY", declaration).replace("PROHIBITION", "")
+
+    private fun withProhibition(prohibition: String) = valueWithAttr.replace("PROPERTY", "").replace("PROHIBITION", prohibition)
+
+    private fun v11ThroughAttr(spec: String) {
+        val diags = diagnostics(spec)
+        assertEquals(1, diags.size, diags.toString())
+        assertTrue(diags.single().startsWith("[V11] '") && "reads through 'attr', which may be absent" in diags.single(), diags.single())
+    }
+
+    @Test
+    fun `an equality on a question-dot path holding shows every step present in the rest of the conjunction`() {
+        assertEquals(emptyList(), diagnostics(withProhibition("""never (Value where attr?.kind == "relation" and x not in attr.relations)""")))
+    }
+
+    @Test
+    fun `an in test and an ordered comparison on a question-dot path holding show the step present`() {
+        assertEquals(emptyList(), diagnostics(withProhibition("""never (Value where attr?.kind in ["relation", "link"] and x not in attr.relations)""")))
+        assertEquals(emptyList(), diagnostics(withProhibition("""never (Value where attr?.weight > 3 and not attr.hasUnits)""")))
+    }
+
+    @Test
+    fun `an equality holding shows the step present in the then branch and nothing in the else branch`() {
+        assertEquals(emptyList(), diagnostics(withProperty("""linked: boolean = if attr?.kind == "relation" then attr.hasUnits else false""")))
+        v11ThroughAttr(withProperty("""linked: boolean = if attr?.kind == "relation" then false else attr.hasUnits"""))
+    }
+
+    @Test
+    fun `an inequality or a not-in holding shows nothing, since both hold on an absent value`() {
+        v11ThroughAttr(withProhibition("""never (Value where attr?.kind != "relation" and x not in attr.relations)"""))
+        v11ThroughAttr(withProhibition("""never (Value where attr?.kind not in ["relation"] and x not in attr.relations)"""))
+    }
+
+    @Test
+    fun `an equality with a side that may be absent shows nothing, since two absent values compare equal`() {
+        v11ThroughAttr(withProhibition("""never (Value where attr?.kind == units and not attr.hasUnits)"""))
+        assertEquals(emptyList(), diagnostics(withProhibition("""never (Value where attr?.kind == x and not attr.hasUnits)""")))
+    }
+
+    @Test
+    fun `an inequality failing is the equality holding, so the else branch reads the step`() {
+        assertEquals(emptyList(), diagnostics(withProperty("""linked: boolean = if attr?.kind != "relation" then false else attr.hasUnits""")))
+    }
+
+    @Test
+    fun `the right side of an or is read where its left side failed`() {
+        assertEquals(emptyList(), diagnostics(withProhibition("""never (Value where units is some and (attr is none or not attr.hasUnits))""")))
+    }
+
+    @Test
+    fun `the right side of an or after a presence test is refused, since it runs where the step is absent`() {
+        v11ThroughAttr(withProhibition("""never (Value where units is some and (attr is some or attr.hasUnits))"""))
+    }
+
+    @Test
+    fun `the right side of an or after a union test reads the other operand`() {
+        assertEquals(emptyList(), diagnostics("""
+            act Member { name: text }
+            act Post { author: one Member, body: text }
+            act Photo { author: one Member, caption: text }
+            shape Content = Post or Photo
+            act Comment { target: one Content, body: text }
+            shape Captioned = Comment where target is Post or target.caption != ""
+        """))
+    }
+
+    @Test
+    fun `at run time the right side of an or is not evaluated where its left side held`() {
+        val sys = VelleSystem(Model(Parser.parse(withProhibition("""never (Value where units is some and (attr is none or not attr.hasUnits))""").trimIndent())))
+        sys.scope {
+            val unitless = assertIs<CommitResult.Accepted>(sys.commit("Attr", mapOf("hasUnits" to false, "relations" to emptyList<String>()))).id
+            val withUnits = assertIs<CommitResult.Accepted>(sys.commit("Attr", mapOf("hasUnits" to true, "relations" to emptyList<String>()))).id
+            assertIs<CommitResult.Refused>(sys.commit("Value", mapOf("x" to "1", "units" to "kg")))
+            assertIs<CommitResult.Refused>(sys.commit("Value", mapOf("attr" to unitless, "x" to "1", "units" to "kg")))
+            assertIs<CommitResult.Accepted>(sys.commit("Value", mapOf("attr" to withUnits, "x" to "1", "units" to "kg")))
+            assertIs<CommitResult.Accepted>(sys.commit("Value", mapOf("x" to "1")))
+        }
     }
 }

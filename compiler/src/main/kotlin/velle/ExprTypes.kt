@@ -352,6 +352,12 @@ class ExprTypes(private val model: Model) {
         cond is Binary && cond.op == "and" && holds -> narrowingOf(cond.left, true, scope, env) + narrowingOf(cond.right, true, scope, env)
         // an `or` failing is both sides failing
         cond is Binary && cond.op == "or" && !holds -> narrowingOf(cond.left, false, scope, env) + narrowingOf(cond.right, false, scope, env)
+        // a comparison holding shows every path it reads present, since an absent value equals nothing,
+        // is in nothing, and satisfies no ordered comparison (Reference §10); `!=` failing is `==` holding
+        cond is Binary && (cond.op in PRESENCE_SHOWING_COMPARISONS && holds || cond.op == "!=" && !holds) ->
+            Narrowing(present = pathsCompared(cond, scope, env), established = if (holds) setOf(PresenceFacts.testKey(cond)) else emptySet())
+        // `x not in [...]` failing is `x in [...]` holding
+        cond is NotExpr && cond.inner is Binary && cond.inner.op == "in" -> narrowingOf(cond.inner, !holds, scope, env)
         cond is IsExpr && cond.subject is PathExpr -> {
             val path = namesOf(cond.subject)
             when {
@@ -366,6 +372,17 @@ class ExprTypes(private val model: Model) {
         }
         holds -> Narrowing(established = setOf(PresenceFacts.testKey(cond)))
         else -> Narrowing.NONE
+    }
+
+    /** Every step of every path a comparison holding shows present: `attr?.kind == "relation"` shows `attr` and
+     *  `attr.kind`. Two absent values compare equal (Reference §10), so an equality shows a side present only
+     *  when the other side cannot be absent; `in` and the ordered comparisons fail on any absent operand. */
+    private fun pathsCompared(comparison: Binary, scope: String, env: TypeEnv): Set<List<String>> {
+        val equality = comparison.op == "==" || comparison.op == "!="
+        fun shown(side: Expr, other: Expr) = side is PathExpr && !(equality && absenceDeclared(other, scope, env))
+        return listOf(comparison.left to comparison.right, comparison.right to comparison.left)
+            .filter { (side, other) -> shown(side, other) }
+            .flatMapTo(linkedSetOf()) { (side, _) -> Narrowing.stepsOf(namesOf(side as PathExpr)) }
     }
 
     /** Over a static union, what a path is when it is not [named]: the other operand, or the union of the rest. */
@@ -414,6 +431,8 @@ class ExprTypes(private val model: Model) {
 
     companion object {
         val ARITHMETIC_OPS = setOf("+", "-", "*", "/", "%")
+        /** The comparisons that hold only on present operands (Reference §10). */
+        val PRESENCE_SHOWING_COMPARISONS = setOf("==", "in", "<", "<=", ">", ">=")
         /** The element name of [emptyCollection], a name no shape has. */
         const val EMPTY_ELEMENT = "<empty>"
 
