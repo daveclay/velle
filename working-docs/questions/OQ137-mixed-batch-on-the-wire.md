@@ -1,6 +1,6 @@
 # OQ137 — May a closure edge carry parts of several shapes that take one shape with `is`, the committer sending one list in which each part names its shape?
 
-**Status:** opened 2026-11-16 as OQ136's residue. D1 awaits Dave; its recommendation was no, then yes, both on 2026-11-16, and the section keeps both cases.
+**Status:** opened 2026-11-16 as OQ136's residue. D1 decided 2026-11-16; settled, build pending. The build plan is §3.
 
 **In plain terms:** an act may arrive with records nested inside it, its parts, and the committer sends each list of parts as a list. Today every such list holds records of one shape. When the parts share their fields through one shape with `is` but come in several shapes, the author declares one list per shape and the committer sends one list per shape. The act itself already reads all of its parts as one collection. The question is whether the committer may also send them as one list, each part saying which shape it is, as a nested value at a union-typed field already does.
 
@@ -58,7 +58,7 @@ There is one place today where a nested value says which shape it is: a `one` fi
 
 ## 2. What to decide
 
-### D1. Whether a closure edge may be the collection a taken shape's back-reference infers, its parts of every shape that takes it
+### D1. Whether a closure edge may be the collection a taken shape's back-reference infers, its parts of every shape that takes it · Decided 2026-11-16
 
 Does a closure edge accept the collection a taken shape's back-reference infers on the act, whose parts are of every shape that takes it with `is`, the committer sending one list in which each part names its shape?
 
@@ -141,6 +141,27 @@ For the recommendation, yes at the language level:
 
 If no instead, with a client's mixed list met in the API layer: `apis/json` `Wire.input` splits a tagged list under the inferred collection's name into the per-edge lists and refuses an untagged element; `Describe` and `wiki/Guides/API-layer.md` say so; a test in the JSON API. A plain no changes nothing.
 
-## 3. Work items
+**Decided:** yes, 2026-11-16. Dave: submitting one collection of "upsert" objects that share their properties, where one kind carries fields the other does not, is a valid use case; it could be written as two collections, but the act being the one place that refuses a collection of mixed shapes is the greater inconsistency. The binding is less opinionated about its rules, and that is where the messiness of the real world adapts to Velle's explicit, consistent rules, so the language allows the mixed edge and the binding follows.
 
-- [ ] Decide D1.
+## 3. The build
+
+D1's proposed changes in build order. The by-value edge over a union-typed `one` field (`Model.kt`, `resolveByValueEdge`) is the pattern for every step: parts of several shapes under one edge, each shape's own children resolved under it.
+
+1. `Model.kt`: `ClosureEdge` carries the set of part shapes; `resolveClosureEdge` resolves an inverse whose shape is a taken shape to one edge over every taker, each taker's `with` children resolved under it with the owner recorded; `markTransientParts` marks every taker. The V22 message offering a view per taker goes.
+2. `Codegen`: the taken shape's `New` class as a sealed type over the takers' `New` classes; the act's input list typed by it; the registry and the boundary's refusals for a sibling reference unchanged.
+3. `Runtime.kt`: the closure commit creates each element of such an edge as its own shape; the input refusal of an element whose shape does not take the edge's shape names the edge and the shapes it accepts.
+4. `apis/json`: `Wire.nested` reads `"@shape"` per element of such a list, refusing an element without one; `Describe` lists the shapes an edge takes.
+5. Regenerate every example's output (`implement` skill §2).
+6. Wiki: `checks.md` V22 loses "a closure edge's parts are of one shape" and says an edge over a taken shape's inverse carries parts of every taker; Reference §6 "A request that is not kept, with its parts" shows `with rows`, with the per-shape views as the spelling for an author who wants each kind's arrival apart; `wiki/Guides/Act-API.md` "Inline parts" and `wiki/Guides/API-layer.md` (`Wire`); `diagnostics.md` regenerated for the removed message.
+7. Examples: survey `04-transient-variants-read-batch.velle` respelled to `with rows`, or a sibling file added, and the README line updated.
+8. Tests: `TransientClosureTest.kt`, a commit of one tagged list with parts of both shapes and values on each, and a refusal of an element without a tag or of a shape that is not a taker; a JSON API test for the tagged list; `DiagnosticCatalogTest` for the removed message.
+9. Settle: the row in the settled table, OQ54's item already filed, this file removed.
+
+## 4. Work items
+
+- [ ] Build steps 1 to 4 of §3 (model, codegen, runtime, JSON).
+- [ ] Regenerate the examples' output.
+- [ ] Update `checks.md` V22, Reference §6, the Act API and API layer guides, `diagnostics.md`.
+- [ ] Respell or add the survey exhibit and its README line.
+- [ ] Add the tests of §3 step 8 and run the suite.
+- [ ] Land the settling commit.
