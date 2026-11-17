@@ -13,4 +13,5 @@ each case below is an executable test.
 
 ## Not yet generated
 
+- never #1: shape is a union over Post or Photo
 - never #2: multi-conjunct predicate

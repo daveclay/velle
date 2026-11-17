@@ -1,0 +1,2 @@
+act Item { key: text
+  stem: text = key + "-" }

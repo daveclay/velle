@@ -1,0 +1,5 @@
+-- 1. `a?.kind == "relation"` holding means `a` is present, but a later
+--    `a.relations` in the same conjunction is refused.
+act Attr { kind: text?, relations: many text, hasUnits: boolean }
+act Value { attr: one Attr?, x: text, units: text? }
+never (Value where attr?.kind == "relation" and x not in attr.relations)

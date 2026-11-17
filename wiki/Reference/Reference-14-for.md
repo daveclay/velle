@@ -48,6 +48,8 @@ rule OpenAccountReview
 
 A rule sometimes has to create many records from one: a well for every position on every container a design calls for. `for each` runs the statements inside its braces once per element of a collection, and once per combination when it names several collections. A range `from 1 to n` stands for the whole numbers one through `n`, both included, so a count stored on the record becomes a set to run over.
 
+The name carries what its collection's filter shows about each element, as a refinement's `where` shows `this` ([§10](Reference-10-Predicate-expressions#reaching-through-relationships)). Inside `for each r in (rows where newKey is some) { Made from { key: r.newKey } }`, `r.newKey` is a text, not a text that may be absent, so it fills the required `key`; the same holds for the `where` of a refinement the name runs over, `for each r in (Keyed where upload == this)` with `shape Keyed = Row where newKey is some`. The facts end with the closing brace. A test the filter writes on `this`, the rule's subject, says nothing about the element.
+
 "When a design is submitted, lay out every container and every well," from `examples/platelayout/platelayout.velle`. A design names a container type with a fixed number of wells, how many containers, how many replicates, and the conditions to test. Each condition takes a block of wells on every container.
 
 ```

@@ -1,6 +1,6 @@
 # OQ54 — The exhaustiveness engine: V9, every request answered, `states of`
 
-**Status:** open (2026-10-14) — Reference §8 names refinement exhaustiveness as a compiler goal; nothing has built it, and three settled designs lean on it
+**Status:** open (2026-10-14) — Reference §8 names refinement exhaustiveness as a compiler goal; nothing has built it, and three settled designs lean on it. D1 (opened 2026-11-17) awaits Dave.
 **In plain terms:** can the compiler prove that a set of refinements covers every instance of a shape in every reachable state? Three things wait on the answer: a transient request must provably get a response (V18 today proves only a complement pair); a declared state partition (`states of Invoice = Draft | Issued | Paid | Voided`, Reference §22) is that proof made into a declaration; and deletion's positive-exhaustive sentence ("deletable only in Draft") was ruled to ride the partition declaration.
 **See:** Reference §8 (the goal), §22 "State partition declaration" · `checks.md` V18 (the complement slice) · Reference §8 "Frozen fields" (`undeletable`; the gate is negative only) · `checks.md` V18 (a transient act's parts owe no answer of their own)
 
@@ -59,6 +59,46 @@ What v0 has (`checks.md` V18): coverage is proven when some answer is the bare a
 
 **The item:** grow V18 beyond the complement slice once the engine exists. A closure's parts owe no coverage of their own; the act's answer covers what it carries (`checks.md` V18).
 
+### D1. Whether rules over every kind of a transient act's parts answer the act
+
+A batch arrives with rows of two kinds that take one shape, `CreateRow is Row` and `UpdateRow is Row`, in one list (OQ137, settled). The natural spelling is one rule per kind. Each fires once per row inside the batch's commit (Reference §9), and together they reach every row. V18 counts only an answer written over the batch, so it refuses the spec. Found 2026-11-17 by a stress pass of a domain spec, re-verified at commit 76cff78.
+
+`working-docs/examples/survey/20-part-kind-rules-refused.velle`:
+
+```
+transient act Upload { note: text } with rows    -- a batch that is not kept; its parts arrive with it
+shape Row { upload: one Upload, ident: text }    -- the shape both kinds take; it has no records of its own
+shape CreateRow is Row { newKey: text }          -- one kind of row
+shape UpdateRow is Row { key: text }             -- the other kind
+shape Made { key: text }
+rule HandleCreate when CreateRow { Made from { key: newKey } }
+                                                 -- fires once per CreateRow inside the Upload's commit
+rule HandleUpdate when UpdateRow { Made from { key: key } }
+                                                 -- fires once per UpdateRow inside the Upload's commit
+                                                 -- REFUSED today, V18: "a 'Upload' can arrive that no rule or
+                                                 -- 'never' answers, and it is transient, so an unanswered one
+                                                 -- would be ignored with no record that it arrived ..."
+```
+
+What validates today, `working-docs/examples/survey/20-part-kind-rules-workaround.velle`: the batch declares a view per kind, `createRows: many CreateRow = (CreateRow where upload == this)` and the same for updates (OQ136), and one rule over the bare `Upload` walks both with `for each`. The two rules per kind become two loops in one rule.
+
+Do rules over every kind of a transient act's parts count as answering the act?
+
+Recommendation: no, and keep V18 as it is. The rules over the kinds reach every row, but a batch with no rows is still a transient act that arrives and leaves no record, and `checks.md` V18 already says a closure's parts owe no coverage of their own because the act's answer covers what it carries. Counting the part rules as the act's answer would need a second condition, that the batch is never empty, which the author would have to state as `never (Upload where count(rows) == 0)` or the compiler would have to read from the closure. One rule over the bare act, walking the kinds, says the same thing and is the answer V18 already accepts. The cost is the spelling in the workaround file: two loops in one rule rather than two rules, and a view per kind on the batch.
+
+A second question the same spec raises: is a rule over the taken shape itself, `rule R when Row`, an answer to `Upload`? Under the recommendation, no, for the same reason: it fires per row, not per batch.
+
+Costs:
+
+- Nothing is removed; nothing is added to the compiler.
+- A product owner who thinks in rows, not batches, writes the rule over the batch. The wiki says why in one sentence beside V18: a batch with no rows is still a request.
+- If the answer is yes instead, V18 gains a case: the act is answered when every kind that takes its parts' shape has an answer and a prohibition forbids the empty closure. That is a slice of the engine this file waits on, and the fail-closed check it adds is the empty-closure prohibition.
+
+#### Proposed changes
+
+- `wiki/Normative/checks.md` V18 and `wiki/Reference/Reference-04-State-and-commits.md` "Transient acts": one sentence, rules over the kinds of an act's parts are not the act's answer because a request with no parts is still a request; the answer is a rule over the act that walks them.
+- `working-docs/examples/survey/20-part-kind-rules-refused.velle` and `-workaround.velle` stay as the pair that shows it, README lines in place.
+
 ## 2. `states of`: the partition declaration, and the sentence deletion handed it
 
 Reference §22 carries the construct. One requirement was attached by the deletion rulings (Reference §8 "Frozen fields", `undeletable`): the deletion gate is negative and state-scoped (`undeletable` on the state where deletion is denied), and with richer state the negative spelling becomes N declarations that silently under-cover the moment a state is added:
@@ -85,5 +125,6 @@ Until it lands, richer-state "only if" sentences are N `undeletable` declaration
 
 ## 3. Work items
 
+- [ ] Decide D1.
 - [ ] Grow V18 beyond the complement slice once V9's exhaustiveness engine exists.
 - [ ] Check, once the engine exists, that a rule narrowing an element of a mixed collection with `is` (a `many` typed by a static union or a taken shape, or the inverse a taken shape's back-reference infers) names every shape the collection can hold, so a shape added later does not fall silently into an `else`; raised by OQ137 on 2026-11-16.

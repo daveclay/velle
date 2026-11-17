@@ -1,0 +1,7 @@
+-- The spellings that validate today for the two refused files beside this one:
+-- the presence test written out before the read, and the `or` turned into
+-- `not (... and ...)` so the read sits in a conjunction with its test.
+act Attr { kind: text?, relations: many text, hasUnits: boolean }
+act Value { attr: one Attr?, x: text, units: text? }
+never (Value where attr is some and attr.kind == "relation" and x not in attr.relations)
+never (Value where units is some and not (attr is some and attr.hasUnits))

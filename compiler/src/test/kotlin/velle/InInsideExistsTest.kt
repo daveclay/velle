@@ -125,4 +125,38 @@ class InInsideExistsTest {
         assertEquals(1, diags.size, diags.toString())
         assertTrue("'options' is a collection of values, not of records" in diags.single(), diags.single())
     }
+
+    // ── a value filter reading a bare field of the enclosing record (Reference §10) ──
+
+    private val bareFieldSpec = """
+        act Item { kind: text, relations: many text }
+        never (Item where exists (relations as r where r == kind))
+    """.trimIndent()
+
+    @Test
+    fun `a value filter comparing the value with a bare field of the record validates`() {
+        assertEquals(emptyList(), Validator.validate(Parser.parse(bareFieldSpec)).map { it.toString() })
+    }
+
+    @Test
+    fun `the same inside a filter over another shape, reached through an outer as name, validates`() {
+        val spec = """
+            act Item { kind: text }
+            act Attr { relations: many text }
+            act Request { note: text }
+            act Value { request: one Request, attr: one Attr? }
+            never (Request where exists (values as v where v.attr is some
+                and not exists (Item where exists (v.attr.relations as r where r == kind))))
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(Parser.parse(spec)).map { it.toString() })
+    }
+
+    @Test
+    fun `an item whose relations name its own kind is refused, one whose relations do not is accepted`() {
+        val sys = VelleSystem(Model(Parser.parse(bareFieldSpec)))
+        sys.scope {
+            assertIs<CommitResult.Refused>(sys.commit("Item", mapOf("kind" to "a", "relations" to listOf("a"))))
+            assertIs<CommitResult.Accepted>(sys.commit("Item", mapOf("kind" to "a", "relations" to listOf("b"))))
+        }
+    }
 }

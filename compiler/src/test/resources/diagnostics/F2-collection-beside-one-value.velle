@@ -1,0 +1,6 @@
+-- A collection of values compared with one value, `tags == name`; whether the value is one of them is `name in tags`.
+act S {
+    name: text
+    tags: many text
+    tagged: many S = (S where tags == name)
+}

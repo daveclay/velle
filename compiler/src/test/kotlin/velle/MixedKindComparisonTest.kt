@@ -158,3 +158,53 @@ class MixedKindComparisonTest {
         }
     }
 }
+
+/**
+ * A collection beside a single value meets under no comparison operator (Reference §10;
+ * checks.md F2): `inheritedBy == this` compares a `many S` with one record and is never true,
+ * and the membership question is `this in inheritedBy`. Two collections are not this check.
+ */
+class CollectionBesideOneComparisonTest {
+
+    private fun f2(spec: String) = Validator.validate(spec).filter { it.code == "F2" }.map { it.message }
+
+    private val shapes = """
+        act S {
+            name: text
+            tags: many text
+            inheritedBy: many S = (S where name == this.name)
+    """.trimIndent()
+
+    @Test
+    fun `a collection of records beside one record is refused, naming the membership test`() {
+        val messages = f2("$shapes\n    sharing: many S = (S where inheritedBy == this)\n}")
+        assertEquals(listOf("'inheritedBy == this' — compares the collection 'inheritedBy' with a record; " +
+            "a collection is not compared with one value. Write 'this in inheritedBy' to ask whether it is one of them"), messages)
+    }
+
+    @Test
+    fun `the record may be on the left, and not-equal names not in`() {
+        val messages = f2("$shapes\n    sharing: many S = (S where this != inheritedBy)\n}")
+        assertEquals(listOf("'this != inheritedBy' — compares the collection 'inheritedBy' with a record; " +
+            "a collection is not compared with one value. Write 'this not in inheritedBy' to ask whether it is one of them"), messages)
+    }
+
+    @Test
+    fun `a collection of values beside one value is refused the same way`() {
+        val messages = f2("$shapes\n    tagged: many S = (S where tags == name)\n}")
+        assertEquals(listOf("'tags == name' — compares the collection 'tags' with a text; " +
+            "a collection is not compared with one value. Write 'name in tags' to ask whether it is one of them"), messages)
+    }
+
+    @Test
+    fun `a collection under an ordered comparison is refused because a collection has no order`() {
+        val messages = f2("$shapes\n    below: many S = (S where inheritedBy < this)\n}")
+        assertEquals(listOf("'inheritedBy < this' — compares the collection 'inheritedBy' with a record; a collection has no order"), messages)
+    }
+
+    @Test
+    fun `membership and two collections side by side are not this check`() {
+        val messages = f2("$shapes\n    viaIn: many S = (S where this in inheritedBy)\n    same: many S = (S where tags == this.tags)\n}")
+        assertEquals(emptyList(), messages)
+    }
+}

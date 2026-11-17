@@ -17,6 +17,8 @@ import velle.generated.gallery.*
  *     PopularityNotice from { content: this, noticedOn: now }
  * }
  *
+ * never (Content where (creditLine is some) and (source is none))
+ *
  */
 class ContentSpec : SpecSupport() {
 

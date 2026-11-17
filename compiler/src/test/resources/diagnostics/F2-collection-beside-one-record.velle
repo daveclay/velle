@@ -1,0 +1,6 @@
+-- A collection of records compared with one record, `inheritedBy == this`, which is never true; whether the record is one of them is `this in inheritedBy`.
+act S {
+    name: text
+    inheritedBy: many S = (S where name == this.name)
+    sharing: many S = (S where inheritedBy == this)
+}

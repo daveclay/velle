@@ -559,6 +559,7 @@ class Validator(private val model: Model) {
 
     private fun checkForEach(rule: RuleDecl, scope: String, fe: ForEach, created: Map<String, String>) {
         val bound = mutableListOf<String>()
+        val outerBranch = branchNarrowing
         for (b in fe.bindings) {
             val taken = b.name == "this" || b.name in aliasScopes || b.name in scalarAliases || b.name in created ||
                 model.membersOf(scope).containsKey(b.name) || b.name in model.shapes || b.name in model.refinements
@@ -579,7 +580,11 @@ class Validator(private val model: Model) {
             }
             if (taken || elem == null) continue
             when (elem) {
-                is LoopElem.Records -> aliasScopes[b.name] = elem.shape
+                is LoopElem.Records -> {
+                    aliasScopes[b.name] = elem.shape
+                    // the source shows its name's fields present in the body, as a refinement's `where` shows `this` (Reference §10, §14)
+                    branchNarrowing = branchNarrowing + loopNarrowing(b.name, elem.shape, (b.source as? LoopSource.Over)?.expr)
+                }
                 is LoopElem.Values -> scalarAliases[b.name] = elem.type
             }
             bound.add(b.name)
@@ -596,7 +601,33 @@ class Validator(private val model: Model) {
             checkBody(rule, scope, fe.body, created)
         } finally {
             bound.forEach { aliasScopes.remove(it); scalarAliases.remove(it) }
+            branchNarrowing = outerBranch
         }
+    }
+
+    /** What a `for each` name's source shows about each element, kept under the name (Reference §14):
+     *  the element scope's own `where` when the source is a refinement, and the filter's `where`,
+     *  `(rows where newKey is some)`, whose tests on the element make `name.newKey` present in the body.
+     *  A test the filter writes on the outer subject, `this.note is some`, or on an outer `as` name,
+     *  says nothing about the element and is left out. */
+    private fun loopNarrowing(name: String, element: String, source: Expr?): Narrowing {
+        val collection = (source as? SetExpr)?.collection
+        val filterAlias = collection?.bindings?.singleOrNull()?.alias
+        val elementTests = PresenceFacts.conjuncts(collection?.where).filter { conjunct ->
+            val root = testedRoot(conjunct)
+            root != null && root != "this" && (root == filterAlias || root !in aliasScopes)
+        }
+        val filter = elementTests.fold(Narrowing.NONE) { shown, test ->
+            shown + model.types.narrowingOf(test, holds = true, element, TypeEnv(thisScope = element))
+        }
+        return (model.types.narrowingOf(element) + filter).under(name, filterAlias)
+    }
+
+    /** The root name of the path an `is` test reads, through a `not`; null for any other test. */
+    private fun testedRoot(conjunct: Expr): String? = when (conjunct) {
+        is IsExpr -> (conjunct.subject as? PathExpr)?.root
+        is NotExpr -> testedRoot(conjunct.inner)
+        else -> null
     }
 
     /** What a `for each` name runs over, or null with a diagnostic when the source is not a collection. */
@@ -1460,6 +1491,7 @@ class Validator(private val model: Model) {
     private fun checkComparison(e: Binary, scope: String) {
         val l = scalarTypeOf(e.left, scope)?.let { (it as? VType.Optional)?.inner ?: it }
         val r = scalarTypeOf(e.right, scope)?.let { (it as? VType.Optional)?.inner ?: it }
+        if (checkCollectionBesideOne(e, l, r)) return
         val lext = extOf(l); val rext = extOf(r)
         if (lext == null && rext == null) { checkBuiltinComparison(e, l, r); return }
         val ordered = e.op in setOf("<", "<=", ">", ">=")
@@ -1477,6 +1509,29 @@ class Validator(private val model: Model) {
             rext != null -> constantOf(e.left)?.let { checkConstantAs(it, rext, e.left) }
                 ?: l?.let { diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — compares a ${describe(rext)} with '${Printer.expr(e.left)}', which is not one")) }
         }
+    }
+
+    /**
+     * A collection beside a single value (Reference §10; checks.md F2): `inheritedBy == this`
+     * compares a `many S` with one record and is never true, since a collection is not a
+     * record; whether the record is one of them is `this in inheritedBy`. A collection has no
+     * order, so `<` and the rest are refused the same way. Two collections are not this check.
+     * Returns whether it refused.
+     */
+    private fun checkCollectionBesideOne(comparison: Binary, leftType: VType?, rightType: VType?): Boolean {
+        val leftIsCollection = leftType is VType.Coll || leftType is VType.CollS
+        val rightIsCollection = rightType is VType.Coll || rightType is VType.CollS
+        if (leftIsCollection == rightIsCollection || leftType == null || rightType == null) return false
+        val collection = Printer.expr(if (leftIsCollection) comparison.left else comparison.right)
+        val single = if (leftIsCollection) comparison.right else comparison.left
+        val singleType = if (leftIsCollection) rightType else leftType
+        val singleWord = if (singleType is VType.Inst) "a record" else an(kindWord(single, singleType))
+        val sentence = "'${Printer.expr(comparison)}' — compares the collection '$collection' with $singleWord; "
+        val membership = if (comparison.op == "!=") "${Printer.expr(single)} not in $collection" else "${Printer.expr(single)} in $collection"
+        diags.add(Diagnostic("F2", sentence + if (comparison.op == "==" || comparison.op == "!=")
+            "a collection is not compared with one value. Write '$membership' to ask whether it is one of them"
+            else "a collection has no order"))
+        return true
     }
 
     /** The builtin half of [checkComparison]: the two kinds agree, the numbers being one kind,

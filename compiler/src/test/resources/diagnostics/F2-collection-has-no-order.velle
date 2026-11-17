@@ -1,0 +1,6 @@
+-- A collection under an ordered comparison, `inheritedBy < this`; a collection has no order.
+act S {
+    name: text
+    inheritedBy: many S = (S where name == this.name)
+    below: many S = (S where inheritedBy < this)
+}

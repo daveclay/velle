@@ -1,0 +1,15 @@
+-- The spelling that compiles today: a view per kind on the batch, walked by
+-- one rule over the batch.
+transient act Upload {
+    note: text
+    createRows: many CreateRow = (CreateRow where upload == this)
+    updateRows: many UpdateRow = (UpdateRow where upload == this)
+} with rows
+shape Row { upload: one Upload, ident: text }
+shape CreateRow is Row { newKey: text }
+shape UpdateRow is Row { key: text }
+shape Made { key: text }
+rule HandleUpload when Upload {
+    for each r in createRows { Made from { key: r.newKey } }
+    for each r in updateRows { Made from { key: r.key } }
+}

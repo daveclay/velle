@@ -1,0 +1,9 @@
+-- A key built from a naming template stored as data, "{parent}-{sequence}",
+-- with the sequence zero-padded to three digits. A literal with pieces works;
+-- a template held in a field cannot be filled in, a number cannot be padded,
+-- and there is no counter.
+act Setup { namingTemplate: text }
+act Item { setup: one Setup, parentKey: text, sequence: integer
+  fromLiteral: text = "${parentKey}-${sequence}" }
+-- Wanted, in some spelling: fill(setup.namingTemplate, parent: parentKey,
+-- sequence: pad(sequence, 3)), and a sequence the system mints.

@@ -37,6 +37,15 @@ data class Narrowing(
     )
     fun isEmpty() = present.isEmpty() && narrowed.isEmpty() && established.isEmpty()
 
+    /** The same presence and narrowing kept under [name], as a `for each` name carries what its
+     *  source shows about each element: `newKey` becomes `name.newKey`, and a path the filter's own
+     *  `as` name [alias] roots moves under [name]. The tests established are dropped, since a
+     *  prohibition's facts are read for `this` alone. */
+    fun under(name: String, alias: String?): Narrowing {
+        fun rekey(path: List<String>) = if (alias != null && path.firstOrNull() == alias) listOf(name) + path.drop(1) else listOf(name) + path
+        return Narrowing(present.mapTo(linkedSetOf(), ::rekey), narrowed.mapKeys { (path, _) -> rekey(path) })
+    }
+
     companion object {
         val NONE = Narrowing()
 
@@ -176,9 +185,11 @@ class ExprTypes(private val model: Model) {
     private fun pathType(path: PathExpr, scope: String, outer: TypeEnv): VType? {
         if (path.root in outer.scalarAliases) return if (path.segs.isEmpty()) outer.scalarAliases[path.root] else null
         val env = scopeEnv(outer, scope)
+        // `this` is the outer subject, an alias is its binding, and a bare name is a member of the
+        // innermost element, [scope], which differs from the subject inside a filter over another shape
         val start: String? = if (path.root in env.aliases) env.aliases[path.root] else env.thisScope ?: scope
         if (path.root == "this" || path.root in env.aliases) return along(start, path.segs, aliasPrefix(path, env), optional = false, env)
-        val rootMember = start?.let { model.membersOf(it)[path.root] } ?: return null
+        val rootMember = model.membersOf(scope)[path.root] ?: return null
         return along(rootMember, path.segs, listOf(path.root), optional = false, env)
     }
 
@@ -204,7 +215,11 @@ class ExprTypes(private val model: Model) {
         if (path.root in outer.scalarAliases) return null
         val env = scopeEnv(outer, scope)
         val startsAtRecord = path.root == "this" || path.root in env.aliases
-        var current: String? = if (path.root in env.aliases) env.aliases[path.root] else env.thisScope ?: scope
+        var current: String? = when {
+            path.root in env.aliases -> env.aliases[path.root]
+            path.root == "this" -> env.thisScope ?: scope
+            else -> scope
+        }
         val steps = if (startsAtRecord) path.segs else listOf(Seg(path.root, viaQdot = false)) + path.segs
         val names = aliasPrefix(path, env).toMutableList()
         var mayBeAbsent = false

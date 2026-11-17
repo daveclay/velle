@@ -817,6 +817,7 @@ class DomainAnalysis(private val model: Model) {
          * scope to continue from, which is not the same as unresolved.
          */
         private fun narrowedOnUnion(field: String, at: Scope): NarrowedRead? {
+            if (at.name == VALUE_ALIAS) return null
             val operands = model.basesOf(at.name)
             if (operands.size < 2) return null
             val declaring = operands.mapNotNull { operand -> model.membersOf(operand)[field]?.let { member -> operand to member } }
@@ -851,7 +852,12 @@ class DomainAnalysis(private val model: Model) {
                     is PathExpr ->
                         if ((src.root in model.shapes || src.root in model.refinements) && src.segs.isEmpty())
                             bareShapeSource(src.root, b, c, ctx)
-                        else walkPath(src, inner) ?: if (b.alias != null && namesValues(src, inner)) Scope(VALUE_ALIAS, Anchor.Unknown) else unknownScope()
+                        else walkPath(src, inner) ?: if (b.alias != null && namesValues(src, inner)) {
+                            // a binding over a `many` of values names a value, not a record (Reference §5): its
+                            // `as` name is an alias only, and a bare field in the `where` still reads the record
+                            inner = Ctx(inner.subject, inner.elements, inner.aliases + (b.alias to Scope(VALUE_ALIAS, Anchor.Unknown)))
+                            continue
+                        } else unknownScope()
                     is ShapeForSource -> correlatedSource(src.shape, src.forExpr, inner)
                     else -> {
                         walkExpr(src, inner)

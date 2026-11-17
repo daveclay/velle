@@ -25,7 +25,10 @@ plus the rules hanging off it. One generated spec file per **story root**:
 - Every file opens with the **Velle it verifies, quoted verbatim** (pretty-printed
   from the AST) — reading the spec file is reading the description plus its proof.
 - A generated `SPEC_INDEX-<System>.md` per system lists every file and every
-  case sentence: the table of contents for "what does this system do." Each
+  case sentence: the table of contents for "what does this system do." Every
+  prohibition appears in it: as its cases, or under "Not yet generated" with the
+  reason none was made, a prohibition over a shape several shapes take with `is`
+  or over a static union saying which shapes it is over. Each
   system's generated output lives in its own package
   (`velle.generated.<system>` / `.specs`) inside its own output module
   (`examples/<system>/output/`).

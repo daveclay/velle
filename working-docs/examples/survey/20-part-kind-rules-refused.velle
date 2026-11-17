@@ -1,0 +1,10 @@
+-- A batch whose parts come in two kinds that take one shape. One rule per
+-- kind fires once per part inside the batch's commit, and together they
+-- answer every part. V18 counts only an answer over the batch itself.
+transient act Upload { note: text } with rows
+shape Row { upload: one Upload, ident: text }
+shape CreateRow is Row { newKey: text }
+shape UpdateRow is Row { key: text }
+shape Made { key: text }
+rule HandleCreate when CreateRow { Made from { key: newKey } }
+rule HandleUpdate when UpdateRow { Made from { key: key } }

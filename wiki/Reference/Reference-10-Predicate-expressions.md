@@ -8,6 +8,7 @@ The comparison operators are `==`, `!=`, `<`, `<=`, `>`, and `>=`.
 
 - `==` is the only spelling of equality. `=` is for defining a shape (`shape X = Y where ...`) and for [assignment](Reference-12-Assignment).
 - Comparing two records with `==` asks whether they are the same record, by their `id` ([§5](Reference-05-Scalars)). It never compares them field by field.
+- A collection is compared with nothing single. `inheritedBy == this` is refused, since a collection of records is not a record; whether the record is one of them is `this in inheritedBy`, below. A collection has no order, so `<` and the rest are refused the same way.
 
 `qty between 2 and 5` is `qty >= 2 and qty <= 5`, both bounds included. It works on any ordered value: `due between today and today + 7 days`.
 
@@ -85,7 +86,7 @@ The first argument is any collection expression. A relationship filtered with `w
 
 A relationship is followed with a dot: `response.outcome`, `ward.admissions`, including a relationship back to the same shape.
 
-A dot through an optional value is allowed only when the value is known to be present: its type is not optional, or an `is some` or `is none` test earlier in the same `and` chain, or in the matching branch of an `if`, has established it. Plain `.` on an optional value with no such test is a compile error.
+A dot through an optional value is allowed only when the value is known to be present: its type is not optional, or an `is some` or `is none` test earlier in the same `and` chain, or in the matching branch of an `if`, has established it. Plain `.` on an optional value with no such test is a compile error. A `for each` name carries what the filter of its collection shows about each element: inside `for each r in (rows where site is some)`, `r.site.name` reads with a plain dot ([§14](Reference-14-for#creating-one-record-per-element-for-each)).
 
 A test on a path establishes every step of the path. Once `site?.region is some` holds, `site` holds a record and that record's `region` holds one, so the branch it governs reads `site.region.name` with plain dots: `if site?.region is some then site.region.name else "unplaced"`. The same holds in the `else` branch of `site?.region is none`. The path under test is spelled with `?.`, because it is read before it is known to be present. A prohibition the rules cannot move establishes a step as well: `never (Submission where parentLabel is some and parent is none)` shows `parent` present wherever `parentLabel is some` is established ([§21, "What the compiler checks"](Reference-21-never#what-the-compiler-checks)).
 

@@ -47,9 +47,14 @@ object SpecGen {
             for (rule in model.rules.values) {
                 clusters.getOrPut(storyRootOf(rule)) { mutableListOf() }.add(ClusterItem.Rule(rule))
             }
-            for ((i, never) in model.nevers.withIndex()) {
-                val base = model.baseOfExpr(never.target) ?: continue
-                clusters.getOrPut(storyRootOfName(base)) { mutableListOf() }.add(ClusterItem.Never(never, i))
+            for ((ordinal, never) in model.nevers.withIndex()) {
+                // one base shape files the never under its story root; none (a taken shape, a static
+                // union, a composite with no common base) files it under the leftmost name, so it
+                // reaches neverTests and the index says why no case is generated
+                val root = model.baseOfExpr(never.target)?.let { storyRootOfName(it) }
+                    ?: leftmostName(never.target)?.let { storyRootOfName(it) }
+                    ?: "Misc"
+                clusters.getOrPut(root) { mutableListOf() }.add(ClusterItem.Never(never, ordinal))
             }
 
             val files = LinkedHashMap<String, String>()
@@ -665,7 +670,11 @@ object SpecGen {
             if (never.fromActorClause) return skip(ordinal, "the role gate an act's `by` clause states")
             if (never.keyDeclaration != null) return skip(ordinal, "a key, ${never.keyDeclaration}: no bound to cross")
             val target = never.target as? RefName ?: return skip(ordinal, "composite never")
-            val shape = model.shapes[target.name] ?: return skip(ordinal, "never over a refinement")
+            val shape = model.shapes[target.name] ?: return skip(
+                ordinal,
+                if (model.isCrossBase(target.name)) "shape is a union over ${model.basesOf(target.name).joinToString(" or ")}"
+                else "never over a refinement",
+            )
             if (target.name !in model.exposed) return skip(ordinal, "shape is not an act")
             val conjunct = target.where?.let { predicateConjuncts(it) } ?: return skip(ordinal, "no predicate")
             if (conjunct.size != 1) return skip(ordinal, "multi-conjunct predicate")

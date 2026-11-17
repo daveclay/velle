@@ -264,4 +264,49 @@ class ForEachTest {
     fun `the clean spec validates`() {
         assertEquals(emptyList(), codes(PLATES))
     }
+
+    // ── the filter shows its name present (Reference §10, §14) ──────────────
+
+    private val UPLOAD = """
+        transient act Upload { note: text? } with rows
+        shape Row { upload: one Upload, newKey: text?, site: one Site?, note: text? }
+        shape Site { name: text }
+        shape Made { key: text }
+    """.trimIndent()
+
+    @Test
+    fun `a filter's presence test lets the body supply the field to a required one`() {
+        assertEquals(emptyList(), diags("$UPLOAD\nrule HandleUpload when Upload { for each r in (rows where newKey is some) { Made from { key: r.newKey } } }").map { it.toString() })
+    }
+
+    @Test
+    fun `the filter's own as name carries the same`() {
+        assertEquals(emptyList(), diags("$UPLOAD\nrule HandleUpload when Upload { for each r in (rows as x where x.newKey is some) { Made from { key: r.newKey } } }").map { it.toString() })
+    }
+
+    @Test
+    fun `a presence test on a relationship licenses the plain dot through it`() {
+        assertEquals(emptyList(), diags("$UPLOAD\nrule HandleUpload when Upload { for each r in (rows where site is some) { Made from { key: r.site.name } } }").map { it.toString() })
+    }
+
+    @Test
+    fun `a loop over a named refinement carries the refinement's where`() {
+        assertEquals(emptyList(), diags("$UPLOAD\nshape Keyed = Row where newKey is some\nrule HandleUpload when Upload { for each r in (Keyed where upload == this) { Made from { key: r.newKey } } }").map { it.toString() })
+    }
+
+    @Test
+    fun `without the test the body still may not supply a maybe-absent value`() {
+        assertEquals(listOf("F2"), codes("$UPLOAD\nrule HandleUpload when Upload { for each r in rows { Made from { key: r.newKey } } }"))
+    }
+
+    @Test
+    fun `a test on the outer subject says nothing about the element's field of the same name`() {
+        assertEquals(listOf("F2"), codes("$UPLOAD\nrule HandleUpload when Upload { for each r in (rows where this.note is some) { Made from { key: r.note } } }"))
+    }
+
+    @Test
+    fun `the facts end with the block`() {
+        assertEquals(listOf("F2"), codes("$UPLOAD\nrule HandleUpload when Upload { for each r in (rows where newKey is some) { Made from { key: r.newKey } }\n    for each r in rows { Made from { key: r.newKey } } }"))
+    }
+
 }
