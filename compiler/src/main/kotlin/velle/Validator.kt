@@ -3691,11 +3691,16 @@ class Validator(private val model: Model) {
         model.refinements.forEach { (name, r) -> checkMembers(name, r.members) }
 
         // V17: the transient shape's name may appear in no expression — even
-        // from its own refinement family, that is a read across acts. The one
-        // exception: a rule or refinement over a shape a transient act takes with
+        // from its own refinement family, that is a read across acts. Two
+        // exceptions: a rule or refinement over a shape a transient act takes with
         // `is` runs inside that act's own commit, so narrowing to the act there
-        // reads the record at hand (Reference §9, "Sharing a field across shapes")
+        // reads the record at hand (Reference §9, "Sharing a field across shapes");
+        // and a derived property of the act, or of a part of its closure, that reads
+        // a shape of the same closure is read inside that commit too, as the inverse
+        // a part's back-reference infers is (Reference §6, "A request that is not
+        // kept, with its parts")
         val transientSubjectsAt = transientSubjectsBySite()
+        val closureShapeAt = model.transients.associateBy { shape -> "shape '$shape'" }
         forEachSpecExpr { site, e ->
             val mentioned = when (e) {
                 is PathExpr -> e.root.takeIf { it in model.transients }
@@ -3707,6 +3712,8 @@ class Validator(private val model: Model) {
                     ?.takeIf { (model.baseOf(it) ?: it) !in transientSubjectsAt[site].orEmpty() }
                 else -> null
             } ?: return@forEachSpecExpr
+            val readingShape = closureShapeAt[site]
+            if (readingShape != null && model.sameTransientClosure(readingShape, mentioned)) return@forEachSpecExpr
             diags.add(Diagnostic("V17", "$site reads transient ${model.transientKind(mentioned)} '$mentioned' — " +
                 "it is not kept after its commit, so no expression may query it; " +
                 "read the durable outcomes its rules produced instead"))

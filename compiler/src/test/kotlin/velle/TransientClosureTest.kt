@@ -267,4 +267,77 @@ class TransientClosureTest {
             assertEquals(emptyList(), sys.instancesOf("Entry"))
         }
     }
+
+    // ── the batch's fields read once, on the shape the variants take ──────────
+    //
+    // The spelling V22's message offers for a mixed inverse: `batch` declared on
+    // the shared shape, and one view per variant on the act. The views read the
+    // act's own parts inside its commit, as the inferred inverse does.
+
+    private val batchReadThroughRow = """
+        transient act Batch {
+            note: text
+            createRows: many CreateRow = (CreateRow where batch == this)
+            updateRows: many UpdateRow = (UpdateRow where batch == this)
+        } with { createRows with { rowValues }, updateRows with { rowValues } }
+
+        shape Row {
+            batch: one Batch
+            identifier: text
+            note: text = batch.note
+        }
+
+        shape CreateRow is Row { newKey: text }
+        shape UpdateRow is Row { key: text }
+
+        shape RowValue {
+            row: one Row
+            name: text
+            note: text = row.note
+        }
+
+        shape Made { key: text, note: text, valuesWithNote: integer }
+
+        rule HandleBatch when Batch {
+            for each row in createRows { Made from { key: row.newKey, note: row.note, valuesWithNote: count(row.rowValues where note == "nightly") } }
+            for each row in updateRows { Made from { key: row.key, note: row.note, valuesWithNote: count(row.rowValues where note == "nightly") } }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `a view on the act over one variant of its parts is the spelling V22 offers, and it validates`() {
+        assertEquals(emptyList(), Validator.validate(batchReadThroughRow), messages(batchReadThroughRow))
+    }
+
+    @Test
+    fun `each variant reads the batch through the shared shape, and a value reads it through its row`() {
+        val sys = system(batchReadThroughRow)
+        sys.scope {
+            val result = sys.commit(
+                "Batch",
+                mapOf("note" to "nightly"),
+                mapOf(
+                    "createRows" to listOf(mapOf("identifier" to "c1", "newKey" to "N1",
+                        "rowValues" to listOf(mapOf("name" to "a"), mapOf("name" to "b")))),
+                    "updateRows" to listOf(mapOf("identifier" to "u1", "key" to "T1",
+                        "rowValues" to listOf(mapOf("name" to "c")))),
+                ),
+            )
+            assertIs<CommitResult.Accepted>(result, "commit refused: $result")
+            val made = sys.instancesOf("Made")
+                .map { madeId -> "${sys.get(madeId, "key")}:${sys.get(madeId, "note")}:${sys.get(madeId, "valuesWithNote")}" }
+                .toSet()
+            assertEquals(setOf("N1:nightly:2", "T1:nightly:1"), made)
+            assertEquals(emptyList(), sys.instancesOf("RowValue"))
+        }
+    }
+
+    @Test
+    fun `V17 - a durable shape's view over a part is still a read across commits`() {
+        val spec = batchReadThroughRow + """
+
+            shape Audit { note: text, rows: many CreateRow = (CreateRow where batch.note == note) }
+        """
+        assertTrue(codes(spec).contains("V17"), messages(spec))
+    }
 }

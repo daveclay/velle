@@ -232,6 +232,33 @@ rule QuoteRequest when PriceRequest {
 
 A part that arrives with a transient request is not kept, so everything [§4](Reference-04-State-and-commits#transient-acts-transient-act) says a transient act may not do holds for the part: no shape may hold a relationship to it, its name appears in no expression, and a rule over it fires only at the commit ([checks.md, V17](checks#v17--transient-isolation)). The request owes one answer in every situation, as any transient act does. Its parts owe none.
 
+The request reads its parts inside its own commit, through the collection a part's back-reference gives it. A derived property of the request, or of one of its parts, may name a shape of the same closure for the same reason. When the parts come in several shapes that take one shape with `is` ([§9, "Sharing a field across shapes"](Reference-09-Composing-refinements#sharing-a-field-across-shapes-is)), the collection the taken shape's back-reference gives the request holds every kind, and a closure edge's parts are of one shape, so the request declares one view per kind and names each as an edge:
+
+```
+transient act Batch {
+    note: text
+    createRows: many CreateRow = (CreateRow where batch == this)
+    updateRows: many UpdateRow = (UpdateRow where batch == this)
+} with { createRows with { rowValues }, updateRows with { rowValues } }
+
+shape Row {
+    batch: one Batch
+    identifier: text
+    note: text = batch.note
+}
+
+shape CreateRow is Row { newKey: text }
+shape UpdateRow is Row { key: text }
+
+shape RowValue {
+    row: one Row
+    name: text
+    note: text = row.note
+}
+```
+
+`Row.batch: one Batch` is declared once, so `Row.note` reads the batch for a row of either kind, and `RowValue.note` reads it through `row` without asking which kind the row is. The committer sends one list per edge, `createRows` and `updateRows`.
+
 ## A reference supplied by value (`with` naming a `one` field)
 
 A `one` field on an act is a reference, and the committer normally supplies it by naming a record already on the books. Naming the field in `with` lets the committer supply it by value instead: a new record, nested inside the act's input, created in the same commit. Use it when the record and the one it points at are one event in the business.

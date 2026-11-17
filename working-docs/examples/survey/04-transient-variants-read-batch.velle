@@ -1,0 +1,36 @@
+-- A batch arrives with create rows and update rows, answered and not kept. Each kind takes the
+-- fields the two share, among them the back-reference to the batch, from one shape with `is`.
+-- The batch names one view per kind as a closure edge, the spelling V22 offers for a mixed
+-- inverse, and the views read the batch's own parts inside its commit. A row value reads the
+-- batch through its row whichever kind the row is.
+transient act Batch {
+    note: text
+    createRows: many CreateRow = (CreateRow where batch == this)
+    updateRows: many UpdateRow = (UpdateRow where batch == this)
+} with { createRows with { rowValues }, updateRows with { rowValues } }
+
+shape Row {
+    batch: one Batch
+    identifier: text
+    note: text = batch.note
+}
+
+shape CreateRow is Row { newKey: text }
+shape UpdateRow is Row { key: text }
+
+shape RowValue {
+    row: one Row
+    name: text
+    note: text = row.note
+}
+
+shape Made {
+    key: text
+    note: text
+    valuesWithNote: integer
+}
+
+rule HandleBatch when Batch {
+    for each row in createRows { Made from { key: row.newKey, note: row.note, valuesWithNote: count(row.rowValues where note == "nightly") } }
+    for each row in updateRows { Made from { key: row.key, note: row.note, valuesWithNote: count(row.rowValues where note == "nightly") } }
+}
