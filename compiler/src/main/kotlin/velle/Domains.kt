@@ -762,11 +762,12 @@ class DomainAnalysis(private val model: Model) {
                     val inner = ctx.innermost()
                     val m = model.membersOf(inner.name)[p.root]
                     if (m == null) {
-                        narrowedOnUnion(p.root, inner) ?: run {
+                        val narrowed = narrowedOnUnion(p.root, inner) ?: run {
                             acc.widen(model.baseOf(inner.name) ?: inner.name,
                                 "'${p.root}' cannot be resolved on '${inner.name}'", decl, tolerated)
                             return null
                         }
+                        narrowed.scope
                     } else memberScope(m, inner)
                 }
             }
@@ -793,27 +794,35 @@ class DomainAnalysis(private val model: Model) {
             if (scope == null) return null
             val m = model.membersOf(scope.name)[field]
             if (m == null) {
-                return narrowedOnUnion(field, scope) ?: run {
+                val narrowed = narrowedOnUnion(field, scope) ?: run {
                     acc.widen(model.baseOf(scope.name) ?: scope.name,
                         "'$field' cannot be resolved on '${scope.name}'", decl, tolerated)
-                    null
+                    return null
                 }
+                return narrowed.scope
             }
             return memberScope(m, scope)
         }
+
+        /** A read resolved by narrowing: [scope] is where the path continues, null when the member is a scalar. */
+        inner class NarrowedRead(val scope: Scope?)
 
         /**
          * A read the validator licensed by narrowing (`target is Post` governing
          * `target.author`, Reference §9): the name is no shared member of the union, but
          * an operand's own. Attribute the read to every operand that declares it,
          * at the same anchor — the over-approximation of the one operand the
-         * branch actually reads, which is all the derivation ever claims.
+         * branch actually reads, which is all the derivation ever claims. Null
+         * when no operand declares the name; a scalar member resolves with no
+         * scope to continue from, which is not the same as unresolved.
          */
-        private fun narrowedOnUnion(field: String, at: Scope): Scope? {
+        private fun narrowedOnUnion(field: String, at: Scope): NarrowedRead? {
             val operands = model.basesOf(at.name)
             if (operands.size < 2) return null
-            val per = operands.mapNotNull { op -> model.membersOf(op)[field]?.let { memberScope(it, Scope(op, at.anchor)) } }
-            return per.firstOrNull()
+            val declaring = operands.mapNotNull { operand -> model.membersOf(operand)[field]?.let { member -> operand to member } }
+            if (declaring.isEmpty()) return null
+            val scopes = declaring.map { (operand, member) -> memberScope(member, Scope(operand, at.anchor)) }
+            return NarrowedRead(scopes.firstOrNull { scope -> scope != null })
         }
 
         /** Record one member read at an anchor — the attribution point. Every

@@ -2408,8 +2408,9 @@ class Validator(private val model: Model) {
             // deleters join the proof's state changes (OQ37): deleting the never's
             // own base only shrinks the forbidden set, but a deleter of any other
             // consulted shape can flip membership either way — not spendable
-            val nBase = model.baseOfExpr(n.target)
-            val foreignConsults = s.touchedShapes().mapNotNull { model.baseOf(it) }.toSet() - setOfNotNull(nBase)
+            // a never over a union or a taken shape (Reference §9) is over each operand or taker
+            val ownBases = model.basesOfExpr(n.target)
+            val foreignConsults = s.touchedShapes().flatMap { model.basesOf(it) }.toSet() - ownBases
             !s.opaque && s.fields.none { it in written } &&
                 foreignConsults.none { it in model.deletedShapes }
         }
@@ -2434,8 +2435,10 @@ class Validator(private val model: Model) {
         model.nevers.indices.filter { i ->
             val n = model.nevers[i]
             val s = model.summaryOfRefExpr(n.target)
-            val consulted = (s.touchedShapes() + setOfNotNull(model.baseOfExpr(n.target)))
-                .mapNotNull { model.baseOf(it) }.toSet()
+            // a never over a union or a taken shape (Reference §9) consults each operand or taker,
+            // so a rule creating a record of one keeps the never at the transaction end
+            val consulted = (s.touchedShapes() + model.basesOfExpr(n.target))
+                .flatMap { model.basesOf(it) }.toSet()
             // an `on update` timestamp advances at every write to its shape
             val updateStamps = s.collFields.filter { (sh, f) ->
                 model.shapes[model.baseOf(sh) ?: sh]?.members?.filterIsInstance<TimestampProp>()

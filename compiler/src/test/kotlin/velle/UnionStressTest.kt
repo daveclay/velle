@@ -201,6 +201,33 @@ class UnionStressTest {
         assertTrue("'Comment.target' and 'Comment.post'" in v13.single().message, v13.single().message)
     }
 
+    @Test
+    fun `a never over a union or a taken shape is checked after a rule creates a record of an operand`() {
+        // OQ134: a prohibition over a union, or over a shape several shapes take with `is`,
+        // consults every operand, so a rule creating one keeps it at the transaction end
+        // (checks.md V10) rather than the door, where the created record is not yet there
+        val reposting = """
+            act Member { name: text unique }
+            shape Viewed { views: integer }
+            act Post is Viewed { author: one Member, body: text }
+            act Photo is Viewed { author: one Member, caption: text }
+            shape Content = Post or Photo
+            act Repost { original: one Post }
+            rule Copy when Repost { Post from { author: original.author, body: original.body, views: -1 } }
+        """.trimIndent()
+        for (prohibition in listOf("never (Content where views < 0)", "never (Viewed where views < 0)")) {
+            val sys = system(reposting + "\n" + prohibition)
+            sys.scope {
+                val member = sys.mustCommit("Member", mapOf("name" to "ada"))
+                val post = sys.mustCommit("Post", mapOf("author" to member, "body" to "hi", "views" to 3))
+                val repost = sys.commit("Repost", mapOf("original" to post))
+                val refused = assertIs<CommitResult.Refused>(repost, "$prohibition let a rule-created Post with views -1 land: $repost")
+                assertTrue("views < 0" in refused.reason, refused.reason)
+                assertEquals(1, sys.idsOf("Post").size, prohibition)
+            }
+        }
+    }
+
     // ── the checks that skip a cross-base refinement (gaps) ──────────────────
 
     @Test
@@ -399,5 +426,31 @@ class UnionStressTest {
     fun `creating a union is refused naming its operands`() {
         val src = content + "\nact Flag { about: one Content }\nrule Make when Flag { Content from { author: about.author } }"
         assertTrue(diags(src).any { "creates 'Content', which has no records of its own: a record of it is a Post or a Photo; create one of them" in it.message }, diags(src).toString())
+    }
+
+    @Test
+    fun `a narrowed read of an operand's own scalar field is keyed on its path and widens nothing`() {
+        // OQ134: `target.body` under `target is Post` reads Post.body at the comment's
+        // target, a queue key; a scalar read ends the path without being unresolved (A5)
+        val source = """
+            act Member { name: text unique }
+            shape Authored { author: one Member }
+            act Post is Authored { body: text }
+            act Photo is Authored { caption: text }
+            shape Content = Post or Photo
+            act Comment { author: one Member, target: one Content }
+            shape CommentNotice { recipient: one Member, comment: one Comment, excerpt: text }
+            rule NotifyAuthor when Comment {
+                CommentNotice from {
+                    recipient: target.author
+                    comment: this
+                    excerpt: if target is Post then target.body else target.caption
+                }
+            }
+        """.trimIndent()
+        assertEquals(emptyList(), diags(source))
+        val advisories = Validator.advisories(source)
+        assertTrue(advisories.none { it.code == "A5" }, advisories.toString())
+        assertEquals(emptyMap(), DomainAnalysis(Model(Parser.parse(source))).commitWidenings())
     }
 }
