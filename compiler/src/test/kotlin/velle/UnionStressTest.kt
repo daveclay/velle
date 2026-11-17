@@ -455,8 +455,9 @@ class UnionStressTest {
     }
 
     @Test
-    fun `a never over a union or a taken shape is not yet a presence fact on an operand`() {
-        // OQ140: V11 spends a prohibition over the operand itself and nothing wider
+    fun `a never over a union or a taken shape shows a step present on each operand`() {
+        // OQ140: the prohibition is enforced on every operand (OQ134), so V11 spends it in a
+        // scope over any of them; a rule assigning the step on either operand unspends it
         val credited = """
             act Member { name: text unique }
             shape Attributed { source: one Member?, sourceLabel: text? }
@@ -464,10 +465,17 @@ class UnionStressTest {
             act Photo is Attributed { caption: text }
             shape Content = Post or Photo
         """.trimIndent()
-        fun refusesTheRead(prohibition: String) =
-            diags(credited + "\n" + prohibition).any { it.code == "V11" && "'source.name' reads through 'source'" in it.message }
-        assertTrue(refusesTheRead("never (Content where sourceLabel is some and source is none)"))
-        assertTrue(refusesTheRead("never (Attributed where sourceLabel is some and source is none)"))
+        fun refusesTheRead(rest: String) =
+            diags(credited + "\n" + rest).any { it.code == "V11" && "'source.name' reads through 'source'" in it.message }
+        assertTrue(!refusesTheRead("never (Content where sourceLabel is some and source is none)"))
+        assertTrue(!refusesTheRead("never (Attributed where sourceLabel is some and source is none)"))
         assertTrue(!refusesTheRead("never (Post where sourceLabel is some and source is none)"))
+        assertTrue(refusesTheRead("never (Content where source is none)\nshape Credited = Content where sourceLabel is some".replace("never (Content", "never (Credited")),
+            "a prohibition over a refinement of the union licenses nothing in the bare operand's scope")
+        assertTrue(refusesTheRead("""
+            never (Content where sourceLabel is some and source is none)
+            act Disown { photo: one Photo }
+            rule Forget when Disown { photo.source = none }
+        """.trimIndent()), "a rule assigning the step on the other operand unspends the prohibition")
     }
 }

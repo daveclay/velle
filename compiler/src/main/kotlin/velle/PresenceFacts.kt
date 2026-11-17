@@ -11,6 +11,11 @@ package velle
  * reads, by name anywhere in the spec, and no shape it reads through beyond its own is deleted
  * anywhere, since a deleted record reads absent. A predicate with a part this class does not
  * read, an `exists` or a selection, is not spent. Fail closed is the rule for every spend.
+ *
+ * A prohibition over a static union, or over a shape several shapes take with `is` (Reference §9),
+ * is enforced on every operand or taker, so its fact holds in every scope over one of them: a
+ * record of `Post` is within `Post`, the refinements over it, and every union `Post` is an operand
+ * of, a taken shape arriving here already rewritten as the union of its takers ([SharedShapes]).
  */
 class PresenceFacts(decls: List<Decl>) {
 
@@ -36,8 +41,35 @@ class PresenceFacts(decls: List<Decl>) {
             .flatMapTo(linkedSetOf()) { fact -> Narrowing.stepsOf(fact.path) }
     }
 
-    /** The names a record in [scope] is a member of: the scope, the refinements it names, and its base shape. */
-    fun withinOf(scope: String): Set<String> = within(scope, mutableSetOf())
+    /** The refinements that are a pure `or` of names: static unions, and taken shapes as rewritten. */
+    private val unions: Map<String, RefinementDecl> = refinements.filterValues { refinement -> pureOr(refinement.expr) }
+
+    /**
+     * The names a record in [scope] is a member of: the scope, the refinements it names, its base
+     * shape, and every union one of those is an operand of, unions of unions included.
+     */
+    fun withinOf(scope: String): Set<String> {
+        val names = within(scope, mutableSetOf()).toMutableSet()
+        var grew = true
+        while (grew) {
+            val reached = unions.filter { (name, union) -> name !in names && leavesOf(union.expr).any { leaf -> leaf in names } }
+            names.addAll(reached.keys)
+            grew = reached.isNotEmpty()
+        }
+        return names
+    }
+
+    private fun pureOr(expr: RefExpr): Boolean = when (expr) {
+        is RefName -> expr.where == null
+        is RefOr -> pureOr(expr.left) && pureOr(expr.right)
+        else -> false
+    }
+
+    private fun leavesOf(expr: RefExpr): List<String> = when (expr) {
+        is RefName -> listOf(expr.name)
+        is RefOr -> leavesOf(expr.left) + leavesOf(expr.right)
+        else -> emptyList()
+    }
 
     private fun within(name: String, seen: MutableSet<String>): Set<String> {
         if (!seen.add(name)) return emptySet()
@@ -56,13 +88,14 @@ class PresenceFacts(decls: List<Decl>) {
 
     private fun factsOf(never: NeverDecl): List<Fact> {
         val target = never.target as? RefName ?: return emptyList()
-        val base = baseOf(target.name) ?: return emptyList()
-        return disjuncts(target.where).flatMap { disjunct -> factsOf(target.name, base, conjuncts(disjunct)) }
+        val bases = basesOf(target.name)
+        if (bases.isEmpty()) return emptyList()
+        return disjuncts(target.where).flatMap { disjunct -> factsOf(target.name, bases, conjuncts(disjunct)) }
     }
 
-    /** `C and q is none` never holding: `q` is present wherever `C` holds, for each such `q`. */
-    private fun factsOf(subject: String, base: String, conjuncts: List<Expr>): List<Fact> {
-        if (conjuncts.any { conjunct -> !spendable(conjunct, base) }) return emptyList()
+    /** `C and q is none` never holding: `q` is present wherever `C` holds, for each such `q`, on every base. */
+    private fun factsOf(subject: String, bases: Set<String>, conjuncts: List<Expr>): List<Fact> {
+        if (conjuncts.any { conjunct -> bases.any { base -> !spendable(conjunct, base) } }) return emptyList()
         return conjuncts.mapNotNull { conjunct ->
             val absence = conjunct as? IsExpr ?: return@mapNotNull null
             if (absence.kind != "none") return@mapNotNull null
@@ -113,25 +146,27 @@ class PresenceFacts(decls: List<Decl>) {
         }
     }
 
+    /** The shapes a rule deletes; a rule over a union deleting its subject deletes a record of any operand. */
     private fun deletedShapes(rule: RuleDecl): List<String> {
-        val base = baseOfExpr(rule.condition) ?: return emptyList()
-        return rule.body.filterIsInstance<DeleteStmt>().mapNotNull { stmt ->
-            if (stmt.target.root == "this" && stmt.target.segs.isEmpty()) base
-            else (pathType(stmt.target, base) as? RelType)?.shape
+        val bases = basesOfExpr(rule.condition)
+        return rule.body.filterIsInstance<DeleteStmt>().flatMap { stmt ->
+            if (stmt.target.root == "this" && stmt.target.segs.isEmpty()) bases.toList()
+            else bases.mapNotNull { base -> (pathType(stmt.target, base) as? RelType)?.shape }
         }
     }
 
-    private fun baseOf(name: String, seen: MutableSet<String> = mutableSetOf()): String? = when {
-        name in shapes -> name
-        name in refinements && seen.add(name) -> baseOfExpr(refinements.getValue(name).expr, seen)
-        else -> null
+    /** The base shapes a name's records are drawn from: one, or every operand of a union. */
+    private fun basesOf(name: String, seen: MutableSet<String> = mutableSetOf()): Set<String> = when {
+        name in shapes -> setOf(name)
+        name in refinements && seen.add(name) -> basesOfExpr(refinements.getValue(name).expr, seen)
+        else -> emptySet()
     }
 
-    private fun baseOfExpr(expr: RefExpr, seen: MutableSet<String> = mutableSetOf()): String? = when (expr) {
-        is RefName -> baseOf(expr.name, seen)
-        is RefAnd -> baseOfExpr(expr.left, seen)
-        is RefOr -> baseOfExpr(expr.left, seen)?.takeIf { left -> left == baseOfExpr(expr.right, seen) }
-        is RefNot -> baseOfExpr(expr.inner, seen)
+    private fun basesOfExpr(expr: RefExpr, seen: MutableSet<String> = mutableSetOf()): Set<String> = when (expr) {
+        is RefName -> basesOf(expr.name, seen)
+        is RefAnd -> basesOfExpr(expr.left, seen) intersect basesOfExpr(expr.right, seen)
+        is RefOr -> basesOfExpr(expr.left, seen) + basesOfExpr(expr.right, seen)
+        is RefNot -> basesOfExpr(expr.inner, seen)
     }
 
     private fun fieldType(shape: String, field: String): TypeRef? {

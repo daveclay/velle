@@ -19,6 +19,18 @@ act Member {
 -- own: every record of it is a post or a photo.
 shape Contribution {
     author: one Member
+    -- A contribution may come from an outside source, with a line saying how. A
+    -- line without the source is refused at the door by one prohibition over
+    -- Content (below), and the compiler reads that promise wherever the line is
+    -- tested, so `credit` reads `source.name` with a plain dot (Reference §21).
+    source: one Source?
+    creditLine: text?
+    credit: text = if creditLine is some then source.name else ""
+}
+
+-- a wire service or a studio a contribution may be credited to
+act Source {
+    name: text
 }
 
 act Post is Contribution {
@@ -45,6 +57,10 @@ act Comment {
     body: text
 }
 -- inferred inverse: Post.comments, Photo.comments, and Content.comments, from Comment.target
+
+-- A credit line names its source. One prohibition over the union is enforced
+-- on every post and every photo, and is the fact `credit` reads from.
+never (Content where creditLine is some and source is none)
 
 -- Nobody comments on their own post. Narrowing in a conjunction: `target is Post`
 -- licenses `target.author` in what follows it.

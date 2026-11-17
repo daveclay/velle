@@ -13,4 +13,4 @@ each case below is an executable test.
 
 ## Not yet generated
 
-- never #1: multi-conjunct predicate
+- never #2: multi-conjunct predicate

@@ -26,10 +26,18 @@ data class MemberRow(
     val name: String,
 )
 
+/** One stored Source row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class SourceRow(
+    val key: StoreKey,
+    val name: String,
+)
+
 /** One stored Post row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class PostRow(
     val key: StoreKey,
     val author: Ref.Persisted,
+    val source: Ref.Persisted?,
+    val creditLine: String?,
     val body: String,
 )
 
@@ -37,6 +45,8 @@ data class PostRow(
 data class PhotoRow(
     val key: StoreKey,
     val author: Ref.Persisted,
+    val source: Ref.Persisted?,
+    val creditLine: String?,
     val caption: String,
 )
 
@@ -78,6 +88,7 @@ interface GalleryStore {
     // ── keyed reads ──
     fun tick(key: StoreKey): TickRow?
     fun member(key: StoreKey): MemberRow?
+    fun source(key: StoreKey): SourceRow?
     fun post(key: StoreKey): PostRow?
     fun photo(key: StoreKey): PhotoRow?
     fun comment(key: StoreKey): CommentRow?
@@ -87,6 +98,7 @@ interface GalleryStore {
     // ── scan floor: all rows of a shape ──
     fun allTicks(): List<TickRow>
     fun allMembers(): List<MemberRow>
+    fun allSources(): List<SourceRow>
     fun allPosts(): List<PostRow>
     fun allPhotos(): List<PhotoRow>
     fun allComments(): List<CommentRow>
@@ -95,7 +107,9 @@ interface GalleryStore {
 
     // ── join reads: rows referencing a target through a to-one field ──
     fun postsByAuthor(target: Ref.Persisted): List<PostRow>
+    fun postsBySource(target: Ref.Persisted): List<PostRow>
     fun photosByAuthor(target: Ref.Persisted): List<PhotoRow>
+    fun photosBySource(target: Ref.Persisted): List<PhotoRow>
     fun commentsByTarget(target: Ref.Persisted): List<CommentRow>
     fun commentsByAuthor(target: Ref.Persisted): List<CommentRow>
     fun popularityNoticesByContent(target: Ref.Persisted): List<PopularityNoticeRow>
@@ -131,6 +145,7 @@ open class GalleryStoreOverGeneric(
 
     override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun member(key: StoreKey): MemberRow? = backend.fetchByKey("Member", key)?.toMemberRow()
+    override fun source(key: StoreKey): SourceRow? = backend.fetchByKey("Source", key)?.toSourceRow()
     override fun post(key: StoreKey): PostRow? = backend.fetchByKey("Post", key)?.toPostRow()
     override fun photo(key: StoreKey): PhotoRow? = backend.fetchByKey("Photo", key)?.toPhotoRow()
     override fun comment(key: StoreKey): CommentRow? = backend.fetchByKey("Comment", key)?.toCommentRow()
@@ -139,6 +154,7 @@ open class GalleryStoreOverGeneric(
 
     override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allMembers(): List<MemberRow> = backend.fetchAll("Member").map { it.toMemberRow() }
+    override fun allSources(): List<SourceRow> = backend.fetchAll("Source").map { it.toSourceRow() }
     override fun allPosts(): List<PostRow> = backend.fetchAll("Post").map { it.toPostRow() }
     override fun allPhotos(): List<PhotoRow> = backend.fetchAll("Photo").map { it.toPhotoRow() }
     override fun allComments(): List<CommentRow> = backend.fetchAll("Comment").map { it.toCommentRow() }
@@ -147,8 +163,12 @@ open class GalleryStoreOverGeneric(
 
     override fun postsByAuthor(target: Ref.Persisted): List<PostRow> =
         backend.fetchReferencing("Post", "author", target).map { it.toPostRow() }
+    override fun postsBySource(target: Ref.Persisted): List<PostRow> =
+        backend.fetchReferencing("Post", "source", target).map { it.toPostRow() }
     override fun photosByAuthor(target: Ref.Persisted): List<PhotoRow> =
         backend.fetchReferencing("Photo", "author", target).map { it.toPhotoRow() }
+    override fun photosBySource(target: Ref.Persisted): List<PhotoRow> =
+        backend.fetchReferencing("Photo", "source", target).map { it.toPhotoRow() }
     override fun commentsByTarget(target: Ref.Persisted): List<CommentRow> =
         backend.fetchReferencing("Comment", "target", target).map { it.toCommentRow() }
     override fun commentsByAuthor(target: Ref.Persisted): List<CommentRow> =
@@ -181,6 +201,7 @@ class GalleryStoreResolver(
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Tick" -> store.tick(key)?.toRow()
         "Member" -> store.member(key)?.toRow()
+        "Source" -> store.source(key)?.toRow()
         "Post" -> store.post(key)?.toRow()
         "Photo" -> store.photo(key)?.toRow()
         "Comment" -> store.comment(key)?.toRow()
@@ -192,6 +213,7 @@ class GalleryStoreResolver(
     override fun fetchAll(shape: String): List<Row> = when (shape) {
         "Tick" -> store.allTicks().map { it.toRow() }
         "Member" -> store.allMembers().map { it.toRow() }
+        "Source" -> store.allSources().map { it.toRow() }
         "Post" -> store.allPosts().map { it.toRow() }
         "Photo" -> store.allPhotos().map { it.toRow() }
         "Comment" -> store.allComments().map { it.toRow() }
@@ -202,7 +224,9 @@ class GalleryStoreResolver(
 
     override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
         shape == "Post" && field == "author" -> store.postsByAuthor(target).map { it.toRow() }
+        shape == "Post" && field == "source" -> store.postsBySource(target).map { it.toRow() }
         shape == "Photo" && field == "author" -> store.photosByAuthor(target).map { it.toRow() }
+        shape == "Photo" && field == "source" -> store.photosBySource(target).map { it.toRow() }
         shape == "Comment" && field == "target" -> store.commentsByTarget(target).map { it.toRow() }
         shape == "Comment" && field == "author" -> store.commentsByAuthor(target).map { it.toRow() }
         shape == "PopularityNotice" && field == "content" -> store.popularityNoticesByContent(target).map { it.toRow() }
@@ -246,25 +270,42 @@ fun MemberRow.toRow(): Row = Row("Member", key, buildMap {
     put("name", name)
 })
 
+fun Row.toSourceRow(): SourceRow = SourceRow(
+    key = key,
+    name = fields["name"] as String,
+)
+
+fun SourceRow.toRow(): Row = Row("Source", key, buildMap {
+    put("name", name)
+})
+
 fun Row.toPostRow(): PostRow = PostRow(
     key = key,
     author = fields["author"] as Ref.Persisted,
+    source = fields["source"] as Ref.Persisted?,
+    creditLine = fields["creditLine"] as String?,
     body = fields["body"] as String,
 )
 
 fun PostRow.toRow(): Row = Row("Post", key, buildMap {
     put("author", author)
+    source?.let { put("source", it) }
+    creditLine?.let { put("creditLine", it) }
     put("body", body)
 })
 
 fun Row.toPhotoRow(): PhotoRow = PhotoRow(
     key = key,
     author = fields["author"] as Ref.Persisted,
+    source = fields["source"] as Ref.Persisted?,
+    creditLine = fields["creditLine"] as String?,
     caption = fields["caption"] as String,
 )
 
 fun PhotoRow.toRow(): Row = Row("Photo", key, buildMap {
     put("author", author)
+    source?.let { put("source", it) }
+    creditLine?.let { put("creditLine", it) }
     put("caption", caption)
 })
 

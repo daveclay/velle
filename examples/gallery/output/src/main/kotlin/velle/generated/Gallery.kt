@@ -15,13 +15,19 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun commit(input: NewMember): Commit<NewMember, Ref<Member>> =
         boundary("Member", input).carrying(input)
 
-    /** Queue key: [post.author].
+    /** Queue keys: none — this commit contends with no other work.
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
+    fun commit(input: NewSource): Commit<NewSource, Ref<Source>> =
+        boundary("Source", input).carrying(input)
+
+    /** Queue keys: [post.author], [post.source].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewPost): Commit<NewPost, Ref<Post>> =
         boundary("Post", input).carrying(input)
 
-    /** Queue key: [photo.author].
+    /** Queue keys: [photo.author], [photo.source].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewPhoto): Commit<NewPhoto, Ref<Photo>> =
@@ -35,6 +41,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
     fun ticks(): List<Tick> = all("Tick") { materializeTick(it) }
     fun members(): List<Member> = all("Member") { materializeMember(it) }
+    fun sources(): List<Source> = all("Source") { materializeSource(it) }
     fun posts(): List<Post> = all("Post") { materializePost(it) }
     fun photos(): List<Photo> = all("Photo") { materializePhoto(it) }
     fun comments(): List<Comment> = all("Comment") { materializeComment(it) }
@@ -63,6 +70,11 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun member(key: StoreKey): Member = byKey("Member", key)
         fun member(key: Long): Member = member(StoreKey(key))
+
+        val sources: SourceQuery get() = query("Source", SourceFields()) { materializeSource(it) }
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun source(key: StoreKey): Source = byKey("Source", key)
+        fun source(key: Long): Source = source(StoreKey(key))
 
         val posts: PostQuery get() = query("Post", PostFields()) { materializePost(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -122,6 +134,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Tick" -> materializeTick(id)
         "Member" -> materializeMember(id)
+        "Source" -> materializeSource(id)
         "Post" -> materializePost(id)
         "Photo" -> materializePhoto(id)
         "Comment" -> materializeComment(id)
@@ -144,9 +157,18 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         contributions = (system.get(id, "contributions") as List<*>).map { system.refFor(it as Long) },
     )
 
+    private fun materializeSource(id: Long): Source = Source(
+        key = system.refFor(id).key,
+        name = system.get(id, "name") as String,
+        contributions = (system.get(id, "contributions") as List<*>).map { system.refFor(it as Long) },
+    )
+
     private fun materializePost(id: Long): Post = Post(
         key = system.refFor(id).key,
         author = system.refFor(system.get(id, "author") as Long),
+        source = (system.get(id, "source") as Long?)?.let { system.refFor(it) },
+        creditLine = system.get(id, "creditLine") as String?,
+        credit = system.get(id, "credit") as String,
         body = system.get(id, "body") as String,
         comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
         popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
@@ -159,6 +181,9 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     private fun materializePhoto(id: Long): Photo = Photo(
         key = system.refFor(id).key,
         author = system.refFor(system.get(id, "author") as Long),
+        source = (system.get(id, "source") as Long?)?.let { system.refFor(it) },
+        creditLine = system.get(id, "creditLine") as String?,
+        credit = system.get(id, "credit") as String,
         caption = system.get(id, "caption") as String,
         comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
         popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
@@ -199,6 +224,9 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         key = system.refFor(id).key,
         shape = system.shapeOf(id),
         author = system.refFor(system.get(id, "author") as Long),
+        source = (system.get(id, "source") as Long?)?.let { system.refFor(it) },
+        creditLine = system.get(id, "creditLine") as String?,
+        credit = system.get(id, "credit") as String,
         comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
         popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
         commentCount = (system.get(id, "commentCount") as BigDecimal).intValueExact(),
@@ -228,6 +256,9 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     private fun materializeLongPost(id: Long): LongPost = LongPost(
         key = system.refFor(id).key,
         author = system.refFor(system.get(id, "author") as Long),
+        source = (system.get(id, "source") as Long?)?.let { system.refFor(it) },
+        creditLine = system.get(id, "creditLine") as String?,
+        credit = system.get(id, "credit") as String,
         body = system.get(id, "body") as String,
         comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
         popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
@@ -238,6 +269,9 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     private fun materializeCaptioned(id: Long): Captioned = Captioned(
         key = system.refFor(id).key,
         author = system.refFor(system.get(id, "author") as Long),
+        source = (system.get(id, "source") as Long?)?.let { system.refFor(it) },
+        creditLine = system.get(id, "creditLine") as String?,
+        credit = system.get(id, "credit") as String,
         caption = system.get(id, "caption") as String,
         comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
         popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
@@ -249,6 +283,9 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         key = system.refFor(id).key,
         shape = system.shapeOf(id),
         author = system.refFor(system.get(id, "author") as Long),
+        source = (system.get(id, "source") as Long?)?.let { system.refFor(it) },
+        creditLine = system.get(id, "creditLine") as String?,
+        credit = system.get(id, "credit") as String,
         comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
         popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
         isPopular = system.isMember(id, "Popular"),
@@ -279,6 +316,18 @@ act Member {
 -- own: every record of it is a post or a photo.
 shape Contribution {
     author: one Member
+    -- A contribution may come from an outside source, with a line saying how. A
+    -- line without the source is refused at the door by one prohibition over
+    -- Content (below), and the compiler reads that promise wherever the line is
+    -- tested, so `credit` reads `source.name` with a plain dot (Reference §21).
+    source: one Source?
+    creditLine: text?
+    credit: text = if creditLine is some then source.name else ""
+}
+
+-- a wire service or a studio a contribution may be credited to
+act Source {
+    name: text
 }
 
 act Post is Contribution {
@@ -305,6 +354,10 @@ act Comment {
     body: text
 }
 -- inferred inverse: Post.comments, Photo.comments, and Content.comments, from Comment.target
+
+-- A credit line names its source. One prohibition over the union is enforced
+-- on every post and every photo, and is the fact `credit` reads from.
+never (Content where creditLine is some and source is none)
 
 -- Nobody comments on their own post. Narrowing in a conjunction: `target is Post`
 -- licenses `target.author` in what follows it.
@@ -355,6 +408,7 @@ shape Notable = LongPost or Captioned
 // ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
 typealias TickQuery = TypedQuery<TickFields, Tick>
 typealias MemberQuery = TypedQuery<MemberFields, Member>
+typealias SourceQuery = TypedQuery<SourceFields, Source>
 typealias PostQuery = TypedQuery<PostFields, Post>
 typealias PhotoQuery = TypedQuery<PhotoFields, Photo>
 typealias CommentQuery = TypedQuery<CommentFields, Comment>
@@ -382,13 +436,28 @@ data class NewMember(
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Member") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
+data class NewSource(
+    val name: String,
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+        put("name", name)
+    }
+    override fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Source") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
+}
+
 data class NewPost(
     val author: Ref<Member>,
     val body: String,
+    val source: Ref<Source>? = null,
+    val creditLine: String? = null,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("author", system.idOf(author))
         put("body", body)
+        source?.let { put("source", system.idOf(it)) }
+        creditLine?.let { put("creditLine", it) }
     }
     override fun register(reg: NewRegistry) {
     }
@@ -398,10 +467,14 @@ data class NewPost(
 data class NewPhoto(
     val author: Ref<Member>,
     val caption: String,
+    val source: Ref<Source>? = null,
+    val creditLine: String? = null,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("author", system.idOf(author))
         put("caption", caption)
+        source?.let { put("source", system.idOf(it)) }
+        creditLine?.let { put("creditLine", it) }
     }
     override fun register(reg: NewRegistry) {
     }
@@ -451,9 +524,22 @@ data class Member(
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
+data class Source(
+    override val key: StoreKey,
+    val name: String,
+    val contributions: List<Ref<Contribution>>,
+) : Ref<Source> {
+    override val shape: String get() = "Source"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
 data class Post(
     override val key: StoreKey,
     override val author: Ref<Member>,
+    override val source: Ref<Source>?,
+    override val creditLine: String?,
+    override val credit: String,
     val body: String,
     override val comments: List<Ref<Comment>>,
     override val popularityNotices: List<Ref<PopularityNotice>>,
@@ -474,6 +560,9 @@ data class Post(
 data class Photo(
     override val key: StoreKey,
     override val author: Ref<Member>,
+    override val source: Ref<Source>?,
+    override val creditLine: String?,
+    override val credit: String,
     val caption: String,
     override val comments: List<Ref<Comment>>,
     override val popularityNotices: List<Ref<PopularityNotice>>,
@@ -532,6 +621,9 @@ interface Contribution : Keyed {
     /** this record as a reference typed by the union, for a parameter that takes one */
     val ref: Ref<Contribution>
     val author: Ref<Member>
+    val source: Ref<Source>?
+    val creditLine: String?
+    val credit: String
     val comments: List<Ref<Comment>>
     val popularityNotices: List<Ref<PopularityNotice>>
 }
@@ -540,6 +632,9 @@ interface Content : Keyed {
     /** this record as a reference typed by the union, for a parameter that takes one */
     val ref: Ref<Content>
     val author: Ref<Member>
+    val source: Ref<Source>?
+    val creditLine: String?
+    val credit: String
     val comments: List<Ref<Comment>>
     val popularityNotices: List<Ref<PopularityNotice>>
     val commentCount: Int
@@ -551,6 +646,9 @@ data class Popular(
     /** the record's own shape: a Popular is a record of Post or Photo */
     override val shape: String,
     val author: Ref<Member>,
+    val source: Ref<Source>?,
+    val creditLine: String?,
+    val credit: String,
     val comments: List<Ref<Comment>>,
     val popularityNotices: List<Ref<PopularityNotice>>,
     val commentCount: Int,
@@ -596,6 +694,9 @@ data class PhotoComment(
 data class LongPost(
     override val key: StoreKey,
     val author: Ref<Member>,
+    val source: Ref<Source>?,
+    val creditLine: String?,
+    val credit: String,
     val body: String,
     val comments: List<Ref<Comment>>,
     val popularityNotices: List<Ref<PopularityNotice>>,
@@ -612,6 +713,9 @@ data class LongPost(
 data class Captioned(
     override val key: StoreKey,
     val author: Ref<Member>,
+    val source: Ref<Source>?,
+    val creditLine: String?,
+    val credit: String,
     val caption: String,
     val comments: List<Ref<Comment>>,
     val popularityNotices: List<Ref<PopularityNotice>>,
@@ -630,6 +734,9 @@ data class Notable(
     /** the record's own shape: a Notable is a record of Post or Photo */
     override val shape: String,
     val author: Ref<Member>,
+    val source: Ref<Source>?,
+    val creditLine: String?,
+    val credit: String,
     val comments: List<Ref<Comment>>,
     val popularityNotices: List<Ref<PopularityNotice>>,
     /** membership of Popular at the moment of the read */
@@ -654,8 +761,15 @@ class MemberFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
 }
 
+class SourceFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+}
+
 class PostFields(path: List<String> = emptyList()) : Fields(path) {
     val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val source: SourceFields get() = SourceFields(fieldPath + "source")
+    val creditLine: TextField get() = TextField(fieldPath + "creditLine")
+    val credit: TextField get() = TextField(fieldPath + "credit")
     val body: TextField get() = TextField(fieldPath + "body")
     val commentCount: NumField get() = NumField(fieldPath + "commentCount")
     fun isPopular(): Expr = isA("Popular")
@@ -665,6 +779,9 @@ class PostFields(path: List<String> = emptyList()) : Fields(path) {
 
 class PhotoFields(path: List<String> = emptyList()) : Fields(path) {
     val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val source: SourceFields get() = SourceFields(fieldPath + "source")
+    val creditLine: TextField get() = TextField(fieldPath + "creditLine")
+    val credit: TextField get() = TextField(fieldPath + "credit")
     val caption: TextField get() = TextField(fieldPath + "caption")
     val commentCount: NumField get() = NumField(fieldPath + "commentCount")
     fun isPopular(): Expr = isA("Popular")
@@ -693,16 +810,25 @@ class CommentNoticeFields(path: List<String> = emptyList()) : Fields(path) {
 
 class ContributionFields(path: List<String> = emptyList()) : Fields(path) {
     val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val source: SourceFields get() = SourceFields(fieldPath + "source")
+    val creditLine: TextField get() = TextField(fieldPath + "creditLine")
+    val credit: TextField get() = TextField(fieldPath + "credit")
 }
 
 class ContentFields(path: List<String> = emptyList()) : Fields(path) {
     val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val source: SourceFields get() = SourceFields(fieldPath + "source")
+    val creditLine: TextField get() = TextField(fieldPath + "creditLine")
+    val credit: TextField get() = TextField(fieldPath + "credit")
     val commentCount: NumField get() = NumField(fieldPath + "commentCount")
     fun isPopular(): Expr = isA("Popular")
 }
 
 class PopularFields(path: List<String> = emptyList()) : Fields(path) {
     val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val source: SourceFields get() = SourceFields(fieldPath + "source")
+    val creditLine: TextField get() = TextField(fieldPath + "creditLine")
+    val credit: TextField get() = TextField(fieldPath + "credit")
     val commentCount: NumField get() = NumField(fieldPath + "commentCount")
     fun isLongPost(): Expr = isA("LongPost")
     fun isCaptioned(): Expr = isA("Captioned")
@@ -725,6 +851,9 @@ class PhotoCommentFields(path: List<String> = emptyList()) : Fields(path) {
 
 class LongPostFields(path: List<String> = emptyList()) : Fields(path) {
     val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val source: SourceFields get() = SourceFields(fieldPath + "source")
+    val creditLine: TextField get() = TextField(fieldPath + "creditLine")
+    val credit: TextField get() = TextField(fieldPath + "credit")
     val body: TextField get() = TextField(fieldPath + "body")
     fun isPopular(): Expr = isA("Popular")
     fun isNotable(): Expr = isA("Notable")
@@ -732,6 +861,9 @@ class LongPostFields(path: List<String> = emptyList()) : Fields(path) {
 
 class CaptionedFields(path: List<String> = emptyList()) : Fields(path) {
     val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val source: SourceFields get() = SourceFields(fieldPath + "source")
+    val creditLine: TextField get() = TextField(fieldPath + "creditLine")
+    val credit: TextField get() = TextField(fieldPath + "credit")
     val caption: TextField get() = TextField(fieldPath + "caption")
     fun isPopular(): Expr = isA("Popular")
     fun isNotable(): Expr = isA("Notable")
@@ -739,6 +871,9 @@ class CaptionedFields(path: List<String> = emptyList()) : Fields(path) {
 
 class NotableFields(path: List<String> = emptyList()) : Fields(path) {
     val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val source: SourceFields get() = SourceFields(fieldPath + "source")
+    val creditLine: TextField get() = TextField(fieldPath + "creditLine")
+    val credit: TextField get() = TextField(fieldPath + "credit")
     fun isPopular(): Expr = isA("Popular")
     fun isLongPost(): Expr = isA("LongPost")
     fun isCaptioned(): Expr = isA("Captioned")
@@ -747,13 +882,14 @@ class NotableFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = GallerySystem()
     println("Velle MockHarness — Gallery")
-    println("Commits: commit(NewMember(...)), commit(NewPost(...)), commit(NewPhoto(...)), commit(NewComment(...))")
+    println("Commits: commit(NewMember(...)), commit(NewSource(...)), commit(NewPost(...)), commit(NewPhoto(...)), commit(NewComment(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>
 
     println("Tick: " + sys.ticks().size)
     println("Member: " + sys.members().size)
+    println("Source: " + sys.sources().size)
     println("Post: " + sys.posts().size)
     println("Photo: " + sys.photos().size)
     println("Comment: " + sys.comments().size)
