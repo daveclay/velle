@@ -97,7 +97,7 @@ class ExprTypes(private val model: Model) {
         }
         is UnaryMinus -> of(expr.inner, scope, env)
         // a registered function's result, from the signature its arguments match (Reference §5)
-        is FunCall -> (resolveCall(expr, scope, env) as? FunctionResolver.Outcome.Ok)?.result?.takeIf { it != VType.Unknown }
+        is FunCall -> callType(expr, scope, env)
         is AggCall -> aggregateType(expr, scope, env)
         is Binary -> if (expr.op in ARITHMETIC_OPS) arithmeticType(expr, scope, env) else VType.Bool
         is NotExpr, is IsExpr, is ExistsExpr -> VType.Bool
@@ -109,7 +109,75 @@ class ExprTypes(private val model: Model) {
         is PathExpr -> pathType(expr, scope, env)
         is Access -> accessType(expr, scope, env)
         is SetExpr -> recordElement(expr.collection, scope, env)?.let { VType.Coll(it) } ?: valueCollectionType(expr.collection, scope, env)
-        is SingularFor -> VType.Optional(VType.Inst(expr.shape))
+        is SingularFor -> selectedRecord(expr, expr.shape, scope, env)
+    }
+
+    /** A call's result, from the signature its arguments match. A result absent only over an empty
+     *  collection is present where a test shows the collection is not empty (Reference §10). */
+    private fun callType(call: FunCall, scope: String, env: TypeEnv): VType? {
+        val resolved = resolveCall(call, scope, env) as? FunctionResolver.Outcome.Ok ?: return null
+        val result = resolved.result.takeIf { it != VType.Unknown } ?: return null
+        return if (absentOnlyOverEmptyShown(call, resolved, scope, env)) bare(result) else result
+    }
+
+    /** Whether [call] is absent only when its collection is empty, and that collection is shown not empty. */
+    private fun absentOnlyOverEmptyShown(call: FunCall, resolved: FunctionResolver.Outcome.Ok, scope: String, env: TypeEnv): Boolean {
+        if (!resolved.signature.absentOnlyWhenEmpty || resolved.argTypes.any { it is VType.Optional }) return false
+        val collection = collectionTested(call.args.singleOrNull() ?: return false) ?: return false
+        return notEmptyPath(collection, scope, env) in scopeEnv(env, scope).present
+    }
+
+    // ── a selection shown present (Reference §10) ────────────────────────────────
+
+    /** The one record a selection chooses: absent when nothing matched, unless a test shows something does. */
+    private fun selectedRecord(selection: Expr, shape: String, scope: String, env: TypeEnv): VType =
+        VType.Inst(shape).let { record -> if (selectionShown(selection, scope, env)) record else VType.Optional(record) }
+
+    /** Whether a test in [env] or the scope's own condition shows [selection] matched: an `is some` on the
+     *  selection as written, or a test that the collection it selects from is not empty. */
+    private fun selectionShown(selection: Expr, scope: String, env: TypeEnv): Boolean {
+        val present = scopeEnv(env, scope).present
+        if (readRoot(selection) in present) return true
+        val collection = collectionSelectedFrom(selection) ?: return false
+        return notEmptyPath(collection, scope, env) in present
+    }
+
+    /** The collection a selection chooses its record from; null when [expr] is not a selection. */
+    fun collectionSelectedFrom(expr: Expr): CollectionExpr? = when {
+        expr is AggCall && (expr.name == "first" || expr.name == "latest") -> expr.collection
+        expr is SingularFor -> CollectionExpr(listOf(Binding(ShapeForSource(expr.shape, expr.forExpr))))
+        else -> null
+    }
+
+    /** The collection an `is empty` test, an `exists`, or a function over a `many` reads; null for anything else. */
+    private fun collectionTested(expr: Expr): CollectionExpr? = when (expr) {
+        is PathExpr -> CollectionExpr(listOf(Binding(expr)))
+        is SetExpr -> expr.collection
+        is ExistsExpr -> expr.collection ?: CollectionExpr(listOf(Binding(ShapeForSource(expr.shape!!, expr.forExpr!!))))
+        else -> null
+    }
+
+    /** The name the steps of a read through a non-path expression are kept under, as an alias keeps
+     *  those of a path: the expression as written, `first(upload.rows by key)`. */
+    private fun readRoot(target: Expr): List<String> = listOf(Printer.expr(Access(target, emptyList())))
+
+    /**
+     * The entry a collection shown not empty is kept under in [TypeEnv.present], beside the paths
+     * shown present. A test and a selection meet by spelling: a relationship by its path, with or
+     * without `this`, and any other collection as written. A bare name inside a filter over
+     * another shape names that shape's member, and is kept apart from the subject's.
+     */
+    private fun notEmptyPath(collection: CollectionExpr, scope: String, env: TypeEnv): List<String> {
+        val relationship = collection.bindings.singleOrNull()?.takeIf { it.alias == null && collection.where == null }?.source as? PathExpr
+        val spelled = relationship?.let { relationshipSpelled(it, scope, env) } ?: Printer.expr(SetExpr(collection))
+        return listOf("not empty: $spelled")
+    }
+
+    private fun relationshipSpelled(relationship: PathExpr, scope: String, env: TypeEnv): String {
+        val names = PresenceFacts.namesOf(relationship).joinToString(".")
+        val readOffSubject = relationship.root == "this" || relationship.root in env.aliases
+        val insideFilterOverAnotherShape = env.thisScope != null && env.thisScope != scope
+        return if (readOffSubject || !insideFilterOverAnotherShape) names else "$scope's $names"
     }
 
     /** The signature a call matches, or why none does; null when the name resolves to no function. */
@@ -124,7 +192,7 @@ class ExprTypes(private val model: Model) {
         "sum" -> if (expr.field == null) valueCollectionType(expr.collection, scope, env)?.let { model.scalarOf(it.name) }
             else recordElement(expr.collection, scope, env)?.let { element -> model.membersOf(element)[expr.field]?.let(::memberType) }?.let(::bare)
         // a selector is the one record chosen, or absent when the collection is empty (Reference §10)
-        "first", "latest" -> recordElement(expr.collection, scope, env)?.let { VType.Optional(VType.Inst(it)) }
+        "first", "latest" -> recordElement(expr.collection, scope, env)?.let { element -> selectedRecord(expr, element, scope, env) }
         else -> null
     }
 
@@ -215,13 +283,29 @@ class ExprTypes(private val model: Model) {
         if (path.root in outer.scalarAliases) return null
         val env = scopeEnv(outer, scope)
         val startsAtRecord = path.root == "this" || path.root in env.aliases
-        var current: String? = when {
+        val start: String? = when {
             path.root in env.aliases -> env.aliases[path.root]
             path.root == "this" -> env.thisScope ?: scope
             else -> scope
         }
         val steps = if (startsAtRecord) path.segs else listOf(Seg(path.root, viaQdot = false)) + path.segs
-        val names = aliasPrefix(path, env).toMutableList()
+        return untestedStepAmong(steps, start, aliasPrefix(path, env), env)
+    }
+
+    /**
+     * The same for a read through a selection or another non-path expression (Reference §10): the
+     * dot directly after it needs no test, the rest of the path being absent when it matched
+     * nothing, and every step after that is checked as a path's is.
+     */
+    fun untestedStepAfter(access: Access, scope: String, outer: TypeEnv): List<String>? {
+        val target = bareOrNull(of(access.target, scope, outer)) as? VType.Inst ?: return null
+        return untestedStepAmong(access.segs, target.shape, readRoot(access.target), accessEnv(access, scope, outer))
+    }
+
+    /** The first of [steps], read from [start] and kept under [prefix], that a plain dot follows while it may be absent. */
+    private fun untestedStepAmong(steps: List<Seg>, start: String?, prefix: List<String>, env: TypeEnv): List<String>? {
+        var current = start
+        val names = prefix.toMutableList()
         var mayBeAbsent = false
         for (step in steps) {
             if (mayBeAbsent && !step.viaQdot) return names.toList()
@@ -237,7 +321,47 @@ class ExprTypes(private val model: Model) {
     private fun accessType(expr: Access, scope: String, env: TypeEnv): VType? {
         val target = of(expr.target, scope, env) ?: return null
         if (target is VType.Coll) return collectionAccessType(target, expr.segs, env)
-        return along(bare(target).instanceShape(), expr.segs, emptyList(), optional = target is VType.Optional, env)
+        return along(bare(target).instanceShape(), expr.segs, readRoot(expr.target), optional = target is VType.Optional, accessEnv(expr, scope, env))
+    }
+
+    /** Whether a step of [expr] after its target is declared optional and not shown present: the
+     *  read is then absent by declaration, whatever its target is (Reference §7). */
+    private fun stepAbsentByDeclaration(expr: Access, scope: String, env: TypeEnv): Boolean {
+        val target = bareOrNull(of(expr.target, scope, env)) as? VType.Inst ?: return false
+        return along(target.shape, expr.segs, readRoot(expr.target), optional = false, accessEnv(expr, scope, env)) is VType.Optional
+    }
+
+    /** What the steps after [expr]'s target are read under: the scope's own condition, and, after a
+     *  selection, what the filter of its collection shows about the record selected,
+     *  `first(rows where newKey is some by key).newKey` (Reference §10). */
+    private fun accessEnv(expr: Access, scope: String, outer: TypeEnv): TypeEnv {
+        val env = scopeEnv(outer, scope)
+        val collection = collectionSelectedFrom(expr.target) ?: return env
+        val element = recordElement(collection, scope, outer) ?: return env
+        return env.with(elementNarrowing(collection, element, readRoot(expr.target).single(), env.aliases.keys))
+    }
+
+    /**
+     * What a collection shows about each of its elements, kept under [name] (Reference §14): the
+     * element scope's own `where` when it is a refinement, and the tests the collection's filter
+     * writes on the element. A test the filter writes on the outer subject, `this.note is some`,
+     * or on an outer `as` name, says nothing about the element and is left out.
+     */
+    fun elementNarrowing(collection: CollectionExpr?, element: String, name: String, outerAliases: Set<String>): Narrowing {
+        val filterAlias = collection?.bindings?.singleOrNull()?.alias
+        val elementTests = PresenceFacts.conjuncts(collection?.where).filter { conjunct ->
+            val root = testedRoot(conjunct)
+            root != null && root != "this" && (root == filterAlias || root !in outerAliases)
+        }
+        val filter = elementTests.fold(Narrowing.NONE) { shown, test -> shown + narrowingOf(test, holds = true, element, TypeEnv(thisScope = element)) }
+        return (narrowingOf(element) + filter).under(name, filterAlias)
+    }
+
+    /** The root name of the path an `is` test reads, through a `not`; null for any other test. */
+    private fun testedRoot(conjunct: Expr): String? = when (conjunct) {
+        is IsExpr -> (conjunct.subject as? PathExpr)?.root
+        is NotExpr -> testedRoot(conjunct.inner)
+        else -> null
     }
 
     /** A field read off every record of a set denotation, `(Component where ...).source`. */
@@ -292,23 +416,54 @@ class ExprTypes(private val model: Model) {
 
     /**
      * Whether an expression may be absent by declaration (Reference §7; checks.md F2): an optional
-     * path not shown present, `none`, a function result that is optional, through arithmetic and
-     * the branches of a conditional. A selection that matches nothing, `first`, `latest`,
-     * `(Shape for expr)`, a walk with `until`, is absent by data, which Reference §14 leaves to
-     * the runtime, so it does not count.
+     * path not shown present, a field or step declared optional read off any record, `none`, a
+     * function result that is optional, through arithmetic and the branches of a conditional.
+     *
+     * A selection that matches nothing, `first`, `latest`, `(Shape for expr)`, is absent by data.
+     * With [selectionsCount], as for a derived or captured property, one no test shows to match
+     * counts; without, as for a `from` block and an assignment, Reference §14 leaves it to the
+     * runtime. The `?.` directly after a selection is the plain dot and counts for nothing.
      */
-    fun absenceDeclared(expr: Expr, scope: String, env: TypeEnv): Boolean = when (expr) {
-        is NoneLit -> true
-        is PathExpr -> of(expr, scope, env) is VType.Optional
-        is Access -> expr.segs.any { it.viaQdot } || absenceDeclared(expr.target, scope, env)
-        // a function is absent when an argument is, or when its signature says so, `number(text)`
-        is FunCall -> expr.args.any { absenceDeclared(it, scope, env) } ||
-            (resolveCall(expr, scope, env) as? FunctionResolver.Outcome.Ok)?.signature?.optionalResult == true
-        is UnaryMinus -> absenceDeclared(expr.inner, scope, env)
-        is Binary -> expr.op in ARITHMETIC_OPS && (absenceDeclared(expr.left, scope, env) || absenceDeclared(expr.right, scope, env))
-        is IfExpr -> absenceDeclared(expr.thenExpr, scope, env.with(narrowingOf(expr.condition, holds = true, scope, env))) ||
-            absenceDeclared(expr.elseExpr, scope, env.with(narrowingOf(expr.condition, holds = false, scope, env)))
-        else -> false
+    fun absenceDeclared(expr: Expr, scope: String, env: TypeEnv, selectionsCount: Boolean = false): Boolean {
+        fun absent(part: Expr, partEnv: TypeEnv = env) = absenceDeclared(part, scope, partEnv, selectionsCount)
+        return when (expr) {
+            is NoneLit -> true
+            is PathExpr -> of(expr, scope, env) is VType.Optional
+            is Access -> absent(expr.target) || stepAbsentByDeclaration(expr, scope, env)
+            is AggCall, is SingularFor -> selectionsCount && collectionSelectedFrom(expr) != null && of(expr, scope, env) is VType.Optional
+            // a function is absent when an argument is, or when its signature says so, `number(text)`
+            is FunCall -> expr.args.any { absent(it) } || resultAbsentByDeclaration(expr, scope, env)
+            is UnaryMinus -> absent(expr.inner)
+            is Binary -> expr.op in ARITHMETIC_OPS && (absent(expr.left) || absent(expr.right))
+            is IfExpr -> absent(expr.thenExpr, env.with(narrowingOf(expr.condition, holds = true, scope, env))) ||
+                absent(expr.elseExpr, env.with(narrowingOf(expr.condition, holds = false, scope, env)))
+            else -> false
+        }
+    }
+
+    /** The first selection [expr] reads that no test shows to match, through the reads, calls,
+     *  arithmetic, and branches [absenceDeclared] goes through; null when there is none. */
+    fun unshownSelection(expr: Expr, scope: String, env: TypeEnv): Expr? = when (expr) {
+        is Access -> unshownSelection(expr.target, scope, env)
+        is AggCall, is SingularFor -> expr.takeIf { collectionSelectedFrom(it) != null && of(it, scope, env) is VType.Optional }
+        is FunCall -> expr.args.firstNotNullOfOrNull { unshownSelection(it, scope, env) }
+        is UnaryMinus -> unshownSelection(expr.inner, scope, env)
+        is Binary -> if (expr.op in ARITHMETIC_OPS) unshownSelection(expr.left, scope, env) ?: unshownSelection(expr.right, scope, env) else null
+        is IfExpr -> unshownSelection(expr.thenExpr, scope, env.with(narrowingOf(expr.condition, holds = true, scope, env)))
+            ?: unshownSelection(expr.elseExpr, scope, env.with(narrowingOf(expr.condition, holds = false, scope, env)))
+        else -> null
+    }
+
+    /** The test that shows [selection] matches, as a spec writes it: `exists (Entry where key == this.entryKey)`. */
+    fun existsTestFor(selection: Expr): Expr? {
+        val collection = collectionSelectedFrom(selection) ?: return null
+        val related = collection.bindings.singleOrNull()?.takeIf { collection.where == null }?.source as? ShapeForSource
+        return if (related != null) ExistsExpr(shape = related.shape, forExpr = related.forExpr) else ExistsExpr(collection = collection)
+    }
+
+    private fun resultAbsentByDeclaration(call: FunCall, scope: String, env: TypeEnv): Boolean {
+        val resolved = resolveCall(call, scope, env) as? FunctionResolver.Outcome.Ok ?: return false
+        return resolved.signature.optionalResult && !absentOnlyOverEmptyShown(call, resolved, scope, env)
     }
 
     private val narrowingCache = HashMap<String, Narrowing>()
@@ -346,7 +501,40 @@ class ExprTypes(private val model: Model) {
      * union of two operands, as the other operand where it fails. A conjunction adds up where
      * it holds.
      */
-    fun narrowingOf(cond: Expr, holds: Boolean, scope: String, env: TypeEnv): Narrowing = when {
+    fun narrowingOf(cond: Expr, holds: Boolean, scope: String, env: TypeEnv): Narrowing =
+        testNarrowingOf(cond, holds, scope, env) + selectionNarrowingOf(cond, holds, scope, env)
+
+    /**
+     * What one test shows about collections and selections (Reference §10): `C is empty` failing,
+     * `C is not empty` holding, and `exists C` holding show `C` not empty, so a selection over `C`
+     * matched; `is some` holding on a selection, or on a read through one, shows that read and
+     * every step on the way to it present.
+     */
+    private fun selectionNarrowingOf(cond: Expr, holds: Boolean, scope: String, env: TypeEnv): Narrowing = when {
+        cond is NotExpr && cond.inner is ExistsExpr -> selectionNarrowingOf(cond.inner, !holds, scope, env)
+        cond is ExistsExpr && holds -> notEmptyNarrowing(cond, scope, env)
+        cond is IsExpr && saysNotEmpty(cond, holds) -> notEmptyNarrowing(cond.subject, scope, env)
+        cond is IsExpr && cond.subject !is PathExpr && saysPresent(cond, holds) -> presentReadNarrowing(cond.subject, scope, env)
+        else -> Narrowing.NONE
+    }
+
+    private fun saysNotEmpty(test: IsExpr, holds: Boolean) = if (holds) test.kind == "notEmpty" else test.kind == "empty"
+
+    private fun saysPresent(test: IsExpr, holds: Boolean) = if (holds) test.kind == "some" else test.kind == "none"
+
+    private fun notEmptyNarrowing(tested: Expr, scope: String, env: TypeEnv): Narrowing =
+        collectionTested(tested)?.let { collection -> Narrowing(present = setOf(notEmptyPath(collection, scope, env))) } ?: Narrowing.NONE
+
+    /** `first(rows by key).parent is some` shows the selection, and `parent` read off it, present;
+     *  a selection shown present shows its collection not empty. */
+    private fun presentReadNarrowing(read: Expr, scope: String, env: TypeEnv): Narrowing {
+        val target = (read as? Access)?.target ?: read
+        val steps = readRoot(target) + ((read as? Access)?.segs?.map { seg -> seg.name } ?: emptyList())
+        val selected = collectionSelectedFrom(target)?.let { collection -> setOf(notEmptyPath(collection, scope, env)) } ?: emptySet()
+        return Narrowing(present = Narrowing.stepsOf(steps) + selected)
+    }
+
+    private fun testNarrowingOf(cond: Expr, holds: Boolean, scope: String, env: TypeEnv): Narrowing = when {
         // `x is not A` holding is `x is A` failing (Reference §10)
         cond is NotExpr && cond.inner is IsExpr -> narrowingOf(cond.inner, !holds, scope, env)
         cond is Binary && cond.op == "and" && holds -> narrowingOf(cond.left, true, scope, env) + narrowingOf(cond.right, true, scope, env)

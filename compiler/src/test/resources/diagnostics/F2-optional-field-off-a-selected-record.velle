@@ -1,0 +1,20 @@
+-- A `from` block filling a required field with a field declared optional, read off a selected record, `first(upload.rows by key).newKey` with `newKey: text?`.
+act Upload {
+    note: text?
+    rows: many Row = (Row where upload == this)
+}
+act Row {
+    upload: one Upload
+    key: text
+    newKey: text?
+}
+act Other {
+    upload: one Upload
+}
+shape Kept {
+    other: one Other
+    label: text
+}
+rule Keep when Other {
+    Kept from { other: this, label: first(upload.rows by key).newKey }
+}

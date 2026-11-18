@@ -1,0 +1,8 @@
+-- `?.` directly after a selection reads as the plain dot does: a `from` block takes
+-- both into a required field, and the `?` draws advisory A10 (Reference §10).
+act Upload { note: text? } with rows
+shape Parent { name: text }
+shape Row { upload: one Upload, key: text, newKey: text?, parent: one Parent? }
+shape Kept { other: one Other, label: text }
+act Other { upload: one Upload }
+rule Keep when Other { Kept from { other: this, label: first(upload.rows by key)?.key } }

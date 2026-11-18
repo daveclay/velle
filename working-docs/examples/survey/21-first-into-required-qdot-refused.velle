@@ -1,7 +1,0 @@
--- The same read as 21-first-into-required-by-data with `?.` after the selection
--- is refused, though Reference §10 gives the two spellings one meaning.
-act Upload { note: text? } with rows
-shape Parent { name: text }
-shape Row { upload: one Upload, key: text, newKey: text?, parent: one Parent? }
-act Other { upload: one Upload
-  keyFromFirst: text = first(upload.rows by key)?.key }

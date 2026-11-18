@@ -27,11 +27,10 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeAttempt — consults ChargeAttempt through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — consults AttemptTimeout through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
      *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
@@ -39,7 +38,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -50,7 +48,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -58,13 +55,11 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over SettlementReversal — creates SettlementReversal referencing an instance the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over DunningFlag — consults OpenDunningFlag through a path the derivation cannot key (unexamined (A5)).
@@ -82,7 +77,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -93,7 +87,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -101,7 +94,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewCustomer): Commit<NewCustomer, Ref<Customer>> =
@@ -115,7 +107,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -126,7 +117,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -134,7 +124,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewCardUpdate): Commit<NewCardUpdate, Ref<CardUpdate>> =
@@ -148,7 +137,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -159,7 +147,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -167,7 +154,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewPlaceOrder): Commit<NewPlaceOrder, Nothing?> =
@@ -176,11 +162,10 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: [processorVerdict.attempt] — plus system-wide width below.
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — consults AttemptTimeout through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
      *  System-wide over AddressChangeApplication — consults AddressChangeOutcome through a path the derivation cannot key (unexamined (A5)).
@@ -188,7 +173,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -199,7 +183,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -207,13 +190,11 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over SettlementReversal — creates SettlementReversal referencing an instance the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over DunningFlag — consults OpenDunningFlag through a path the derivation cannot key (unexamined (A5)).
@@ -239,7 +220,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -250,7 +230,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -269,7 +248,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -280,7 +258,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
      *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
      *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
@@ -288,7 +265,6 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over AttemptTimeout — reads AttemptOutcome.attempt with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewManualCharge): Commit<NewManualCharge, Ref<ManualCharge>> =
@@ -1575,7 +1551,7 @@ shape AttemptTimeout is AttemptOutcome {
 shape PendingAttempt = ChargeAttempt where not exists AttemptOutcome for this
 
 shape CompletedAttempt = ChargeAttempt where exists ChargeResponse for this {
-    outcome: Verdict = latest(ChargeResponse where attempt == this by respondedOn).outcome
+    outcome: Verdict = latest(ChargeResponse for this by respondedOn).outcome
 }
 
 shape SuccessfulCharge = CompletedAttempt where outcome == "approved"

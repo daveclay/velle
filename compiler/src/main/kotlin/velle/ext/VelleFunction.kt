@@ -58,11 +58,17 @@ interface VelleFunction {
  * present (`max` over an empty collection). Without it the result is absent
  * only when an argument is: the runtime never calls the body with an absent
  * argument, so a body never sees null.
+ *
+ * [absentOnlyWhenEmpty]: said beside [optionalResult] by a signature whose one
+ * parameter is a `many`: the result is absent when the collection is empty and
+ * never otherwise, so a test showing the collection is not empty shows the
+ * result present (`max`, `min`).
  */
 class Signature(
     val parameters: List<Parameter>,
     val result: Returns,
     val optionalResult: Boolean = false,
+    val absentOnlyWhenEmpty: Boolean = false,
     val apply: (FunctionContext, List<Typed>) -> Any?,
 )
 

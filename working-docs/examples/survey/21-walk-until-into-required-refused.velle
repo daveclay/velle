@@ -1,5 +1,0 @@
--- A walk with `until` finds a record or none, absent by data as a selection is, and
--- a required property declared over it is refused.
-shape Kind { name: text, parent: one Kind?, top: boolean
-  topKind: one Kind = walk parent until top }
-never (Kind where parent == this)

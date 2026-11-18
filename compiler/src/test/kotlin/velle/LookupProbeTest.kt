@@ -229,6 +229,37 @@ class LookupProbeTest {
     }
 
     @Test
+    fun `a never on Unpaired with a guarded rule over a unique key`() {
+        val sys = system("""
+            act Entry {
+                key: text unique
+                initialLabel: text
+            }
+            act Submission {
+                entryKey: text
+                newLabel: text?
+            }
+            shape Arrival {
+                submission: one Submission
+                entry: one Entry
+            }
+            shape Unpaired = Submission where not exists Arrival for this
+            never (Unpaired)
+            rule RecordArrival when (Unpaired where exists (Entry where key == this.entryKey)) {
+                Arrival from { submission: this, entry: (Entry where key == this.entryKey) }
+            }
+        """)
+        sys.scope {
+            sys.commit("Entry", mapOf("key" to "PLOT-0417", "initialLabel" to "a"))
+            assertIs<CommitResult.Accepted>(sys.commit("Submission", mapOf("entryKey" to "PLOT-0417")))
+            assertEquals(1, sys.instancesOf("Arrival").size)
+            val refused = assertIs<CommitResult.Refused>(sys.commit("Submission", mapOf("entryKey" to "PLOT-9999")))
+            assertTrue(refused.reason.startsWith("Submission refused: this Submission would be an Unpaired"), refused.reason)
+            assertEquals(1, sys.instancesOf("Submission").size)
+        }
+    }
+
+    @Test
     fun `the lookup behind after commit, a key no entry has`() {
         val sys = system(entryAndSubmission + """
             never (Entry where count(Entry where key == this.key) > 1)

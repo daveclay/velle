@@ -1,0 +1,13 @@
+-- A property declared required and computed through a selection, `first(upload.rows by key).key`, with no test showing the upload has a row; the selection matches nothing on an upload with none.
+act Upload {
+    note: text?
+    rows: many Row = (Row where upload == this)
+}
+act Row {
+    upload: one Upload
+    key: text
+}
+act Other {
+    upload: one Upload
+    keyFromFirst: text = first(upload.rows by key).key
+}

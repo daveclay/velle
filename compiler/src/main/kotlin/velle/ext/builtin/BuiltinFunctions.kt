@@ -140,6 +140,7 @@ sealed class Extreme(name: String, private val pickFirst: (Int) -> Boolean) : Bu
             parameters = listOf(Parameter("values", Accepts.ManyOf(Ordered::class), takes = "a many of ordered values")),
             result = Returns.ElementOf(0),
             optionalResult = true,
+            absentOnlyWhenEmpty = true,
             apply = { _, args -> pick(args[0].capability(), args[0].elements) },
         ),
     )

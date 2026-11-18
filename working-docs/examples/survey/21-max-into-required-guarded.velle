@@ -1,0 +1,4 @@
+-- `max` over a collection with the empty case answered first: the `else` branch runs
+-- only when `scores` is not empty, so the result is present there (Reference §10).
+act Trial { scores: many integer
+  best: integer = if scores is empty then 0 else max(scores) }

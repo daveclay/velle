@@ -1,8 +1,0 @@
--- A required property computed through a selection that may match nothing, reading
--- a required field of the selected record. Reference §7 admits it and says the
--- runtime refuses the absence; RequiredThroughSelectionProbeTest shows it does not.
-act Upload { note: text? } with rows
-shape Parent { name: text }
-shape Row { upload: one Upload, key: text, newKey: text?, parent: one Parent? }
-act Other { upload: one Upload
-  keyFromFirst: text = first(upload.rows by key).key }

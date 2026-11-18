@@ -101,5 +101,6 @@ A derivation recalculates when a record it aggregates over is deleted: `balance 
 - [ ] Let V24 discharge a referrer whose existence the deleter's scope provably excludes (P6: the fills of a never-filled prescription).
 - [ ] Write a spec that deletes against a stored fold twin or a snapshot and rule whether the existence-dependency check should name them (OQ37's flagged edge).
 - [ ] Implement V21 in the validator (`initially`/`timestamp` on an act is a compile error; OQ31), then remove the now-dead `initially` optional-parameter branch from `Codegen.kt` `commitFn`.
-- [ ] Close the validator gaps `Validator.kt`'s header lists: V11 branch-sensitive narrowing · V12 at-most-one beyond the refinement slice (`singular_references.md`) · the A-series beyond A4/A5.
+- [ ] Close the validator gaps `Validator.kt`'s header lists: V11 branch-sensitive narrowing · V12 at-most-one beyond the refinement slice (`singular_references.md`) · A1 and A3 of the A-series.
 - [ ] Add the static selector-discrimination check (selectors fail loudly at runtime today; Reference §10; rides OQ16).
+- [ ] Read a comparison that holds as showing a read through a selection present, `first(rows by key).newKey == "a"`, as it shows a path present (Reference §10); today only `is some` on the read does (`ExprTypes.selectionNarrowingOf`; residue of OQ143, settled table).

@@ -14,7 +14,7 @@ import velle.generated.membership.*
  * shape ClosedTicket = Ticket where (exists TicketClosure for this) and (not (exists ReopenTicket for this)) {
  *     frozen
  *     captured closedOn: Date = today
- *     captured closedBy: one Agent = latest(TicketClosure where ticket == this by closedOn).closedBy
+ *     captured closedBy: one Agent = latest(TicketClosure for this by closedOn).closedBy
  * }
  *
  * rule NoticeReopen when leaving ClosedTicket {

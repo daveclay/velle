@@ -155,7 +155,7 @@ shape AttemptTimeout is AttemptOutcome {
 shape PendingAttempt = ChargeAttempt where not exists AttemptOutcome for this
 
 shape CompletedAttempt = ChargeAttempt where exists ChargeResponse for this {
-    outcome: Verdict = latest(ChargeResponse where attempt == this by respondedOn).outcome
+    outcome: Verdict = latest(ChargeResponse for this by respondedOn).outcome
 }
 
 shape SuccessfulCharge = CompletedAttempt where outcome == "approved"

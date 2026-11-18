@@ -206,6 +206,22 @@ What the compiler checks, and what happens at run time:
 - The compiler rejects `(Entry where key == this.entryKey)` where one record is expected when the filter names only part of a key, or when `entryKey` could be absent, since two absent values compare equal ([checks.md, V36](checks#v36--a-filter-over-a-key-is-one-record)). An optional `entryKey` is tested with `entryKey is some` in the refinement the rule is declared on, as the test "a refinement's is some makes the compared value present in the rule's body" in `compiler/src/test/kotlin/velle/UniqueKeyTest.kt` shows.
 - Without the `never`, a submission naming a key no entry has makes the filter absent. The firing fails, the commit is undone, and the committer is told ([§14](Reference-14-for)). The key and the `never` together keep both the duplicate and the missing entry out at the door.
 
+The office may want the refusal to say what the business wants, that every submission is tied to its plot. State that as the prohibition, and let the rule fire only when an entry has the key:
+
+```
+never (Unpaired)
+
+rule RecordArrival when (Unpaired where exists (Entry where key == this.entryKey)) {
+    Arrival from { submission: this, entry: (Entry where key == this.entryKey) }
+}
+```
+
+- `never (Unpaired)` replaces the `never` on `Submission`. Every submission is `Unpaired` when it arrives and the rule changes that, so the prohibition is checked when the commit ends, after the rule has fired.
+- The rule's condition holds only when an entry has the key. For a key no entry has, the rule does not fire, the submission is still `Unpaired` when the commit ends, and the prohibition refuses it: `Submission refused: this Submission would be an Unpaired`.
+- Write both lines or neither. The condition without the `never` accepts a submission that names no entry and leaves it unpaired, with nobody told. The `never` without the condition is never heard, because the failed firing refuses the submission first.
+
+The test "a never on Unpaired with a guarded rule over a unique key" in `compiler/src/test/kotlin/velle/LookupProbeTest.kt` runs this spelling.
+
 ## A wide domain: the two authors
 
 *The consequence of the serialization-domain design ([`evaluation.md`](evaluation) [U3](evaluation#the-universal-transaction); [`checks.md`](checks) [A5](checks#a5--contention-width)) that decides why the width warning is an advisory.*

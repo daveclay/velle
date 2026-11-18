@@ -1,0 +1,7 @@
+-- A plain dot through `parent`, declared `one Parent?`, after a selection: refused,
+-- as `row.parent.name` off a stored row is (Reference §10).
+act Upload { note: text? } with rows
+shape Parent { name: text }
+shape Row { upload: one Upload, key: text, newKey: text?, parent: one Parent? }
+act Other { upload: one Upload
+  parentName: text? = first(upload.rows by key).parent.name }

@@ -1,0 +1,17 @@
+-- A plain dot through a step declared optional, after a selection, `first(upload.rows by key).parent.name` with `parent: one Parent?`.
+shape Parent {
+    name: text
+}
+act Upload {
+    note: text?
+    rows: many Row = (Row where upload == this)
+}
+act Row {
+    upload: one Upload
+    key: text
+    parent: one Parent?
+}
+act Other {
+    upload: one Upload
+    parentName: text? = first(upload.rows by key).parent.name
+}

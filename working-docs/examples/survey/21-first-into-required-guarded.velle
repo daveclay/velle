@@ -1,0 +1,7 @@
+-- The same property with the empty case answered first: the `else` branch runs only
+-- for an upload with a row, so the selection matched there (Reference §10).
+act Upload { note: text? } with rows
+shape Parent { name: text }
+shape Row { upload: one Upload, key: text, newKey: text?, parent: one Parent? }
+act Other { upload: one Upload
+  keyFromFirst: text = if upload.rows is empty then "none" else first(upload.rows by key).key }

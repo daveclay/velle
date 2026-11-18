@@ -1,7 +1,0 @@
--- A required property computed through a selection that may match nothing is
--- accepted; the plain optional read beside it is refused. Reference §10 says
--- the rest of the path is absent when `first` matched nothing, so both are `text?`.
-act Upload { note: text? } with rows
-shape Row { upload: one Upload, newKey: text? }
-act Other { upload: one Upload
-  keyFromFirst: text = first(upload.rows by newKey).newKey }

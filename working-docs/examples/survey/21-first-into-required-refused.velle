@@ -1,0 +1,7 @@
+-- A required property computed through a selection that may match nothing: refused,
+-- since nothing shows the upload has a row (Reference §7).
+act Upload { note: text? } with rows
+shape Parent { name: text }
+shape Row { upload: one Upload, key: text, newKey: text?, parent: one Parent? }
+act Other { upload: one Upload
+  keyFromFirst: text = first(upload.rows by key).key }

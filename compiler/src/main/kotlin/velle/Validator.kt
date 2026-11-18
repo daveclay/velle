@@ -16,8 +16,8 @@ import java.math.BigDecimal
  * calibration against realistic specs is OQ16's deferred work. Not yet
  * implemented (tracked in checks.md): V12 at-most-one proofs beyond the
  * refinement slice (base-shape to-one-inverse proofs stay runtime-enforced),
- * and the A-series beyond A4/A5
- * (drift-exposed partitions and contention — advisory, via Validator.advisories).
+ * and of the A-series A1 and A3; A2 and A4 to A10 are advisory, via
+ * Validator.advisories.
  */
 class Validator(private val model: Model) {
 
@@ -519,12 +519,14 @@ class Validator(private val model: Model) {
         // statement creates, as a reference, for the other statements of its level
         val created = checkCreationAliases(rule, scope)
         ruleNarrowing = model.types.narrowingOf(rule.condition, scope)
+        ruleChecked = rule
         try {
             (rule.condition as? RefName)?.where?.let { checkExpr(it, scope) }
             checkBody(rule, scope, rule.body, created)
         } finally {
             rule.by?.let { aliasScopes.remove(it.name); ruleActor = null }
             ruleNarrowing = Narrowing.NONE
+            ruleChecked = null
         }
     }
 
@@ -610,25 +612,8 @@ class Validator(private val model: Model) {
      *  `(rows where newKey is some)`, whose tests on the element make `name.newKey` present in the body.
      *  A test the filter writes on the outer subject, `this.note is some`, or on an outer `as` name,
      *  says nothing about the element and is left out. */
-    private fun loopNarrowing(name: String, element: String, source: Expr?): Narrowing {
-        val collection = (source as? SetExpr)?.collection
-        val filterAlias = collection?.bindings?.singleOrNull()?.alias
-        val elementTests = PresenceFacts.conjuncts(collection?.where).filter { conjunct ->
-            val root = testedRoot(conjunct)
-            root != null && root != "this" && (root == filterAlias || root !in aliasScopes)
-        }
-        val filter = elementTests.fold(Narrowing.NONE) { shown, test ->
-            shown + model.types.narrowingOf(test, holds = true, element, TypeEnv(thisScope = element))
-        }
-        return (model.types.narrowingOf(element) + filter).under(name, filterAlias)
-    }
-
-    /** The root name of the path an `is` test reads, through a `not`; null for any other test. */
-    private fun testedRoot(conjunct: Expr): String? = when (conjunct) {
-        is IsExpr -> (conjunct.subject as? PathExpr)?.root
-        is NotExpr -> testedRoot(conjunct.inner)
-        else -> null
-    }
+    private fun loopNarrowing(name: String, element: String, source: Expr?): Narrowing =
+        model.types.elementNarrowing((source as? SetExpr)?.collection, element, name, aliasScopes.keys)
 
     /** What a `for each` name runs over, or null with a diagnostic when the source is not a collection. */
     private fun loopElement(rule: RuleDecl, name: String, e: Expr, scope: String): LoopElem? {
@@ -1064,7 +1049,11 @@ class Validator(private val model: Model) {
                         "first(${e.shape} where <field> == $subject by <field>) (Reference §10)"))
                 }
             }
-            is Access -> checkExpr(e.target, scope)
+            is Access -> {
+                checkExpr(e.target, scope)
+                checkDotsLicensed(e, scope)
+                adviseOnQuestionMarkAfterSelection(e)
+            }
             is ShapeForSource -> checkExpr(e.forExpr, scope)
             is SetExpr -> checkCollection(e.collection, scope)
             is WalkExpr -> checkWalk(e, scope)
@@ -1215,12 +1204,16 @@ class Validator(private val model: Model) {
         val mismatch: (site: String, field: String, declared: String, actual: String, actualSpelled: String) -> String,
         val absent: (site: String, field: String, declared: String, optionalSpelled: String) -> String,
         val none: (site: String, field: String, declared: String, optionalSpelled: String) -> String,
+        /** Whether the site refuses a selection no test shows to match (Reference §7): a derived or
+         *  captured property does, having no moment at which the runtime could refuse the miss. */
+        val refusesUnshownSelection: Boolean = false,
     )
 
     private val COMPUTED = Wording(
         { site, field, declared, actual, spelled -> "$site is declared $declared and computed as $actual; declare it '$field: $spelled', or compute $declared" },
         { site, field, declared, spelled -> "$site is declared $declared and may be absent; declare it '$field: $spelled', or test the value with 'is some' first" },
         { site, field, declared, spelled -> "$site is declared $declared and computed as none; declare it '$field: $spelled'" },
+        refusesUnshownSelection = true,
     )
     private val INITIALLY = Wording(
         { site, field, declared, actual, spelled -> "$site is declared $declared and starts as $actual; declare it '$field: $spelled', or start it with $declared" },
@@ -1242,22 +1235,24 @@ class Validator(private val model: Model) {
      * The declared type of a property against the expression written for it (Reference §7, §12,
      * §14; checks.md F2): the expression's type is the declared one, the number types being
      * one kind, and a required declaration takes no expression that may be absent. A constant
-     * the declared type reads, `"09:00"` for a `time`, is read by it. An extension type is
-     * [checkExtWrite]'s. An expression the compiler reads no type off is refused.
+     * the declared type reads, `"09:00"` for a `time`, is read by it. The kind of a value given to an
+     * extension type is [checkExtWrite]'s. An expression the compiler reads no type off is refused.
      */
     private fun checkDeclaredType(site: String, field: String, declared: VType, value: Expr, scope: String, wording: Wording) {
         if (value is PathExpr && value.root == "randomUUID" && value.segs.isEmpty()) return
         // one message per reason: a diagnostic that already names the expression has said what is wrong
         val written = Printer.expr(value)
-        if (diags.any { written in it.message }) return
+        if (diags.any { !it.advisory && written in it.message }) return
         val declaredBare = ExprTypes.bare(declared)
         constantOf(value)?.let { constant ->
             val reader = registryName(declared)?.let { model.registry.builtins[it] ?: model.registry[it] }
             if (reader != null && readsForm(reader, constant)) { checkConstantAs(constant, reader, value); return }
         }
-        if (declaredBare is VType.Ext) return
+        // the kind of a value given to an extension type is [checkExtWrite]'s; whether it may be absent is checked here
+        val kindCheckedElsewhere = declaredBare is VType.Ext
         val actual = model.types.of(value, scope, typeEnv())
         if (actual == null) {
+            if (kindCheckedElsewhere) return
             diags.add(Diagnostic("F2", "$site — the compiler reads no type off '${Printer.expr(value)}' to check against the declared ${model.spell(declared)}"))
             return
         }
@@ -1267,14 +1262,60 @@ class Validator(private val model: Model) {
             return
         }
         val actualBare = ExprTypes.bare(actual)
-        if (!declaredAccepts(declaredBare, actualBare)) {
+        if (!kindCheckedElsewhere && !declaredAccepts(declaredBare, actualBare)) {
             diags.add(Diagnostic("F2", wording.mismatch(site, field, model.words(declared), model.words(actualBare), model.spell(actualBare))))
             return
         }
-        // a text literal with an optional piece has its own sentence (checkInterpolationDeclaration); a
-        // selection that matches nothing is absent by data, the runtime's to refuse (Reference §14)
-        if (actual is VType.Optional && declared !is VType.Optional && value !is Interpolation && model.types.absenceDeclared(value, scope, typeEnv()))
-            diags.add(Diagnostic("F2", wording.absent(site, field, model.words(declared), optionalSpelled)))
+        // a text literal with an optional piece has its own sentence (checkInterpolationDeclaration); in a
+        // `from` block and an assignment a selection that matches nothing is the runtime's to refuse (Reference §14)
+        if (actual !is VType.Optional || declared is VType.Optional || value is Interpolation) return
+        when {
+            model.types.absenceDeclared(value, scope, typeEnv()) ->
+                diags.add(Diagnostic("F2", wording.absent(site, field, model.words(declared), optionalSpelled)))
+            wording.refusesUnshownSelection && model.types.absenceDeclared(value, scope, typeEnv(), selectionsCount = true) ->
+                diags.add(Diagnostic("F2", unshownSelectionMessage(site, field, model.words(declared), optionalSpelled, value, scope)))
+            else -> adviseOnMissOutsideTransaction(site, value, scope)
+        }
+    }
+
+    /** A required derived or captured property computed through a selection no test shows to match
+     *  (Reference §7): the message names the selection and the test that shows it matches. */
+    private fun unshownSelectionMessage(site: String, field: String, declared: String, optionalSpelled: String, value: Expr, scope: String): String {
+        val selection = model.types.unshownSelection(value, scope, typeEnv())
+        val test = selection?.let { model.types.existsTestFor(it) }
+        if (selection == null || test == null) return COMPUTED.absent(site, field, declared, optionalSpelled)
+        return "$site is declared $declared and may be absent: '${Printer.expr(selection)}' may match nothing; declare it '$field: $optionalSpelled', " +
+            "or compute it where a test shows the selection matches, such as '${Printer.expr(test)}' (Reference §10)"
+    }
+
+    /**
+     * A9 (Reference §14): a rule that fires after the commit or on a schedule fills a required field
+     * with a selection nothing shows to match. Inside the act's transaction a miss refuses the act;
+     * here the act has already been kept, so the miss is only a failed firing. The rule's own
+     * condition showing the selection matches silences it.
+     */
+    private fun adviseOnMissOutsideTransaction(site: String, value: Expr, scope: String) {
+        val rule = ruleChecked ?: return
+        if (rule.preposition != "after" && rule.triggers.all { trigger -> trigger == "commit" }) return
+        val selection = model.types.unshownSelection(value, scope, typeEnv()) ?: return
+        val test = model.types.existsTestFor(selection)?.let { Printer.expr(it) } ?: return
+        addAdvisoryOnce(Diagnostic("A9", "$site — the field is required and '${Printer.expr(selection)}' may match nothing; the rule fires " +
+            "outside the transaction of the act that triggers it, so a miss refuses nothing: the record stays and the firing fails. " +
+            "Fire the rule only when the selection matches, with '$test' in its condition (Reference §14)", advisory = true))
+    }
+
+    /** An expression is checked once per reading of it; an advisory about it is said once. */
+    private fun addAdvisoryOnce(advisory: Diagnostic) {
+        if (diags.none { said -> said.code == advisory.code && said.message == advisory.message }) diags.add(advisory)
+    }
+
+    /** A10 (Reference §10): `?.` directly after a selection says what the plain dot says there, the
+     *  rest of the path being absent when the selection matched nothing. */
+    private fun adviseOnQuestionMarkAfterSelection(access: Access) {
+        if (model.types.collectionSelectedFrom(access.target) == null || !access.segs.first().viaQdot) return
+        val plain = access.copy(segs = listOf(access.segs.first().copy(viaQdot = false)) + access.segs.drop(1))
+        addAdvisoryOnce(Diagnostic("A10", "'${Printer.expr(access)}' — the '?' after '${Printer.expr(access.target)}' adds nothing: a read through a selection " +
+            "is absent when the selection matched nothing; write '${Printer.expr(plain)}' (Reference §10)", advisory = true))
     }
 
     /** Whether a declaration of [declared] holds a value of [actual]: the same type, any number
@@ -1349,6 +1390,9 @@ class Validator(private val model: Model) {
 
     /** What the rule being checked shows for its body through its condition's inline `where`. */
     private var ruleNarrowing: Narrowing = Narrowing.NONE
+
+    /** The rule whose body is being checked; null outside one. */
+    private var ruleChecked: RuleDecl? = null
 
     /** The type of an expression as the model reads it (`ExprTypes`), with its optionality
      *  taken off, as the kind checks here want it; null when the model gives none or the
@@ -1893,6 +1937,18 @@ class Validator(private val model: Model) {
         val dotAfterStep = step.size - (if (path.root == "this") 0 else 1)
         val licensed = PathExpr(path.root, path.segs.mapIndexed { index, seg -> if (index == dotAfterStep) seg.copy(viaQdot = true) else seg })
         diags.add(Diagnostic("V11", "'${Printer.expr(path)}' reads through '$stepSpelled', which may be absent; " +
+            "test '$stepSpelled is some' first, or write '${Printer.expr(licensed)}' to read absent when it is (Reference §10)"))
+    }
+
+    /** V11 for the steps after a selection or another non-path expression: the dot directly after it
+     *  needs no test, and a plain dot after a later step that may be absent is refused as in a path. */
+    private fun checkDotsLicensed(access: Access, scope: String) {
+        val step = model.types.untestedStepAfter(access, scope, typeEnv()) ?: return
+        val stepSpelled = step.joinToString(".")
+        // the step's own name is the last of [step]; its root is the target as written, one name
+        val dotAfterStep = step.size - 1
+        val licensed = access.copy(segs = access.segs.mapIndexed { index, seg -> if (index == dotAfterStep) seg.copy(viaQdot = true) else seg })
+        diags.add(Diagnostic("V11", "'${Printer.expr(access)}' reads through '$stepSpelled', which may be absent; " +
             "test '$stepSpelled is some' first, or write '${Printer.expr(licensed)}' to read absent when it is (Reference §10)"))
     }
 
