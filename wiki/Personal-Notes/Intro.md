@@ -58,8 +58,43 @@ Don't worry. I see the bad stuff, too.
 
 ## Velle as Philosophy
 
-Velle isn't just a new language, it's an exploration of the philosophy of engineering. It's an attempt to distill all the things I've wanted to see in how we build systems.
+For me, velle isn't just a new language, it's my exploration on the philosophy of engineering. It's an attempt to distill all the things I've wanted to see in software engineering and how we build complex systems.
 
 ### Mental Models
 
-Key to Velle and my philosophy is how humans interpret the world through mental models. Abstract concepts and relationships.
+Key to velle and my philosophy is how we interpret the world through mental models. Abstract concepts and relationships.
+
+# Principles
+_Personal note: split out principles into separate pages, link from here and from docs_
+
+## Strongly Typed
+Communication, understanding
+
+## "Compiled"
+Verification: step for proof of consistency and validity before runtime
+
+## Readable
+The behavior velle describes needs to be clearly readable, not obfuscated. The whole purpose of velle is to lift the
+behavior humans care about to a concise grammar that can be read quickly and easily. Instead of business rules buried
+within functions and variables scattered across systems and libraries, frontends and backends, velle extracts them to
+a top-level syntax that lives separate from traditional computer science structures like functions, stacks, and
+variables.
+
+# Velle & AI
+
+AI has taken over writing code. But that's left us in a bit of a paradox: engineers are either relegated to reviewing
+thousands of lines of code changes and become the bottleneck, or they give up entirely and let AI tackle the whole
+development lifecycle from inception to deployment. Neither feels right.
+
+Velle attempts to get out of this paradox by changing what the "code" is.
+
+## MCP as UI
+
+The question of "what's relevant to business vs what's relevant to the mechanics of the app" is where velle draws the line between what it can describe vs what it defers.
+
+Agents become the UI
+
+Spec-driven developement (problems and solutions)
+
+These questions and concerns align in velle. It's the same answer, because these are essentially the same question.
+
