@@ -1,0 +1,8 @@
+-- A plain dot through `parent`, declared `one Parent?`, is accepted when the record
+-- it is read off came from a selection. Off a stored `row: one Row` the same path,
+-- `row.parent.name`, is refused by V11.
+act Upload { note: text? } with rows
+shape Parent { name: text }
+shape Row { upload: one Upload, key: text, newKey: text?, parent: one Parent? }
+act Other { upload: one Upload
+  parentName: text = first(upload.rows by key).parent.name }

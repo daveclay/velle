@@ -1,0 +1,27 @@
+-- The lookup with the business outcome stated as a prohibition, `never (Unpaired)`,
+-- and the rule unguarded. Validates; at runtime a key no entry has fails the firing
+-- before the transaction ends, so the `never` does not speak (LookupProbeTest).
+act Entry {
+    key: text
+    initialLabel: text
+}
+
+act Submission {
+    entryKey: text
+    newLabel: text?
+}
+
+never (Entry where count(Entry where key == this.key) > 1)
+
+shape Arrival {
+    submission: one Submission
+    entry: one Entry
+}
+
+shape Unpaired = Submission where not exists Arrival for this
+
+never (Unpaired)
+
+rule RecordArrival when Unpaired {
+    Arrival from { submission: this, entry: first(Entry where key == this.entryKey by key) }
+}

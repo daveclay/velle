@@ -154,6 +154,100 @@ class LookupProbeTest {
         }
     }
 
+    private val guardedRule = """
+            rule RecordArrival when (Unpaired where exists (Entry where key == this.entryKey)) {
+                Arrival from { submission: this, entry: first(Entry where key == this.entryKey by key) }
+            }
+    """
+
+    @Test
+    fun `a never on Unpaired with an unguarded rule, a key no entry has`() {
+        val sys = system(entryAndSubmission + """
+            never (Entry where count(Entry where key == this.key) > 1)
+            never (Unpaired)
+            rule RecordArrival when Unpaired {
+                Arrival from { submission: this, entry: first(Entry where key == this.entryKey by key) }
+            }
+        """)
+        sys.scope {
+            val committed = runCatching { sys.commit("Submission", mapOf("entryKey" to "PLOT-9999")) }
+            report("never-unpaired/unguarded/bad-key", committed)
+            println("PROBE never-unpaired/unguarded/bad-key -> submissions=${sys.instancesOf("Submission").size}")
+            // the firing fails before the transaction ends, so the `never` on Unpaired does not speak
+            val refused = assertIs<CommitResult.Refused>(committed.getOrThrow())
+            assertTrue(refused.reason.startsWith("rule 'RecordArrival' did not fire: 'Arrival.entry' is required"), refused.reason)
+        }
+    }
+
+    @Test
+    fun `a never on Unpaired with a guarded rule, a key that exists`() {
+        val sys = system(entryAndSubmission + """
+            never (Entry where count(Entry where key == this.key) > 1)
+            never (Unpaired)
+        """ + guardedRule)
+        sys.scope {
+            sys.commit("Entry", mapOf("key" to "PLOT-0417", "initialLabel" to "a"))
+            val committed = runCatching { sys.commit("Submission", mapOf("entryKey" to "PLOT-0417")) }
+            report("never-unpaired/guarded/good-key", committed)
+            println("PROBE never-unpaired/guarded/good-key -> arrivals=${sys.instancesOf("Arrival").size}")
+            assertIs<CommitResult.Accepted>(committed.getOrThrow())
+            assertEquals(1, sys.instancesOf("Arrival").size)
+        }
+    }
+
+    @Test
+    fun `a never on Unpaired with a guarded rule, a key no entry has`() {
+        val sys = system(entryAndSubmission + """
+            never (Entry where count(Entry where key == this.key) > 1)
+            never (Unpaired)
+        """ + guardedRule)
+        sys.scope {
+            val committed = runCatching { sys.commit("Submission", mapOf("entryKey" to "PLOT-9999")) }
+            report("never-unpaired/guarded/bad-key", committed)
+            println("PROBE never-unpaired/guarded/bad-key -> submissions=${sys.instancesOf("Submission").size}")
+            // the rule stands aside, the submission is still Unpaired at the transaction end, and the `never` refuses it
+            val refused = assertIs<CommitResult.Refused>(committed.getOrThrow())
+            assertTrue(refused.reason.startsWith("Submission refused: this Submission would be an Unpaired"), refused.reason)
+            assertEquals(0, sys.instancesOf("Submission").size)
+        }
+    }
+
+    @Test
+    fun `a guarded rule and no never on Unpaired, a key no entry has`() {
+        val sys = system(entryAndSubmission + """
+            never (Entry where count(Entry where key == this.key) > 1)
+        """ + guardedRule)
+        sys.scope {
+            val committed = runCatching { sys.commit("Submission", mapOf("entryKey" to "PLOT-9999")) }
+            report("no-never/guarded/bad-key", committed)
+            println("PROBE no-never/guarded/bad-key -> submissions=${sys.instancesOf("Submission").size} arrivals=${sys.instancesOf("Arrival").size}")
+            // with the rule guarded and no `never`, the submission naming no entry is accepted and stays unpaired
+            assertIs<CommitResult.Accepted>(committed.getOrThrow())
+            assertEquals(1, sys.instancesOf("Submission").size)
+            assertEquals(0, sys.instancesOf("Arrival").size)
+        }
+    }
+
+    @Test
+    fun `the lookup behind after commit, a key no entry has`() {
+        val sys = system(entryAndSubmission + """
+            never (Entry where count(Entry where key == this.key) > 1)
+            rule RecordArrival when Unpaired after commit, Hourly {
+                Arrival from { submission: this, entry: first(Entry where key == this.entryKey by key) }
+            }
+        """)
+        sys.scope {
+            val committed = runCatching { sys.commit("Submission", mapOf("entryKey" to "PLOT-9999")) }
+            report("after-commit/bad-key", committed)
+            println("PROBE after-commit/bad-key -> submissions=${sys.instancesOf("Submission").size} arrivals=${sys.instancesOf("Arrival").size}")
+            // the act stands; the miss is a failure on the result, not a refusal
+            val accepted = assertIs<CommitResult.Accepted>(committed.getOrThrow())
+            assertEquals("RecordArrival", accepted.afterCommitFailures.single().rule)
+            assertEquals(1, sys.instancesOf("Submission").size)
+            assertEquals(0, sys.instancesOf("Arrival").size)
+        }
+    }
+
     @Test
     fun `the singular for query with a text subject is refused by the validator`() {
         val diags = Validator.validate(entryAndSubmission + """

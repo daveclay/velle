@@ -1,0 +1,4 @@
+-- `max` over a collection is absent when the collection is empty, absent by data as
+-- a selection is, and a required property computed from it is refused.
+act Trial { scores: many integer
+  best: integer = max(scores) }

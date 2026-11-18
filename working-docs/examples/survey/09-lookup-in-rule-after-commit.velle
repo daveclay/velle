@@ -1,0 +1,25 @@
+-- The lookup in a rule behind `after commit`. Validates; at runtime a submission
+-- naming a key no entry has is accepted and stands, and the miss is a firing failure
+-- on the result, not a refusal (LookupProbeTest).
+act Entry {
+    key: text
+    initialLabel: text
+}
+
+act Submission {
+    entryKey: text
+    newLabel: text?
+}
+
+never (Entry where count(Entry where key == this.key) > 1)
+
+shape Arrival {
+    submission: one Submission
+    entry: one Entry
+}
+
+shape Unpaired = Submission where not exists Arrival for this
+
+rule RecordArrival when Unpaired after commit, Hourly {
+    Arrival from { submission: this, entry: first(Entry where key == this.entryKey by key) }
+}

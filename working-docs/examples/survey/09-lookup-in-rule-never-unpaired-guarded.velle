@@ -1,0 +1,27 @@
+-- The same with the rule firing only when an entry has the key. Validates; at
+-- runtime a key no entry has leaves the submission Unpaired at the transaction end
+-- and the `never` refuses it (LookupProbeTest).
+act Entry {
+    key: text
+    initialLabel: text
+}
+
+act Submission {
+    entryKey: text
+    newLabel: text?
+}
+
+never (Entry where count(Entry where key == this.key) > 1)
+
+shape Arrival {
+    submission: one Submission
+    entry: one Entry
+}
+
+shape Unpaired = Submission where not exists Arrival for this
+
+never (Unpaired)
+
+rule RecordArrival when (Unpaired where exists (Entry where key == this.entryKey)) {
+    Arrival from { submission: this, entry: first(Entry where key == this.entryKey by key) }
+}

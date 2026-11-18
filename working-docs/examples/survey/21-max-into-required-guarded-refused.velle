@@ -1,0 +1,4 @@
+-- The same property with the empty case answered first is still refused: the
+-- compiler does not read `scores is empty` as showing `max(scores)` present.
+act Trial { scores: many integer
+  best: integer = if scores is empty then 0 else max(scores) }

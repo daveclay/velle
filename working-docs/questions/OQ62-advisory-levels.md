@@ -18,3 +18,9 @@ Whether the A-series gains levels, and if so which:
 - **record what the spec entails**, no warning, but a generated artifact the author can read or run: a test that exhibits the case, or a note in the generated documentation.
 
 **To decide, when a second case wants the quiet level:** whether a level system is worth its weight against the alternative of each advisory choosing, per check, between warning and silence. One passing remark and one accepted-volume ruling are not enough to design levels around.
+
+## 3. Cases that want the quiet level
+
+Roster: case 1 is the only one so far.
+
+1. Added 2026-11-18 from OQ143 D3. A rule that fires inside an act's transaction and fills a required field with a selection that may match nothing, rule `RecordArrival` in `working-docs/examples/survey/09-lookup-in-rule-no-existence.velle`, refuses the act when the selection misses (`LookupProbeTest`, "first with no existence prohibition, a key no entry has"). Dave ruled no warning there. What the spec entails, "rule `RecordArrival` can refuse a `Submission` when no `Entry` has its key", is a fact a product owner would want listed.

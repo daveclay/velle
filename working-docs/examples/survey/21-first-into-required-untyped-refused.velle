@@ -1,0 +1,9 @@
+-- With its type left out, the property takes `text?` from the selection, and the
+-- required property computed from it is refused. Stating `text` on the first one,
+-- as 21-first-into-required-by-data does, is accepted.
+act Upload { note: text? } with rows
+shape Parent { name: text }
+shape Row { upload: one Upload, key: text, newKey: text?, parent: one Parent? }
+act Other { upload: one Upload
+  keyFromFirst = first(upload.rows by key).key
+  keyAgain: text = keyFromFirst }

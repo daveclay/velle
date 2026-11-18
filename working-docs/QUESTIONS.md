@@ -23,7 +23,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 
 - **OQ83** — The dead-`until` advisory: a `walk R until P` whose condition the record itself can never satisfy and no step can reach serves nothing; not built, A2 covers `for 1 steps` only (OQ76, settled table).
 - **OQ131** — Build or retract the second V4 check: Reference §18 "What the compiler checks" and `checks.md` V4 say a guard and backup schedule on a plain `on commit` rule is refused with "did you mean `after commit`?", and `Validator.kt` has no such check (found 2026-11-13 while rewriting the messages, OQ130 in the settled table).
-- **[OQ62](questions/OQ62-advisory-levels.md)** — whether the advisory series gains a quieter level that records what the spec entails without warning · deferred 2026-10-14 out of OQ52 §4 until a second case wants it
+- **[OQ62](questions/OQ62-advisory-levels.md)** — whether the advisory series gains a quieter level that records what the spec entails without warning · deferred 2026-10-14 out of OQ52 §4 until a second case wants it; one such case recorded 2026-11-18 from OQ143 D3
 - **[OQ53](questions/OQ53-validator-precision.md)** — legitimate specs the fail-closed checks reject: V6, V29/V10/V26, the disarm proof, V10's induction · opened 2026-10-14 from the two passes; eleven work items
 
 ## Expressions, refinements, and unions
@@ -38,7 +38,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **OQ92** — Decide whether the inferred inverse's name is pluralized properly (`PeptideBatch` → `peptideBatches`) or stays Reference §6's literal `s` (`peptideBatchs`); the batches spec declares the readable view on the union body (B3).
 - **OQ93** — Decide whether the value vocabulary grows: a mean or maximum over a collection, an nth selector (second-largest), `Date - Date`; by design today, and both passes spelled around all of them (S10, P12). A boolean written as a comparison is settled (OQ89).
 - **[OQ142](questions/OQ142-text-from-a-template-that-is-data.md)** — can a spec fill a naming template held in a field, `{parent}-{sequence}`, and mint the sequence number? · opened 2026-11-17 from a stress pass of a domain spec; D1 and D2 decided 2026-11-17 (yes, yes), build pending; five work items
-- **OQ143** — Refuse a property declared required and computed through a selection that may match nothing, `key: text = first(upload.rows by newKey).newKey`, which F2 accepts today while the plain optional read `key: text = upload.note` is refused (`working-docs/examples/survey/21-first-into-required-accepted.velle`); Reference §10 says the rest of the path is absent when the selection matched nothing, so the value is `text?`. Found 2026-11-17.
+- **[OQ143](questions/OQ143-required-through-a-selection.md)** — may a property declared required be computed through a selection that may match nothing, `key: text = first(upload.rows by key).key`? · opened 2026-11-17 from a stress pass of a domain spec; investigated 2026-11-18 (`working-docs/examples/survey/21-*`, `RequiredThroughSelectionProbeTest`); D1 to D6 decided 2026-11-18, build pending; five work items
 
 ## Acts, transient and exposed
 

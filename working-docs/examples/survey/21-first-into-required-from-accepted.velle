@@ -1,0 +1,8 @@
+-- A `from` block fills a required field with a field declared optional, read off a
+-- selected record. The stored twin, `label: row.newKey`, is refused by F2.
+act Upload { note: text? } with rows
+shape Parent { name: text }
+shape Row { upload: one Upload, key: text, newKey: text?, parent: one Parent? }
+shape Kept { other: one Other, label: text }
+act Other { upload: one Upload }
+rule Keep when Other { Kept from { other: this, label: first(upload.rows by key).newKey } }
