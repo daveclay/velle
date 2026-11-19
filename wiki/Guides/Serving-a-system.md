@@ -262,7 +262,11 @@ fun overdue(): List<Overdue> = api.scope {
 
 ## The console
 
-`/velle` serves one page, `apis/spring/src/main/resources/velle/console.html`, that reads `GET /api` and builds itself: every shape as a table with the query's `where` and order, ordered at first by the shape's first member the description marks `orderable`, every record as a page of its members with its references as links, every act as a form, every schedule as a page that says when it last ran, with a button that ticks it when ticks are exposed. A header the page sends with every request, kept in the browser, lets a developer act as someone, `X-Velle-Actor: Staff:1` with the resolver above. Nothing in the page is written per spec.
+`/velle` serves one page that reads the model's description from `GET /api`, builds itself from it, and reads and commits everything else over GraphQL: every shape as a table with the query's `where` and order, ordered at first by the shape's first member the description marks `orderable`, every record as a page of its members with its references as links, every act as a form, every schedule as a page that says when it last ran, with a button that ticks it when ticks are exposed. A header the page sends with every request, kept in the browser, lets a developer act as someone, `X-Velle-Actor: Staff:1` with the resolver above. Nothing in the page is written per spec.
+
+An act's form takes each field as the act's GraphQL input takes it. A reference is the key of a record, or `Shape#key` when the field's type is a union. A field that may carry a new record takes a key, or the new record as JSON, `{"newAddress": {...}}`. An act's parts are typed as a JSON list.
+
+The page is a React and TypeScript project, `console/`. Its views are in `console/src/components/`: a shape's table, a record's page, an act's form, a schedule's page. Each is given the model's description and a connection to the API, and takes nothing from the page around it. `./gradlew build` builds the project into one HTML file and puts it in the starter's jar. To work on the page against an application that is already running, run `VELLE_APP=http://localhost:8090 npm run dev` in `console/`.
 
 ## In memory and over SQLite
 

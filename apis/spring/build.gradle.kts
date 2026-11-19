@@ -40,6 +40,16 @@ dependencies {
     testRuntimeOnly(project(":extensions:finance-sql"))
 }
 
+// the console page is built by :console and served from this jar as velle/console.html (VelleConsole.kt)
+tasks.processResources {
+    dependsOn(":console:buildConsole")
+    from(project(":console").layout.projectDirectory.dir("dist")) {
+        include("index.html")
+        rename("index.html", "console.html")
+        into("velle")
+    }
+}
+
 tasks.test {
     useJUnitPlatform()
 }

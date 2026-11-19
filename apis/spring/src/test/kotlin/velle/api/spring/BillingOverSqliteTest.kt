@@ -83,7 +83,7 @@ class BillingOverSqliteTest {
         mvc.get("/billing/ticks/Daily").andExpect { status { isNotFound() } }
         val every = mvc.get("/billing/ticks").andExpect { status { isOk() } }.andReturn().response.contentAsString
         assertTrue("\"schedule\":\"Hourly\",\"at\":null" in every && "\"schedule\":\"Weekly\",\"at\":\"${tick["at"]}\"" in every, every)
-        mvc.get("/velle").andExpect { status { isOk() } }.andReturn().response.contentAsString.let { assertTrue("const API = \"/billing\"" in it) }
+        mvc.get("/velle").andExpect { status { isOk() } }.andReturn().response.contentAsString.let { assertTrue("""api: "/billing", graphql: "/graphql", ticks: "true"""" in it) }
     }
 
     @Test

@@ -114,9 +114,9 @@ class VendorsOverHttpTest {
     }
 
     @Test
-    fun `the console is served, built from the api path`() {
+    fun `the console is served, told the api path, the graphql path, and that ticks are hidden`() {
         val html = mvc.get("/velle").andExpect { status { isOk() } }.andReturn().response.contentAsString
-        assertTrue("const API = \"/api\"" in html, html.take(300))
-        assertTrue("__API__" !in html)
+        assertTrue("""window.velleConsole = { api: "/api", graphql: "/graphql", ticks: "false" }""" in html, html.take(600))
+        assertTrue("<div id=\"console\">" in html, "the page the console project builds")
     }
 }

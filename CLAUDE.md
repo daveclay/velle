@@ -10,7 +10,8 @@ digital computer with functions, variables, stack frames and memory.
 
 The 
 repo holds the compiler and runtime
-(`compiler/`), stores (`stores/`), the API layer (`apis/`), extension
+(`compiler/`), stores (`stores/`), the API layer (`apis/`), the console
+(`console/`), extension
 libraries (`extensions/`), the example systems (`examples/`), the
 documentation (`wiki/`), and the working documents (`working-docs/`).
 
