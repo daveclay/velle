@@ -1,6 +1,6 @@
 # OQ147 — Does Velle keep every tick of a schedule, or only the latest?
 
-**Status:** opened 2026-11-19 from Dave's reading of the pharmacy app's stored records. D1, D2, and D4 decided 2026-11-19; D3 is moot under D2. D5 and D6 await Dave. No work items yet.
+**Status:** opened 2026-11-19 from Dave's reading of the pharmacy app's stored records. D1, D2, and D4 decided 2026-11-19; D3 is moot under D2. D5, D6, and D7 await Dave. No work items yet.
 
 **In plain terms:** every time a schedule runs, Velle writes down that it ran, and it never removes what it wrote. A schedule that runs every minute leaves about 526,000 records a year. Velle itself only ever looks at the most recent one.
 
@@ -48,8 +48,9 @@ The decisions in this file:
 - **D4.** Whether the store contract gains members of its own for ticks, one moment kept per schedule.
 - **D5.** Whether an engineer can read when a schedule last ran from the running system.
 - **D6.** Whether a system that already holds `Tick` records carries its latest one over.
+- **D7.** Whether the latest tick of each schedule is served over REST and GraphQL as a thing of its own.
 
-D1 is a removal: it takes away something that runs today, the reading of tick history by a spec. D2 and D3 only apply when D1 is answered yes. D4, D5, and D6 were added on 2026-11-19 after D2 was answered: they are the build questions its answer raised.
+D1 is a removal: it takes away something that runs today, the reading of tick history by a spec. D2 and D3 only apply when D1 is answered yes. D4, D5, and D6 were added on 2026-11-19 after D2 was answered: they are the build questions its answer raised. D7 was added the same day from Dave's remark on D5.
 
 ### D1. Velle keeps only the latest tick of each schedule · Decided 2026-11-19
 
@@ -261,7 +262,7 @@ Costs:
 - `apis/json/src/main/kotlin/velle/api/Describe.kt`: `velle: true` removed; `VelleApiTest` updated.
 - `wiki/Guides/API-layer.md` and `wiki/Guides/Act-API.md` "Ticking a schedule": the `Tick` shape removed, `latestTick` on `VelleSystem` added.
 
-**Decided:**
+**Decided:** the Kotlin half awaits Dave. On the REST and GraphQL half, Dave on 2026-11-19: a tick could still be served over REST and GraphQL as a special case. That goes against the "no" recommended above and is taken up in D7.
 
 ### D6. A system that already holds `Tick` records carries its latest one over
 
@@ -282,6 +283,44 @@ Costs:
 
 **Decided:**
 
+### D7. The latest tick of each schedule is served over REST and GraphQL as a thing of its own
+
+Raised by Dave on 2026-11-19, on D5: a tick could still be served over REST and GraphQL as a special case.
+
+Do REST and GraphQL serve the moment each schedule last ran, as a read that is about ticks by name and is not a shape?
+
+Recommendation: yes, beside the tick endpoint that already exists. It follows D2: ticks are a special thing and are served as one, where today a client has to know that the shape named `Tick` is Velle's and not the spec's.
+
+What is served today, all of it in `apis/`:
+
+- `GET /api`, the description, lists the schedules by name (`apis/json/src/main/kotlin/velle/api/Describe.kt`, `schedules`).
+- `POST {path}/ticks/{schedule}` runs a tick (`apis/spring/src/main/kotlin/velle/api/spring/VelleRestController.kt`), and GraphQL has a `tick(schedule)` mutation (`apis/graphql/src/main/kotlin/velle/api/graphql/VelleGraphQL.kt`). Both exist only when `velle.api.ticks` is on, as a development affordance (OQ71 D5).
+- `Tick` is listed among the readable shapes with `velle: true`, which D2 removes.
+
+The proposal:
+
+- REST: `GET {path}/ticks` answers every schedule with the moment it last ran, and `GET {path}/ticks/{schedule}` answers one. A schedule that has never run has no moment.
+- GraphQL: a `ticks` query answering the same list, each entry a schedule's name and its latest moment.
+- Both read through `VelleSystem.latestTick` from D5, so D7 needs D5's Kotlin half answered yes.
+- The reads are served whether or not `velle.api.ticks` is on. That setting governs causing a tick, not reading when one happened.
+
+Costs:
+
+- The API layer was built on one rule: the GraphQL builder and the console read the description from `Describe` and nothing else about the model (`wiki/Guides/API-layer.md`). A read that is not an act and not a shape is a second kind of thing each API has to serve by hand. The tick mutation is already one such thing.
+- Who may read it has no answer from the spec. Today `Tick` takes the spec-wide `visible to` default, or is visible to anyone (`checks.md` V32). `visible to` is a statement about records, and after D2 a tick is not one. The proposal serves the read to whoever may read `GET /api`, which already tells them the schedules exist. If the moment a schedule ran should be narrower than that, it needs a decision of its own.
+- A product owner gets nothing from it. It is for an operator or a console.
+- With a no, the moment is reachable only from the engineer's Kotlin (D5), and an engineer who wants it over HTTP writes their own endpoint.
+
+#### Proposed changes
+
+- `apis/json/src/main/kotlin/velle/api/VelleApi.kt`: a read of every schedule with its latest moment, beside `tick`.
+- `apis/spring/src/main/kotlin/velle/api/spring/VelleRestController.kt`: the two `GET` routes.
+- `apis/graphql/src/main/kotlin/velle/api/graphql/VelleGraphQL.kt`: the `ticks` query.
+- `apis/json/src/test/kotlin/velle/api/VelleApiTest.kt` and the REST and GraphQL tests: the reads pinned, with a schedule that has never run.
+- `wiki/Guides/API-layer.md` and `wiki/Guides/Serving-a-system.md`: the reads documented beside the tick endpoint.
+
+**Decided:**
+
 ## 3. The build
 
-Written when D5 and D6 are decided. It gathers the "Proposed changes" lists above in build order.
+Written when D5, D6, and D7 are decided. It gathers the "Proposed changes" lists above in build order.
