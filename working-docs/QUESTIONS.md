@@ -90,7 +90,7 @@ A frontend framework grown from the console: given the model description and not
 
 ## Runtime and clock
 
-- **[OQ147](questions/OQ147-tick-records-grow-forever.md)** — does Velle keep every tick of a schedule as a record, or only the latest? · opened 2026-11-19 from Dave's reading of the pharmacy app's stored records; reopens part of OQ71 D3; D1, D2, and D4 decided 2026-11-19; D5, D6, and D7 await Dave
+- **[OQ147](questions/OQ147-tick-records-grow-forever.md)** — does Velle keep every tick of a schedule as a record, or only the latest? · opened 2026-11-19 from Dave's reading of the pharmacy app's stored records; reopens part of OQ71 D3; D1, D2, D4, and D5 decided 2026-11-19; D6 and D7 await Dave
 - **[OQ58](questions/OQ58-runtime-follow-ons.md)** — candidate narrowing, the production clock, timestamp ties · the runtime's leftovers plus peptides S4; four work items, among them the sixteen compiler tests failing at HEAD
 
 ## Deletion, erasure, retention

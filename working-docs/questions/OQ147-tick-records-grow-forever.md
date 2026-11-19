@@ -1,6 +1,6 @@
 # OQ147 — Does Velle keep every tick of a schedule, or only the latest?
 
-**Status:** opened 2026-11-19 from Dave's reading of the pharmacy app's stored records. D1, D2, and D4 decided 2026-11-19; D3 is moot under D2. D5, D6, and D7 await Dave. No work items yet.
+**Status:** opened 2026-11-19 from Dave's reading of the pharmacy app's stored records. D1, D2, D4, and D5 decided 2026-11-19; D3 is moot under D2. D6 and D7 await Dave. No work items yet.
 
 **In plain terms:** every time a schedule runs, Velle writes down that it ran, and it never removes what it wrote. A schedule that runs every minute leaves about 526,000 records a year. Velle itself only ever looks at the most recent one.
 
@@ -239,7 +239,7 @@ Costs:
 
 **Decided:** yes, 2026-11-19, with Dave's names for the two members: `latestTick` for the read, where the proposal above says `previousTick`, and `persistTick` for the write, where it says `tickRan`. Dave did not speak to the interface's name, `TickMemory` in the proposal, which stays mine and open to change.
 
-### D5. An engineer can read when a schedule last ran from the running system
+### D5. An engineer can read when a schedule last ran from the running system · Decided 2026-11-19
 
 Once a spec cannot read `Tick`, can an engineer still ask the running system when a schedule last ran?
 
@@ -262,7 +262,7 @@ Costs:
 - `apis/json/src/main/kotlin/velle/api/Describe.kt`: `velle: true` removed; `VelleApiTest` updated.
 - `wiki/Guides/API-layer.md` and `wiki/Guides/Act-API.md` "Ticking a schedule": the `Tick` shape removed, `latestTick` on `VelleSystem` added.
 
-**Decided:** the Kotlin half awaits Dave. On the REST and GraphQL half, Dave on 2026-11-19: a tick could still be served over REST and GraphQL as a special case. That goes against the "no" recommended above and is taken up in D7.
+**Decided:** yes, 2026-11-19: the running system in Kotlin, `VelleSystem`, provides the latest tick, and the tick cannot be referenced as a shape. On the REST and GraphQL half, Dave the same day, before this answer: a tick could still be served over REST and GraphQL as a special case. That goes against the "no" recommended above and is taken up in D7, which is still open.
 
 ### D6. A system that already holds `Tick` records carries its latest one over
 
@@ -323,4 +323,4 @@ Costs:
 
 ## 3. The build
 
-Written when D5, D6, and D7 are decided. It gathers the "Proposed changes" lists above in build order.
+Written when D6 and D7 are decided. It gathers the "Proposed changes" lists above in build order.
