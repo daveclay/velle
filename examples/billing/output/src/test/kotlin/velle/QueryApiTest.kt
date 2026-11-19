@@ -148,11 +148,12 @@ open class QueryApiTest {
     }
 
     @Test
-    fun `every query names its order, and the order is checked against the spec`() {
+    fun `a query with no order is answered in key order, and a named order is checked against the spec`() {
         val sys = newSystem()
-        sys.customer("Ada")
-        val unordered = assertFailsWith<QueryRefused> { sys.read.customers.list() }
-        assertTrue(unordered.diagnostics.single().message.contains("names its order"), unordered.message)
+        for (name in listOf("Cy", "Ada", "Ben")) sys.customer(name)
+        // the keys are handed out as the customers are created, so key order is that order
+        assertEquals(listOf("Cy", "Ada", "Ben"), sys.read.customers.list().map { customer -> customer.name })
+        assertEquals(listOf("Cy", "Ada", "Ben"), sys.read.customers.list().map { customer -> customer.name })
 
         // the checks without running: identity orders nothing (Reference §5)
         val byId = sys.system.check(Query("Customer", orderBy = listOf(OrderDatum("id"))))

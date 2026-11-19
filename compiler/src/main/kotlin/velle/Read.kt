@@ -17,8 +17,9 @@ import java.time.LocalDate
 
 /**
  * One read request. [where] is a predicate over the members of [root] in the
- * spec's predicate language; [orderBy] is required (R10) — one or more orderable
- * members with a direction; [page] is a window over the ordered rows; [viewer]
+ * spec's predicate language; [orderBy] is orderable members, each with a direction,
+ * and may be empty: the rows are then in the order of their store keys, the same on
+ * every run; [page] is a window over the ordered rows; [viewer]
  * is the person the read is for (Reference §22, "The actor"): with one, the
  * answer holds only the records the root's visibility clauses admit to them;
  * null is the engineer's own view of the store, unfiltered.
@@ -40,13 +41,14 @@ data class Page(val size: Int, val after: Cursor? = null) {
 }
 
 /**
- * Where a page ended (R2): the last row's order datums plus its store key as
- * the hidden tie-break, so the next page starts after a pair that tells every
- * row apart. Opaque to callers — pass it back as [Page.after]. The key is never
- * an ordering datum the caller sees (Reference §5).
+ * Where a page ended (R2): the last row's order datums plus its shape and store
+ * key as the hidden tie-break, so the next page starts after values that tell every
+ * row apart. The shape is there because a refinement over several shapes reads rows
+ * of each, and two shapes may hold the same key. Opaque to callers — pass it back as
+ * [Page.after]. The key is never an ordering datum the caller sees (Reference §5).
  */
-class Cursor internal constructor(internal val datums: List<Value>, internal val key: Comparable<Any>) {
-    override fun toString() = "Cursor(${datums.joinToString()}; key=$key)"
+class Cursor internal constructor(internal val datums: List<Value>, internal val shape: String, internal val key: Comparable<Any>) {
+    override fun toString() = "Cursor(${datums.joinToString()}; $shape key=$key)"
 
     /** The cursor as one opaque text a caller can hand back across a wire; [decode] reads it. */
     fun encode(): String = CursorCodec.encode(this)
@@ -58,7 +60,7 @@ class Cursor internal constructor(internal val datums: List<Value>, internal val
 }
 
 /**
- * The text form of a [Cursor]: each order datum and the hidden key, typed, so the
+ * The text form of a [Cursor]: each order datum, then the shape and the hidden key, typed, so the
  * next page starts exactly where the last one ended whichever process answers it.
  * Opaque to callers; nothing in it is for reading.
  */
@@ -66,7 +68,7 @@ internal object CursorCodec {
     private const val SEP = '\u001f'
 
     fun encode(c: Cursor): String {
-        val parts = c.datums.map { datum(it) } + key(c.key)
+        val parts = c.datums.map { datum(it) } + c.shape + key(c.key)
         return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(parts.joinToString(SEP.toString()).toByteArray())
     }
 
@@ -77,9 +79,11 @@ internal object CursorCodec {
             throw IllegalArgumentException("not a cursor")
         }
         val parts = raw.split(SEP)
-        require(parts.isNotEmpty()) { "not a cursor" }
-        val datums = parts.dropLast(1).map { datum(it, model) }
-        return Cursor(datums, key(parts.last()))
+        require(parts.size >= 2) { "not a cursor" }
+        val shape = parts[parts.size - 2]
+        require(shape in model.shapes) { "not a cursor" }
+        val datums = parts.dropLast(2).map { datum(it, model) }
+        return Cursor(datums, shape, key(parts.last()))
     }
 
     private fun datum(v: Value): String = when (v) {
@@ -194,21 +198,25 @@ internal class QueryEngine(private val system: VelleSystem) {
             .filter { system.evaluator.memberOfRefExpr(it, cond) && system.visibleTo(viewer, it) }
     }
 
-    private class Keyed(val id: Long, val datums: List<Value>, val key: Comparable<Any>)
+    private class Keyed(val id: Long, val datums: List<Value>, val shape: String, val key: Comparable<Any>)
 
     private fun keyed(q: Query, id: Long): Keyed = Keyed(
         id,
         q.orderBy.map { system.evaluator.readMember(id, q.root, it.member) },
+        system.refFor(id).shape,
         system.orderKeyOf(id),
     )
 
-    /** The order: each datum in its direction, absent values last, then the hidden key ascending. */
-    private fun comparator(q: Query): Comparator<Keyed> = Comparator { a, b ->
-        for ((i, d) in q.orderBy.withIndex()) {
-            val c = system.evaluator.orderCompare(a.datums[i], b.datums[i])
-            if (c != 0) return@Comparator if (d.descending) -c else c
+    /** The order: each datum in its direction, absent values last, then the hidden tie-break:
+     *  the shape's name, then the key ascending. A query that names no order is in that
+     *  tie-break's order alone. Two rows of one shape never share a key, so no two rows tie. */
+    private fun comparator(q: Query): Comparator<Keyed> = Comparator { first, second ->
+        for ((position, datum) in q.orderBy.withIndex()) {
+            val compared = system.evaluator.orderCompare(first.datums[position], second.datums[position])
+            if (compared != 0) return@Comparator if (datum.descending) -compared else compared
         }
-        a.key.compareTo(b.key)
+        val byShape = first.shape.compareTo(second.shape)
+        if (byShape != 0) byShape else first.key.compareTo(second.key)
     }
 
     fun run(q: Query): QueryResult {
@@ -218,18 +226,17 @@ internal class QueryEngine(private val system: VelleSystem) {
         val page = q.page ?: return QueryResult(rows.map { it.id }, null)
         page.after?.let { c ->
             require(c.datums.size == q.orderBy.size) { "cursor does not belong to this query's order" }
-            val mark = Keyed(-1, c.datums, c.key)
+            val mark = Keyed(-1, c.datums, c.shape, c.key)
             rows = rows.filter { cmp.compare(it, mark) > 0 }
         }
         val window = rows.take(page.size)
-        val next = if (rows.size > page.size) window.last().let { Cursor(it.datums, it.key) } else null
+        val next = if (rows.size > page.size) window.last().let { Cursor(it.datums, it.shape, it.key) } else null
         return QueryResult(window.map { it.id }, next)
     }
 
     /** The checks for an aggregate: everything but the order, which a count or sum does not need. */
     private fun checkedUnordered(q: Query, extra: List<Diagnostic> = emptyList()) {
-        val diags = check(q.copy(orderBy = emptyList()))
-            .filterNot { it.message.startsWith("a query names its order") } + extra
+        val diags = check(q.copy(orderBy = emptyList())) + extra
         if (diags.isNotEmpty()) throw QueryRefused(diags)
     }
 

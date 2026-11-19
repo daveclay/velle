@@ -78,7 +78,7 @@ class VelleGraphQLTest {
         assertTrue("lineItems: [LineItem!]!" in sdl, sdl)
         assertTrue("isPaidInvoice: Boolean!" in sdl, sdl)
         assertTrue("type PaidInvoice {" in sdl, sdl)
-        assertTrue("invoices(after: String, first: Int, orderBy: [String!]!, where: String): InvoicePage!" in sdl, sdl)
+        assertTrue("invoices(after: String, first: Int, orderBy: [String!], where: String): InvoicePage!" in sdl, sdl)
         assertTrue("signUp(input: SignUpInput!): SignUpOutcome!" in sdl, sdl)
         assertTrue("input LineItemInput {" in sdl && "invoice: ID!" in sdl && "price: Money!" in sdl, sdl)
         assertTrue("tick(schedule: String!): TickOutcome!" in sdl, sdl)
@@ -145,6 +145,15 @@ class VelleGraphQLTest {
         val p2 = e.run("""query(${'$'}a: String) { invoices(where: "due < today", orderBy: ["-due"], first: 1, after: ${'$'}a) { items { due } next } }""", mapOf("a" to cursor))
         assertEquals(listOf("2026-01-01"), (p2.at("invoices", "items") as List<*>).map { (it as Map<*, *>)["due"] })
         assertNull(p2.at("invoices", "next"))
+
+        // `orderBy` left off: the records in key order, paged, each once
+        val unordered = (e.run("""{ invoices { items { key } } }""").at("invoices", "items") as List<*>).map { (it as Map<*, *>)["key"] }
+        assertEquals(3, unordered.toSet().size)
+        val unorderedPage1 = e.run("""{ invoices(first: 2) { items { key } next } }""")
+        val unorderedPage2 = e.run("""query(${'$'}a: String) { invoices(first: 2, after: ${'$'}a) { items { key } next } }""", mapOf("a" to unorderedPage1.at("invoices", "next")))
+        val paged = (unorderedPage1.at("invoices", "items") as List<*>) + (unorderedPage2.at("invoices", "items") as List<*>)
+        assertEquals(unordered, paged.map { (it as Map<*, *>)["key"] })
+        assertNull(unorderedPage2.at("invoices", "next"))
 
         // a refused query is a GraphQL error carrying its kind
         val refused = e.errors("""{ invoices(where: "colour == 1", orderBy: ["due"]) { items { due } } }""")
@@ -281,7 +290,7 @@ class VelleGraphQLTest {
         assertTrue("author: Member!" in gallery.substringAfter("\ninterface Contribution {").substringBefore("\n}"), gallery)
         assertTrue("\ntype Post implements Contribution {" in gallery, gallery)
         assertTrue("\ntype Photo implements Contribution {" in gallery, gallery)
-        assertTrue("contributions(after: String, first: Int, orderBy: [String!]!, where: String): ContributionPage!" in gallery, gallery)
+        assertTrue("contributions(after: String, first: Int, orderBy: [String!], where: String): ContributionPage!" in gallery, gallery)
         assertTrue("\nunion Content = Photo | Post" in gallery, "the closed union stays a union: $gallery")
     }
 
@@ -289,7 +298,7 @@ class VelleGraphQLTest {
     fun `a union of refinements is a union of their shapes, with a query root and a flag on each operand`() {
         val gallery = sdl("gallery")
         assertTrue("\nunion Notable = Photo | Post" in gallery, gallery)
-        assertTrue("notables(after: String, first: Int, orderBy: [String!]!, where: String): NotablePage!" in gallery, gallery)
+        assertTrue("notables(after: String, first: Int, orderBy: [String!], where: String): NotablePage!" in gallery, gallery)
         assertTrue("isNotable: Boolean!" in gallery.substringAfter("\ntype Post ").substringBefore("\n}"), gallery)
         assertTrue("isNotable: Boolean!" in gallery.substringAfter("\ntype Photo ").substringBefore("\n}"), gallery)
         assertTrue("isPopular: Boolean!" in gallery.substringAfter("\ntype Post ").substringBefore("\n}"), "a refinement over the static union flags its operands too: $gallery")

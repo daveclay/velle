@@ -155,7 +155,7 @@ GET /api/shapes/OverdueInvoice?where=balance > 1000&orderBy=-due&size=20
 - A `one` field in a request takes the key alone when the field's type is one shape, or `{"shape": "Fermentation", "key": 7}` when the type is a union of shapes ([§9](Reference-09-Composing-refinements)). A field named in the act's `with` takes a nested object instead of a key, with `"@shape"` naming which operand it is when the type is a union ([§6](Reference-06-Relationships), "A reference supplied by value"). A part collection is a list of nested objects. A value another nested value points at carries `"@new": 1`, and the pointing field holds `{"new": 1}`.
 - A `Date`, `DateTime`, `time`, and `uuid` is its ISO text. A `duration` is ISO-8601 text such as `PT36H`, or the spec's spelling, `3 days`. `bytes` is base64. An `integer` is a whole number, every other number a decimal. A value of an [extension type](Extension-types) is its own text, `"1200.00"` for `Money`, and a number is accepted where the type reads one.
 - A record carries every member of the shape, including derived properties and inferred inverse collections, and one `is<Refinement>` flag per refinement of the shape, as the generated model object does.
-- `where` is a predicate in the spec's own language over the members of the shape ([§10](Reference-10-Predicate-expressions)): `balance > 0 and due < today`. `orderBy` names one or more orderable members, `-due` for descending, and is required because a page without an order has no next page. `after` is the `next` value of the previous page, opaque.
+- `where` is a predicate in the spec's own language over the members of the shape ([§10](Reference-10-Predicate-expressions)): `balance > 0 and due < today`. `orderBy` names one or more orderable members, `-due` for descending. Left off, the records come in the order of their keys in the store: the same order on every request, so paging works, and one that means nothing to the business. A refinement that reads several shapes then comes shape by shape, in the order of the shapes' names. `after` is the `next` value of the previous page, opaque.
 - A refusal is an answer, not an error. The rejection beside the reason is the same data the generated commit function returns ([§21](Reference-21-never)), projected for the actor as a read would be.
 
 ## GraphQL
@@ -178,7 +178,7 @@ type Invoice {
 
 type Query {
   invoice(key: ID!): Invoice
-  invoices(where: String, orderBy: [String!]!, first: Int, after: String): InvoicePage!
+  invoices(where: String, orderBy: [String!], first: Int, after: String): InvoicePage!
   invoiceCount(where: String): Int!
 }
 
@@ -279,7 +279,7 @@ A system with no generated code is served the same way: declare a `VelleSystem` 
 The API layer runs no spec that did not validate. What it refuses at the boundary, before the runtime:
 
 - **400** a body that names a field the act has no stored field for, claims the actor or a part's back-reference, or writes a value the field's type does not read, naming the field and the reason.
-- **400** a query whose `where` does not parse, names a member the shape has no member of, or compares members of different types, or whose order is missing or not orderable, with the validator's diagnostics ([checks.md, F1 and F2](checks#f1--unknown-name)).
+- **400** a query whose `where` does not parse, names a member the shape has no member of, or compares members of different types, or whose order names a member that is not orderable, with the validator's diagnostics ([checks.md, F1 and F2](checks#f1--unknown-name)).
 - **400** a read of a transient act or a refinement of one, which is never readable ([§4](Reference-04-State-and-commits)).
 - **401** an act declared `by`, or any read on a system with authorization, with no actor resolved.
 - **404** an unknown act, shape, refinement, or schedule, and a record that is gone, not a member, or not shown to the viewer.

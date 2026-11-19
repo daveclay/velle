@@ -1708,8 +1708,6 @@ class Validator(private val model: Model) {
     /** The query API's order datums: each an orderable member of [scope], never
      *  `id` (Reference §5, §10; OQ51 R2, R10). */
     fun checkQueryOrder(datums: List<String>, scope: String): List<Diagnostic> = buildList {
-        if (datums.isEmpty())
-            add(Diagnostic("F2", "a query names its order — one or more orderable members of '$scope' with a direction (Reference §22)"))
         for (d in datums) {
             val m = model.membersOf(scope)[d]
             when {

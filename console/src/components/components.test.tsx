@@ -80,9 +80,9 @@ describe('a shape\'s table', () => {
     expect((await screen.findByText('2')).className).toBe('numeric');
     cleanup();
 
-    const refusing = fakeClient(() => { throw new VelleRequestError('a query names its order'); });
+    const refusing = fakeClient(() => { throw new VelleRequestError("order by 'owner': Company.owner is not orderable"); });
     render(<ShapeTable model={testModel} client={refusing.client} shapeName="Company" recordHref={recordHref} />);
-    expect(await screen.findByText('a query names its order')).toBeTruthy();
+    expect(await screen.findByText("order by 'owner': Company.owner is not orderable")).toBeTruthy();
   });
 });
 

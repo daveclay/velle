@@ -220,6 +220,15 @@ Each decision section:
   2026-11-16, OQ137: "costs in terms of what velle can prove, describe, or
   other things that might go against the philosophy of velle that I might
   miss while I'm making these decisions").
+- When a decision requires something of every statement of a kind, as "every
+  query names its order" does, names the cases that have nothing to meet the
+  requirement with, and says what can no longer be done for them. Find them
+  in `examples/` before proposing, and pin one with a test. Requiring an
+  order left a shape whose members are all references unreadable as a
+  collection over REST, GraphQL, and the read API, and no decision listed
+  that; it surfaced as OQ151 when Dave opened such a shape in the console
+  (Dave, 2026-11-19: "this was the true cost of requiring ordering and
+  should have been caught as a cost").
 - Shows full-context Velle: the `shape` and `act` declarations with their
   field types in view, the `uses` lines, a comment per line saying what the
   compiler does with it, and the alternative spelled against the same spec.

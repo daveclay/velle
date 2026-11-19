@@ -25,8 +25,9 @@ Decisions to keep consistent:
 - The wall clock is set on the system before each call.
 - Reads are 401 when the spec declares authorization and no actor resolved;
   a spec without authorization serves the engineer's view.
-- `where` is a Velle predicate string on every transport; `orderBy` is
-  required; paging is by cursor.
+- `where` is a Velle predicate string on every transport; `orderBy` may be
+  left off, and the records then come in the order of their keys, the same
+  on every run; paging is by cursor.
 - A refusal is data: REST 422 with the rejection. Malformed input is 400,
   an unknown record 404.
 - The REST and GraphQL tick exists for development only; never an

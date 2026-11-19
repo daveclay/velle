@@ -142,7 +142,8 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
     /**
      * The records of [root] that satisfy [where], a predicate in the spec's own
      * language over the root's members ([Reference §10]), in the order [orderBy]
-     * names (`"due"`, `"-total"` for descending), [size] at a time from the
+     * names (`"due"`, `"-total"` for descending) or, when it names none, in the
+     * order of their keys, the same on every run, [size] at a time from the
      * cursor [after]. The answer is `{"items": [...], "next": cursor-or-null}`.
      */
     fun query(root: String, where: String?, orderBy: List<String>, size: Int?, after: String?, viewer: Ref<*>?): Map<String, Any?> {

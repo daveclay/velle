@@ -313,9 +313,9 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
                 .field { it.name("next").type(Scalars.GraphQLString).description("Pass as `after` for the next page; null when this was the last.") }
                 .build()
             additional[page.name] = page
-            q.field { it.name(many).description("The $r records satisfying `where`, a predicate in the spec's own language over the members of $r, in the order `orderBy` names (\"due\", \"-total\").")
+            q.field { it.name(many).description("The $r records satisfying `where`, a predicate in the spec's own language over the members of $r, in the order `orderBy` names (\"due\", \"-total\"), or in the order of their keys when it names none.")
                 .argument(GraphQLArgument.newArgument().name("where").type(Scalars.GraphQLString))
-                .argument(GraphQLArgument.newArgument().name("orderBy").type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(Scalars.GraphQLString)))))
+                .argument(GraphQLArgument.newArgument().name("orderBy").type(GraphQLList.list(GraphQLNonNull.nonNull(Scalars.GraphQLString))))
                 .argument(GraphQLArgument.newArgument().name("first").type(Scalars.GraphQLInt))
                 .argument(GraphQLArgument.newArgument().name("after").type(Scalars.GraphQLString))
                 .type(GraphQLNonNull.nonNull(page)) }

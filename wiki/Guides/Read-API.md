@@ -42,6 +42,8 @@ A typed query is built from the shape's members. From `examples/billing/billing.
 billing.read.invoices.where { due.dayOfWeek gte 6 }.orderBy { due.ascending }.list()
 ```
 
+`orderBy` may be left off. `billing.read.invoices.list()` answers the invoices in the order of their keys in the store, the same order on every call, so `page(n)` works over it. That order means nothing to the business; name a member when the order matters.
+
 In a query, a text member offers `lowercase`, `uppercase`, `trim`, and `length` (`where { title.length gt 10 }`), `matches` with a regular expression, and `isEmpty()` / `isNotEmpty()` for an absent or blank text; a `uuid` member equality only; and a `duration`, `time`, or `bytes` member the ordered comparisons. Every comparable member offers `oneOf(a, b)` for `in` and `between(lo, hi)` for `between` ([§10](Reference-10-Predicate-expressions)). A member of a type declared by its words ([§5](Reference-05-Scalars#a-field-that-takes-one-of-a-few-words)) offers `eq`, `neq`, and `oneOf` against the generated enum class's entries, `where { role eq Role.pharmacist }`, and no order. A `Date` member offers `year`, `month`, `day`, and `dayOfWeek`, a `time` member `hour` and `minute`, and a `DateTime` member all six, each compared as a whole number: `where { due.dayOfWeek gte 6 }`. The `examples/billing/output` query tests use each of these over SQLite.
 
 ## What a read remembers

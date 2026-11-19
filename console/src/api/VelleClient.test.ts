@@ -22,8 +22,8 @@ describe('the client over HTTP', () => {
   });
 
   it('refuses with the API\'s message and its details when GraphQL answers errors', async () => {
-    answering(200, { errors: [{ message: 'a query names its order', extensions: { kind: 'BAD_REQUEST', details: ['orderBy is empty'] } }] });
-    await expect(client.request('query { x }')).rejects.toThrow('a query names its order\norderBy is empty');
+    answering(200, { errors: [{ message: 'the query was refused', extensions: { kind: 'BAD_REQUEST', details: ['Invoice.customer is not orderable'] } }] });
+    await expect(client.request('query { x }')).rejects.toThrow('the query was refused\nInvoice.customer is not orderable');
   });
 
   it('refuses with the status when the endpoint does not answer 200', async () => {

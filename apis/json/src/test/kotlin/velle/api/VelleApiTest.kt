@@ -169,9 +169,18 @@ class VelleApiTest {
         assertNull(page2["next"])
         assertEquals(0, api.query("OverdueInvoice", null, listOf("due"), null, null, null).items().size) // nothing owed, nothing overdue
 
+        // with no order named the records come in key order, the same every time, and page: each record once
+        val unordered = api.query("Invoice", null, emptyList(), null, null, null).items().map { it["key"] }
+        assertEquals(3, unordered.toSet().size)
+        assertEquals(unordered, api.query("Invoice", null, emptyList(), null, null, null).items().map { it["key"] })
+        val unorderedPage1 = api.query("Invoice", null, emptyList(), 2, null, null)
+        val unorderedPage2 = api.query("Invoice", null, emptyList(), 2, assertNotNull(unorderedPage1["next"] as String?), null)
+        assertEquals(unordered, (unorderedPage1.items() + unorderedPage2.items()).map { it["key"] })
+        assertNull(unorderedPage2["next"])
+
         // what the query checks refuse comes back as a bad request with the diagnostics
-        val noOrder = assertFailsWith<ApiException> { api.query("Invoice", null, emptyList(), null, null, null) }
-        assertTrue(noOrder.details.any { "order" in it }, noOrder.details.toString())
+        val notOrderable = assertFailsWith<ApiException> { api.query("Invoice", null, listOf("customer"), null, null, null) }
+        assertTrue(notOrderable.details.any { "not orderable" in it }, notOrderable.details.toString())
         val syntax = assertFailsWith<ApiException> { api.query("Invoice", "due <", listOf("due"), null, null, null) }
         assertTrue(syntax.message!!.startsWith("where:"), syntax.message)
         val unknownMember = assertFailsWith<ApiException> { api.query("Invoice", "colour == 1", listOf("due"), null, null, null) }
