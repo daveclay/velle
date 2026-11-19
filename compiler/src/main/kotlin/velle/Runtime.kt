@@ -1648,7 +1648,6 @@ class VelleSystem(
         val id = nextId.getAndIncrement()
         val inst = Instance(id, m.shape, id, m.fields.toMutableMap())
         instances[id] = inst
-        byShape.getOrPut(m.shape) { mutableListOf() }.add(id)
         idShape[id] = m.shape
         t.created.add(id)
         val suppliedNames = inst.fields.keys.toSet()
@@ -1667,6 +1666,9 @@ class VelleSystem(
                     UUID.randomUUID().let { if ((p.type as? ScalarType)?.name == "uuid") Value.VUuid(it) else Value.VText(it.toString()) }
                 else startingValue(p, initially, m.shape, id)
         }
+        // the record joins the records of its shape once its starting values are computed: an
+        // `initially` reads the records that existed before this one (Reference §5)
+        byShape.getOrPut(m.shape) { mutableListOf() }.add(id)
         for (p in decl.members.filterIsInstance<TimestampProp>())
             inst.fields[p.name] = Value.VDateTime(now) // create and update both start here
         return id

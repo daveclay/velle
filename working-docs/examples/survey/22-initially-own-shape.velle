@@ -1,7 +1,7 @@
 -- An `initially` selecting over the record's own shape, the next number in a patient's run of
--- charts: accepted. The chart being created is already among `Chart` when its `sequence` is
--- computed and has no `sequence` to order by, so the commit throws `cannot order VNone against
--- VNone` (`InitiallyOrderTest`, OQ146).
+-- charts: passes. The chart being created is not yet among `Chart` when its `sequence` is
+-- computed, so the selection reads the charts that existed before it and a patient's charts
+-- start at 1, 2, 3 (Reference §5; `InitiallyOrderTest`).
 act Patient { name: text, nickname: text?
   visits: many Visit = (Visit where patient == this) }
 act Visit { patient: one Patient, seenOn: Date }

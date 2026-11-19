@@ -77,3 +77,4 @@ Costs:
 
 - [ ] Decide D1.
 - [ ] Decide D2.
+- [ ] Weigh in D2's build the stored spelling that runs since 2026-11-19, `sequence: integer initially if exists (Item where setup == this.setup) then latest(Item where setup == this.setup by sequence).sequence + 1 else 1`: a starting value reads the records that existed before the new one (Reference §5 "Starting values"; `InitiallyOrderTest`), so the number is stored, may sit in a `unique` key, and does not move when an item is deleted.

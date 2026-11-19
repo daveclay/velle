@@ -198,6 +198,14 @@ opened: Date
 
 A starting value is computed before any other record can point at the new one. Take a chart that declares `notes: many Note = (Note where chart == this)`. No note points at a chart that is only now being created, so `notes` is empty when the starting values are computed, and `noteCount: integer initially count(notes)` starts at 0 every time. The compiler warns and names the collection. Write `noteCount: integer initially 0` for a count that a rule keeps, or `noteCount: integer = count(notes)` for a [derived property](Reference-07-Derived-properties) that is always the current count. A collection read on another record, `patient.visits`, may hold records and draws no warning.
 
+For the same reason the new record is not yet among the records of its own shape. A starting value that reads them reads the records that existed before this one. So a chart can number itself within its patient's charts:
+
+```
+sequence: integer initially if exists (Chart where patient == this.patient) then latest(Chart where patient == this.patient by sequence).sequence + 1 else 1
+```
+
+The first chart of a patient starts at 1, the next at 2. `count(Chart where patient == this.patient)` in an `initially` is the number of earlier charts and does not count the new one.
+
 `initially` is not allowed on an `act`, whose every stored field the committer supplies. A system-kept value belongs on the `shape` a rule creates from the act ([§22](Reference-22-Open-unresolved), "External input").
 
 ## Generated values

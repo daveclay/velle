@@ -25,8 +25,9 @@ that finding (OQ144, settled) became Reference §5 "Starting values" and a case 
 `checks.md` A2. `22-initially-later-field` and `22-initially-read-each-other-refused` probe an
 `initially` that reads another field's `initially`; that finding (OQ145, settled)
 became the ordering rule in Reference §5 and a case of `checks.md` V14.
-`22-initially-own-shape-accepted` probes an `initially` that selects over the
-record's own shape (OQ146).
+`22-initially-own-shape` probes an `initially` that selects over the record's own
+shape; that finding (OQ146, settled) became the last paragraphs of Reference §5
+"Starting values".
 
 `./check.sh` compiles every file against the compiler jar (path inside the
 script; build it with `./gradlew :compiler:jar --max-workers=1`) and prints
@@ -115,4 +116,4 @@ what to expect:
 | `22-initially-own-collection` | `noteCount: integer initially count(notes)` and `firstNote: text initially if exists (notes) then first(notes by body).body else "none"`, where `notes` is the notes that point at the chart being created | passes; advisory A2 on each field, `'Chart.noteCount' starts from 'notes', the Note records that point at this Chart. None can when the Chart is created, so 'notes' is empty every time; write the value 'noteCount' starts with, or declare it with '=' to keep it current (Reference §5)` (`InitiallySelectionProbeTest`, "an initially reading the record's own collection draws an advisory") | Reference §5 "Starting values"; checks A2 |
 | `22-initially-later-field` | `doubled: integer initially base * 2` declared before `base: integer initially 5` | passes; `doubled` starts at 10 (`InitiallyOrderTest`, "an initially reads a field whose own initially is declared after it") | Reference §5 "Starting values" |
 | `22-initially-read-each-other-refused` | `doubled: integer initially base * 2` beside `base: integer initially doubled + 1` | `[V14] 'Chart.doubled' starts from 'Chart.base', which starts from 'Chart.doubled', so neither can be computed first; start one of them without the other` | Reference §5 "Starting values"; checks V14 |
-| `22-initially-own-shape-accepted` | `sequence: integer initially if exists (Chart where patient == this.patient) then latest(Chart where patient == this.patient by sequence).sequence + 1 else 1`, a selection over the shape of the record being created | passes; the commit throws `cannot order VNone against VNone` (`InitiallyOrderTest`, "an initially selecting over the record's own shape meets the new record and throws out of the commit") | OQ146 |
+| `22-initially-own-shape` | `sequence: integer initially if exists (Chart where patient == this.patient) then latest(Chart where patient == this.patient by sequence).sequence + 1 else 1`, a selection over the shape of the record being created | passes; a patient's charts start at 1, 2, 3, since the new chart is not among `Chart` while its starting values are computed (`InitiallyOrderTest`, "an initially selecting over the record's own shape reads the records that existed before it") | Reference §5 "Starting values" |

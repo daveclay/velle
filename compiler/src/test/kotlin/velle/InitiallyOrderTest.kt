@@ -2,14 +2,14 @@ package velle
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
 /**
  * One `initially` reading another field of the same record that has an `initially` of its own
  * (Reference §5; checks.md V14): the starting values are computed in the order they read one
- * another, wherever each is declared, and two that read each other are refused. The last test
- * pins what an `initially` selecting over the record's own shape does today, which OQ146 asks about.
+ * another, wherever each is declared, and two that read each other are refused. They are
+ * computed over the records that existed before the new one, which is not yet among the
+ * records of its shape.
  */
 class InitiallyOrderTest {
 
@@ -140,20 +140,23 @@ class InitiallyOrderTest {
     }
 
     @Test
-    fun `an initially selecting over the record's own shape meets the new record and throws out of the commit`() {
+    fun `an initially selecting over the record's own shape reads the records that existed before it`() {
         val source = patientAndRequest + """
             shape Chart {
                 patient: one Patient
                 sequence: integer initially if exists (Chart where patient == this.patient) then latest(Chart where patient == this.patient by sequence).sequence + 1 else 1
+                earlier: integer initially count(Chart where patient == this.patient)
             }
         """
         assertEquals(emptyList(), Validator.validate(source))
         val sys = VelleSystem(Model(Parser.parse(source)))
         sys.scope {
             val patient = assertIs<CommitResult.Accepted>(sys.commit("Patient", mapOf("name" to "Ada"))).id
-            // the chart being created is already among `Chart` when its `sequence` is computed, with no `sequence` to order by
-            val error = assertFailsWith<VelleRuntimeError> { sys.commit("OpenChart", mapOf("patient" to patient)) }
-            assertEquals("cannot order VNone against VNone", error.message)
+            repeat(3) { assertIs<CommitResult.Accepted>(sys.commit("OpenChart", mapOf("patient" to patient))) }
+            val charts = sys.instancesOf("Chart")
+            // the chart being created is not among `Chart` while its starting values are computed
+            assertEquals(listOf(1L, 2L, 3L), charts.map { chart -> whole(sys.get(chart, "sequence")) })
+            assertEquals(listOf(0L, 1L, 2L), charts.map { chart -> whole(sys.get(chart, "earlier")) })
         }
     }
 }
