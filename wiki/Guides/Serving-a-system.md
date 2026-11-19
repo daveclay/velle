@@ -262,7 +262,7 @@ fun overdue(): List<Overdue> = api.scope {
 
 ## The console
 
-`/velle` serves one page, `apis/spring/src/main/resources/velle/console.html`, that reads `GET /api` and builds itself: every shape as a table with the query's `where` and order, every record as a page of its members with its references as links, every act as a form, every schedule as a page that says when it last ran, with a button that ticks it when ticks are exposed. A header the page sends with every request, kept in the browser, lets a developer act as someone, `X-Velle-Actor: Staff:1` with the resolver above. Nothing in the page is written per spec.
+`/velle` serves one page, `apis/spring/src/main/resources/velle/console.html`, that reads `GET /api` and builds itself: every shape as a table with the query's `where` and order, ordered at first by the shape's first member the description marks `orderable`, every record as a page of its members with its references as links, every act as a form, every schedule as a page that says when it last ran, with a button that ticks it when ticks are exposed. A header the page sends with every request, kept in the browser, lets a developer act as someone, `X-Velle-Actor: Staff:1` with the resolver above. Nothing in the page is written per spec.
 
 ## In memory and over SQLite
 

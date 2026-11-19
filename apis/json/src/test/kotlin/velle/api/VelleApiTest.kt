@@ -82,6 +82,19 @@ class VelleApiTest {
         assertEquals("timestamp", members.getValue("issuedOn")["kind"])
         assertEquals("inverse", members.getValue("lineItems")["kind"])
         assertEquals("LineItem", members.getValue("lineItems")["type"])
+        // which members a query may order by, as the query check decides it: a date and a text do,
+        // a reference, a collection, and a type declared by its words do not
+        assertEquals(true, members.getValue("due")["orderable"])
+        assertEquals(false, members.getValue("customer")["orderable"])
+        assertEquals(false, members.getValue("lineItems")["orderable"])
+        assertEquals("Status", members.getValue("status")["type"])
+        assertEquals(false, members.getValue("status")["orderable"])
+        val api = billing()
+        for (member in members.values) {
+            val memberName = member["name"] as String
+            val queryAccepted = runCatching { api.query("Invoice", null, listOf(memberName), 1, null, null) }.isSuccess
+            assertEquals(queryAccepted, member["orderable"], "the description and the query agree about ordering by '$memberName'")
+        }
         assertEquals("refinement", shapes.getValue("PaidInvoice")["kind"])
         assertEquals(listOf("Invoice"), shapes.getValue("PaidInvoice")["bases"])
     }

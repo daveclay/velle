@@ -199,19 +199,10 @@ function isUnionType(typeName) {
   return Boolean(shape && shape.kind === 'refinement' && shape.bases && shape.bases.length > 1);
 }
 
-// The member a shape's table is ordered by until the developer picks one: the first member that is
-// neither an inverse collection nor the actor, and whose type sorts (a scalar or an extension type;
-// not another shape, not a boolean, bytes, or a uuid).
-const ORDERABLE_TYPES = new Set(['text', 'integer', 'long', 'decimal', 'double', 'Date', 'DateTime', 'time', 'duration']);
-const UNORDERABLE_SCALARS = ['boolean', 'bytes', 'uuid'];
-
+// The member a shape's table is ordered by until the developer picks one: the first member the
+// description says a query may order by. The API decides that, never this page.
 function defaultOrderBy(shape) {
-  const member = shape.members.find(candidate => {
-    if (candidate.kind === 'inverse' || candidate.kind === 'actor') return false;
-    if (ORDERABLE_TYPES.has(candidate.type)) return true;
-    const isShapeType = Boolean(shapesByName[candidate.type]);
-    return !isShapeType && !UNORDERABLE_SCALARS.includes(candidate.type);
-  });
+  const member = shape.members.find(candidate => candidate.orderable);
   return member ? member.name : '';
 }
 

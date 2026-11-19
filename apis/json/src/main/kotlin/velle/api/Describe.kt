@@ -6,6 +6,7 @@ import velle.RelType
 import velle.ScalarType
 import velle.StoredProp
 import velle.TypeRef
+import velle.Validator
 import velle.VType
 import velle.VisibleClause
 
@@ -17,6 +18,8 @@ import velle.VisibleClause
  * the system.
  */
 class Describe(private val model: Model) {
+
+    private val validator by lazy { Validator(model) }
 
     /** The schedules the spec's rules run on, in the order the rules name them. */
     val schedules: List<String> = model.rules.values.flatMap { it.triggers }.filter { it != "commit" }.distinct()
@@ -112,6 +115,8 @@ class Describe(private val model: Model) {
                 m.derived != null -> "derived"
                 else -> "stored"
             }
+            // whether a query may order by the member: the query's own check answers, so the two cannot disagree
+            d["orderable"] = validator.checkQueryOrder(listOf(m.name), name).isEmpty()
             if (m.visible.isNotEmpty()) d["visibleTo"] = m.visible.map(::clause)
             d
         }
