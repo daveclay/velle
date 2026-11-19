@@ -1,6 +1,6 @@
 # OQ147 — Does Velle keep every tick of a schedule, or only the latest?
 
-**Status:** opened 2026-11-19 from Dave's reading of the pharmacy app's stored records. D1, D2, D4, D5, and D6 decided 2026-11-19; D3 is moot under D2. D7 awaits Dave. No work items yet.
+**Status:** opened 2026-11-19 from Dave's reading of the pharmacy app's stored records. every decision answered 2026-11-19 (D3 moot under D2). Settled, build pending: the plan is §3, shown to Dave before building. Eight work items.
 
 **In plain terms:** every time a schedule runs, Velle writes down that it ran, and it never removes what it wrote. A schedule that runs every minute leaves about 526,000 records a year. Velle itself only ever looks at the most recent one.
 
@@ -283,7 +283,7 @@ Costs:
 
 **Decided:** no, 2026-11-19, as recommended: nothing is carried over, each schedule starts with no latest tick, and the old `Tick` records are the engineer's to drop.
 
-### D7. The latest tick of each schedule is served over REST and GraphQL as a thing of its own
+### D7. The latest tick of each schedule is served over REST and GraphQL as a thing of its own · Decided 2026-11-19
 
 Raised by Dave on 2026-11-19, on D5: a tick could still be served over REST and GraphQL as a special case.
 
@@ -319,8 +319,68 @@ Costs:
 - `apis/json/src/test/kotlin/velle/api/VelleApiTest.kt` and the REST and GraphQL tests: the reads pinned, with a schedule that has never run.
 - `wiki/Guides/API-layer.md` and `wiki/Guides/Serving-a-system.md`: the reads documented beside the tick endpoint.
 
-**Decided:**
+**Decided:** yes, 2026-11-19. Dave answered the section as a whole, so the proposal's two details stand with it: the reads are served whether or not `velle.api.ticks` is on, and they are served to whoever may read `GET /api`.
 
 ## 3. The build
 
-Written when D7 is decided. It gathers the "Proposed changes" lists above in build order.
+Every decision is answered. What is built is D2's option B, D4, D5, D6's "no", and D7. Three of the "Proposed changes" lists above are not built, because a later answer replaced them: D1's two `Runtime.kt` lines and its `TickRecordTest.kt` line (one `Tick` record per schedule), D2's list for option A, and D3's list.
+
+One name is still open: the interface in D4 is `TickMemory` in the proposal, and Dave named only its two members. The build uses `TickMemory` unless he names it.
+
+In build order:
+
+**The compiler and runtime**
+
+- `compiler/src/main/kotlin/velle/Hydration.kt`: the interface `TickMemory` with `latestTick(schedule)` and `persistTick(schedule, moment)`; a new kind of `AdmissionKey` for a schedule (D4).
+- `compiler/src/main/kotlin/velle/Runtime.kt`: `connect` takes the third interface; `tickInScope` calls `persistTick` in a unit of work of its own, under the schedule's key, in place of creating a `Tick` record; the private `previousTick` becomes the public `latestTick(schedule)` on `VelleSystem` and asks the store in place of running a query (D4, D5).
+- `compiler/src/main/kotlin/velle/Model.kt`: `PRELUDE` and `TICK` removed (D2).
+- `compiler/src/main/kotlin/velle/Validator.kt`: the F1 and V32 special cases for Velle's own shape removed, so `Tick` is a name a spec may use (D2).
+- `compiler/src/main/kotlin/velle/StoreGen.kt` and `Codegen.kt`: no `Tick` in generated code (D4).
+- `compiler/src/main/kotlin/velle/Rejection.kt`: the `TickListener` comment that names the `Tick` row reworded.
+
+**The stores**
+
+- `compiler/src/main/kotlin/velle/MemoryStore.kt`: implements `TickMemory` (D4).
+- `stores/sql`: implements `TickMemory`; `stores/sqlite` and `stores/postgres` gain the two-column table through `SqlDialect` (D4). No code reads an old `Tick` table (D6).
+
+**The API layer**
+
+- `apis/json/src/main/kotlin/velle/api/Describe.kt`: `velle: true` removed (D5).
+- `apis/json/src/main/kotlin/velle/api/VelleApi.kt`: a read of every schedule with its latest moment, beside `tick` (D7).
+- `apis/spring/src/main/kotlin/velle/api/spring/VelleRestController.kt`: `GET {path}/ticks` and `GET {path}/ticks/{schedule}` (D7).
+- `apis/graphql/src/main/kotlin/velle/api/graphql/VelleGraphQL.kt`: the `ticks` query (D7).
+
+**Regenerated output**
+
+- Every example under `examples/` and `working-docs/examples/survey/out`, since the generated code loses `Tick`.
+
+**The wiki**
+
+- Reference §17 "What Velle records about a tick": rewritten. Velle keeps the moment each schedule last ran and nothing else; it is not a shape and a spec cannot read it; a history of runs is a rule of the author's own (D1, D2).
+- `evaluation.md` "Ticks", the bullet "The tick's own record": rewritten to the store's tick members and the per-schedule key; the sentence about a `Tick` row a constraint refuses removed (D4).
+- `checks.md` F1 and V32: the sentences about Velle's own `Tick` removed (D2).
+- `wiki/Guides/Store-API.md`: a section for `latestTick` and `persistTick`, and one sentence saying a `Tick` table left by an earlier version is the engineer's to drop (D4, D6).
+- `wiki/Guides/Concurrency.md`: the row for the tick's own record names the per-schedule key (D4).
+- `wiki/Guides/API-layer.md`, `wiki/Guides/Act-API.md` "Ticking a schedule", and `wiki/Guides/Serving-a-system.md`: the `Tick` shape removed; `latestTick` on `VelleSystem` and the two API reads added (D5, D7).
+
+**Examples and tests**
+
+- `working-docs/examples/survey/23-tick-history-read.velle`: renamed with `-refused`, its README line updated to the F1 message (D2).
+- `compiler/src/test/kotlin/velle/TickRecordTest.kt`: rewritten against the store's tick members. It keeps the restart test for `when leaving`, pins that two schedules each keep their own latest moment, and replaces "a spec may not declare a shape named Tick" with a spec that declares one and validates (D2, D4).
+- `AdmissionKeysTest`, `BillingOverSqliteTest`, and each example's generated test over SQLite: updated where they name `Tick` (D4).
+- `apis/json/src/test/kotlin/velle/api/VelleApiTest.kt` and the REST and GraphQL tests: the reads pinned, with a schedule that has never run (D7).
+
+**Settling**
+
+- The settled row in `working-docs/QUESTIONS.md`, a note on OQ71's row that its D3 was reversed here, the missed-run item in `working-docs/questions/OQ34-schedule-definition.md` reworded from "the latest `Tick` row" to `latestTick`, and this file deleted in the same commit.
+
+## 4. Work items
+
+- [ ] Add `TickMemory` and the schedule queue key, and move the runtime's tick onto them.
+- [ ] Remove `Tick` from the model, the validator, and the generated code.
+- [ ] Implement `TickMemory` in `MemoryStore` and `stores/sql`.
+- [ ] Serve the latest tick of each schedule from `VelleApi`, REST, and GraphQL, and remove `velle: true`.
+- [ ] Regenerate every example's output.
+- [ ] Rewrite the wiki pages listed in §3.
+- [ ] Rewrite `TickRecordTest` and update the other tests listed in §3; rename survey spec 23.
+- [ ] Run the suite, write the settled row, and delete this file in the settling commit.
