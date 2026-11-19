@@ -242,7 +242,10 @@ Costs:
 
 Once a spec cannot read `Tick`, can an engineer still ask the running system when a schedule last ran?
 
-Recommendation: yes on the system object in Kotlin, and no over REST and GraphQL as a readable shape.
+Recommendation: yes in the engineer's own Kotlin code, and no over REST and GraphQL.
+
+- In Kotlin: `VelleSystem` (`compiler/src/main/kotlin/velle/Runtime.kt`) is the class every commit, tick, and query of a running application goes through. The generated class for a spec wraps it, and an engineer already reaches it as `sys.system`, for example to register a tick listener with `sys.system.listen(listener)` (`wiki/Guides/Act-API.md`, "Ticking a schedule"). A yes adds one read there, `sys.system.latestTick("Nightly")`, giving the moment `Nightly` last ran or nothing before its first run. The name follows D4.
+- Over REST and GraphQL: the moment is not served. It is served today only because `Tick` is a shape.
 
 Today `Tick` is listed by `GET /api` as a readable shape marked `velle: true` (`wiki/Guides/API-layer.md`), so it is readable over REST, GraphQL, and the console like any shape. After D2 it is not a shape and that listing has nothing to list. What an engineer would want the moment for is a health check ("has `Nightly` run in the last day") and the missed-run item in `working-docs/questions/OQ34-schedule-definition.md`. Both are deployment concerns, and the starter already reports every tick through `MetricsTickListener` and `LoggingTickListener` (`wiki/Guides/Serving-a-system.md`, "Hearing a tick").
 
@@ -254,9 +257,9 @@ Costs:
 
 #### Proposed changes
 
-- `compiler/src/main/kotlin/velle/Runtime.kt`: `previousTick(schedule)` becomes public on `VelleSystem`.
+- `compiler/src/main/kotlin/velle/Runtime.kt`: the private `previousTick(schedule)` becomes the public `latestTick(schedule)` on `VelleSystem`.
 - `apis/json/src/main/kotlin/velle/api/Describe.kt`: `velle: true` removed; `VelleApiTest` updated.
-- `wiki/Guides/API-layer.md` and `wiki/Guides/Act-API.md` "Ticking a schedule": the `Tick` shape removed, the read on the system object added.
+- `wiki/Guides/API-layer.md` and `wiki/Guides/Act-API.md` "Ticking a schedule": the `Tick` shape removed, `latestTick` on `VelleSystem` added.
 
 **Decided:**
 
