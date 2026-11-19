@@ -37,7 +37,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **OQ91** — Decide whether a field may be read through a `many` hop as a collection (`(Component where ...).source`, `origin.components.source`): the validator accepts both and the evaluator refuses both, so a derived set of ancestor records has no spelling that runs; either the grammar gains the collection path or the validator refuses it (B5).
 - **OQ92** — Decide whether the inferred inverse's name is pluralized properly (`PeptideBatch` → `peptideBatches`) or stays Reference §6's literal `s` (`peptideBatchs`); the batches spec declares the readable view on the union body (B3).
 - **OQ93** — Decide whether the value vocabulary grows: a mean or maximum over a collection, an nth selector (second-largest), `Date - Date`; by design today, and both passes spelled around all of them (S10, P12). A boolean written as a comparison is settled (OQ89).
-- **[OQ142](questions/OQ142-text-from-a-template-that-is-data.md)** — can a spec fill a naming template held in a field, `{parent}-{sequence}`, and mint the sequence number? · opened 2026-11-17 from a stress pass of a domain spec; D1 and D2 decided 2026-11-17 (yes, yes), build pending; three work items
+- **[OQ142](questions/OQ142-text-from-a-template-that-is-data.md)** — can a spec fill a naming template held in a field, `{parent}-{sequence}`, and mint the sequence number? · opened 2026-11-17 from a stress pass of a domain spec; D1 and D2 await Dave; three work items
 
 ## Acts, transient and exposed
 
