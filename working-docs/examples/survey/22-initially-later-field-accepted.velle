@@ -1,0 +1,12 @@
+-- An `initially` reading a field of the same record whose own `initially` is declared after
+-- it: accepted with no advisory. The runtime fills the fields in declaration order
+-- (`Runtime.kt`, `applyCreate`), so `base` is absent when `doubled` is computed and the commit
+-- throws `'*' on non-number` (`InitiallySelectionProbeTest`, OQ145).
+act Patient { name: text, nickname: text?
+  visits: many Visit = (Visit where patient == this) }
+act Visit { patient: one Patient, seenOn: Date }
+act OpenChart { patient: one Patient }
+shape Chart { patient: one Patient
+  doubled: integer initially base * 2
+  base: integer initially 5 }
+rule Open when OpenChart { Chart from { patient: patient } }

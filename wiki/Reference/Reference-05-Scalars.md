@@ -176,6 +176,26 @@ It is allowed on any stored property of a `shape`, relationships included. The v
 
 `initially` is not a derivation. `applied: boolean = false` in a shape body would declare a [derived property](Reference-07-Derived-properties) that is always false and never assignable. A derived property has no stored value, so it cannot take `initially`; neither can a `timestamp` field, whose value the commit supplies (below). The counterpart inside a [refinement](Reference-08-Refinements) is `captured`, which computes its value when the record enters the refinement.
 
+A required field cannot start absent. A selection such as `first(patient.visits by seenOn)` picks one record, and picks none when the patient has no visit ([§10, "A selection that may match nothing"](Reference-10-Predicate-expressions#a-selection-that-may-match-nothing)). So the compiler rejects this field:
+
+```
+opened: Date initially first(patient.visits by seenOn).seenOn
+```
+
+There are three ways to write it:
+
+```
+opened: Date initially if exists (patient.visits) then first(patient.visits by seenOn).seenOn else today
+opened: Date? initially first(patient.visits by seenOn).seenOn
+opened: Date
+```
+
+- The first tests that the patient has a visit and says what the field starts as when there is none.
+- The second declares the field with `?`, so a chart for a patient with no visit starts with no `opened`.
+- The third drops `initially`. Each [rule](Reference-11-rule-when-on) that creates the record gives the value in its `from` block, `Chart from { patient: patient, opened: first(patient.visits by seenOn).seenOn }`. A patient with no visit then refuses the act ([§14, "A required field given an absent value"](Reference-14-for#a-required-field-given-an-absent-value)).
+
+A starting value is computed before any other record can point at the new one. Take a chart that declares `notes: many Note = (Note where chart == this)`. No note points at a chart that is only now being created, so `notes` is empty when the starting values are computed, and `noteCount: integer initially count(notes)` starts at 0 every time. The compiler warns and names the collection. Write `noteCount: integer initially 0` for a count that a rule keeps, or `noteCount: integer = count(notes)` for a [derived property](Reference-07-Derived-properties) that is always the current count. A collection read on another record, `patient.visits`, may hold records and draws no warning.
+
 `initially` is not allowed on an `act`, whose every stored field the committer supplies. A system-kept value belongs on the `shape` a rule creates from the act ([§22](Reference-22-Open-unresolved), "External input").
 
 ## Generated values
@@ -227,6 +247,8 @@ An act declared `by` carries one more system-filled property: the actor who comm
 - **Refuses** at the boundary a committed `many` of values that holds the same value twice, unless the property tolerates duplication ([checks.md, V21](checks#v21--act-field-forms)).
 - **Rejects** `initially` on anything but a stored property, and any assignment to a `timestamp` field or `id` ([checks.md, F3](checks#f3--position-rules)).
 - **Rejects** an `initially` whose value is of another type than the field, `applied: boolean initially 5`, naming the type to declare or the value to start with; a constant the field's type reads, `"09:00"` for a `time`, is read, and one it rejects is an error at the constant; the four number types are one kind ([checks.md, F2](checks#f2--type-checking)).
+- **Rejects** a required field whose `initially` reads through a selection, `first`, `latest`, or `(Shape for expr)`, unless a test shows the selection matches. The message names the selection and the test to write ([checks.md, F2](checks#f2--type-checking)).
+- **Warns** when an `initially` reads the collection of records that point at the record being created, since that collection is empty every time. The message names the collection ([checks.md, A2](checks#a2--dead-machinery)).
 - **Rejects** `initially` or `timestamp` on an act, naming the field and where it should move ([checks.md, V21](checks#v21--act-field-forms)).
 - **Rejects** a declared field named `id` ([checks.md, F1](checks#f1--name-resolution-and-casing)).
 

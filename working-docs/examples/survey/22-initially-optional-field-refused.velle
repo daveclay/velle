@@ -1,0 +1,8 @@
+-- A required stored field whose `initially` reads a field declared optional: refused.
+act Patient { name: text, nickname: text?
+  visits: many Visit = (Visit where patient == this) }
+act Visit { patient: one Patient, seenOn: Date }
+act OpenChart { patient: one Patient }
+shape Chart { patient: one Patient
+  label: text initially patient.nickname }
+rule Open when OpenChart { Chart from { patient: patient } }

@@ -1,0 +1,16 @@
+-- An `initially` reading the collection of records that point at the record being created:
+-- passes, with advisory A2 on each field. Nothing points at a record before it exists, so the
+-- collection is empty every time: `noteCount` starts at 0 and `firstNote` at "none", although
+-- the same firing creates a note (Reference §5; `InitiallySelectionProbeTest`).
+act Patient { name: text, nickname: text?
+  visits: many Visit = (Visit where patient == this) }
+act Visit { patient: one Patient, seenOn: Date }
+act OpenChart { patient: one Patient }
+shape Chart { patient: one Patient
+  notes: many Note = (Note where chart == this)
+  firstNote: text initially if exists (notes) then first(notes by body).body else "none"
+  noteCount: integer initially count(notes) }
+shape Note { chart: one Chart, body: text }
+rule Open when OpenChart {
+  Chart from { patient: patient } as chart
+  Note from { chart: chart, body: "opened" } }

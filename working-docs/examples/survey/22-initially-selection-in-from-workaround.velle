@@ -1,0 +1,10 @@
+-- The same selection written in the `from` block of the rule that creates the chart: passes,
+-- and a patient with no visit refuses the act (Reference §14). Every rule that creates a
+-- chart repeats the selection.
+act Patient { name: text, nickname: text?
+  visits: many Visit = (Visit where patient == this) }
+act Visit { patient: one Patient, seenOn: Date }
+act OpenChart { patient: one Patient }
+shape Chart { patient: one Patient
+  opened: Date }
+rule Open when OpenChart { Chart from { patient: patient, opened: first(patient.visits by seenOn).seenOn } }

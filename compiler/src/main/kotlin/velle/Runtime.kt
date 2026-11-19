@@ -1666,11 +1666,28 @@ class VelleSystem(
                 if (p.initially == PathExpr("randomUUID"))
                     // a `uuid` field gets the value; a `text` field its canonical spelling (Reference §5)
                     UUID.randomUUID().let { if ((p.type as? ScalarType)?.name == "uuid") Value.VUuid(it) else Value.VText(it.toString()) }
-                else coerceCollection(evaluator.eval(p.initially, Evaluator.Ctx(m.shape, id)), p.type)
+                else startingValue(p, p.initially, m.shape, id)
         }
         for (p in decl.members.filterIsInstance<TimestampProp>())
             inst.fields[p.name] = Value.VDateTime(now) // create and update both start here
         return id
+    }
+
+    /** What a field's `initially` computes for a record being created. A required field cannot
+     *  start absent (Reference §5, §14): the compiler refuses every spelling known to, and the
+     *  firing fails here rather than keeping a record with a hole in it. */
+    private fun startingValue(field: StoredProp, initially: Expr, shape: String, recordId: Long): Value {
+        val computed = evaluator.eval(initially, Evaluator.Ctx(shape, recordId))
+        if (computed == Value.VNone && !takesAbsence(field))
+            throw FiringFailed("'$shape.${field.name}' is required and its 'initially', '${Printer.expr(initially)}', is absent (Reference §14)")
+        return coerceCollection(computed, field.type)
+    }
+
+    /** Whether [field] may hold no value: declared with `?`, or a `many`, whose absence is the empty collection. */
+    private fun takesAbsence(field: StoredProp): Boolean = when (val type = field.type) {
+        is RelType -> type.optional || type.many
+        is ScalarType -> type.optional || type.many
+        else -> false
     }
 
     private fun applyAssign(m: Mutation.Assign, t: Txn, pre: Map<*, Set<Long>>) {
@@ -1758,13 +1775,15 @@ class VelleSystem(
         // the clause say `?` for
         val ctx = Evaluator.Ctx(scope, subject, actor = rule.by?.let { it.name to txn?.actor })
         val mutations = mutableListOf<Mutation>()
+        // a failure with no rule named is this firing's own, from its body or from a record it
+        // creates; one raised by a rule its commit fired arrives already named
         try {
             execute(rule.body, ctx, subject, mutations)
+            if (mutations.isNotEmpty()) applyCommit(mutations)
         } catch (failure: FiringFailed) {
             if (failure.rule != null) throw failure
             throw FiringFailed(failure.message!!, rule.name)
         }
-        if (mutations.isNotEmpty()) applyCommit(mutations)
     }
 
     /**
@@ -1816,9 +1835,7 @@ class VelleSystem(
                 // nothing (Reference §10, §14). The firing fails rather than storing a record
                 // with a hole in it, as a selection that does not single out a winner does.
                 for (p in model.shapes.getValue(item.shape).members.filterIsInstance<StoredProp>()) {
-                    if (fields[p.name] != Value.VNone) continue
-                    val rel = p.type as? RelType; val sc = p.type as? ScalarType
-                    if (rel?.optional == true || sc?.optional == true || rel?.many == true || sc?.many == true) continue
+                    if (fields[p.name] != Value.VNone || takesAbsence(p)) continue
                     val given = item.fields.firstOrNull { it.name == p.name }?.value?.let { Printer.expr(it) } ?: "the value given"
                     throw FiringFailed(
                         "'${item.shape}.${p.name}' is required and '$given' is absent: the selection matched nothing (Reference §14)")

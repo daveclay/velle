@@ -466,4 +466,168 @@ class SelectionPresenceTest {
         """)
         assertEquals(emptyList(), advisories.filter { advisory -> advisory.code == "A10" })
     }
+
+    // ── a required stored field started by `initially` ───────────────────────
+
+    private val summaryOfAnUpload = """
+        act Other {
+            upload: one Upload
+        }
+        rule Summarize when Other {
+            Summary from { upload: upload }
+        }
+    """
+
+    @Test
+    fun `a required initially through a selection is refused`() {
+        val diagnostics = diagnosticsOf(summaryOfAnUpload + """
+            shape Summary {
+                upload: one Upload
+                firstKey: text initially first(upload.rows by key).key
+            }
+        """)
+        assertRefused("F2", "'Summary.firstKey' is declared a text and may start absent: 'first(upload.rows by key)' may match nothing; " +
+            "declare it 'firstKey: text?', or start it where a test shows the selection matches, such as 'exists (upload.rows)' (Reference §10)", diagnostics)
+        assertEquals(1, diagnostics.size, "$diagnostics")
+    }
+
+    @Test
+    fun `a required initially with the selection under a test is accepted`() {
+        assertAccepted(diagnosticsOf(summaryOfAnUpload + """
+            shape Summary {
+                upload: one Upload
+                firstKey: text initially if exists (upload.rows) then first(upload.rows by key).key else "none"
+            }
+        """))
+    }
+
+    @Test
+    fun `an optional initially through a selection is accepted`() {
+        assertAccepted(diagnosticsOf(summaryOfAnUpload + """
+            shape Summary {
+                upload: one Upload
+                firstKey: text? initially first(upload.rows by key).key
+            }
+        """))
+    }
+
+    @Test
+    fun `the selection written in the from block of the creating rule is accepted`() {
+        assertAccepted(diagnosticsOf("""
+            act Other {
+                upload: one Upload
+            }
+            shape Summary {
+                upload: one Upload
+                firstKey: text
+            }
+            rule Summarize when Other {
+                Summary from { upload: upload, firstKey: first(upload.rows by key).key }
+            }
+        """))
+    }
+
+    // ── an `initially` reading the records that point at the record being created ──
+
+    private val summaryWithLines = summaryOfAnUpload + """
+        shape Line {
+            summary: one Summary
+            body: text
+        }
+    """
+
+    private fun ownCollectionAdvisories(summary: String): List<String> =
+        advisoriesOf(summaryWithLines + summary).filter { advisory -> advisory.code == "A2" }.map { advisory -> advisory.message }
+
+    @Test
+    fun `an initially counting the record's own declared collection draws A2`() {
+        val advisories = ownCollectionAdvisories("""
+            shape Summary {
+                upload: one Upload
+                entries: many Line = (Line where summary == this)
+                lineCount: integer initially count(entries)
+            }
+        """)
+        assertEquals(listOf("'Summary.lineCount' starts from 'entries', the Line records that point at this Summary. None can when the Summary is " +
+            "created, so 'entries' is empty every time; write the value 'lineCount' starts with, or declare it with '=' to keep it current (Reference §5)"), advisories)
+    }
+
+    @Test
+    fun `an initially reading the inferred collection draws A2`() {
+        val advisories = ownCollectionAdvisories("""
+            shape Summary {
+                upload: one Upload
+                lineCount: integer initially count(this.lines)
+            }
+        """)
+        assertEquals(1, advisories.size, "$advisories")
+        assertTrue("'Summary.lineCount' starts from 'this.lines', the Line records that point at this Summary" in advisories.single(), "$advisories")
+    }
+
+    @Test
+    fun `an initially whose test of its own collection can never hold draws A2`() {
+        val advisories = ownCollectionAdvisories("""
+            shape Summary {
+                upload: one Upload
+                firstBody: text initially if exists (lines) then first(lines by body).body else "none"
+            }
+        """)
+        assertEquals(1, advisories.size, "$advisories")
+        assertTrue("'Summary.firstBody' starts from 'lines'" in advisories.single(), "$advisories")
+    }
+
+    @Test
+    fun `an initially reading the filter written in place draws A2`() {
+        val advisories = ownCollectionAdvisories("""
+            shape Summary {
+                upload: one Upload
+                lineCount: integer initially count(Line where summary == this and body != "")
+            }
+        """)
+        assertEquals(1, advisories.size, "$advisories")
+        assertTrue("'Summary.lineCount' starts from '(Line where (summary == this) and (body != \"\"))'" in advisories.single(), "$advisories")
+    }
+
+    @Test
+    fun `an initially reading a collection declared over its own collection draws A2`() {
+        val advisories = ownCollectionAdvisories("""
+            shape Summary {
+                upload: one Upload
+                filled: many Line = (lines where body != "")
+                filledCount: integer initially count(filled)
+            }
+        """)
+        assertEquals(1, advisories.size, "$advisories")
+    }
+
+    @Test
+    fun `an initially reading the same kind of collection on another record draws no A2`() {
+        assertEquals(emptyList(), ownCollectionAdvisories("""
+            shape Summary {
+                upload: one Upload
+                rowCount: integer initially count(upload.rows)
+            }
+        """))
+    }
+
+    @Test
+    fun `an initially reading a filter over values draws no A2`() {
+        assertEquals(emptyList(), ownCollectionAdvisories("""
+            shape Summary {
+                upload: one Upload
+                title: text
+                sameBodyCount: integer initially count(Line where body == this.title)
+            }
+        """))
+    }
+
+    @Test
+    fun `a derived property over the record's own collection draws no A2`() {
+        assertEquals(emptyList(), ownCollectionAdvisories("""
+            shape Summary {
+                upload: one Upload
+                lineCount: integer = count(lines)
+            }
+        """))
+    }
 }

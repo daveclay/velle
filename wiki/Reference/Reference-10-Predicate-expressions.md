@@ -119,6 +119,7 @@ shape CompletedAttempt = ChargeAttempt where exists ChargeResponse for this {
 - The test and the selection spell the collection the same way. `exists ChargeResponse for this` shows nothing about `latest(ChargeResponse where attempt == this by respondedOn)`, and a test of `harvests` shows nothing about a selection from `harvests where yieldKgPerHa > 0`.
 - An `is some` test on the selection itself, `first(harvests by harvestedOn) is some`, shows that selection matched.
 - `max` and `min` over a `many` of values are absent when it is empty. The same tests show them present: `if scores is empty then 0 else max(scores)`.
+- A required stored field started by `initially` takes a selection under the same tests: `opened: Date initially if exists (patient.visits) then first(patient.visits by seenOn).seenOn else today` ([§5, "Starting values"](Reference-05-Scalars#starting-values-initially)).
 
 The steps after a selection follow the rule for every path. A field declared with `?`, read off the selected record, may be absent even when the selection matched. A plain dot through a step declared with `?` is a compile error, so a row's optional `parent` is read as `first(rows by key).parent?.name`. Two tests show such a read present. One is `is some` on the same read: `if first(rows by key).newKey is some then first(rows by key).newKey else "none"`. The other is a filter on the collection selected from: `first(rows where newKey is some by key).newKey`.
 

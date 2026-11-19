@@ -19,7 +19,11 @@ settled) became Reference §9 "Sharing a field across shapes", the `is` clause.
 The `21-*` files and the `09-lookup-in-rule-never-unpaired*`, `-guarded-no-never`,
 and `-after-commit` files probe a selection that may match nothing where a value
 that is always there is declared; that finding (OQ143, settled) became Reference
-§10 "A selection that may match nothing" and `checks.md` A9 and A10.
+§10 "A selection that may match nothing" and `checks.md` A9 and A10. The
+`22-initially-*` files probe the same selection in a stored field's `initially`;
+that finding (OQ144, settled) became Reference §5 "Starting values" and a case of
+`checks.md` A2. `22-initially-later-field-accepted` probes an `initially` that reads
+a field declared after it (OQ145).
 
 `./check.sh` compiles every file against the compiler jar (path inside the
 script; build it with `./gradlew :compiler:jar --max-workers=1`) and prints
@@ -101,3 +105,9 @@ what to expect:
 | `21-first-into-required-optional-step-refused` | `first(upload.rows by key).parent.name` with `parent: one Parent?` | `[V11] 'first(upload.rows by key).parent.name' reads through 'first(upload.rows by key).parent', which may be absent; test 'first(upload.rows by key).parent is some' first, or write 'first(upload.rows by key).parent?.name' to read absent when it is (Reference §10)` | checks V11 |
 | `21-first-into-required-qdot` | `Kept from { label: first(upload.rows by key)?.key }`, `?.` directly after a selection | passes, as the plain dot does; advisory A10 names the dot to write (`SelectionPresenceTest`) | checks A10 |
 | `21-max-into-required-guarded` | `best: integer = if scores is empty then 0 else max(scores)` | passes | Reference §10 "A selection that may match nothing" |
+| `22-initially-selection-refused` | `opened: Date initially first(patient.visits by seenOn).seenOn` on a stored field of `shape Chart`, a required field started through a selection that may match nothing | `[F2] 'Chart.opened' is declared a Date and may start absent: 'first(patient.visits by seenOn)' may match nothing; declare it 'opened: Date?', or start it where a test shows the selection matches, such as 'exists (patient.visits)' (Reference §10)` | Reference §5 "Starting values"; checks F2 |
+| `22-initially-selection-guarded` | the same field as `initially if exists (patient.visits) then first(patient.visits by seenOn).seenOn else today` | passes | Reference §5 "Starting values" |
+| `22-initially-selection-in-from-workaround` | the selection moved to the rule, `Chart from { patient: patient, opened: first(patient.visits by seenOn).seenOn }`, with `opened: Date` | passes; a patient with no visit refuses the act (`InitiallySelectionProbeTest`, "the same selection written in the from block refuses the act"); every rule that creates a chart repeats the selection | Reference §14 |
+| `22-initially-optional-field-refused` | `label: text initially patient.nickname` with `nickname: text?` | `[F2] 'Chart.label' is declared a text and may start absent; declare it 'label: text?'` | checks F2 |
+| `22-initially-own-collection` | `noteCount: integer initially count(notes)` and `firstNote: text initially if exists (notes) then first(notes by body).body else "none"`, where `notes` is the notes that point at the chart being created | passes; advisory A2 on each field, `'Chart.noteCount' starts from 'notes', the Note records that point at this Chart. None can when the Chart is created, so 'notes' is empty every time; write the value 'noteCount' starts with, or declare it with '=' to keep it current (Reference §5)` (`InitiallySelectionProbeTest`, "an initially reading the record's own collection draws an advisory") | Reference §5 "Starting values"; checks A2 |
+| `22-initially-later-field-accepted` | `doubled: integer initially base * 2` declared before `base: integer initially 5` | passes with no advisory; the commit throws `'*' on non-number` (`InitiallySelectionProbeTest`, "an initially reading a field whose own initially is declared later throws out of the commit") | OQ145 |

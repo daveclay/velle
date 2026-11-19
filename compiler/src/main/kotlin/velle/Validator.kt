@@ -76,6 +76,7 @@ class Validator(private val model: Model) {
         checkDriftExposedPartitions() // A4 (advisory)
         checkContention()             // A5 (advisory, OQ40)
         checkDeadOptionality()        // A2 (advisory: `? initially required` nothing can absent)
+        checkInitiallyReadsOwnCollection() // A2 (advisory: an `initially` over the records that point at the record being created)
     }
 
     // ── V22: closure declaration legality + V1 closure extension (Reference §6,
@@ -1204,21 +1205,27 @@ class Validator(private val model: Model) {
         val mismatch: (site: String, field: String, declared: String, actual: String, actualSpelled: String) -> String,
         val absent: (site: String, field: String, declared: String, optionalSpelled: String) -> String,
         val none: (site: String, field: String, declared: String, optionalSpelled: String) -> String,
-        /** Whether the site refuses a selection no test shows to match (Reference §7): a derived or
-         *  captured property does, having no moment at which the runtime could refuse the miss. */
-        val refusesUnshownSelection: Boolean = false,
+        /** How the site refuses a selection no test shows to match (Reference §5, §7), the last two
+         *  arguments being the selection and the test that would show it matches: a derived or
+         *  captured property and an `initially` refuse one, each computing its value where no rule's
+         *  condition can show the selection matches. Null where the site takes the selection and a
+         *  miss is the runtime's to refuse, a `from` block and an assignment (Reference §14). */
+        val unshownSelection: ((site: String, field: String, declared: String, optionalSpelled: String, selection: String, test: String) -> String)? = null,
     )
 
     private val COMPUTED = Wording(
         { site, field, declared, actual, spelled -> "$site is declared $declared and computed as $actual; declare it '$field: $spelled', or compute $declared" },
         { site, field, declared, spelled -> "$site is declared $declared and may be absent; declare it '$field: $spelled', or test the value with 'is some' first" },
         { site, field, declared, spelled -> "$site is declared $declared and computed as none; declare it '$field: $spelled'" },
-        refusesUnshownSelection = true,
+        { site, field, declared, spelled, selection, test -> "$site is declared $declared and may be absent: '$selection' may match nothing; declare it '$field: $spelled', " +
+            "or compute it where a test shows the selection matches, such as '$test' (Reference §10)" },
     )
     private val INITIALLY = Wording(
         { site, field, declared, actual, spelled -> "$site is declared $declared and starts as $actual; declare it '$field: $spelled', or start it with $declared" },
         { site, field, declared, spelled -> "$site is declared $declared and may start absent; declare it '$field: $spelled'" },
         { site, field, declared, spelled -> "$site is declared $declared and starts as none; declare it '$field: $spelled'" },
+        { site, field, declared, spelled, selection, test -> "$site is declared $declared and may start absent: '$selection' may match nothing; declare it '$field: $spelled', " +
+            "or start it where a test shows the selection matches, such as '$test' (Reference §10)" },
     )
     private val SUPPLIED = Wording(
         { site, _, declared, actual, _ -> "$site — declared $declared, given $actual; supply $declared" },
@@ -1272,20 +1279,21 @@ class Validator(private val model: Model) {
         when {
             model.types.absenceDeclared(value, scope, typeEnv()) ->
                 diags.add(Diagnostic("F2", wording.absent(site, field, model.words(declared), optionalSpelled)))
-            wording.refusesUnshownSelection && model.types.absenceDeclared(value, scope, typeEnv(), selectionsCount = true) ->
-                diags.add(Diagnostic("F2", unshownSelectionMessage(site, field, model.words(declared), optionalSpelled, value, scope)))
+            wording.unshownSelection != null && model.types.absenceDeclared(value, scope, typeEnv(), selectionsCount = true) ->
+                diags.add(Diagnostic("F2", unshownSelectionMessage(wording, site, field, model.words(declared), optionalSpelled, value, scope)))
             else -> adviseOnMissOutsideTransaction(site, value, scope)
         }
     }
 
-    /** A required derived or captured property computed through a selection no test shows to match
-     *  (Reference §7): the message names the selection and the test that shows it matches. */
-    private fun unshownSelectionMessage(site: String, field: String, declared: String, optionalSpelled: String, value: Expr, scope: String): String {
+    /** A required derived or captured property, or a required `initially`, computed through a
+     *  selection no test shows to match (Reference §5, §7): the message names the selection and the
+     *  test that shows it matches. */
+    private fun unshownSelectionMessage(wording: Wording, site: String, field: String, declared: String, optionalSpelled: String, value: Expr, scope: String): String {
         val selection = model.types.unshownSelection(value, scope, typeEnv())
         val test = selection?.let { model.types.existsTestFor(it) }
-        if (selection == null || test == null) return COMPUTED.absent(site, field, declared, optionalSpelled)
-        return "$site is declared $declared and may be absent: '${Printer.expr(selection)}' may match nothing; declare it '$field: $optionalSpelled', " +
-            "or compute it where a test shows the selection matches, such as '${Printer.expr(test)}' (Reference §10)"
+        val refusal = wording.unshownSelection
+        if (selection == null || test == null || refusal == null) return wording.absent(site, field, declared, optionalSpelled)
+        return refusal(site, field, declared, optionalSpelled, Printer.expr(selection), Printer.expr(test))
     }
 
     /**
@@ -4455,6 +4463,101 @@ class Validator(private val model: Model) {
                         advisory = true))
             }
         }
+    }
+
+    // A2 (advisory) — an `initially` that reads the records pointing at the record being
+    // created (Reference §5). A record cannot be pointed at before it exists, so that collection
+    // is empty every time the starting value is computed, and what is read from it is a constant.
+    private fun checkInitiallyReadsOwnCollection() {
+        for ((shapeName, shape) in model.shapes)
+            for (field in shape.members.filterIsInstance<StoredProp>()) adviseOnOwnCollectionRead(shapeName, field)
+    }
+
+    private fun adviseOnOwnCollectionRead(shapeName: String, field: StoredProp) {
+        val initially = field.initially ?: return
+        val read = ownCollectionRead(initially, shapeName, subjectLevel = true) ?: return
+        diags.add(Diagnostic("A2", "'$shapeName.${field.name}' starts from '${read.spelled}', the ${read.elementShape} records that point at this $shapeName. " +
+            "None can when the $shapeName is created, so '${read.spelled}' is empty every time; write the value '${field.name}' starts with, " +
+            "or declare it with '=' to keep it current (Reference §5)", advisory = true))
+    }
+
+    /** A collection of the records that point at the record being created, as the `initially` spells it. */
+    private class OwnCollectionRead(val spelled: String, val elementShape: String)
+
+    /** The first read in [expr] of a collection that is empty when a [shape] is created. A bare name
+     *  is the record's own member only at [subjectLevel]; inside a filter it is the element's, and
+     *  `this` stays the record. */
+    private fun ownCollectionRead(expr: Expr?, shape: String, subjectLevel: Boolean): OwnCollectionRead? = when (expr) {
+        null -> null
+        is PathExpr -> ownMemberRead(expr, subjectLevel)?.let { memberName -> memberStartingEmpty(memberName, shape, emptySet()) }
+        is ExistsExpr -> ownCollectionRead(expr.forExpr, shape, subjectLevel) ?: expr.collection?.let { collection -> ownCollectionReadIn(collection, shape, subjectLevel) }
+        is AggCall -> ownCollectionReadIn(expr.collection, shape, subjectLevel)
+        is SetExpr -> ownCollectionReadIn(expr.collection, shape, subjectLevel)
+        else -> partsOf(expr).firstNotNullOfOrNull { part -> ownCollectionRead(part, shape, subjectLevel) }
+    }
+
+    /** The expressions directly inside [expr], for every form that holds no collection of its own. */
+    private fun partsOf(expr: Expr): List<Expr> = when (expr) {
+        is UnaryMinus -> listOf(expr.inner)
+        is Binary -> listOf(expr.left, expr.right)
+        is NotExpr -> listOf(expr.inner)
+        is IfExpr -> listOf(expr.condition, expr.thenExpr, expr.elseExpr)
+        is Interpolation -> expr.pieces
+        is IsExpr -> listOf(expr.subject)
+        is FunCall -> expr.args
+        is SingularFor -> listOf(expr.forExpr)
+        is ShapeForSource -> listOf(expr.forExpr)
+        is Access -> listOf(expr.target)
+        else -> emptyList()
+    }
+
+    private fun ownCollectionReadIn(collection: CollectionExpr, shape: String, subjectLevel: Boolean): OwnCollectionRead? {
+        // a member read whole, `count(notes)`, is named as the member; a filter is quoted as written
+        val spelled = collection.bindings.singleOrNull()?.source?.takeIf { collection.where == null }?.let { source -> Printer.expr(source) }
+            ?: Printer.expr(SetExpr(collection))
+        collectionStartingEmpty(collection, shape, emptySet())?.let { elementShape -> return OwnCollectionRead(spelled, elementShape) }
+        return collection.bindings.firstNotNullOfOrNull { binding -> ownCollectionRead(binding.source, shape, subjectLevel) }
+            ?: ownCollectionRead(collection.where, shape, subjectLevel = false)
+    }
+
+    /** The record's own member a path starts at: `notes`, `this.notes`, `notes.size`. */
+    private fun ownMemberRead(path: PathExpr, subjectLevel: Boolean): String? = when {
+        path.root == "this" -> path.segs.firstOrNull()?.name
+        subjectLevel -> path.root
+        else -> null
+    }
+
+    /** [memberName] of [shape] when it is a collection that is empty when a [shape] is created: the
+     *  inverse the compiler infers, or one declared over such a collection. [visiting] ends a
+     *  chain of declarations that read one another. */
+    private fun memberStartingEmpty(memberName: String, shape: String, visiting: Set<String>): OwnCollectionRead? {
+        if (memberName in visiting) return null
+        val member = model.membersOf(shape)[memberName] ?: return null
+        member.inverse?.let { inverse -> return OwnCollectionRead(memberName, inverse.shape) }
+        val declared = (member.derived?.expr as? SetExpr)?.collection ?: return null
+        val elementShape = collectionStartingEmpty(declared, shape, visiting + memberName) ?: return null
+        return OwnCollectionRead(memberName, elementShape)
+    }
+
+    /** The element shape of [collection] when it is empty at the creation of a [shape]: a filter
+     *  whose every record points at the new record, `(Note where chart == this)`, or a filter
+     *  over a member that starts empty, `(notes where body != "")`. */
+    private fun collectionStartingEmpty(collection: CollectionExpr, shape: String, visiting: Set<String>): String? {
+        val source = collection.bindings.singleOrNull()?.source as? PathExpr ?: return null
+        val sourceShape = source.root.takeIf { source.segs.isEmpty() && (it in model.shapes || it in model.refinements) }
+        if (sourceShape == null) return ownMemberRead(source, subjectLevel = true)?.let { memberName -> memberStartingEmpty(memberName, shape, visiting) }?.elementShape
+        val filter = collection.where ?: return null
+        return sourceShape.takeIf { conjunctsOf(filter).any { conjunct -> pointsAtThis(conjunct, sourceShape) } }
+    }
+
+    /** Whether [condition] is `field == this`, with `field` a stored reference of [elementShape] to one record. */
+    private fun pointsAtThis(condition: Expr, elementShape: String): Boolean {
+        if (condition !is Binary || condition.op != "==") return false
+        val sides = listOf(condition.left, condition.right).filterIsInstance<PathExpr>().filter { side -> side.segs.isEmpty() }
+        if (sides.size != 2 || sides.none { side -> side.root == "this" }) return false
+        val fieldName = sides.firstOrNull { side -> side.root != "this" }?.root ?: return false
+        val field = model.membersOf(elementShape)[fieldName] ?: return false
+        return field.stored && field.type.instanceShape() != null
     }
 
     // ── A4 (advisory): drift-act partitions ──────────────────────────

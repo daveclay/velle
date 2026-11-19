@@ -1,0 +1,9 @@
+-- The same `initially` with the selection under an `exists` test and a value for the
+-- branch where no visit exists: passes (Reference §5).
+act Patient { name: text, nickname: text?
+  visits: many Visit = (Visit where patient == this) }
+act Visit { patient: one Patient, seenOn: Date }
+act OpenChart { patient: one Patient }
+shape Chart { patient: one Patient
+  opened: Date initially if exists (patient.visits) then first(patient.visits by seenOn).seenOn else today }
+rule Open when OpenChart { Chart from { patient: patient } }
