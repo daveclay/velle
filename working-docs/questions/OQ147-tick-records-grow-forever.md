@@ -1,6 +1,6 @@
 # OQ147 — Does Velle keep every tick of a schedule, or only the latest?
 
-**Status:** opened 2026-11-19 from Dave's reading of the pharmacy app's stored records. D1, D2, and D3 await Dave. No work items yet.
+**Status:** opened 2026-11-19 from Dave's reading of the pharmacy app's stored records. D1 and D2 decided 2026-11-19; D3 is moot under D2. D4, D5, and D6, which D2's answer raised, await Dave. No work items yet.
 
 **In plain terms:** every time a schedule runs, Velle writes down that it ran, and it never removes what it wrote. A schedule that runs every minute leaves about 526,000 records a year. Velle itself only ever looks at the most recent one.
 
@@ -44,11 +44,14 @@ The decisions in this file:
 
 - **D1.** Whether Velle keeps only the latest tick of each schedule.
 - **D2.** Whether a spec can still read when a schedule last ran.
-- **D3.** Whether the older `Tick` records of an existing system are removed.
+- **D3.** Whether the older `Tick` records of an existing system are removed. Moot under D2's answer.
+- **D4.** Whether the store contract gains members of its own for ticks, one moment kept per schedule.
+- **D5.** Whether an engineer can read when a schedule last ran from the running system.
+- **D6.** Whether a system that already holds `Tick` records carries its latest one over.
 
-D1 is a removal: it takes away something that runs today, the reading of tick history by a spec. D2 and D3 only apply when D1 is answered yes.
+D1 is a removal: it takes away something that runs today, the reading of tick history by a spec. D2 and D3 only apply when D1 is answered yes. D4, D5, and D6 were added on 2026-11-19 after D2 was answered: they are the build questions its answer raised.
 
-### D1. Velle keeps only the latest tick of each schedule
+### D1. Velle keeps only the latest tick of each schedule · Decided 2026-11-19
 
 Does Velle keep only the latest tick of each schedule, and stop keeping one record per tick?
 
@@ -102,9 +105,9 @@ Costs:
 - `wiki/Guides/Concurrency.md`, the row for the hourly tick's own record, and `checks.md` F1 ("the record of a schedule's ticks"): reworded to the latest tick.
 - `working-docs/examples/survey/23-tick-history-read.velle` and its README line: updated to what the spec means after the change.
 
-**Decided:**
+**Decided:** yes, 2026-11-19. Dave: the growing table is the actual cost of having made `Tick` a shape, which he was hesitant about when he decided it in OQ71. He cannot imagine an engineer wanting a stored record for every run of a task that runs every five minutes, outside of a logging framework. Today's schedules are examples of what the schedule feature will be capable of, so the lack of a five-minute schedule today is no argument. An engineer who wants a record of an occurrence writes a rule, a shape, or a field for it, explicitly.
 
-### D2. A spec can still read when a schedule last ran
+### D2. A spec can still read when a schedule last ran · Decided 2026-11-19
 
 After D1, does `Tick` stay a shape a spec can read, holding one record per schedule, or does it leave the language?
 
@@ -166,9 +169,9 @@ For B, in place of the above:
 - Reference §17 "What Velle records about a tick" is removed; `wiki/Guides/Store-API.md` gains the new surface.
 - `working-docs/examples/survey/23-tick-history-read.velle` is renamed `-refused`.
 
-**Decided:**
+**Decided:** option B, 2026-11-19: `Tick` leaves the language. Dave: the store is involved in persisting and hydrating the tick, not as any other shape but as its own thing, and it should be explicit that ticks are a special thing. A system that stored every tick so it could be undone and played back is novel and interesting, but it is not worth the tax of someone having to identify the `Tick` shape and handle that one shape in a special way. The recommendation above was option A and was not taken.
 
-### D3. The older `Tick` records of an existing system are removed
+### D3. The older `Tick` records of an existing system are removed · Moot under D2, 2026-11-19
 
 When a system that already holds many `Tick` records per schedule starts on the new runtime, does the first tick of each schedule delete that schedule's older records?
 
@@ -188,8 +191,94 @@ This decision is moot under D2's option B, where the records are no longer of a 
 - `compiler/src/test/kotlin/velle/TickRecordTest.kt`: a test that starts from a store holding three `Tick` records of one schedule and finds one after the next tick, with `leaving` still noticing a leaver across that tick.
 - Reference §17: one sentence saying what happens to records written by an earlier version.
 
+**Decided:** not asked. D2 was answered with option B on 2026-11-19, under which this section's own text says the question is moot. What remains of it is D6.
+
+### D4. The store contract gains members of its own for ticks, one moment kept per schedule
+
+Does the store contract gain two members that are only about ticks, a read of the moment a schedule last ran and a write of the moment a tick ran, with the store keeping one moment per schedule?
+
+Recommendation: yes, as a third interface beside the two a store implements today, so a store that has not been taught about ticks does not compile against the new runtime.
+
+Today a store is two interfaces in `compiler/src/main/kotlin/velle/Hydration.kt`: `StateResolver`, the reads, and `CommitCallback`, the landing of a commit. `VelleSystem.connect(resolver, onCommit)` in `Runtime.kt` takes both. Neither names a tick. The proposal, with names that are mine and open to change:
+
+```kotlin
+/** What a store keeps about ticks: for each schedule, the moment it last ran. Nothing else, and no history. */
+interface TickMemory {
+    /** The moment [schedule] last ran, or null before its first tick. */
+    fun previousTick(schedule: String): Instant?
+
+    /** [schedule] ran at [moment]: replaces what the store held for the schedule. Runs inside a unit of work; throw, and nothing is kept. */
+    fun tickRan(schedule: String, moment: Instant)
+}
+```
+
+How the runtime uses it, each point the same as today except where it says otherwise:
+
+- `tickRan` is called once per tick, after the tick's firings, in a unit of work of its own. A sweep that is cut off leaves the previous moment in place and the next tick covers the gap (`evaluation.md` "Ticks").
+- That unit of work is serialized under a queue key of its own kind, one per schedule. Today it is the whole-shape key `Tick`, so the ticks of two different schedules wait on each other; after the change they do not.
+- The unit of work commits no records, so no rule fires on it and no `never` is evaluated over it. Today a constraint can refuse the `Tick` record in the V30 backstop state (`evaluation.md` "Ticks", last sentence of "The tick's own record"); that case goes away.
+- `previousTick` survives a restart and is one value for every process over one store, because the store holds it.
+
+Costs:
+
+- Every store implements two more members: `MemoryStore`, `stores/sql` (for both `stores/sqlite` and `stores/postgres`), and any store an engineer has written. For the SQL store it is one two-column table with the schedule as its key.
+- The store contract was two interfaces about records. It becomes three, one of which is about something that is not a record. That is the explicitness Dave asked for in D2, and it is also a permanent widening of what every store author has to read.
+- It stays within the principle that the store API is agnostic to how and where records are stored: the members say what is kept, a moment per schedule, and name no mechanism.
+- A product owner loses nothing further; D1 and D2 already removed the reading of `Tick`.
+
+#### Proposed changes
+
+- `compiler/src/main/kotlin/velle/Hydration.kt`: the new interface, and a new kind of `AdmissionKey` for a schedule.
+- `compiler/src/main/kotlin/velle/Runtime.kt`: `connect` takes the third interface; `tickInScope` calls `tickRan` in place of creating a `Tick` record; `previousTick` asks the store in place of running a query.
+- `compiler/src/main/kotlin/velle/MemoryStore.kt` and `stores/sql`: implement it; `stores/sqlite` and `stores/postgres` gain the table through `SqlDialect`.
+- `compiler/src/main/kotlin/velle/Model.kt`: `PRELUDE` and `TICK` removed (already listed under D2, option B).
+- `compiler/src/main/kotlin/velle/StoreGen.kt` and `Codegen.kt`: no `Tick` in generated code; every example's output regenerated.
+- `wiki/Guides/Store-API.md`: a section for the tick members; `evaluation.md` "Ticks": "The tick's own record" rewritten; `wiki/Guides/Concurrency.md`: the row for the tick's own record names the per-schedule key.
+- `compiler/src/test/kotlin/velle/TickRecordTest.kt`: rewritten against the store's tick members; `BillingOverSqliteTest` and `AdmissionKeysTest` updated where they name `Tick`.
+
+**Decided:**
+
+### D5. An engineer can read when a schedule last ran from the running system
+
+Once a spec cannot read `Tick`, can an engineer still ask the running system when a schedule last ran?
+
+Recommendation: yes on the system object in Kotlin, and no over REST and GraphQL as a readable shape.
+
+Today `Tick` is listed by `GET /api` as a readable shape marked `velle: true` (`wiki/Guides/API-layer.md`), so it is readable over REST, GraphQL, and the console like any shape. After D2 it is not a shape and that listing has nothing to list. What an engineer would want the moment for is a health check ("has `Nightly` run in the last day") and the missed-run item in `working-docs/questions/OQ34-schedule-definition.md`. Both are deployment concerns, and the starter already reports every tick through `MetricsTickListener` and `LoggingTickListener` (`wiki/Guides/Serving-a-system.md`, "Hearing a tick").
+
+Costs:
+
+- With a yes, `VelleSystem` gains one public read, the moment a schedule last ran. It is information about the deployment, not about the business, which is why the recommendation keeps it out of the shapes the API serves.
+- With a no, the starter's own missed-run check (OQ34) has to reach the store directly, and an engineer's health check reads the metric or the store.
+- The console loses its `Tick` listing either way. Whether the console shows each schedule's last run some other way is a question for the console and is not decided here.
+
+#### Proposed changes
+
+- `compiler/src/main/kotlin/velle/Runtime.kt`: `previousTick(schedule)` becomes public on `VelleSystem`.
+- `apis/json/src/main/kotlin/velle/api/Describe.kt`: `velle: true` removed; `VelleApiTest` updated.
+- `wiki/Guides/API-layer.md` and `wiki/Guides/Act-API.md` "Ticking a schedule": the `Tick` shape removed, the read on the system object added.
+
+**Decided:**
+
+### D6. A system that already holds `Tick` records carries its latest one over
+
+When a system that holds `Tick` records starts on the new runtime, does Velle read each schedule's latest `Tick` record as that schedule's previous moment?
+
+Recommendation: no. The new runtime starts each schedule with no previous moment, as a new system does, and the old `Tick` records are the engineer's to drop.
+
+Costs:
+
+- With a no, the first tick of each schedule after the change compares against the system's start time (`evaluation.md` "Ticks"). A record that left a refinement between the last tick on the old runtime and the first start on the new one is not noticed by a `when leaving` rule on a schedule. An engineer closes the gap by ticking once on the old runtime immediately before the change.
+- With a yes, every store carries code that reads a shape Velle no longer declares, for one start of each system, and that code stays until someone removes it.
+- Nothing checked in shows a deployed system that would be affected. That is an absence, not evidence, and Dave knows better than the repo whether one exists.
+
+#### Proposed changes
+
+- With a no: one sentence in `wiki/Guides/Store-API.md` saying what an engineer does with a `Tick` table left by an earlier version.
+- With a yes: `stores/sql` reads the latest row per schedule from the old table when the new one is empty; a test over SQLite pins it.
+
 **Decided:**
 
 ## 3. The build
 
-Written when D1, D2, and D3 are decided. It gathers the "Proposed changes" lists above in build order.
+Written when D4, D5, and D6 are decided. It gathers the "Proposed changes" lists above in build order.
