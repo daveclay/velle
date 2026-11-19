@@ -1,0 +1,17 @@
+-- OQ147: a spec reads `Tick`, the shape Velle declares for every system (Reference §17).
+-- `nightlyRuns` reads every `Tick` record the store has ever kept for the schedule;
+-- `lastNightlyRun` reads only the latest one.
+
+act Permit { site: text  expiresOn: Date
+  nightlyRuns: integer = count(NightlyRun)
+  lastNightlyRun: DateTime? = latest(NightlyRun by at)?.at }
+
+shape NightlyRun = Tick where schedule == "Nightly"
+
+shape Valid = Permit where expiresOn >= today
+
+shape Lapse { permit: one Permit  noticedOn: Date }
+
+rule NoticeLapse when leaving Valid on Nightly {
+  Lapse from { permit: this, noticedOn: today }
+}

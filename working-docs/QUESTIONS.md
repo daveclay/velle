@@ -1,6 +1,6 @@
 # Open questions — the directory
 
-One line per open question (OQ) here, and nothing else. An OQ whose context fits in its line is only the line. An OQ with more lives in `questions/OQ<n>-*.md`, where the file's header states the question in plain terms before the dense part begins, and the discussion, the decisions, and the work items as `- [ ]` lines are in the file. OQ tags are stable — numbers are never renumbered or reused (next free: OQ147), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
+One line per open question (OQ) here, and nothing else. An OQ whose context fits in its line is only the line. An OQ with more lives in `questions/OQ<n>-*.md`, where the file's header states the question in plain terms before the dense part begins, and the discussion, the decisions, and the work items as `- [ ]` lines are in the file. OQ tags are stable — numbers are never renumbered or reused (next free: OQ148), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
 
 **Every work item has a tag** (Dave, 2026-11-11). A work item is one action, verb-first, one line. It is a `- [ ]` line in the file of the OQ that holds its context, or, when no OQ holds it, an OQ of its own: a tagged line here, `- **OQ<n>** — <the action>`, with a file only once its context outgrows the line. A `- [ ]` line never stands here, so every piece of work can be named by a tag. This file is a directory; an OQ file holds the details. OQs are grouped by the part of Velle they change, not by where they were found; S-numbers, P-numbers, and B-numbers are findings of the peptides, pharmacy, and batches passes, recorded in OQ16's calibration record.
 
@@ -90,6 +90,7 @@ A frontend framework grown from the console: given the model description and not
 
 ## Runtime and clock
 
+- **[OQ147](questions/OQ147-tick-records-grow-forever.md)** — does Velle keep every tick of a schedule as a record, or only the latest? · opened 2026-11-19 from Dave's reading of the pharmacy app's stored records; reopens part of OQ71 D3; D1, D2, and D3 await Dave
 - **[OQ58](questions/OQ58-runtime-follow-ons.md)** — candidate narrowing, the production clock, timestamp ties · the runtime's leftovers plus peptides S4; four work items, among them the sixteen compiler tests failing at HEAD
 
 ## Deletion, erasure, retention
