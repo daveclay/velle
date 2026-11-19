@@ -1651,22 +1651,21 @@ class VelleSystem(
         byShape.getOrPut(m.shape) { mutableListOf() }.add(id)
         idShape[id] = m.shape
         t.created.add(id)
+        val suppliedNames = inst.fields.keys.toSet()
         for (p in decl.members.filterIsInstance<StoredProp>()) {
-            if (p.name in inst.fields) {
-                inst.fields[p.name] = coerceCollection(inst.fields.getValue(p.name), p.type)
-                continue
-            }
-            if (p.initially == null) {
-                // an unsupplied `many` starts empty — the empty collection is the absence (Reference §6)
-                coerceCollection(Value.VEmpty, p.type).takeIf { it != Value.VEmpty }
-                    ?.let { inst.fields[p.name] = it }
-                continue
-            }
+            if (p.name in suppliedNames) inst.fields[p.name] = coerceCollection(inst.fields.getValue(p.name), p.type)
+            // an unsupplied `many` starts empty — the empty collection is the absence (Reference §6)
+            else if (p.initially == null) coerceCollection(Value.VEmpty, p.type).takeIf { it != Value.VEmpty }?.let { inst.fields[p.name] = it }
+        }
+        // each `initially` after the ones it reads, wherever they are declared (Reference §5)
+        for (p in model.startingValues.orderOf(m.shape)) {
+            val initially = p.initially ?: continue
+            if (p.name in suppliedNames) continue
             inst.fields[p.name] =
-                if (p.initially == PathExpr("randomUUID"))
+                if (initially == PathExpr("randomUUID"))
                     // a `uuid` field gets the value; a `text` field its canonical spelling (Reference §5)
                     UUID.randomUUID().let { if ((p.type as? ScalarType)?.name == "uuid") Value.VUuid(it) else Value.VText(it.toString()) }
-                else startingValue(p, p.initially, m.shape, id)
+                else startingValue(p, initially, m.shape, id)
         }
         for (p in decl.members.filterIsInstance<TimestampProp>())
             inst.fields[p.name] = Value.VDateTime(now) // create and update both start here

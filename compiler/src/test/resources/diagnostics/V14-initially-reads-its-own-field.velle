@@ -1,0 +1,14 @@
+-- A stored field whose `initially` reads the field itself, `total: integer initially total + 1`; the field has no value until it has started.
+act Patient {
+    name: text
+}
+act OpenChart {
+    patient: one Patient
+}
+shape Chart {
+    patient: one Patient
+    total: integer initially total + 1
+}
+rule Open when OpenChart {
+    Chart from { patient: patient }
+}

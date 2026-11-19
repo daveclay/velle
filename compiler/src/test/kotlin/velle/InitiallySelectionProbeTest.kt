@@ -2,7 +2,6 @@ package velle
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -12,8 +11,7 @@ import kotlin.test.assertTrue
  * shows the selection matches, and the runtime fails the firing for a required field its
  * `initially` left absent. The runtime tests build their model without validating, since no spec
  * that validates reaches the runtime check. The specs are those of
- * `working-docs/examples/survey/22-initially-*.velle`. The last test pins what an `initially`
- * reading a field declared after it does today, which OQ145 asks about.
+ * `working-docs/examples/survey/22-initially-*.velle`.
  */
 class InitiallySelectionProbeTest {
 
@@ -57,17 +55,6 @@ class InitiallySelectionProbeTest {
         rule Open when OpenChart {
             Chart from { patient: patient } as chart
             Note from { chart: chart, body: "opened" }
-        }
-    """
-
-    private val chartReadingALaterField = patientAndVisit + """
-        shape Chart {
-            patient: one Patient
-            doubled: integer initially base * 2
-            base: integer initially 5
-        }
-        rule Open when OpenChart {
-            Chart from { patient: patient }
         }
     """
 
@@ -127,11 +114,6 @@ class InitiallySelectionProbeTest {
             listOf("[A2] 'Chart.noteCount' starts from 'notes', the Note records that point at this Chart. None can when the Chart is created, " +
                 "so 'notes' is empty every time; write the value 'noteCount' starts with, or declare it with '=' to keep it current (Reference §5)"),
             Validator.advisories(chartCountingItsOwnNotes).map { diagnostic -> "$diagnostic" })
-    }
-
-    @Test
-    fun `an initially reading a field whose own initially is declared later validates with no advisory`() {
-        assertNoErrorsOrAdvisories(chartReadingALaterField)
     }
 
     // ── the runtime ──────────────────────────────────────────────────────────
@@ -197,16 +179,6 @@ class InitiallySelectionProbeTest {
             assertTrue(refused.reason.startsWith("rule 'Open' did not fire: 'Chart.firstNote' is required and its 'initially'"), refused.reason)
             assertEquals(0, sys.instancesOf("Chart").size)
             assertEquals(0, sys.instancesOf("Note").size)
-        }
-    }
-
-    @Test
-    fun `an initially reading a field whose own initially is declared later throws out of the commit`() {
-        val sys = system(chartReadingALaterField)
-        sys.scope {
-            val patient = sys.commitPatient()
-            val error = assertFailsWith<VelleRuntimeError> { sys.commit("OpenChart", mapOf("patient" to patient)) }
-            assertEquals("'*' on non-number", error.message)
         }
     }
 }

@@ -690,6 +690,9 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     /** The one reading of an expression's type (checks.md F2). */
     val types: ExprTypes by lazy { ExprTypes(this) }
 
+    /** The order a new record's `initially` values are computed in (Reference §5). */
+    val startingValues: StartingValues by lazy { StartingValues(this) }
+
     /** What the prohibitions the rules cannot move say about presence (Reference §21). */
     val presenceFacts: PresenceFacts by lazy { PresenceFacts(decls) }
 

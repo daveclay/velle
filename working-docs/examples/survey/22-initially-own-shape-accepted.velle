@@ -1,0 +1,11 @@
+-- An `initially` selecting over the record's own shape, the next number in a patient's run of
+-- charts: accepted. The chart being created is already among `Chart` when its `sequence` is
+-- computed and has no `sequence` to order by, so the commit throws `cannot order VNone against
+-- VNone` (`InitiallyOrderTest`, OQ146).
+act Patient { name: text, nickname: text?
+  visits: many Visit = (Visit where patient == this) }
+act Visit { patient: one Patient, seenOn: Date }
+act OpenChart { patient: one Patient }
+shape Chart { patient: one Patient
+  sequence: integer initially if exists (Chart where patient == this.patient) then latest(Chart where patient == this.patient by sequence).sequence + 1 else 1 }
+rule Open when OpenChart { Chart from { patient: patient } }

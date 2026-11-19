@@ -176,6 +176,8 @@ It is allowed on any stored property of a `shape`, relationships included. The v
 
 `initially` is not a derivation. `applied: boolean = false` in a shape body would declare a [derived property](Reference-07-Derived-properties) that is always false and never assignable. A derived property has no stored value, so it cannot take `initially`; neither can a `timestamp` field, whose value the commit supplies (below). The counterpart inside a [refinement](Reference-08-Refinements) is `captured`, which computes its value when the record enters the refinement.
 
+One starting value may read another field of the same record. In `dueOn: Date initially openedOn + 30 days` beside `openedOn: Date initially today`, `openedOn` is computed first, whichever of the two is declared first. The same holds when the read goes through a derived property. Two starting values that read each other cannot be ordered, and the compiler rejects them.
+
 A required field cannot start absent. A selection such as `first(patient.visits by seenOn)` picks one record, and picks none when the patient has no visit ([§10, "A selection that may match nothing"](Reference-10-Predicate-expressions#a-selection-that-may-match-nothing)). So the compiler rejects this field:
 
 ```
@@ -248,6 +250,7 @@ An act declared `by` carries one more system-filled property: the actor who comm
 - **Rejects** `initially` on anything but a stored property, and any assignment to a `timestamp` field or `id` ([checks.md, F3](checks#f3--position-rules)).
 - **Rejects** an `initially` whose value is of another type than the field, `applied: boolean initially 5`, naming the type to declare or the value to start with; a constant the field's type reads, `"09:00"` for a `time`, is read, and one it rejects is an error at the constant; the four number types are one kind ([checks.md, F2](checks#f2--type-checking)).
 - **Rejects** a required field whose `initially` reads through a selection, `first`, `latest`, or `(Shape for expr)`, unless a test shows the selection matches. The message names the selection and the test to write ([checks.md, F2](checks#f2--type-checking)).
+- **Rejects** two `initially` values that read each other, directly or through a derived property, and an `initially` that reads its own field. The message names each field ([checks.md, V14](checks#v14--well-foundedness-coarse)).
 - **Warns** when an `initially` reads the collection of records that point at the record being created, since that collection is empty every time. The message names the collection ([checks.md, A2](checks#a2--dead-machinery)).
 - **Rejects** `initially` or `timestamp` on an act, naming the field and where it should move ([checks.md, V21](checks#v21--act-field-forms)).
 - **Rejects** a declared field named `id` ([checks.md, F1](checks#f1--name-resolution-and-casing)).

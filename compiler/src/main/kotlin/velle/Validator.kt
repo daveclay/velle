@@ -56,6 +56,7 @@ class Validator(private val model: Model) {
         checkNevers()             // V10
         checkTransientFields()    // V37 (Reference §4, "Transient fields of a kept act")
         checkWellFoundedness()    // V14 (stratify, then certify)
+        checkStartingValueCycles() // V14 (two `initially` values that read each other)
         checkTransitionInterference() // V15 (third leg)
         checkQuiescence()         // V16
         checkSingularProofs()     // V12 (refinement slice)
@@ -3121,6 +3122,27 @@ class Validator(private val model: Model) {
         }
     }
 
+    /** Starting values that read one another (Reference §5): the runtime computes each `initially`
+     *  after the ones it reads, and a cycle leaves no order to compute them in. */
+    private fun checkStartingValueCycles() {
+        val edges = mutableMapOf<DefNode, Set<DefNode>>()
+        for (shapeName in model.shapes.keys)
+            for ((fieldName, fieldsRead) in model.startingValues.readsOf(shapeName))
+                edges[DefNode.Prop(shapeName, fieldName)] = fieldsRead.map { fieldRead -> DefNode.Prop(shapeName, fieldRead) }.toSet()
+        for (cycle in reportedOnce(definitionCycles(edges))) diags.add(Diagnostic("V14", startingCycleMessage(cycle.filterIsInstance<DefNode.Prop>())))
+    }
+
+    /** `'Chart.doubled' starts from 'Chart.base', which starts from 'Chart.doubled', so neither can be computed first; ...` */
+    private fun startingCycleMessage(cycle: List<DefNode.Prop>): String {
+        val first = cycle.first()
+        if (cycle.size == 1)
+            return "'${label(first)}' starts from its own value, which it does not have until it has started; start it without '${first.prop}'"
+        val chain = (cycle.drop(1) + first).joinToString(", which starts from ") { field -> "'${label(field)}'" }
+        val ending = if (cycle.size == 2) "so neither can be computed first; start one of them without the other"
+            else "so none of them can be computed first; start one of them without the others"
+        return "'${label(first)}' starts from $chain, $ending"
+    }
+
     /** Every cycle the depth-first walk meets, each as its distinct nodes in walk order. */
     private fun definitionCycles(edges: Map<DefNode, Set<DefNode>>): List<List<DefNode>> {
         val cycles = mutableListOf<List<DefNode>>()
@@ -4489,26 +4511,11 @@ class Validator(private val model: Model) {
      *  `this` stays the record. */
     private fun ownCollectionRead(expr: Expr?, shape: String, subjectLevel: Boolean): OwnCollectionRead? = when (expr) {
         null -> null
-        is PathExpr -> ownMemberRead(expr, subjectLevel)?.let { memberName -> memberStartingEmpty(memberName, shape, emptySet()) }
+        is PathExpr -> ownMemberOf(expr, subjectLevel)?.let { memberName -> memberStartingEmpty(memberName, shape, emptySet()) }
         is ExistsExpr -> ownCollectionRead(expr.forExpr, shape, subjectLevel) ?: expr.collection?.let { collection -> ownCollectionReadIn(collection, shape, subjectLevel) }
         is AggCall -> ownCollectionReadIn(expr.collection, shape, subjectLevel)
         is SetExpr -> ownCollectionReadIn(expr.collection, shape, subjectLevel)
         else -> partsOf(expr).firstNotNullOfOrNull { part -> ownCollectionRead(part, shape, subjectLevel) }
-    }
-
-    /** The expressions directly inside [expr], for every form that holds no collection of its own. */
-    private fun partsOf(expr: Expr): List<Expr> = when (expr) {
-        is UnaryMinus -> listOf(expr.inner)
-        is Binary -> listOf(expr.left, expr.right)
-        is NotExpr -> listOf(expr.inner)
-        is IfExpr -> listOf(expr.condition, expr.thenExpr, expr.elseExpr)
-        is Interpolation -> expr.pieces
-        is IsExpr -> listOf(expr.subject)
-        is FunCall -> expr.args
-        is SingularFor -> listOf(expr.forExpr)
-        is ShapeForSource -> listOf(expr.forExpr)
-        is Access -> listOf(expr.target)
-        else -> emptyList()
     }
 
     private fun ownCollectionReadIn(collection: CollectionExpr, shape: String, subjectLevel: Boolean): OwnCollectionRead? {
@@ -4518,13 +4525,6 @@ class Validator(private val model: Model) {
         collectionStartingEmpty(collection, shape, emptySet())?.let { elementShape -> return OwnCollectionRead(spelled, elementShape) }
         return collection.bindings.firstNotNullOfOrNull { binding -> ownCollectionRead(binding.source, shape, subjectLevel) }
             ?: ownCollectionRead(collection.where, shape, subjectLevel = false)
-    }
-
-    /** The record's own member a path starts at: `notes`, `this.notes`, `notes.size`. */
-    private fun ownMemberRead(path: PathExpr, subjectLevel: Boolean): String? = when {
-        path.root == "this" -> path.segs.firstOrNull()?.name
-        subjectLevel -> path.root
-        else -> null
     }
 
     /** [memberName] of [shape] when it is a collection that is empty when a [shape] is created: the
@@ -4545,7 +4545,7 @@ class Validator(private val model: Model) {
     private fun collectionStartingEmpty(collection: CollectionExpr, shape: String, visiting: Set<String>): String? {
         val source = collection.bindings.singleOrNull()?.source as? PathExpr ?: return null
         val sourceShape = source.root.takeIf { source.segs.isEmpty() && (it in model.shapes || it in model.refinements) }
-        if (sourceShape == null) return ownMemberRead(source, subjectLevel = true)?.let { memberName -> memberStartingEmpty(memberName, shape, visiting) }?.elementShape
+        if (sourceShape == null) return ownMemberOf(source, subjectLevel = true)?.let { memberName -> memberStartingEmpty(memberName, shape, visiting) }?.elementShape
         val filter = collection.where ?: return null
         return sourceShape.takeIf { conjunctsOf(filter).any { conjunct -> pointsAtThis(conjunct, sourceShape) } }
     }
