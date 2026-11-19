@@ -74,8 +74,7 @@ class VelleApiTest {
         val shapes = (d["shapes"] as List<Map<String, Any?>>).associateBy { it["name"] }
         assertTrue("SignUp" !in shapes, "a transient act is not readable")
         assertTrue("LineItem" in shapes, "a durable act is a readable shape")
-        assertEquals(true, shapes.getValue("Tick")["velle"], "Velle's record of a tick is readable and marked as Velle's")
-        assertTrue("Tick" !in acts, "and nothing commits it")
+        assertTrue("Tick" !in shapes && "Tick" !in acts, "a tick is neither a shape nor an act")
         val invoice = shapes.getValue("Invoice")
         assertEquals(listOf("isPaidInvoice", "isOverdueInvoice", "isActionableOverdue", "isIssuedInvoice", "isArchivedInvoice"), invoice["flags"])
         val members = (invoice["members"] as List<Map<String, Any?>>).associateBy { it["name"] }
@@ -169,9 +168,16 @@ class VelleApiTest {
         assertEquals(ApiException.Kind.BAD_REQUEST, assertFailsWith<ApiException> { api.query("SignUp", null, listOf("name"), null, null, null) }.kind)
 
         // a tick: the weekly sweep reminds the overdue invoices that owe something — none here
+        assertEquals(mapOf("schedule" to "Weekly", "at" to null), api.latestTick("Weekly"), "a schedule that has never run has no moment")
         val tick = api.tick("Weekly")
         assertEquals(emptyList<Any>(), tick["rejections"])
         assertEquals(ApiException.Kind.NOT_FOUND, assertFailsWith<ApiException> { api.tick("Daily") }.kind)
+
+        // the moment each schedule last ran: read by name, never as a shape
+        val weekly = mapOf("schedule" to "Weekly", "at" to tick["at"])
+        assertEquals(weekly, api.latestTick("Weekly"))
+        assertEquals(listOf(mapOf("schedule" to "Hourly", "at" to null), weekly), api.latestTicks())
+        assertEquals(ApiException.Kind.NOT_FOUND, assertFailsWith<ApiException> { api.latestTick("Daily") }.kind)
     }
 
     @Test

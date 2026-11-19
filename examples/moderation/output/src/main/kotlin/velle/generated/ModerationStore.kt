@@ -5,20 +5,13 @@
 // this domain's names and types, every question the runtime can ask of storage.
 // Implement it directly (ModerationStoreOverGeneric defaults every method onto a
 // generic backend for selective overriding), and connect it with:
-//   system.connect(ModerationStoreResolver(store, system.model), callback)
+//   system.connect(ModerationStoreResolver(store, system.model), callback, tickMemory)
 package velle.generated
 
 import velle.*
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
-
-/** One stored Tick row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
-data class TickRow(
-    val key: StoreKey,
-    val schedule: String,
-    val at: Instant,
-)
 
 /** One stored Seller row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class SellerRow(
@@ -102,7 +95,6 @@ interface ModerationStore {
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
     // ── keyed reads ──
-    fun tick(key: StoreKey): TickRow?
     fun seller(key: StoreKey): SellerRow?
     fun listing(key: StoreKey): ListingRow?
     fun publicationNotice(key: StoreKey): PublicationNoticeRow?
@@ -114,7 +106,6 @@ interface ModerationStore {
     fun discardRefusal(key: StoreKey): DiscardRefusalRow?
 
     // ── scan floor: all rows of a shape ──
-    fun allTicks(): List<TickRow>
     fun allSellers(): List<SellerRow>
     fun allListings(): List<ListingRow>
     fun allPublicationNotices(): List<PublicationNoticeRow>
@@ -166,7 +157,6 @@ open class ModerationStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun seller(key: StoreKey): SellerRow? = backend.fetchByKey("Seller", key)?.toSellerRow()
     override fun listing(key: StoreKey): ListingRow? = backend.fetchByKey("Listing", key)?.toListingRow()
     override fun publicationNotice(key: StoreKey): PublicationNoticeRow? = backend.fetchByKey("PublicationNotice", key)?.toPublicationNoticeRow()
@@ -177,7 +167,6 @@ open class ModerationStoreOverGeneric(
     override fun discardRecord(key: StoreKey): DiscardRecordRow? = backend.fetchByKey("DiscardRecord", key)?.toDiscardRecordRow()
     override fun discardRefusal(key: StoreKey): DiscardRefusalRow? = backend.fetchByKey("DiscardRefusal", key)?.toDiscardRefusalRow()
 
-    override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allSellers(): List<SellerRow> = backend.fetchAll("Seller").map { it.toSellerRow() }
     override fun allListings(): List<ListingRow> = backend.fetchAll("Listing").map { it.toListingRow() }
     override fun allPublicationNotices(): List<PublicationNoticeRow> = backend.fetchAll("PublicationNotice").map { it.toPublicationNoticeRow() }
@@ -224,7 +213,6 @@ class ModerationStoreResolver(
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Tick" -> store.tick(key)?.toRow()
         "Seller" -> store.seller(key)?.toRow()
         "Listing" -> store.listing(key)?.toRow()
         "PublicationNotice" -> store.publicationNotice(key)?.toRow()
@@ -238,7 +226,6 @@ class ModerationStoreResolver(
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
-        "Tick" -> store.allTicks().map { it.toRow() }
         "Seller" -> store.allSellers().map { it.toRow() }
         "Listing" -> store.allListings().map { it.toRow() }
         "PublicationNotice" -> store.allPublicationNotices().map { it.toRow() }
@@ -277,17 +264,6 @@ class ModerationStoreResolver(
 }
 
 // ── row mappers: the generic wire format <-> the typed rows ──
-
-fun Row.toTickRow(): TickRow = TickRow(
-    key = key,
-    schedule = fields["schedule"] as String,
-    at = fields["at"] as Instant,
-)
-
-fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
-    put("schedule", schedule)
-    put("at", at)
-})
 
 fun Row.toSellerRow(): SellerRow = SellerRow(
     key = key,

@@ -38,12 +38,12 @@ class SqliteStore(
         /**
          * The one-line setup: create the schema for [system]'s model in the
          * database behind [dataSource] and connect the system through this store,
-         * both halves of the protocol.
+         * every part of the protocol.
          */
         fun attach(system: VelleSystem, dataSource: DataSource, bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load()): SqliteStore =
             SqliteStore(system.model, dataSource, bindings).also {
                 it.createSchema()
-                system.connect(it, it)
+                system.connect(it, it, it)
             }
 
         /** The one-line setup an example's tests use, over one connection the test holds. */

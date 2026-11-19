@@ -38,7 +38,7 @@ class BatchesFlowOverTypedStoreTest : BatchesFlowTest() {
     override fun newSystem(): BatchesSystem = BatchesSystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = BatchesStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(BatchesStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(BatchesStoreResolver(store, sys.system.model), backend, backend)
     }
 }
 

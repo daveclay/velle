@@ -16,6 +16,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -81,6 +82,7 @@ class VelleGraphQLTest {
         assertTrue("signUp(input: SignUpInput!): SignUpOutcome!" in sdl, sdl)
         assertTrue("input LineItemInput {" in sdl && "invoice: ID!" in sdl && "price: Money!" in sdl, sdl)
         assertTrue("tick(schedule: String!): TickOutcome!" in sdl, sdl)
+        assertTrue("ticks: [LatestTick!]!" in sdl, sdl)
         assertTrue("scalar Money" in sdl, sdl)
         assertTrue("type SignUp {" !in sdl && "type SignUpPage" !in sdl, "a transient act is not readable")
         assertTrue("record: LineItem" in sdl, sdl)
@@ -149,8 +151,12 @@ class VelleGraphQLTest {
         assertEquals("BAD_REQUEST", refused.single().extensions["kind"])
         assertNull(e.run("""{ invoice(key: "999") { due } }""")["invoice"])
 
-        val tick = e.run("""mutation { tick(schedule: "Weekly") { schedule rejections { message } } }""")
+        val tick = e.run("""mutation { tick(schedule: "Weekly") { schedule at rejections { message } } }""")
         assertEquals("Weekly", tick.at("tick", "schedule"))
+
+        // the moment each schedule last ran, absent for one that has never run
+        val ticks = e.run("""{ ticks { schedule at } }""")
+        assertEquals(listOf(mapOf("schedule" to "Hourly", "at" to null), mapOf("schedule" to "Weekly", "at" to tick.at("tick", "at"))), ticks["ticks"])
     }
 
     @Test
@@ -332,6 +338,20 @@ class VelleGraphQLTest {
         val asStaff = e.errors(query, actor = staff).single()
         assertNull(asStaff.extensions?.get("kind"), asStaff.toString())
         assertTrue("non null" in asStaff.message, asStaff.toString())
+    }
+
+    @Test
+    fun `the latest ticks are read whether or not ticks may be caused`() {
+        assertTrue("ticks: [LatestTick!]!" in sdl("billing"), "the read does not wait on the setting that allows the tick mutation")
+    }
+
+    @Test
+    fun `a spec whose own shape wants the field ticks is told so when the schema is built`() {
+        val spec = "act Tick { label: text }\nshape Stale = Tick where label == \"old\"\nshape Notice { tick: one Tick }\nrule Flag when Stale on Nightly { Notice from { tick: this } }\n"
+        val model = Model(Parser.parse(spec))
+        check(model.diagnostics.isEmpty()) { model.diagnostics.toString() }
+        val refusal = assertFailsWith<IllegalStateException> { VelleGraphQL.schema(VelleApi(VelleSystem(model), null)) }
+        assertTrue("'Tick'" in refusal.message!! && "'ticks'" in refusal.message!!, refusal.message)
     }
 
     @Test

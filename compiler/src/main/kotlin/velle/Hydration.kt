@@ -1,5 +1,7 @@
 package velle
 
+import java.time.Instant
+
 /**
  * The store contract (evaluation.md "The universal transaction"): the
  * runtime is a per-commit decision kernel that demand-hydrates state through an
@@ -283,6 +285,28 @@ sealed interface AdmissionKey : Comparable<AdmissionKey> {
     data class Shape(val shape: String) : AdmissionKey {
         override val text get() = shape
     }
+
+    /** The write of one schedule's latest tick ([TickMemory.persistTick]): two ticks of [schedule] queue, two schedules do not. */
+    data class Schedule(val schedule: String) : AdmissionKey {
+        override val text get() = "schedule:$schedule"
+    }
+}
+
+/**
+ * What a store keeps about ticks: for each schedule, the moment it last ran
+ * (Reference §17). One moment per schedule and no history. A tick is not a
+ * record of any shape, so none of the record reads or the commit callback ever
+ * carries one; these two members are the whole of it. Both run inside a unit of
+ * work the runtime opened with [StateResolver.begin]: [latestTick] in a read or
+ * a write unit, [persistTick] in a write unit serialized on
+ * [AdmissionKey.Schedule], made durable when the unit ends committed.
+ */
+interface TickMemory {
+    /** The moment [schedule] last ran, or null before its first tick. */
+    fun latestTick(schedule: String): Instant?
+
+    /** [schedule] ran at [moment]: replaces what the store held for the schedule. Throw, and the unit rolls back. */
+    fun persistTick(schedule: String, moment: Instant)
 }
 
 fun interface CommitCallback {

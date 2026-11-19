@@ -79,7 +79,7 @@ class TypedStoreTest {
         sqlite.createSchema()
 
         val store: BillingStore = TunedStore(sqlite, billing.system.model, conn)
-        billing.system.connect(BillingStoreResolver(store, billing.system.model), sqlite)
+        billing.system.connect(BillingStoreResolver(store, billing.system.model), sqlite, sqlite)
 
         // the full cascade rides the typed layer's generic defaults
         accept(billing.commit(NewSignUp("Ada", "ada@x.com")))

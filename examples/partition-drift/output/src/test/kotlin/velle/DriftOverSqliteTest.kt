@@ -36,7 +36,7 @@ class DriftDemonstrationOverTypedStoreTest : DriftDemonstrationTest() {
     override fun newSystem(): PartitionDriftSystem = PartitionDriftSystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = PartitionDriftStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(PartitionDriftStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(PartitionDriftStoreResolver(store, sys.system.model), backend, backend)
     }
 }
 

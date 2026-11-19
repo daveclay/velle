@@ -112,6 +112,8 @@ Every endpoint hangs from `velle.api.path`, `/api` here. `{Shape}` is a shape or
 | `GET /api/shapes/{Shape}?where=&orderBy=&size=&after=` | the records that satisfy `where`, in the order `orderBy` names, a page at a time |
 | `GET /api/shapes/{Shape}/count?where=` | how many |
 | `POST /api/ticks/{Schedule}` | runs every rule on the schedule now, when `velle.api.ticks` is on; for development and the console, not for a deployment's cadence |
+| `GET /api/ticks` | every schedule with the moment it last ran, `at`, which is null for a schedule that has never run; served whether or not `velle.api.ticks` is on, and to any caller, as `GET /api` is |
+| `GET /api/ticks/{Schedule}` | one schedule and the moment it last ran: 404 when the spec names no such schedule |
 
 A session against the billing application:
 

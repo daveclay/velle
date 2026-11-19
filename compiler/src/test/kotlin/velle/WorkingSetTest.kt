@@ -22,7 +22,7 @@ class WorkingSetTest {
     """.trimIndent()
 
     /** The in-memory store with every by-key fetch counted and a side door for writes the runtime did not make. */
-    private class Counting(private val inner: MemoryStore) : StateResolver by inner, CommitCallback by inner {
+    private class Counting(private val inner: MemoryStore) : StateResolver by inner, CommitCallback by inner, TickMemory by inner {
         val fetchedByKey = mutableListOf<StoreKey>()
         /** Units of work begun and not yet ended. */
         var openUnits = 0
@@ -48,7 +48,7 @@ class WorkingSetTest {
         check(model.diagnostics.isEmpty()) { model.diagnostics.toString() }
         val sys = VelleSystem(model)
         val store = Counting(MemoryStore(model))
-        sys.connect(store, store)
+        sys.connect(store, store, store)
         return sys to store
     }
 

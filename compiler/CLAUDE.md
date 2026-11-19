@@ -28,7 +28,7 @@ type side: custom functions outrank custom types.
 
 A store may be a relational database, a key store, a REST call, an event
 queue, an email, a file on disk, or any combination, behind the one
-`StateResolver` and `CommitCallback` contract. The contract constrains what
+`StateResolver`, `CommitCallback`, and `TickMemory` contract. The contract constrains what
 the reads return and that a commit lands whole; it never names a mechanism.
 The runtime stays SQL-free. Never write "the database" for the store, and
 never design a store-side feature that assumes SQL or one backend. SQL lives

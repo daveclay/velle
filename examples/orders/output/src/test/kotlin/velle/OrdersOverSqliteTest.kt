@@ -39,7 +39,7 @@ class OrdersFlowOverTypedStoreTest : OrdersFlowTest() {
     override fun newSystem(): OrdersSystem = OrdersSystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = OrdersStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(OrdersStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(OrdersStoreResolver(store, sys.system.model), backend, backend)
     }
 }
 

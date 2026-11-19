@@ -35,18 +35,14 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
         return reader !in TypeRegistry.BUILTIN_FUNCTION_NAMES && reader !in TypeRegistry.RESERVED_FUNCTION_NAMES
     }
 
-    /** The spec's declarations behind Velle's own: the prelude is parsed into every model ahead of the spec. */
     /** The `is` clauses resolved (Reference §9, "Sharing a field across shapes"): takers carry
      *  the taken members, and each taken shape is a static union over its takers. */
-    private val shared = SharedShapes(PRELUDE + rawDecls)
+    private val shared = SharedShapes(rawDecls)
 
     /** The shapes other shapes take with `is`, by name, as declared; none has records of its own. */
     val sharedShapes: Map<String, ShapeDecl> get() = shared.taken
 
     private val allDecls: List<Decl> = shared.rewritten
-
-    /** The shapes Velle declares for every system, written in Velle ([PRELUDE]): `Tick`, the record of a schedule's run (Reference §17). */
-    val builtin: Set<String> = PRELUDE.filterIsInstance<ShapeDecl>().map { it.name }.toSet()
 
     val diagnostics = mutableListOf<Diagnostic>()
 
@@ -232,26 +228,6 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     private fun conjunction(terms: List<Expr>): Expr = terms.reduce { left, right -> Binary("and", left, right) }
 
-    companion object {
-        /** Velle's record of a schedule's run: one row per tick, `schedule` and the moment `at` (Reference §17). */
-        const val TICK = "Tick"
-
-        /**
-         * Velle's own declarations, in Velle, ahead of every spec's. A tick creates one
-         * [TICK] row through the ordinary commit path, and reads the latest one for its
-         * schedule as the previous tick; the engineer reads the shape as any other and
-         * commits none, since no act creates it.
-         */
-        val PRELUDE: List<Decl> by lazy {
-            Parser.parse("""
-                shape Tick {
-                    schedule: text
-                    at: timestamp on create
-                }
-            """.trimIndent())
-        }
-    }
-
     /** The actor clause of an act, or null (Reference §22, "The actor"). */
     fun actorOf(shape: String): ActorProp? = shapes[shape]?.actor
 
@@ -303,8 +279,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     private fun register(name: String): Boolean {
         if (name in shapes || name in refinements) {
-            if (name in builtin) error("F1", "'$name' is Velle's own shape, the record of a schedule's ticks (Reference §17); choose another name")
-            else error("F1", "duplicate shape/refinement name '$name'")
+            error("F1", "duplicate shape/refinement name '$name'")
             return false
         }
         typeScope[name]?.let { t ->

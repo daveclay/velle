@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 class AdmissionKeysTest {
 
     /** The in-memory store with every write unit's admission keys recorded. */
-    private class Recording(private val inner: MemoryStore) : StateResolver by inner, CommitCallback by inner {
+    private class Recording(private val inner: MemoryStore) : StateResolver by inner, CommitCallback by inner, TickMemory by inner {
         val serialized = java.util.Collections.synchronizedList(mutableListOf<List<String>>())
         /** Called after a write unit holds its keys; the test may make the unit wait there. */
         @Volatile var holding: (Set<AdmissionKey>) -> Unit = {}
@@ -40,7 +40,7 @@ class AdmissionKeysTest {
         check(model.diagnostics.isEmpty()) { model.diagnostics.toString() }
         val sys = VelleSystem(model)
         val store = Recording(MemoryStore(model))
-        sys.connect(store, store)
+        sys.connect(store, store, store)
         return sys to store
     }
 
@@ -113,8 +113,8 @@ class AdmissionKeysTest {
         store.serialized.clear()
         sys.tick("Hourly")
         val key = wed.key.value
-        // the firing's keys, then the tick's own record under its shape's key (Reference §17)
-        assertEquals(listOf(listOf("Reservation.slot=Wed 14:00", "Waitlist#$key"), listOf("Tick")), store.serialized)
+        // the firing's keys, then the tick's own moment under its schedule's key (Reference §17)
+        assertEquals(listOf(listOf("Reservation.slot=Wed 14:00", "Waitlist#$key"), listOf("schedule:Hourly")), store.serialized)
         sys.scope { assertEquals(1, sys.instancesOf("Nagged").size) }
     }
 

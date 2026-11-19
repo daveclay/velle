@@ -37,7 +37,7 @@ class ModerationFlowOverTypedStoreTest : ModerationFlowTest() {
     override fun newSystem(): ModerationSystem = ModerationSystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = ModerationStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(ModerationStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(ModerationStoreResolver(store, sys.system.model), backend, backend)
     }
 }
 

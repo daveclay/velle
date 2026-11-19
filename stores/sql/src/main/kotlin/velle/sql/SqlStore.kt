@@ -12,6 +12,7 @@ import velle.Ref
 import velle.Row
 import velle.RowRef
 import velle.StateResolver
+import velle.TickMemory
 import velle.StoreKey
 import velle.StoredProp
 import velle.TEXT_OPERATORS
@@ -29,6 +30,7 @@ import velle.UnitOfWork
 import velle.WorkKind
 import java.sql.Connection
 import java.time.Duration
+import java.time.Instant
 import javax.sql.DataSource
 import java.sql.PreparedStatement
 import java.sql.ResultSet
@@ -87,18 +89,18 @@ open class SqlStore(
     functionBindings: List<SqlFunctionBinding> = SqlFunctionBinding.load(),
     /** Qualified names of the functions this system depends on rendering: a refused DDL for one stops the store. */
     private val insistRendered: Set<String> = emptySet(),
-) : StateResolver, CommitCallback {
+) : StateResolver, CommitCallback, TickMemory {
 
     companion object {
         /**
          * The one-line setup: create the schema for [system]'s model in the
          * database behind [dataSource] and connect the system through this
-         * store, both halves of the protocol.
+         * store, every part of the protocol.
          */
         fun attach(system: VelleSystem, dataSource: DataSource, dialect: SqlDialect, bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load()): SqlStore =
             SqlStore(system.model, dataSource, dialect, bindings).also {
                 it.createSchema()
-                system.connect(it, it)
+                system.connect(it, it, it)
             }
     }
 
@@ -386,6 +388,10 @@ open class SqlStore(
     private fun junctionTable(shape: String, field: String) = "${shape}__$field"
     private fun captureTable(refinement: String) = "capture_$refinement"
 
+    /** The moment each schedule last ran, one row per schedule ([TickMemory]). No shape's table starts in lower case. */
+    private val tickTable = "velle_tick"
+    private val momentStorage: StorageColumn get() = dialect.column(StorageClass.DATETIME)
+
     private fun columnType(t: VType): String = when {
         t is VType.Optional -> columnType(t.inner)
         t is VType.Inst -> keyStorage.columnType
@@ -422,8 +428,39 @@ open class SqlStore(
                 val cols = cs.props.joinToString("") { ", \"${it.name}\" ${columnType(it.type)}" }
                 st.execute("""CREATE TABLE IF NOT EXISTS "${captureTable(cs.refinement)}" (id ${keyStorage.columnType} PRIMARY KEY$cols)""")
             }
+            st.execute(
+                """CREATE TABLE IF NOT EXISTS "$tickTable" """ +
+                    """(schedule ${dialect.column(StorageClass.TEXT).columnType} PRIMARY KEY, ran_at ${momentStorage.columnType} NOT NULL)"""
+            )
         }
         installRenderings(conn)
+    }
+
+    // ── ticks: the moment each schedule last ran (Hydration.kt, TickMemory) ──
+
+    override fun latestTick(schedule: String): Instant? = onConnection { conn ->
+        conn.prepareStatement("""SELECT ran_at FROM "$tickTable" WHERE schedule = ?""").use { select ->
+            select.setString(1, schedule)
+            select.executeQuery().use { rows -> if (rows.next()) momentStorage.read(rows, "ran_at") as Instant else null }
+        }
+    }
+
+    /** Replaces the schedule's row, or inserts its first. The write unit holds the schedule's queue key, so the two statements are one step. */
+    override fun persistTick(schedule: String, moment: Instant) = onConnection { conn ->
+        val replaced = conn.prepareStatement("""UPDATE "$tickTable" SET ran_at = ? WHERE schedule = ?""").use { update ->
+            update.setObject(1, momentStorage.bind(moment))
+            update.setString(2, schedule)
+            update.executeUpdate()
+        }
+        if (replaced == 0) insertTick(conn, schedule, moment)
+    }
+
+    private fun insertTick(conn: Connection, schedule: String, moment: Instant) {
+        conn.prepareStatement("""INSERT INTO "$tickTable" (schedule, ran_at) VALUES (?, ?)""").use { insert ->
+            insert.setString(1, schedule)
+            insert.setObject(2, momentStorage.bind(moment))
+            insert.executeUpdate()
+        }
     }
 
     // ── the resolver: the typed read questions (Hydration.kt, StateResolver) ──

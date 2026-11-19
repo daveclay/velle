@@ -27,7 +27,7 @@ fun main() {
         val billing = BillingSystem(startTime = Instant.now())
         val store = SqliteStore(billing.system.model, conn)
         store.createSchema()
-        billing.system.connect(store, store)
+        billing.system.connect(store, store, store)
 
         println("=== Velle billing over SQLite (billing.db) ===")
         println()

@@ -1,6 +1,6 @@
--- OQ147: a spec reads `Tick`, the shape Velle declares for every system (Reference §17).
--- `nightlyRuns` reads every `Tick` record the store has ever kept for the schedule;
--- `lastNightlyRun` reads only the latest one.
+-- A spec tries to read ticks as records. Velle keeps the moment each schedule last ran
+-- and declares no shape for it (Reference §17), so `Tick` here is a name nothing declares.
+-- A spec that wants a record of every run writes a rule on the schedule that creates one.
 
 act Permit { site: text  expiresOn: Date
   nightlyRuns: integer = count(NightlyRun)

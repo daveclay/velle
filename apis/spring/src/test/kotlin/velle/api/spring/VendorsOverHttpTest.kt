@@ -84,6 +84,8 @@ class VendorsOverHttpTest {
         assertTrue((bad["details"] as List<*>).isNotEmpty(), bad.toString())
         mvc.get("/api/shapes/Nothing/1") { header("X-Velle-Actor", "Staff:$admin") }.andExpect { status { isNotFound() } }
         mvc.post("/api/ticks/Daily").andExpect { status { isNotFound() } }
+        // when each schedule last ran is read with no actor, as the description is, though ticks may not be caused
+        mvc.get("/api/ticks").andExpect { status { isOk() } }
 
         val count = parse(mvc.get("/api/shapes/Product/count") { header("X-Velle-Actor", "Staff:$admin") }.andExpect { status { isOk() } }.andReturn().response.contentAsString)
         assertEquals(1, count["count"])

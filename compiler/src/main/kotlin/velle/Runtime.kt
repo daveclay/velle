@@ -305,6 +305,7 @@ class VelleSystem(
     private val memory = MemoryStore(model)
     private var resolver: StateResolver = memory
     private var onCommit: CommitCallback = memory
+    private var tickMemory: TickMemory = memory
 
     /**
      * The unit of work open against the store (Hydration.kt, [UnitOfWork]): a read
@@ -353,10 +354,11 @@ class VelleSystem(
      *  answers it once. */
     private val fetchMisses: MutableSet<Long> get() = s.fetchMisses
 
-    /** Run over [resolver] and [onCommit] instead of the in-memory store, both halves of one store (Hydration.kt). */
-    fun connect(resolver: StateResolver, onCommit: CommitCallback) {
+    /** Run over [resolver], [onCommit], and [tickMemory] instead of the in-memory store, the three parts of one store (Hydration.kt). */
+    fun connect(resolver: StateResolver, onCommit: CommitCallback, tickMemory: TickMemory) {
         this.resolver = resolver
         this.onCommit = onCommit
+        this.tickMemory = tickMemory
     }
 
     /**
@@ -1951,7 +1953,7 @@ class VelleSystem(
         // a tick is a new evaluation moment: select subjects against settled
         // storage, not the previous envelope's leftover working set
         beginSnapshot()
-        val previous = previousTick(schedule) ?: startInstant
+        val previous = latestTick(schedule) ?: startInstant
         val rejected = mutableListOf<Rejection>()
         val failures = mutableListOf<FiringFailure>()
         val firings = linkedMapOf<String, Int>()
@@ -2006,16 +2008,9 @@ class VelleSystem(
                 )
             }
         }
-        // the tick on record: one `Tick` row through the ordinary commit path, after the
-        // firings, so a sweep cut off leaves the previous tick in place and the next tick
-        // covers the gap; every process over one store reads the same row (Reference §17)
-        inTransaction(keys = { setOf(AdmissionKey.Shape(Model.TICK)) }) {
-            applyCommit(listOf(Mutation.Create(Model.TICK, mapOf("schedule" to Value.VText(schedule)))))
-        }.exceptionOrNull()?.let {
-            // refused by a constraint, as any envelope is while the books stand in a state a
-            // clock-reading constraint forbids (the V30 backstop): reported with the firings
-            if (it is NeverViolation) rejected.add(it.rejection) else throw it
-        }
+        // the moment goes to the store after the firings, so a sweep cut off leaves the previous
+        // tick in place and the next tick covers the gap (Reference §17)
+        persistTick(schedule)
         beginSnapshot() // the firings are over: a read after the tick starts from the store
         val report = TickReport(schedule, now, firings, failures)
         // the tick is complete and on record: the listeners hear it, then the caller does.
@@ -2030,12 +2025,33 @@ class VelleSystem(
     private fun failed(rule: RuleDecl, subject: Long, cause: Throwable): FiringFailure =
         FiringFailure(rule.name, keyOf[subject]?.let { RecordRef(idShape.getValue(subject), it) }, cause)
 
-    /** The moment of [schedule]'s previous tick, the latest `Tick` row the store holds for it, or null before the first. */
-    private fun previousTick(schedule: String): Instant? {
-        val latest = Query(Model.TICK, where = Parser.parsePredicate("schedule == \"$schedule\""),
-            orderBy = listOf(OrderDatum("at", descending = true)), page = Page(1))
-        val id = queries.run(latest).ids.firstOrNull() ?: return null
-        return (evaluator.readMember(id, Model.TICK, "at") as Value.VDateTime).v
+    /**
+     * The moment [schedule] last ran, as the store holds it ([TickMemory.latestTick]), or null
+     * before its first tick. It survives a restart and is one moment for every process over
+     * one store. A tick is not a record: this is the only way to read when one happened.
+     */
+    fun latestTick(schedule: String): Instant? = reading {
+        reader()
+        tickMemory.latestTick(schedule)
+    }
+
+    /**
+     * Hands the store the moment of [schedule]'s tick, in a write unit of its own serialized
+     * on the schedule. The unit commits no record, so no rule fires and no `never` is checked.
+     */
+    private fun persistTick(schedule: String) {
+        beginSnapshot()
+        endUnit(Outcome.Committed)
+        val tickUnit = resolver.begin(WorkKind.WRITE)
+        unit = tickUnit
+        try {
+            tickUnit.serialize(setOf(AdmissionKey.Schedule(schedule)))
+            tickMemory.persistTick(schedule, now)
+        } catch (failure: Exception) {
+            endUnit(Outcome.Failed(failure))
+            throw failure
+        }
+        endUnit(Outcome.Committed)
     }
 
     /** Is [subject] one the rule fires for now: a member of the condition, or for a `leaving` rule a member at [previous] and not now. */

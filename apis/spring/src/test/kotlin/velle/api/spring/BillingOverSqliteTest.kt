@@ -78,6 +78,11 @@ class BillingOverSqliteTest {
         val tick = parse(mvc.post("/billing/ticks/Weekly").andExpect { status { isOk() } }.andReturn().response.contentAsString)
         assertEquals("Weekly", tick["schedule"])
         assertTrue((tick["rejections"] as List<*>).isEmpty())
+        val weekly = parse(mvc.get("/billing/ticks/Weekly").andExpect { status { isOk() } }.andReturn().response.contentAsString)
+        assertEquals(mapOf("schedule" to "Weekly", "at" to tick["at"]), weekly, "the moment the schedule last ran, from the store")
+        mvc.get("/billing/ticks/Daily").andExpect { status { isNotFound() } }
+        val every = mvc.get("/billing/ticks").andExpect { status { isOk() } }.andReturn().response.contentAsString
+        assertTrue("\"schedule\":\"Hourly\",\"at\":null" in every && "\"schedule\":\"Weekly\",\"at\":\"${tick["at"]}\"" in every, every)
         mvc.get("/velle").andExpect { status { isOk() } }.andReturn().response.contentAsString.let { assertTrue("const API = \"/billing\"" in it) }
     }
 

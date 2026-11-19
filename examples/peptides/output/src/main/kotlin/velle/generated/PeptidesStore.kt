@@ -5,20 +5,13 @@
 // this domain's names and types, every question the runtime can ask of storage.
 // Implement it directly (PeptidesStoreOverGeneric defaults every method onto a
 // generic backend for selective overriding), and connect it with:
-//   system.connect(PeptidesStoreResolver(store, system.model), callback)
+//   system.connect(PeptidesStoreResolver(store, system.model), callback, tickMemory)
 package velle.generated
 
 import velle.*
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
-
-/** One stored Tick row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
-data class TickRow(
-    val key: StoreKey,
-    val schedule: String,
-    val at: Instant,
-)
 
 /** One stored Crop row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CropRow(
@@ -402,7 +395,6 @@ interface PeptidesStore {
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
     // ── keyed reads ──
-    fun tick(key: StoreKey): TickRow?
     fun crop(key: StoreKey): CropRow?
     fun pathogen(key: StoreKey): PathogenRow?
     fun peptide(key: StoreKey): PeptideRow?
@@ -450,7 +442,6 @@ interface PeptidesStore {
     fun cancelRefusal(key: StoreKey): CancelRefusalRow?
 
     // ── scan floor: all rows of a shape ──
-    fun allTicks(): List<TickRow>
     fun allCrops(): List<CropRow>
     fun allPathogens(): List<PathogenRow>
     fun allPeptides(): List<PeptideRow>
@@ -678,7 +669,6 @@ open class PeptidesStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun crop(key: StoreKey): CropRow? = backend.fetchByKey("Crop", key)?.toCropRow()
     override fun pathogen(key: StoreKey): PathogenRow? = backend.fetchByKey("Pathogen", key)?.toPathogenRow()
     override fun peptide(key: StoreKey): PeptideRow? = backend.fetchByKey("Peptide", key)?.toPeptideRow()
@@ -725,7 +715,6 @@ open class PeptidesStoreOverGeneric(
     override fun taskCancellation(key: StoreKey): TaskCancellationRow? = backend.fetchByKey("TaskCancellation", key)?.toTaskCancellationRow()
     override fun cancelRefusal(key: StoreKey): CancelRefusalRow? = backend.fetchByKey("CancelRefusal", key)?.toCancelRefusalRow()
 
-    override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allCrops(): List<CropRow> = backend.fetchAll("Crop").map { it.toCropRow() }
     override fun allPathogens(): List<PathogenRow> = backend.fetchAll("Pathogen").map { it.toPathogenRow() }
     override fun allPeptides(): List<PeptideRow> = backend.fetchAll("Peptide").map { it.toPeptideRow() }
@@ -988,7 +977,6 @@ class PeptidesStoreResolver(
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Tick" -> store.tick(key)?.toRow()
         "Crop" -> store.crop(key)?.toRow()
         "Pathogen" -> store.pathogen(key)?.toRow()
         "Peptide" -> store.peptide(key)?.toRow()
@@ -1038,7 +1026,6 @@ class PeptidesStoreResolver(
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
-        "Tick" -> store.allTicks().map { it.toRow() }
         "Crop" -> store.allCrops().map { it.toRow() }
         "Pathogen" -> store.allPathogens().map { it.toRow() }
         "Peptide" -> store.allPeptides().map { it.toRow() }
@@ -1206,17 +1193,6 @@ private fun List<QConst>.date(i: Int): LocalDate = (this[i] as QConst.QDate).v
 private fun List<QConst>.instant(i: Int): Instant = (this[i] as QConst.QDateTime).v
 
 // ── row mappers: the generic wire format <-> the typed rows ──
-
-fun Row.toTickRow(): TickRow = TickRow(
-    key = key,
-    schedule = fields["schedule"] as String,
-    at = fields["at"] as Instant,
-)
-
-fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
-    put("schedule", schedule)
-    put("at", at)
-})
 
 fun Row.toCropRow(): CropRow = CropRow(
     key = key,

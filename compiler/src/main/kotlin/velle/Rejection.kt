@@ -105,7 +105,7 @@ class TickRejected(val report: TickReport, val rejections: List<Rejection>) :
  * tells: a log, an alert, a metric.
  */
 interface TickListener {
-    /** Every tick, once its own `Tick` row has landed: the report, and the firings a `never` refused. */
+    /** Every tick, once the store holds its moment: the report, and the firings a `never` refused. */
     fun ticked(report: TickReport, rejections: List<Rejection>)
 
     /** An accepted act whose after-commit firings came to something: the act's record (null for a transient act), the refused, the failed. */

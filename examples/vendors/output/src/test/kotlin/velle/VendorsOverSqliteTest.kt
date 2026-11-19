@@ -27,6 +27,6 @@ class VendorsFlowOverTypedStoreTest : VendorsFlowTest() {
     override fun newSystem(): VendorsSystem = VendorsSystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = VendorsStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(VendorsStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(VendorsStoreResolver(store, sys.system.model), backend, backend)
     }
 }

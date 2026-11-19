@@ -107,7 +107,7 @@ class VelleAutoConfiguration {
             else -> throw IllegalStateException("Velle has no SQL dialect for '$product'; declare a velle.sql.SqlStore bean of your own, connected to the system")
         }
         if (createSchema) store.createSchema()
-        system.connect(store, store)
+        system.connect(store, store, store)
         log.info("Velle store: {} through the SQL store, {} tables", product, system.model.shapes.size)
     }
 

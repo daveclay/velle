@@ -39,7 +39,7 @@ class LoyaltyFlowOverTypedStoreTest : LoyaltyFlowTest() {
     override fun newSystem(): LoyaltySystem = LoyaltySystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = LoyaltyStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(LoyaltyStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(LoyaltyStoreResolver(store, sys.system.model), backend, backend)
     }
 }
 

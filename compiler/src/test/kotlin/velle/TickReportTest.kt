@@ -25,7 +25,7 @@ class TickReportTest {
     """.trimIndent()
 
     /** The in-memory store, refusing to write a commit set that creates [failing] with [cause]. */
-    private class Breaking(private val inner: MemoryStore, private val failing: String, private val cause: RuntimeException) : StateResolver by inner, CommitCallback by inner {
+    private class Breaking(private val inner: MemoryStore, private val failing: String, private val cause: RuntimeException) : StateResolver by inner, CommitCallback by inner, TickMemory by inner {
         override fun onCommit(set: CommitSet): List<StoreKey> {
             if (set.created.any { it.shape == failing }) throw cause
             return inner.onCommit(set)
@@ -42,7 +42,7 @@ class TickReportTest {
     @Test
     fun `a clean tick reports its firings per rule and no failures`() {
         val store = MemoryStore(model())
-        val sys = VelleSystem(model(), startTime = Instant.parse("2026-10-28T06:00:00Z")).also { it.connect(store, store) }
+        val sys = VelleSystem(model(), startTime = Instant.parse("2026-10-28T06:00:00Z")).also { it.connect(store, store, store) }
         overdue(sys, 2)
         val report = sys.tick("Daily")
         assertEquals("Daily", report.schedule)
@@ -57,7 +57,7 @@ class TickReportTest {
         val boom = IllegalStateException("disk full")
         val memory = MemoryStore(model())
         val store = Breaking(memory, "Reminder", boom)
-        val sys = VelleSystem(model(), startTime = Instant.parse("2026-10-28T06:00:00Z")).also { it.connect(store, store) }
+        val sys = VelleSystem(model(), startTime = Instant.parse("2026-10-28T06:00:00Z")).also { it.connect(store, store, store) }
         val heard = FailureCollector()
         sys.listen(heard)
         overdue(sys, 1)
@@ -71,6 +71,6 @@ class TickReportTest {
         assertEquals("firing of 'Remind' for Invoice#2 failed: disk full", failure.message)
         assertEquals(listOf(failure), heard.failures)
         assertEquals(0, memory.fetchAll("Reminder").size, "the firing rolled back")
-        assertEquals(1, memory.fetchAll(Model.TICK).size, "the tick itself is on record")
+        assertEquals(sys.now, memory.latestTick("Daily"), "the store holds the moment of the tick itself")
     }
 }

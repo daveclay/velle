@@ -30,7 +30,7 @@ class CapturePersistenceTest {
         val billing = BillingSystem(startTime = startTime)
         val store = SqliteStore(billing.system.model, conn)
         store.createSchema()
-        billing.system.connect(store, store)
+        billing.system.connect(store, store, store)
         return billing
     }
 

@@ -39,7 +39,7 @@ class EnrollmentFlowOverTypedStoreTest : EnrollmentFlowTest() {
     override fun newSystem(): EnrollmentSystem = EnrollmentSystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = EnrollmentStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(EnrollmentStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(EnrollmentStoreResolver(store, sys.system.model), backend, backend)
     }
 }
 

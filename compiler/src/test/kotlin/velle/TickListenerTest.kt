@@ -28,7 +28,7 @@ class TickListenerTest {
         rule Acknowledge when Unreceipted after commit { Receipt from { invoice: this } }
     """.trimIndent()
 
-    private class Breaking(private val inner: MemoryStore, private val failing: String, private val cause: RuntimeException) : StateResolver by inner, CommitCallback by inner {
+    private class Breaking(private val inner: MemoryStore, private val failing: String, private val cause: RuntimeException) : StateResolver by inner, CommitCallback by inner, TickMemory by inner {
         override fun onCommit(set: CommitSet): List<StoreKey> {
             if (set.created.any { it.shape == failing }) throw cause
             return inner.onCommit(set)
@@ -48,7 +48,7 @@ class TickListenerTest {
     @Test
     fun `every tick is heard with its report, and a clean commit is not`() {
         val store = MemoryStore(model())
-        val sys = VelleSystem(model(), startTime = start).also { it.connect(store, store) }
+        val sys = VelleSystem(model(), startTime = start).also { it.connect(store, store, store) }
         val heard = Heard().also(sys::listen)
         sys.scope {
             val customer = assertIs<CommitResult.Accepted>(sys.commit("Customer", mapOf("name" to "Ada"))).id
@@ -65,7 +65,7 @@ class TickListenerTest {
         val boom = IllegalStateException("receipts offline")
         val memory = MemoryStore(model())
         val store = Breaking(memory, "Receipt", boom)
-        val sys = VelleSystem(model(), startTime = start).also { it.connect(store, store) }
+        val sys = VelleSystem(model(), startTime = start).also { it.connect(store, store, store) }
         val heard = Heard().also(sys::listen)
         val accepted = sys.scope {
             val customer = assertIs<CommitResult.Accepted>(sys.commit("Customer", mapOf("name" to "Ada"))).id
@@ -83,7 +83,7 @@ class TickListenerTest {
     @Test
     fun `a listener that throws undoes nothing and is heard by the caller after the others had their turn`() {
         val store = MemoryStore(model())
-        val sys = VelleSystem(model(), startTime = start).also { it.connect(store, store) }
+        val sys = VelleSystem(model(), startTime = start).also { it.connect(store, store, store) }
         val heard = Heard()
         sys.listen(object : TickListener { override fun ticked(report: TickReport, rejections: List<Rejection>) = throw IllegalStateException("pager down") })
         sys.listen(heard)
@@ -95,8 +95,10 @@ class TickListenerTest {
         assertEquals("pager down", e.message)
         assertEquals(1, heard.ticks.size, "the second listener still heard it")
         assertEquals(1, store.fetchAll("Reminder").size, "the firing stood")
-        assertEquals(1, store.fetchAll(Model.TICK).size, "the tick is on record")
+        val firstTick = store.latestTick("Daily")
+        assertEquals(sys.now, firstTick, "the store holds the moment of the tick")
+        sys.advance(60)
         assertFailsWith<IllegalStateException> { sys.tick("Daily") } // the listener is still there, and so is the next tick
-        assertEquals(2, store.fetchAll(Model.TICK).size, "the next tick ran")
+        assertEquals(firstTick!!.plusSeconds(60), store.latestTick("Daily"), "the next tick ran")
     }
 }

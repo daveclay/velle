@@ -311,7 +311,7 @@ class QueryApiOverTypedStoreTest : QueryApiTest() {
     override fun newSystem(): BillingSystem = BillingSystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = BillingStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(BillingStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(BillingStoreResolver(store, sys.system.model), backend, backend)
     }
 }
 

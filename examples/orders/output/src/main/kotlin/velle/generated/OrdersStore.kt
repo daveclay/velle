@@ -5,20 +5,13 @@
 // this domain's names and types, every question the runtime can ask of storage.
 // Implement it directly (OrdersStoreOverGeneric defaults every method onto a
 // generic backend for selective overriding), and connect it with:
-//   system.connect(OrdersStoreResolver(store, system.model), callback)
+//   system.connect(OrdersStoreResolver(store, system.model), callback, tickMemory)
 package velle.generated
 
 import velle.*
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
-
-/** One stored Tick row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
-data class TickRow(
-    val key: StoreKey,
-    val schedule: String,
-    val at: Instant,
-)
 
 /** One stored Customer row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CustomerRow(
@@ -122,7 +115,6 @@ interface OrdersStore {
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
     // ── keyed reads ──
-    fun tick(key: StoreKey): TickRow?
     fun customer(key: StoreKey): CustomerRow?
     fun product(key: StoreKey): ProductRow?
     fun skuFamily(key: StoreKey): SkuFamilyRow?
@@ -137,7 +129,6 @@ interface OrdersStore {
     fun priceRecord(key: StoreKey): PriceRecordRow?
 
     // ── scan floor: all rows of a shape ──
-    fun allTicks(): List<TickRow>
     fun allCustomers(): List<CustomerRow>
     fun allProducts(): List<ProductRow>
     fun allSkuFamilys(): List<SkuFamilyRow>
@@ -190,7 +181,6 @@ open class OrdersStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun customer(key: StoreKey): CustomerRow? = backend.fetchByKey("Customer", key)?.toCustomerRow()
     override fun product(key: StoreKey): ProductRow? = backend.fetchByKey("Product", key)?.toProductRow()
     override fun skuFamily(key: StoreKey): SkuFamilyRow? = backend.fetchByKey("SkuFamily", key)?.toSkuFamilyRow()
@@ -204,7 +194,6 @@ open class OrdersStoreOverGeneric(
     override fun catalogueLine(key: StoreKey): CatalogueLineRow? = backend.fetchByKey("CatalogueLine", key)?.toCatalogueLineRow()
     override fun priceRecord(key: StoreKey): PriceRecordRow? = backend.fetchByKey("PriceRecord", key)?.toPriceRecordRow()
 
-    override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allCustomers(): List<CustomerRow> = backend.fetchAll("Customer").map { it.toCustomerRow() }
     override fun allProducts(): List<ProductRow> = backend.fetchAll("Product").map { it.toProductRow() }
     override fun allSkuFamilys(): List<SkuFamilyRow> = backend.fetchAll("SkuFamily").map { it.toSkuFamilyRow() }
@@ -258,7 +247,6 @@ class OrdersStoreResolver(
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Tick" -> store.tick(key)?.toRow()
         "Customer" -> store.customer(key)?.toRow()
         "Product" -> store.product(key)?.toRow()
         "SkuFamily" -> store.skuFamily(key)?.toRow()
@@ -275,7 +263,6 @@ class OrdersStoreResolver(
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
-        "Tick" -> store.allTicks().map { it.toRow() }
         "Customer" -> store.allCustomers().map { it.toRow() }
         "Product" -> store.allProducts().map { it.toRow() }
         "SkuFamily" -> store.allSkuFamilys().map { it.toRow() }
@@ -319,17 +306,6 @@ class OrdersStoreResolver(
 }
 
 // ── row mappers: the generic wire format <-> the typed rows ──
-
-fun Row.toTickRow(): TickRow = TickRow(
-    key = key,
-    schedule = fields["schedule"] as String,
-    at = fields["at"] as Instant,
-)
-
-fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
-    put("schedule", schedule)
-    put("at", at)
-})
 
 fun Row.toCustomerRow(): CustomerRow = CustomerRow(
     key = key,

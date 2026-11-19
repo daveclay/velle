@@ -71,6 +71,13 @@ class VelleRestController(private val api: VelleApi, private val props: VellePro
         return api.tick(schedule)
     }
 
+    /** The moment each schedule last ran. Served whether or not ticks may be caused over HTTP. */
+    @GetMapping("/ticks")
+    fun latestTicks(): List<Map<String, Any?>> = api.latestTicks()
+
+    @GetMapping("/ticks/{schedule}")
+    fun latestTick(@PathVariable schedule: String): Map<String, Any?> = api.latestTick(schedule)
+
     @ExceptionHandler(ApiException::class)
     fun refused(e: ApiException): ResponseEntity<Map<String, Any?>> {
         val status = when (e.kind) {

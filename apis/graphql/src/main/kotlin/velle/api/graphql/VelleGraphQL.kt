@@ -329,7 +329,26 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
                 api.count(r, env.getArgument("where"), VelleGraphQL.actorOf(env))
             })
         }
+        latestTicksField(q, readable)
         return q.build()
+    }
+
+    /** `ticks`: every schedule with the moment it last ran. A tick is no shape (Reference §17), so the field is built by hand. */
+    private fun latestTicksField(query: GraphQLObjectType.Builder, readable: List<String>) {
+        val field = "ticks"
+        val type = "LatestTick"
+        val claimant = readable.firstOrNull { shape -> shape == type || field in setOf(lower(shape), plural(shape), "${lower(shape)}Count") }
+        if (claimant != null) throw IllegalStateException(
+            "the spec's '$claimant' and the moment each schedule last ran both want the GraphQL name '$field' or '$type'; rename '$claimant' to serve this spec over GraphQL"
+        )
+        val latestTick = GraphQLObjectType.newObject().name(type).description("A schedule and the moment it last ran.")
+            .field { it.name("schedule").type(GraphQLNonNull.nonNull(Scalars.GraphQLString)) }
+            .field { it.name("at").type(Scalars.GraphQLString).description("Null when the schedule has never run.") }
+            .build()
+        additional[type] = latestTick
+        query.field { it.name(field).description("Every schedule with the moment it last ran: ${api.schedules}.")
+            .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(latestTick)))) }
+        registry.dataFetcher(FieldCoordinates.coordinates("Query", field), DataFetcher { api.latestTicks() })
     }
 
     // ── mutations: one per act ──────────────────────────────────────────────────

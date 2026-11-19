@@ -40,7 +40,7 @@ class GalleryFlowOverTypedStoreTest : GalleryFlowTest() {
     override fun newSystem(): GallerySystem = GallerySystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = GalleryStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(GalleryStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(GalleryStoreResolver(store, sys.system.model), backend, backend)
     }
 }
 

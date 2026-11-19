@@ -33,6 +33,6 @@ class PeptidesPipelineOverTypedStoreTest : PeptidesPipelineTest() {
     override fun newSystem(): PeptidesSystem = PeptidesSystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = PeptidesStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(PeptidesStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(PeptidesStoreResolver(store, sys.system.model), backend, backend)
     }
 }

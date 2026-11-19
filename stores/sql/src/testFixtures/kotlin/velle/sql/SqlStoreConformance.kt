@@ -195,7 +195,7 @@ abstract class SqlStoreConformance {
         val sys = system(spec)
         val store = store(sys.model, ds, bindings, functionBindings = functionBindings, insistRendered = insistRendered).apply { createSchema() }
         val counting = Counting(store)
-        sys.connect(counting, store)
+        sys.connect(counting, store, store)
         return Attached(sys, store, counting, ds)
     }
 
@@ -528,6 +528,40 @@ abstract class SqlStoreConformance {
         assertEquals(9L, (b.scalar("""SELECT "flaggedTier" FROM "capture_Flagged"""") as Number).toLong())
         accepted(b.sys.commit("SetTier", mapOf("customer" to b.id(adaB), "tier" to 2)))
         assertEquals(2L, b.count("UnflagNotice"))
+    }
+
+    // ── ticks: one moment per schedule, kept across processes ────────────────
+
+    @Test
+    fun `the moment a schedule last ran survives the process, one per schedule, replaced by its next tick`() {
+        val permitSpec = """
+            act Permit { site: text  expiresOn: Date }
+            shape Valid = Permit where expiresOn >= today
+            shape Lapse { permit: one Permit  noticedOn: Date }
+            rule NoticeLapse when leaving Valid on Nightly { Lapse from { permit: this, noticedOn: today } }
+            shape Renewal { permit: one Permit }
+            rule OfferRenewal when Valid on Weekly { Renewal from { permit: this } }
+        """.trimIndent()
+        val firstProcess = attach(spec = permitSpec)
+        assertNull(firstProcess.sys.latestTick("Nightly"), "a schedule that has never run has no latest tick")
+        accepted(firstProcess.sys.commit("Permit", mapOf("site" to "north", "expiresOn" to LocalDate.of(2026, 1, 20))))
+        val firstNight = firstProcess.sys.now
+        firstProcess.sys.tick("Nightly")
+        val weeklyRun = firstNight.plusSeconds(3_600)
+        firstProcess.sys.setTime(weeklyRun)
+        firstProcess.sys.tick("Weekly")
+
+        // the next process, over the same database, after the permit expired
+        val secondProcess = attach(firstProcess.ds, spec = permitSpec)
+        assertEquals(firstNight, secondProcess.sys.latestTick("Nightly"))
+        assertEquals(weeklyRun, secondProcess.sys.latestTick("Weekly"))
+        val laterNight = Instant.parse("2026-01-25T09:00:00Z")
+        secondProcess.sys.setTime(laterNight)
+        secondProcess.sys.tick("Nightly")
+        assertEquals(1L, secondProcess.count("Lapse"), "the permit left Valid since the tick the first process ran")
+        assertEquals(laterNight, secondProcess.sys.latestTick("Nightly"), "the next tick replaces the moment")
+        assertEquals(weeklyRun, secondProcess.sys.latestTick("Weekly"), "and leaves the other schedule's alone")
+        assertEquals(2L, secondProcess.count("velle_tick"), "one moment per schedule, however many ticks")
     }
 
     // ── deletion: the row and what hangs off it go, references at it read absent ──

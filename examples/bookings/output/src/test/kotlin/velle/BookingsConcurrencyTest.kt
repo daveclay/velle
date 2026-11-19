@@ -14,6 +14,7 @@ import velle.CommitCallback
 import velle.MemoryStore
 import velle.Outcome
 import velle.StateResolver
+import velle.TickMemory
 import velle.UnitOfWork
 import velle.WorkKind
 import velle.generated.*
@@ -30,7 +31,7 @@ class BookingsConcurrencyTest {
     private val eleven: Instant = Instant.parse("2026-01-05T11:00:00Z")
 
     /** The in-memory store with every write unit's queue keys recorded, and a hook run while they are held. */
-    private class Recording(private val inner: MemoryStore) : StateResolver by inner, CommitCallback by inner {
+    private class Recording(private val inner: MemoryStore) : StateResolver by inner, CommitCallback by inner, TickMemory by inner {
         val serialized: MutableList<List<String>> = Collections.synchronizedList(mutableListOf())
         @Volatile var holding: (Set<AdmissionKey>) -> Unit = {}
         override fun begin(kind: WorkKind): UnitOfWork {
@@ -50,7 +51,7 @@ class BookingsConcurrencyTest {
     private fun recording(): Pair<BookingsSystem, Recording> {
         val sys = BookingsSystem()
         val store = Recording(MemoryStore(sys.system.model))
-        sys.system.connect(store, store)
+        sys.system.connect(store, store, store)
         return sys to store
     }
 
@@ -101,8 +102,8 @@ class BookingsConcurrencyTest {
         val bob = sys.waitlists().single()
         store.serialized.clear()
         sys.tickHourly()
-        assertEquals(listOf(listOf("Booking.slot=$eleven", "Waitlist#${bob.key.value}"), listOf("Tick")), store.serialized,
-            "one firing: the entry it is for, and the slot it waits on")
+        assertEquals(listOf(listOf("Booking.slot=$eleven", "Waitlist#${bob.key.value}"), listOf("schedule:Hourly")), store.serialized,
+            "one firing: the entry it is for, and the slot it waits on; then the tick's own moment, under its schedule")
         assertEquals(1, sys.notices().size)
     }
 

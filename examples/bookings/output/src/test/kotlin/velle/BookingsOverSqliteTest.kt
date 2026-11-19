@@ -29,6 +29,6 @@ class BookingsFlowOverTypedStoreTest : BookingsFlowTest() {
     override fun newSystem(): BookingsSystem = BookingsSystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = BookingsStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(BookingsStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(BookingsStoreResolver(store, sys.system.model), backend, backend)
     }
 }

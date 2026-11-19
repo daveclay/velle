@@ -148,7 +148,7 @@ object StoreGen {
             line("// this domain's names and types, every question the runtime can ask of storage.")
             line("// Implement it directly (${name}StoreOverGeneric defaults every method onto a")
             line("// generic backend for selective overriding), and connect it with:")
-            line("//   system.connect(${name}StoreResolver(store, system.model), callback)")
+            line("//   system.connect(${name}StoreResolver(store, system.model), callback, tickMemory)")
             line("package $pkg")
             line()
             line("import velle.*")

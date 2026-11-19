@@ -224,6 +224,15 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
             linkedMapOf("schedule" to schedule, "at" to system.now.toString(), "rejections" to rejections)
         }
     }
+
+    /** The moment [schedule] last ran, absent before its first tick (Reference §17). A tick is no record, so no actor is asked for. */
+    fun latestTick(schedule: String): Map<String, Any?> {
+        if (schedule !in schedules) throw ApiException.notFound("no schedule '$schedule'; this system has ${schedules}")
+        return linkedMapOf("schedule" to schedule, "at" to system.latestTick(schedule)?.toString())
+    }
+
+    /** Every schedule with the moment it last ran, in the order the description names them. */
+    fun latestTicks(): List<Map<String, Any?>> = schedules.map { schedule -> latestTick(schedule) }
 }
 
 /** A request this layer refuses before the runtime sees it, with the kind a transport maps to its own status. */

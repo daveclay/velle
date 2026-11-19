@@ -42,22 +42,28 @@ A member's balance goes negative at 09:00 and recovers at 17:00. With `when Deli
 
 ## What Velle records about a tick
 
-Every tick leaves one record behind, in a shape Velle declares for every system:
+Velle keeps one thing about a tick: the moment each schedule last ran. The next tick of the same schedule replaces it, so there is one moment per schedule, however often the schedule runs.
+
+A tick is not a record. No shape holds it, and a spec cannot read it in a rule, a derived property, or a query. Velle reads the moment itself, to know when a schedule last ran, which a `when leaving` rule on a schedule needs ([§13](Reference-13-Exit-triggers)): a record that left between two runs is noticed at the second run, even when the system was restarted between them, and every copy of a system over one store agrees on the previous run. An engineer reads the moment from the running system and over the API ([Act API, "Ticking a schedule"](Act-API#ticking-a-schedule)).
+
+To keep a record of every run, write a rule on the schedule that creates one. `examples/pharmacy/pharmacy.velle` writes down the stock of every controlled drug each month:
 
 ```
-shape Tick {
-    schedule: text
-    at: timestamp on create
+shape ControlledInventorySnapshot {
+    drug: one Drug
+    onHand: integer
+    takenOn: Date
+}
+
+rule SnapshotControlled when Controlled on Monthly {
+    ControlledInventorySnapshot from { drug: this, onHand: onHand, takenOn: today }
 }
 ```
 
-- `schedule` is the schedule's name, `Weekly` for a tick of `Weekly`.
-- `at` is the moment the tick ran.
-
-You read `Tick` as you read any shape: over the API, in a query, or in a rule's condition. No act creates it, and you cannot write one: the tick is the event, and the record is what the system remembers of it. Velle reads the latest `Tick` for a schedule to know when that schedule last ran, which a `when leaving` rule on a schedule needs ([§13](Reference-13-Exit-triggers)): a record that left between two runs is noticed at the second run, even when the system was restarted between them, and every copy of a system over one database agrees on the previous run. In a system with [authorization](Authorization), `Tick` takes the spec-wide `visible to` default when the spec has one; with no default it is visible to anyone.
+- `SnapshotControlled` fires once for every controlled drug each time `Monthly` runs.
+- Each firing creates one `ControlledInventorySnapshot` dated `today`. These records are the spec's own: they accumulate, and a rule or a query reads them like any other record.
 
 ## What the compiler checks
 
 - **It rejects** a rule whose condition reads `today` but has no schedule in `on`, because the rule could never fire ([checks.md, V3](checks#v3--unfireable-rule)).
 - **It rejects** a schedule trigger, or `after commit`, on a rule whose subject is a `transient act`, which is gone when the schedule runs ([§4, "Transient acts"](Reference-04-State-and-commits#transient-acts-transient-act); [checks.md, V17](checks#v17--transient-isolation)).
-- **It rejects** a shape or refinement of your own named `Tick`, which is Velle's ([checks.md, F1](checks#f1--name-resolution-and-casing)).

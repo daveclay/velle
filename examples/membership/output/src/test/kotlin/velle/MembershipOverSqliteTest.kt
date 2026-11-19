@@ -40,7 +40,7 @@ class MembershipApiOverTypedStoreTest : MembershipApiTest() {
     override fun newSystem(): MembershipSystem = MembershipSystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = MembershipStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(MembershipStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(MembershipStoreResolver(store, sys.system.model), backend, backend)
     }
 }
 

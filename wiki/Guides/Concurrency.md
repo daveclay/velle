@@ -84,7 +84,7 @@ For this spec the compiler reports the keys in `examples/bookings/output/DIAGRAM
 | `Cancel` of booking 1 | `Booking#1`, `Booking.slot=2026-01-05T10:00:00Z` | the booking given back, and its slot |
 | `Waitlist` | `Waitlist` | every waitlist entry there is |
 | `TellWaitlist`, one hourly firing | `Waitlist#2`, `Booking.slot=2026-01-05T11:00:00Z` | the entry being told, and the slot it waits for |
-| the hourly tick's own record | `Tick` | the row that says the tick ran ([§17, "What Velle records about a tick"](Reference-17-Schedule-triggers#what-velle-records-about-a-tick)) |
+| the hourly tick's own moment | `schedule:Hourly` | the moment `Hourly` last ran, which waits only for another tick of `Hourly` ([§17, "What Velle records about a tick"](Reference-17-Schedule-triggers#what-velle-records-about-a-tick)) |
 
 So two requests for ten o'clock take turns, and the second finds the first's booking and is refused. A request for eleven o'clock runs beside either of them. A cancellation waits only for work on that booking or that slot. The hourly firing for one entry waits only for a booking of the slot that entry wants.
 

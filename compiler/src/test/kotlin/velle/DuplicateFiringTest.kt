@@ -47,8 +47,8 @@ class DuplicateFiringTest {
         val start = Instant.parse("2026-10-28T06:00:00Z")
         val store = MemoryStore(model)
         val interleaving = Interleaving(store)
-        val first = VelleSystem(Model(Parser.parse(spec)), startTime = start).also { it.connect(interleaving, store) }
-        val other = VelleSystem(Model(Parser.parse(spec)), startTime = start).also { it.connect(store, store) }
+        val first = VelleSystem(Model(Parser.parse(spec)), startTime = start).also { it.connect(interleaving, store, store) }
+        val other = VelleSystem(Model(Parser.parse(spec)), startTime = start).also { it.connect(store, store, store) }
 
         first.scope {
             val customer = assertIs<CommitResult.Accepted>(first.commit("Customer", mapOf("name" to "Ada"))).id

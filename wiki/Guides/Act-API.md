@@ -138,6 +138,14 @@ report.firings            // {"RemindOverdue": 3}
 report.failures           // empty unless the store or the runtime failed a firing
 ```
 
+The system remembers the moment each schedule last ran, and nothing else about a tick ([§17, "What Velle records about a tick"](Reference-17-Schedule-triggers#what-velle-records-about-a-tick)). Read it from the system:
+
+```kotlin
+sys.system.latestTick("Weekly")   // the Instant Weekly last ran, or null before its first tick
+```
+
+The moment comes from the store, so it is the same after a restart and from every copy of the application over one store. A health check that asks whether `Weekly` ran this week reads it here. Over HTTP the same moment is `GET /api/ticks/Weekly` ([Serving a system](Serving-a-system)).
+
 To hear every tick and every act whose `after commit` firings were refused or failed without being the caller, register a `TickListener` on the system, `sys.system.listen(listener)`; it is told once the work is on record ([Serving a system, "Hearing a tick"](Serving-a-system#hearing-a-tick)).
 
 ## Related pages

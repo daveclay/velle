@@ -100,7 +100,6 @@ class Describe(private val model: Model) {
         )
         if (refinement) out["bases"] = model.basesOf(name).sorted()
         if (name in model.exposed) out["act"] = true
-        if (name in model.builtin) out["velle"] = true // Velle's own shape, which no act creates (Reference §17)
         // a transient field is in the act's input and not in its record (Reference §4)
         out["members"] = model.membersOf(name).values.filter { it.name != "id" && !it.transient }.map { m ->
             val d = linkedMapOf<String, Any?>("name" to m.name)

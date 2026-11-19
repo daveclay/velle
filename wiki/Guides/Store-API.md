@@ -2,7 +2,7 @@
 
 The store API is the contract between a running Velle system and whatever holds its records. Velle keeps no records of its own. Every record lives in a store the engineer owns, the runtime reads records from it when a commit or a read needs them, and the runtime hands each commit's writes back to it. The contract says nothing about how or where the records are kept. A store may be a relational database, a key-value store, a REST API the store calls, an event queue it publishes to, an email it sends, a file it writes to disk, or any combination of these behind the one interface. After this page you can connect a system to a store, write a store of your own, and tell apart the part of the contract a store must get right from the part it may use to make reads faster.
 
-The contract has two halves. The read half is a small set of questions the runtime asks: one row by its key, all rows of a shape, the rows that reference one record, and the values remembered for a refinement membership. The write half is one call per commit carrying everything the commit changed. Every decision about what a record means is made inside Velle, in memory, by the evaluator. A store never decides whether a predicate holds. It only hands rows over and writes rows back.
+The contract has three parts. The reads are a small set of questions the runtime asks: one row by its key, all rows of a shape, the rows that reference one record, and the values remembered for a refinement membership. The commit is one call per commit carrying everything the commit changed. The ticks are one moment per [schedule](Reference-17-Schedule-triggers), the moment it last ran, which the store keeps and answers. Every decision about what a record means is made inside Velle, in memory, by the evaluator. A store never decides whether a predicate holds. It only hands rows over and writes rows back.
 
 ## The situation
 
@@ -17,8 +17,8 @@ val conn: Connection = DriverManager.getConnection("jdbc:sqlite::memory:")
 val sys = BillingSystem().also { SqliteStore.attach(it.system, conn) }
 ```
 
-- `BillingSystem()` is the generated system. Until another store is connected it runs over `MemoryStore` (`compiler/src/main/kotlin/velle/MemoryStore.kt`), rows in maps with nothing durable, which is how the generated tests run. The in-memory store is a store like any other: it implements both halves of this contract, and the runtime treats it no differently.
-- `SqliteStore.attach` creates one table per shape in the connection, with a unique constraint per key the shape declares ([§21, "Keys"](Reference-21-never#keys)), then connects the system to the store for both halves of the contract. An in-memory SQLite database lives in its one connection, so the store takes the connection itself. Over a file or a server database the store takes a `DataSource` instead and borrows a connection from it for each read and each commit: `PostgresStore.attach(system, dataSource)`, as `examples/billing/output/src/test/kotlin/velle/GeneratedApiOverPostgresTest.kt` does.
+- `BillingSystem()` is the generated system. Until another store is connected it runs over `MemoryStore` (`compiler/src/main/kotlin/velle/MemoryStore.kt`), rows in maps with nothing durable, which is how the generated tests run. The in-memory store is a store like any other: it implements every part of this contract, and the runtime treats it no differently.
+- `SqliteStore.attach` creates one table per shape in the connection, with a unique constraint per key the shape declares ([§21, "Keys"](Reference-21-never#keys)), then connects the system to the store for every part of the contract. An in-memory SQLite database lives in its one connection, so the store takes the connection itself. Over a file or a server database the store takes a `DataSource` instead and borrows a connection from it for each read and each commit: `PostgresStore.attach(system, dataSource)`, as `examples/billing/output/src/test/kotlin/velle/GeneratedApiOverPostgresTest.kt` does.
 
 From then on every commit through the [Act API](Act-API) lands in the database, and every read through the [Read API](Read-API) is answered from it. The same system runs over the in-memory store for tests and over the database in production, and the spec does not change.
 
@@ -26,7 +26,7 @@ A Spring Boot application does not call `attach` itself. The starter in `apis/sp
 
 ## What the runtime asks and what it hands back
 
-A store implements two Kotlin interfaces from `compiler/src/main/kotlin/velle/Hydration.kt`. The read half:
+A store implements three Kotlin interfaces from `compiler/src/main/kotlin/velle/Hydration.kt`: the reads, the commit, and the ticks. The reads:
 
 ```kotlin
 interface StateResolver {
@@ -44,7 +44,7 @@ interface StateResolver {
 - `fetchCandidates` returns the rows of a shape that may satisfy a filter. It has a default, which returns every row, and the next section is about it.
 - `fetchCaptures` returns the values a refinement remembered for one record when the record entered it ([§13](Reference-13-Exit-triggers)), or nothing when the record is not a member now.
 
-The write half is one function:
+The commit is one function:
 
 ```kotlin
 fun interface CommitCallback {
@@ -56,11 +56,25 @@ fun interface CommitCallback {
 
 A row crosses the boundary as a `Row`: the shape, the store's key, and a map from field name to a plain Kotlin value. Text is a `String`, every number a `BigDecimal`, a `Date` a `LocalDate`, a `DateTime` an `Instant`, a `boolean` a `Boolean`, a `uuid` a `UUID`, a `duration` a `Duration`, a `time` a `LocalTime`, `bytes` a `ByteArray`. A `one` field is a `Ref.Persisted` carrying the target's shape and key, and a `many` field is a list in membership order. A field of an [extension type](Extension-types) is that type's own class, and the store's binding for the type says how the column holds it. Derived properties ([§7](Reference-07-Derived-properties)) never appear in a row. They are recomputed from the stored fields on every read.
 
-A system is connected with `system.connect(resolver, callback)`, which is what `SqliteStore.attach` calls after creating the schema. One object may implement both halves, as the SQLite store does, or two objects may split them.
+The ticks are two functions:
+
+```kotlin
+interface TickMemory {
+    fun latestTick(schedule: String): Instant?
+    fun persistTick(schedule: String, moment: Instant)
+}
+```
+
+- `latestTick` returns the moment a schedule last ran, or nothing before its first tick. The runtime calls it at the start of every tick, since a `when leaving` rule on a schedule fires for the records that left since that moment ([§17](Reference-17-Schedule-triggers)).
+- `persistTick` receives the moment a tick ran, after the tick's rules have fired. The store keeps it in place of the moment it held for that schedule. A store holds one moment per schedule and never a history.
+
+A tick is not a row. It never arrives in a commit set and no read of a shape returns it, so these two functions are everything a store does about ticks. The SQL store keeps the moments in a table of its own, `velle_tick`, with one row per schedule. A table named `Tick` in a database that an earlier version of Velle wrote to is no longer read, and is yours to drop.
+
+A system is connected with `system.connect(resolver, callback, tickMemory)`, which is what `SqliteStore.attach` calls after creating the schema. One object may implement all three, as the SQLite store does, or separate objects may split them.
 
 ## The unit of work
 
-The runtime tells the store when a piece of work begins and ends, so the store can hold a connection and a transaction for exactly that long. The resolver's `begin(kind)` opens one unit and returns it; the runtime calls it with `WorkKind.READ` at a query's first fetch and with `WorkKind.WRITE` as a commit or a tick firing opens. Every fetch, and the commit callback, runs between `begin` and the unit's `end(outcome)`.
+The runtime tells the store when a piece of work begins and ends, so the store can hold a connection and a transaction for exactly that long. The resolver's `begin(kind)` opens one unit and returns it; the runtime calls it with `WorkKind.READ` at a query's first fetch and with `WorkKind.WRITE` as a commit or a tick firing opens. Every fetch, and the commit callback, runs between `begin` and the unit's `end(outcome)`. So do the two tick functions: `latestTick` inside a read or a write unit, `persistTick` inside a write unit of its own.
 
 For a write the runtime also calls the unit's `serialize(keys)` once, before any of the envelope's work, with the queue keys the commit revolves around: the records the spec's rules will read and write, named by shape and key, valued from the act's inputs and from state read inside the unit. A key for a value two records may not share, an email or a booked slot, is the value itself, read where the spec gets it: the act's own field, a field of a record one of its references reaches, or the record a scheduled rule is run for. Where a rule computes the value instead, the key is the whole shape, and every commit touching that shape takes turns. The store makes two envelopes that share a key run one after the other, and returns when it may proceed. The runtime then reads everything the envelope evaluates after that point, so the state behind the keys is the state the envelope sees.
 
@@ -87,6 +101,7 @@ These are the parts of the contract where a mistake changes what the spec means.
 - **Keys are the store's and are never reused.** The store assigns every key and reports it back from `onCommit`. It must return the same representation it accepts, since the runtime maps keys to records by equality. A deleted row's key must never be given to a later row. A surviving record may still hold a reference to a deleted one, and that reference reads as absent only while the dead key stays dead. The SQLite store declares its keys `INTEGER PRIMARY KEY AUTOINCREMENT` for this reason.
 - **Every read inside one commit sees one moment.** All questions the runtime asks while processing one commit are answered from the same consistent state. The runtime never asks the same question twice within a commit, and it reads the commit's own in-progress writes from memory, so the store never serves mid-commit state. One database transaction opened at `begin(WRITE)` and used for every read delivers this, and the SQL store does exactly that.
 - **Commits that touch the same records take turns.** Two commits over different customers may run in parallel. Two over the same account must run one after the other, and that includes the records each one only reads to decide what to do. Snapshot isolation alone does not deliver this. The runtime hands the store the records a commit revolves around through `serialize`, valued before the commit's work runs, and the store holds a lock per record until the unit ends. The SQL store over PostgreSQL does this with advisory locks; over SQLite the database's single writer does it. The generated commit function's documentation names the same records.
+- **The moment of a tick is kept exactly, and across a restart.** `latestTick` returns the moment last handed to `persistTick` for that schedule, to every process over the store. A store that loses it makes the next tick compare against the moment the process started, and a record that left a refinement before then is never noticed by a `when leaving` rule on the schedule. `persistTick` runs inside a write unit and becomes durable when that unit ends committed.
 - **An accepted commit stays.** Once the runtime reports a commit accepted, every later read reflects it. Velle's memory of what already happened is data in the store: the row that says a deposit was applied is the only thing that stops the next sweep from applying it again.
 - **No writes around the side.** Every change to the tables behind a Velle shape enters as a commit through the generated surface. A hand-run `UPDATE`, a migration script, or another service writing the same table changes data with no rules fired and no prohibitions checked. Reading those tables with your own SQL is always safe. Your own tables beside them are none of the contract's business.
 - **Every stored extension type has a binding.** A store holding a field of an [extension type](Extension-types) needs the piece that says how its column holds the value. The SQLite store refuses to start without one.
@@ -165,26 +180,27 @@ The engineer connects it with the generated bridge, `BillingStoreResolver`, whic
 ```kotlin
 val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
 val store = TunedStore(backend, sys.system.model, conn)
-sys.system.connect(BillingStoreResolver(store, sys.system.model), backend)
+sys.system.connect(BillingStoreResolver(store, sys.system.model), backend, backend)
 ```
 
 Each typed row class, such as `InvoiceRow`, has every stored field as a Kotlin property of the field's type, and `toInvoiceRow()` and `toRow()` convert between it and the generic `Row`.
 
 ## Writing a store of your own
 
-A store implements `StateResolver` and `CommitCallback` in the vocabulary of whatever it stores into. The contract names no mechanism. A store may answer the reads from a relational database and, in the same commit, publish each created row to an event queue, send an email for each one, call a REST API, or write a file. All of that is the store's business, as long as the reads come back exact and the commit lands whole. In order of what has to be right:
+A store implements `StateResolver`, `CommitCallback`, and `TickMemory` in the vocabulary of whatever it stores into. The contract names no mechanism. A store may answer the reads from a relational database and, in the same commit, publish each created row to an event queue, send an email for each one, call a REST API, or write a file. All of that is the store's business, as long as the reads come back exact and the commit lands whole. In order of what has to be right:
 
 1. **One table, document, collection, or resource per shape, keyed by something the store assigns and never reuses.** A `one` field holds the target's key and, when the field's type is a union of shapes or a shape other shapes take with `is` ([§9](Reference-09-Composing-refinements)), the target's shape beside it, since keys are unique only within one shape. A shape other shapes take has no table and no read of its own: a field it declares is a column on each taker's table, and the runtime asks for each taker's rows.
 2. **The exact reads**: by key, all of a shape, by referencing field, and captures.
 3. **The unit of work**: `begin` opens a connection and a transaction, a read's snapshot or a write's; `serialize` takes a lock per key the runtime hands it; `end` commits or rolls back and releases the connection.
-4. **The commit**: every entry of `onCommit` written inside the unit's transaction, keys returned in creation order, the exception propagated so the unit ends as failed. Deletions apply after creations and assignments.
-5. **The transaction guarantees**: one snapshot per commit, serialized commits over the same records, durable once accepted, no writes around the side.
-6. **A binding per extension type** the spec stores, in the store's own vocabulary. A column type means something to a database and nothing to a wire protocol or a file, so a store over either would ask for an encoding instead.
+4. **The ticks**: one moment per schedule, read by `latestTick` and replaced by `persistTick` inside the write unit the runtime opened for it.
+5. **The commit**: every entry of `onCommit` written inside the unit's transaction, keys returned in creation order, the exception propagated so the unit ends as failed. Deletions apply after creations and assignments.
+6. **The transaction guarantees**: one snapshot per commit, serialized commits over the same records, durable once accepted, no writes around the side.
+7. **A binding per extension type** the spec stores, in the store's own vocabulary. A column type means something to a database and nothing to a wire protocol or a file, so a store over either would ask for an encoding instead.
 
 Only then, and only where measurement asks for it:
 
-7. **A translation of the filter** in `fetchCandidates`, as much of the tree as the database can answer, with every untranslatable part becoming "every row" by the rule above. A store that translates a call defines its own binding interface for functions in its own vocabulary, as the SQL stores do with `SqlFunctionBinding`.
-8. **Hand-tuned SQL** for named questions through the generated typed store.
+8. **A translation of the filter** in `fetchCandidates`, as much of the tree as the database can answer, with every untranslatable part becoming "every row" by the rule above. A store that translates a call defines its own binding interface for functions in its own vocabulary, as the SQL stores do with `SqlFunctionBinding`.
+9. **Hand-tuned SQL** for named questions through the generated typed store.
 
 The in-memory store keeps every guarantee with one lock for its rows and one lock per queue key, which is why a spec runs and its generated tests pass before any database exists.
 

@@ -24,11 +24,11 @@ class PostgresStore(
 ) : SqlStore(model, dataSource, PostgresDialect, bindings, lockTimeout, functionBindings, insistRendered) {
 
     companion object {
-        /** Create the schema for [system]'s model in the database behind [dataSource] and connect the system through this store, both halves of the protocol. */
+        /** Create the schema for [system]'s model in the database behind [dataSource] and connect the system through this store, every part of the protocol. */
         fun attach(system: VelleSystem, dataSource: DataSource, bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load()): PostgresStore =
             PostgresStore(system.model, dataSource, bindings).also {
                 it.createSchema()
-                system.connect(it, it)
+                system.connect(it, it, it)
             }
     }
 }

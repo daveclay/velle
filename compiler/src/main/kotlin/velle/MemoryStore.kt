@@ -1,5 +1,6 @@
 package velle
 
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -7,7 +8,7 @@ import kotlin.concurrent.withLock
 
 /**
  * The store a system runs over when no other is connected: rows in maps, keys
- * from a counter, nothing durable. It implements the same two halves of the
+ * from a counter, nothing durable. It implements the same three parts of the
  * store contract (Hydration.kt) as a database store, so the runtime has one
  * code path: every system is connected to a store from birth, and what the
  * runtime keeps between calls is this store's rows, never a working set of
@@ -24,7 +25,7 @@ import kotlin.concurrent.withLock
  * Keys are one counter across every shape, so a key names one row in the
  * whole store and is never reissued (Hydration.kt, [CommitSet.Deletion]).
  */
-class MemoryStore(private val model: Model) : StateResolver, CommitCallback {
+class MemoryStore(private val model: Model) : StateResolver, CommitCallback, TickMemory {
 
     private val rows = HashMap<String, LinkedHashMap<StoreKey, Row>>()
     private val captures = HashMap<Pair<Ref.Persisted, String>, Map<String, Any?>>()
@@ -32,6 +33,7 @@ class MemoryStore(private val model: Model) : StateResolver, CommitCallback {
 
     private val state = ReentrantReadWriteLock()
     private val keyLocks = ConcurrentHashMap<String, ReentrantLock>()
+    private val latestTickBySchedule = ConcurrentHashMap<String, Instant>()
 
     private inner class Unit(val kind: WorkKind) : UnitOfWork {
         private val held = ArrayList<ReentrantLock>()
@@ -58,6 +60,12 @@ class MemoryStore(private val model: Model) : StateResolver, CommitCallback {
     }
 
     private inline fun <T> reading(body: () -> T): T = state.readLock().withLock(body)
+
+    override fun latestTick(schedule: String): Instant? = latestTickBySchedule[schedule]
+
+    override fun persistTick(schedule: String, moment: Instant) {
+        latestTickBySchedule[schedule] = moment
+    }
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = reading { rows[shape]?.get(key) }
 

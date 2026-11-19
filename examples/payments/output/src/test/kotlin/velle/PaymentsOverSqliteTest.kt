@@ -40,7 +40,7 @@ class PaymentsApiOverTypedStoreTest : PaymentsApiTest() {
     override fun newSystem(): PaymentsSystem = PaymentsSystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = PaymentsStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(PaymentsStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(PaymentsStoreResolver(store, sys.system.model), backend, backend)
     }
 }
 

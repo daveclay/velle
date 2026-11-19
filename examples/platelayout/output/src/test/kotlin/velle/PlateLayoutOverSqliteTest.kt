@@ -34,7 +34,7 @@ class PlateLayoutFlowOverTypedStoreTest : PlateLayoutFlowTest() {
     override fun newSystem(): PlateLayoutSystem = PlateLayoutSystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = PlateLayoutStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(PlateLayoutStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(PlateLayoutStoreResolver(store, sys.system.model), backend, backend)
     }
 }
 

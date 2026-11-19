@@ -81,7 +81,8 @@ class PharmacyApplicationTest {
         assertTrue(count("LicenceReminder") >= 1, "a licence within thirty days of lapsing was reminded about")
         assertTrue(count("ControlledInventorySnapshot") >= 1, "a monthly snapshot")
         assertTrue(count("ClaimFollowUp") >= 1, "a stale claim was followed up")
-        assertTrue(count("Tick") > 100, "the schedules ticked through the weeks")
+        val latestTicks = mvc.get("/api/ticks").andExpect { status { isOk() } }.andReturn().response.contentAsString
+        assertTrue("\"schedule\"" in latestTicks && "\"at\":null" !in latestTicks, "every schedule ticked through the weeks: $latestTicks")
 
         // the fills were filled on their days, not today: the seed walked the clock
         val fills = parse(mvc.get("/api/shapes/Fill?orderBy=filledOn&size=1") { header("X-Velle-Actor", "Staff:1") }.andReturn().response.contentAsString)

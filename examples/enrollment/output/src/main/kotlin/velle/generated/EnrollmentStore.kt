@@ -5,7 +5,7 @@
 // this domain's names and types, every question the runtime can ask of storage.
 // Implement it directly (EnrollmentStoreOverGeneric defaults every method onto a
 // generic backend for selective overriding), and connect it with:
-//   system.connect(EnrollmentStoreResolver(store, system.model), callback)
+//   system.connect(EnrollmentStoreResolver(store, system.model), callback, tickMemory)
 package velle.generated
 
 import velle.*
@@ -15,13 +15,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.UUID
-
-/** One stored Tick row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
-data class TickRow(
-    val key: StoreKey,
-    val schedule: String,
-    val at: Instant,
-)
 
 /** One stored Advisor row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class AdvisorRow(
@@ -63,13 +56,11 @@ interface EnrollmentStore {
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
     // ── keyed reads ──
-    fun tick(key: StoreKey): TickRow?
     fun advisor(key: StoreKey): AdvisorRow?
     fun course(key: StoreKey): CourseRow?
     fun student(key: StoreKey): StudentRow?
 
     // ── scan floor: all rows of a shape ──
-    fun allTicks(): List<TickRow>
     fun allAdvisors(): List<AdvisorRow>
     fun allCourses(): List<CourseRow>
     fun allStudents(): List<StudentRow>
@@ -108,12 +99,10 @@ open class EnrollmentStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun advisor(key: StoreKey): AdvisorRow? = backend.fetchByKey("Advisor", key)?.toAdvisorRow()
     override fun course(key: StoreKey): CourseRow? = backend.fetchByKey("Course", key)?.toCourseRow()
     override fun student(key: StoreKey): StudentRow? = backend.fetchByKey("Student", key)?.toStudentRow()
 
-    override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allAdvisors(): List<AdvisorRow> = backend.fetchAll("Advisor").map { it.toAdvisorRow() }
     override fun allCourses(): List<CourseRow> = backend.fetchAll("Course").map { it.toCourseRow() }
     override fun allStudents(): List<StudentRow> = backend.fetchAll("Student").map { it.toStudentRow() }
@@ -144,7 +133,6 @@ class EnrollmentStoreResolver(
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Tick" -> store.tick(key)?.toRow()
         "Advisor" -> store.advisor(key)?.toRow()
         "Course" -> store.course(key)?.toRow()
         "Student" -> store.student(key)?.toRow()
@@ -152,7 +140,6 @@ class EnrollmentStoreResolver(
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
-        "Tick" -> store.allTicks().map { it.toRow() }
         "Advisor" -> store.allAdvisors().map { it.toRow() }
         "Course" -> store.allCourses().map { it.toRow() }
         "Student" -> store.allStudents().map { it.toRow() }
@@ -180,17 +167,6 @@ class EnrollmentStoreResolver(
 }
 
 // ── row mappers: the generic wire format <-> the typed rows ──
-
-fun Row.toTickRow(): TickRow = TickRow(
-    key = key,
-    schedule = fields["schedule"] as String,
-    at = fields["at"] as Instant,
-)
-
-fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
-    put("schedule", schedule)
-    put("at", at)
-})
 
 fun Row.toAdvisorRow(): AdvisorRow = AdvisorRow(
     key = key,

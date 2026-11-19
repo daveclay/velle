@@ -33,6 +33,6 @@ class PharmacyFlowOverTypedStoreTest : PharmacyFlowTest() {
     override fun newSystem(): PharmacySystem = PharmacySystem().also { sys ->
         val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
         val store = PharmacyStoreOverGeneric(backend, sys.system.model)
-        sys.system.connect(PharmacyStoreResolver(store, sys.system.model), backend)
+        sys.system.connect(PharmacyStoreResolver(store, sys.system.model), backend, backend)
     }
 }
