@@ -235,7 +235,7 @@ function renderNavigation() {
     if (act.actor) tags.push('by ' + act.actor.shape);
     return navigationLink('act/' + act.name, act.name, tags);
   }).join('');
-  if (TICKS_EXPOSED && model.schedules.length) {
+  if (model.schedules.length) {
     html += '<h2>Schedules</h2>' + model.schedules.map(schedule => navigationLink('tick/' + schedule, schedule)).join('');
   }
   document.getElementById('navigation').innerHTML = html;
@@ -549,29 +549,55 @@ function showAct(actName) {
   };
 }
 
-// ── a schedule: a button that ticks it ──
+// ── a schedule: when it last ran, and a button that ticks it when ticks are exposed ──
+
+// The sentence for the moment a schedule last ran, as GET <api>/ticks/<Schedule> answers it.
+function latestTickText(answer) {
+  if (!answer.ok) return errorText(answer);
+  if (!answer.body.at) return 'Has not run yet.';
+  return `Last ran at ${answer.body.at}.`;
+}
+
+async function showLatestTick(schedule) {
+  const answer = await callApi(`/ticks/${encodeURIComponent(schedule)}`);
+  const latestTickElement = document.getElementById('latest-tick');
+  // the developer may have left this schedule's view while the answer was on its way
+  if (!latestTickElement || latestTickElement.dataset.schedule !== schedule) return;
+  latestTickElement.textContent = latestTickText(answer);
+}
+
+function tickOutcomeText(tickAnswer) {
+  const rejections = tickAnswer.rejections || [];
+  if (!rejections.length) return `Ran at ${tickAnswer.at}, nothing rejected.`;
+  return `Ran at ${tickAnswer.at}\n${rejections.length} firing(s) rejected:\n\n` + rejections.map(rejection => rejection.message).join('\n\n');
+}
+
+async function tickAndShowOutcome(schedule) {
+  const answer = await callApi(`/ticks/${encodeURIComponent(schedule)}`, { method: 'POST' });
+  const outcomeElement = document.getElementById('outcome');
+  outcomeElement.hidden = false;
+  if (!answer.ok) {
+    outcomeElement.className = 'outcome bad';
+    outcomeElement.textContent = errorText(answer);
+    return;
+  }
+  const rejected = (answer.body.rejections || []).length > 0;
+  outcomeElement.className = 'outcome ' + (rejected ? 'bad' : 'ok');
+  outcomeElement.textContent = tickOutcomeText(answer.body);
+  showLatestTick(schedule);
+}
 
 function showTick(schedule) {
-  document.getElementById('main').innerHTML = `<h2 class="title">${escapeHtml(schedule)}</h2>
-    <p class="subtitle">Run every rule on this schedule now.</p>
+  const tickControls = TICKS_EXPOSED
+    ? `<p class="subtitle">Run every rule on this schedule now.</p>
     <button class="primary" id="tick">Tick ${escapeHtml(schedule)}</button>
-    <pre class="outcome" id="outcome" hidden></pre>`;
-
-  document.getElementById('tick').onclick = async () => {
-    const answer = await callApi(`/ticks/${encodeURIComponent(schedule)}`, { method: 'POST' });
-    const outcomeElement = document.getElementById('outcome');
-    outcomeElement.hidden = false;
-    if (!answer.ok) {
-      outcomeElement.className = 'outcome bad';
-      outcomeElement.textContent = errorText(answer);
-      return;
-    }
-    const rejections = answer.body.rejections || [];
-    outcomeElement.className = 'outcome ' + (rejections.length ? 'bad' : 'ok');
-    outcomeElement.textContent = `Ran at ${answer.body.at}` + (rejections.length
-      ? `\n${rejections.length} firing(s) rejected:\n\n` + rejections.map(rejection => rejection.message).join('\n\n')
-      : ', nothing rejected.');
-  };
+    <pre class="outcome" id="outcome" hidden></pre>`
+    : '';
+  document.getElementById('main').innerHTML = `<h2 class="title">${escapeHtml(schedule)}</h2>
+    <p class="subtitle" id="latest-tick" data-schedule="${escapeHtml(schedule)}">&nbsp;</p>
+    ${tickControls}`;
+  showLatestTick(schedule);
+  if (TICKS_EXPOSED) document.getElementById('tick').onclick = () => tickAndShowOutcome(schedule);
 }
 
 // ── start ──
