@@ -1,6 +1,6 @@
 # OQ147 — Does Velle keep every tick of a schedule, or only the latest?
 
-**Status:** opened 2026-11-19 from Dave's reading of the pharmacy app's stored records. D1 and D2 decided 2026-11-19; D3 is moot under D2. D4, D5, and D6, which D2's answer raised, await Dave. No work items yet.
+**Status:** opened 2026-11-19 from Dave's reading of the pharmacy app's stored records. D1, D2, and D4 decided 2026-11-19; D3 is moot under D2. D5 and D6 await Dave. No work items yet.
 
 **In plain terms:** every time a schedule runs, Velle writes down that it ran, and it never removes what it wrote. A schedule that runs every minute leaves about 526,000 records a year. Velle itself only ever looks at the most recent one.
 
@@ -193,7 +193,7 @@ This decision is moot under D2's option B, where the records are no longer of a 
 
 **Decided:** not asked. D2 was answered with option B on 2026-11-19, under which this section's own text says the question is moot. What remains of it is D6.
 
-### D4. The store contract gains members of its own for ticks, one moment kept per schedule
+### D4. The store contract gains members of its own for ticks, one moment kept per schedule · Decided 2026-11-19
 
 Does the store contract gain two members that are only about ticks, a read of the moment a schedule last ran and a write of the moment a tick ran, with the store keeping one moment per schedule?
 
@@ -236,7 +236,7 @@ Costs:
 - `wiki/Guides/Store-API.md`: a section for the tick members; `evaluation.md` "Ticks": "The tick's own record" rewritten; `wiki/Guides/Concurrency.md`: the row for the tick's own record names the per-schedule key.
 - `compiler/src/test/kotlin/velle/TickRecordTest.kt`: rewritten against the store's tick members; `BillingOverSqliteTest` and `AdmissionKeysTest` updated where they name `Tick`.
 
-**Decided:**
+**Decided:** yes, 2026-11-19, with Dave's names for the two members: `latestTick` for the read, where the proposal above says `previousTick`, and `persistTick` for the write, where it says `tickRan`. Dave did not speak to the interface's name, `TickMemory` in the proposal, which stays mine and open to change.
 
 ### D5. An engineer can read when a schedule last ran from the running system
 
@@ -281,4 +281,4 @@ Costs:
 
 ## 3. The build
 
-Written when D4, D5, and D6 are decided. It gathers the "Proposed changes" lists above in build order.
+Written when D5 and D6 are decided. It gathers the "Proposed changes" lists above in build order.
