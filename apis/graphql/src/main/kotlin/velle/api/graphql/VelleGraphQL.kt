@@ -1,18 +1,24 @@
 package velle.api.graphql
 
+import graphql.ExecutionResult
 import graphql.GraphQL
 import graphql.GraphQLContext
 import graphql.GraphqlErrorBuilder
 import graphql.Scalars
+import graphql.execution.AsyncExecutionStrategy
+import graphql.execution.AsyncSerialExecutionStrategy
 import graphql.execution.CoercedVariables
 import graphql.execution.DataFetcherExceptionHandler
 import graphql.execution.DataFetcherExceptionHandlerParameters
 import graphql.execution.DataFetcherExceptionHandlerResult
+import graphql.execution.ExecutionContext
+import graphql.execution.ExecutionStrategyParameters
 import graphql.language.BooleanValue
 import graphql.language.FloatValue
 import graphql.language.IntValue
 import graphql.language.StringValue
 import graphql.language.Value
+import graphql.schema.SelectedField
 import graphql.schema.Coercing
 import graphql.schema.CoercingParseLiteralException
 import graphql.schema.CoercingParseValueException
@@ -73,7 +79,29 @@ object VelleGraphQL {
 
     /** A ready engine over [schema], refusing a bad request as a GraphQL error with its kind in `extensions`. */
     fun graphQL(api: VelleApi, ticks: Boolean = false): GraphQL =
-        GraphQL.newGraphQL(schema(api, ticks)).defaultDataFetcherExceptionHandler(ExceptionHandler).build()
+        configure(GraphQL.newGraphQL(schema(api, ticks)), api).build()
+
+    /**
+     * What an engine over [schema] needs beside the schema, for a host that builds the engine itself:
+     * a bad request refused through [ExceptionHandler], and one request run in one scope of the runtime,
+     * so every read of the request is answered from one snapshot and a record it reaches twice is fetched once.
+     */
+    fun configure(engine: GraphQL.Builder, api: VelleApi): GraphQL.Builder = engine
+        .defaultDataFetcherExceptionHandler(ExceptionHandler)
+        .queryExecutionStrategy(QueriesInOneScope(api))
+        .mutationExecutionStrategy(MutationsInOneScope(api))
+
+    /** A query request's fetchers, all inside one scope. */
+    private class QueriesInOneScope(private val api: VelleApi) : AsyncExecutionStrategy(ExceptionHandler) {
+        override fun execute(context: ExecutionContext, parameters: ExecutionStrategyParameters): CompletableFuture<ExecutionResult> =
+            api.scope { super.execute(context, parameters) }
+    }
+
+    /** A mutation request's fetchers, one after another as GraphQL requires, all inside one scope. */
+    private class MutationsInOneScope(private val api: VelleApi) : AsyncSerialExecutionStrategy(ExceptionHandler) {
+        override fun execute(context: ExecutionContext, parameters: ExecutionStrategyParameters): CompletableFuture<ExecutionResult> =
+            api.scope { super.execute(context, parameters) }
+    }
 
     /** Turns an [ApiException] into a GraphQL error carrying `extensions.kind` (BAD_REQUEST, NOT_FOUND, UNAUTHORIZED) and `extensions.details`. */
     object ExceptionHandler : DataFetcherExceptionHandler {
@@ -232,13 +260,20 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
 
     private fun referencedRecord(env: DataFetchingEnvironment, member: String): Any? {
         val ref = env.getSource<Map<String, Any?>>()!![member] as? Map<*, *> ?: return null
-        return readOrAbsent { api.read(api.refTo(ref["shape"] as String, ref["key"]!!), VelleGraphQL.actorOf(env)) }
+        return readOrAbsent { api.read(api.refTo(ref["shape"] as String, ref["key"]!!), VelleGraphQL.actorOf(env), selectedMembers(env.selectionSet.immediateFields)) }
     }
+
+    /**
+     * The members and flags the query asks of a record, as [velle.api.Wire.record] names them, so
+     * nothing else of the record is evaluated. A field the schema renamed is named as the member is.
+     */
+    private fun selectedMembers(fields: List<SelectedField>): Set<String> =
+        fields.map { field -> field.name }.flatMap { name -> listOf(name, name.removeSuffix("_")) }.toSet()
 
     private fun referencedRecords(env: DataFetchingEnvironment, member: String): List<Any?> {
         val refs = (env.getSource<Map<String, Any?>>()!![member] as? List<*>).orEmpty()
             .map { ref -> (ref as Map<*, *>).let { api.refTo(it["shape"] as String, it["key"]!!) } }
-        return api.readEach(refs, VelleGraphQL.actorOf(env)).filterNotNull()
+        return api.readEach(refs, VelleGraphQL.actorOf(env), selectedMembers(env.selectionSet.immediateFields)).filterNotNull()
     }
 
     private fun union(name: String): GraphQLUnionType {
@@ -304,7 +339,7 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
                     .argument(GraphQLArgument.newArgument().name("key").type(GraphQLNonNull.nonNull(Scalars.GraphQLID)))
                     .type(GraphQLTypeReference.typeRef(r)) }
                 registry.dataFetcher(FieldCoordinates.coordinates("Query", one), DataFetcher { env ->
-                    try { api.read(r, env.getArgument<String>("key")!!, VelleGraphQL.actorOf(env)) }
+                    try { api.read(r, env.getArgument<String>("key")!!, VelleGraphQL.actorOf(env), selectedMembers(env.selectionSet.immediateFields)) }
                     catch (e: ApiException) { if (e.kind == ApiException.Kind.NOT_FOUND) null else throw e }
                 })
             }
@@ -320,7 +355,7 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
                 .argument(GraphQLArgument.newArgument().name("after").type(Scalars.GraphQLString))
                 .type(GraphQLNonNull.nonNull(page)) }
             registry.dataFetcher(FieldCoordinates.coordinates("Query", many), DataFetcher { env ->
-                api.query(r, env.getArgument("where"), env.getArgument<List<String>>("orderBy").orEmpty(), env.getArgument("first"), env.getArgument("after"), VelleGraphQL.actorOf(env))
+                api.query(r, env.getArgument("where"), env.getArgument<List<String>>("orderBy").orEmpty(), env.getArgument("first"), env.getArgument("after"), VelleGraphQL.actorOf(env), selectedMembers(env.selectionSet.getFields("items/*")))
             })
             q.field { it.name("${one}Count").description("How many $r records satisfy `where`.")
                 .argument(GraphQLArgument.newArgument().name("where").type(Scalars.GraphQLString))
@@ -399,7 +434,7 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
             b.field { it.name("record").type(GraphQLTypeReference.typeRef(act)).description("The $act record, read back after the commit.") }
             registry.dataFetcher(FieldCoordinates.coordinates("${act}Outcome", "record"), DataFetcher { env ->
                 val ref = env.getSource<Map<String, Any?>>()!!["ref"] as? Map<*, *> ?: return@DataFetcher null
-                readOrAbsent { api.read(act, ref["key"]!!, VelleGraphQL.actorOf(env)) }
+                readOrAbsent { api.read(act, ref["key"]!!, VelleGraphQL.actorOf(env), selectedMembers(env.selectionSet.immediateFields)) }
             })
         }
         return b.build()

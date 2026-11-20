@@ -98,7 +98,7 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
     // ── read ────────────────────────────────────────────────────────────────────
 
     /** The record of [root] (a shape or refinement) with store key [key], as [viewer] sees it; not found when gone, not a member, or not shown. */
-    fun read(root: String, key: Any, viewer: Ref<*>?): Map<String, Any?> {
+    fun read(root: String, key: Any, viewer: Ref<*>?, selected: Set<String>? = null): Map<String, Any?> {
         checkRoot(root)
         val base = if (root in model.shapes) root else model.baseOf(root)
             ?: throw ApiException.badRequest("'$root' is a union of several shapes; read a record by its own shape")
@@ -110,21 +110,21 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
             } catch (e: IllegalArgumentException) {
                 throw ApiException.notFound("no $root with key $k")
             }
-            if (system.currentShapeOf(id) == null || !system.exists(root, id) || !system.visibleCurrent(viewerId, id))
+            if (!system.existsFor(viewerId, root, id))
                 throw ApiException.notFound("no $root with key $k")
-            wire.record(id, root, viewerId)
+            wire.record(id, root, viewerId, selected)
         }
     }
 
     /** The record behind a reference the caller holds, as [viewer] sees it, read as its own shape. */
-    fun read(ref: Ref<*>, viewer: Ref<*>?): Map<String, Any?> = read(ref.shape, ref.key.value, viewer)
+    fun read(ref: Ref<*>, viewer: Ref<*>?, selected: Set<String>? = null): Map<String, Any?> = read(ref.shape, ref.key.value, viewer, selected)
 
     /**
      * The records behind several references, each read as its own shape, in one
      * scope: a record that is gone or not shown to [viewer] is null in its place.
      * What a transport resolving a collection field calls, instead of one read per element.
      */
-    fun readEach(refs: List<Ref<*>>, viewer: Ref<*>?): List<Map<String, Any?>?> {
+    fun readEach(refs: List<Ref<*>>, viewer: Ref<*>?, selected: Set<String>? = null): List<Map<String, Any?>?> {
         if (refs.isEmpty()) return emptyList()
         return scope {
             val viewerId = viewerId(viewer)
@@ -132,8 +132,8 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
                 if (ref.shape !in model.shapes) null
                 else {
                     val id = try { system.idOf(ref) } catch (e: IllegalArgumentException) { null }
-                    if (id == null || system.currentShapeOf(id) == null || !system.visibleCurrent(viewerId, id)) null
-                    else wire.record(id, ref.shape, viewerId)
+                    if (id == null || !system.existsFor(viewerId, ref.shape, id)) null
+                    else wire.record(id, ref.shape, viewerId, selected)
                 }
             }
         }
@@ -146,14 +146,14 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
      * order of their keys, the same on every run, [size] at a time from the
      * cursor [after]. The answer is `{"items": [...], "next": cursor-or-null}`.
      */
-    fun query(root: String, where: String?, orderBy: List<String>, size: Int?, after: String?, viewer: Ref<*>?): Map<String, Any?> {
+    fun query(root: String, where: String?, orderBy: List<String>, size: Int?, after: String?, viewer: Ref<*>?, selected: Set<String>? = null): Map<String, Any?> {
         checkRoot(root)
         val q = build(root, where, orderBy, size, after, viewer)
         return scope {
             val viewerId = viewerId(viewer)
             val result = try { system.query(q) } catch (e: QueryRefused) { throw refused(e) }
             linkedMapOf(
-                "items" to result.ids.map { wire.record(it, root, viewerId) },
+                "items" to result.ids.map { wire.record(it, root, viewerId, selected) },
                 "next" to result.next?.encode(),
             )
         }

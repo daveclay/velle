@@ -127,7 +127,7 @@ class VelleAutoConfiguration {
     @ConditionalOnMissingBean(GraphQlSource::class)
     fun velleGraphQlSource(api: VelleApi, props: VelleProperties): GraphQlSource =
         GraphQlSource.builder(VelleGraphQL.schema(api, props.api.ticks))
-            .configureGraphQl { it.defaultDataFetcherExceptionHandler(VelleGraphQL.ExceptionHandler) }
+            .configureGraphQl { engine -> VelleGraphQL.configure(engine, api) }
             .build()
 
     /** Carries the request's actor into the GraphQL context, where every fetcher reads it. */

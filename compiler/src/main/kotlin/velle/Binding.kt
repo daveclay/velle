@@ -98,7 +98,7 @@ abstract class ViewerReadSurface(protected val system: VelleSystem, protected va
     /** The record behind [ref], or null when it is gone, not a [shape], or not shown to this viewer. */
     protected fun <T> shown(shape: String, ref: Ref<*>, materialize: (Long) -> T): T? = system.scope {
         val id = system.idOf(ref)
-        if (system.visibleCurrent(system.idOf(viewer), id) && system.exists(shape, id)) materialize(id) else null
+        if (system.existsFor(system.idOf(viewer), shape, id)) materialize(id) else null
     }
 
     protected fun <F : Fields, T> query(shape: String, fields: F, materialize: (Long) -> T): TypedQuery<F, T> =

@@ -48,7 +48,7 @@ In a query, a text member offers `lowercase`, `uppercase`, `trim`, and `length` 
 
 ## What a read remembers
 
-A read goes to the store. The generated system keeps no copy of your records between calls: every `read(...)`, `read.<shape>(key)`, and query starts with nothing in hand, fetches the rows it needs from the store, and forgets them when the next read starts. Knowing this tells you what a read returns after your own code, or your database, has changed a row behind Velle's back.
+A read goes to the store. The generated system keeps no copy of your records between calls: the first `read(...)`, `read.<shape>(key)`, or query of a `scope { }` starts with nothing in hand and fetches the rows it needs from the store. The reads after it in the same scope reuse those rows, and everything is forgotten when the scope ends or a commit is made in it. Knowing this tells you what a read returns after your own code, or your database, has changed a row behind Velle's back.
 
 A controller commits an act and then reads the record back to answer the request. The database has a trigger that fills in a column on that row when the commit lands. The engineer wants to know whether the read shows the trigger's value or the value Velle computed. From `examples/billing/billing.velle`, inside one `api.scope { }` ([Serving a system](Serving-a-system)):
 
@@ -56,15 +56,15 @@ A controller commits an act and then reads the record back to answer the request
 val result = billing.commit(NewSignUp("Ada", "ada@x.com"))
 val ref = (result as Commit.Accepted).ref
 val customer = billing.read(ref)              // fetched from the store now, trigger's value included
-val same = billing.read(ref)                  // fetched again: nothing was kept from the line above
-val invoices = billing.read.invoices.orderBy { due.ascending }.list()   // one fetch per invoice, one per distinct customer they reach
+val same = billing.read(ref)                  // not fetched again: the scope still holds the row
+val invoices = billing.read.invoices.orderBy { due.ascending }.list()   // one fetch per invoice, one per distinct customer not already read
 ```
 
 - `billing.commit` runs the transaction and writes the commit to the store. What it built in memory is dropped as it returns.
 - `billing.read(ref)` fetches the row from the store, so a column your trigger changed reads as the trigger left it, provided the spec declares that column as a stored field. A column the spec does not name is invisible to Velle.
-- The second `read(ref)` fetches the row again. Two reads in a row cost two fetches; the generated system does not remember the first.
-- Inside one read, rows are fetched once. A query over many invoices reads each customer those invoices reach one time, however many invoices share it. The memory lasts for that one read and no longer.
-- Over a store that gives snapshots, every read inside one `api.scope { }` or one `scope { }` on the system sees the same state, even though each fetches afresh; a commit from elsewhere shows up on the next scope ([Store API](Store-API), "The unit of work").
+- The second `read(ref)` does not go to the store. Every read inside one `api.scope { }`, or one `scope { }` on the system, is answered from one snapshot, and a row is fetched once in it. A query over many invoices reads each customer those invoices reach one time, however many invoices share it.
+- A commit made in the scope ends that snapshot: the first read after it fetches from the store again. A commit from elsewhere shows up on the next scope ([Store API](Store-API), "The unit of work").
+- A read made outside any scope is a snapshot of its own, so two such reads are two fetches.
 
 A row your trigger changes is a write Velle did not make. If the spec reads that field, the rules and prohibitions of the commit evaluated the value before the trigger ran, and the next commit sees a change no act caused ([Store API](Store-API), "What a store must do"). Keep such columns out of the spec, or put the calculation in a derived property ([§7](Reference-07-Derived-properties)) where the spec can see it.
 

@@ -261,6 +261,10 @@ class VelleSystem(
         var unit: UnitOfWork? = null
         var txn: Txn? = null
         var depth = 0
+        /** How many [scope] calls are open on this thread. */
+        var scopesOpen = 0
+        /** A read entry has opened this scope's snapshot, and nothing has emptied the working set since. */
+        var scopeSnapshotOpen = false
         var clock: Instant? = null
         var evalTime: Instant? = null
     }
@@ -374,7 +378,15 @@ class VelleSystem(
      * and its rows go as the call returns, while the handles it minted stay for
      * the scope that follows.
      */
-    fun <T> scope(body: () -> T): T = entered(drop = true, body)
+    fun <T> scope(body: () -> T): T {
+        val session = s
+        session.scopesOpen++
+        try {
+            return entered(drop = true, body)
+        } finally {
+            session.scopesOpen--
+        }
+    }
 
     /**
      * One read on the runtime's own surface. Inside a scope or an envelope it is
@@ -420,6 +432,7 @@ class VelleSystem(
      *  included: they are a cache over the store's capture channel
      *  (Hydration.kt, CommitSet), hydrated on demand like rows. */
     private fun beginSnapshot() {
+        s.scopeSnapshotOpen = false
         instances.clear()
         byShape.clear()
         fetchedAll.clear()
@@ -2263,11 +2276,19 @@ class VelleSystem(
     /**
      * A read is a read-only snapshot (evaluation.md): outside a transaction it
      * starts from a fresh snapshot of settled state, so a query never reads an
-     * envelope's working set left over from the last commit. Inside one (a
-     * query issued from engineer code while a commit runs) it reads the
-     * envelope's state, like any read there.
+     * envelope's working set left over from the last commit. Every read of one
+     * [scope] is answered from one snapshot: the scope's first read opens it, and
+     * the reads after it keep the rows already fetched until a commit, a seed, or
+     * a tick empties them. Inside a transaction (a query issued from engineer
+     * code while a commit runs) a read reads the envelope's state, like any read
+     * there.
      */
-    internal fun openReadSnapshot() { if (txn == null) beginSnapshot() }
+    internal fun openReadSnapshot() {
+        val session = s
+        if (session.txn != null || session.scopeSnapshotOpen) return
+        beginSnapshot()
+        session.scopeSnapshotOpen = session.scopesOpen > 0
+    }
 
     /** The hidden tie-break (R2): the store key when the row has one, else the session handle. */
     @Suppress("UNCHECKED_CAST")
@@ -2302,10 +2323,24 @@ class VelleSystem(
      */
     fun exists(root: String, id: Long): Boolean = reading {
         openReadSnapshot()
-        val inst = instance(id) ?: return false
+        isCurrentInstanceOf(root, id)
+    }
+
+    /**
+     * A viewer's fetch by identity as one read entry: true when [id] is a current instance of
+     * [root] and is returned to [viewer]. One entry, so the row is fetched once; asking
+     * outside a scope, asking [exists] and [visibleCurrent] in turn is two snapshots and fetches it twice.
+     */
+    fun existsFor(viewer: Long?, root: String, id: Long): Boolean = reading {
+        openReadSnapshot()
+        isCurrentInstanceOf(root, id) && visibleTo(viewer, id)
+    }
+
+    private fun isCurrentInstanceOf(root: String, id: Long): Boolean {
+        val current = instance(id) ?: return false
         if (id in pendingDeleted) return false
-        when {
-            root in model.shapes -> inst.shape == root
+        return when {
+            root in model.shapes -> current.shape == root
             root in model.refinements -> evaluator.memberOfRefExpr(id, RefName(root))
             else -> throw IllegalArgumentException("unknown shape or refinement '$root'")
         }

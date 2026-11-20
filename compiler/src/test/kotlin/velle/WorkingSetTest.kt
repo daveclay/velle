@@ -5,13 +5,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 /**
- * How long the runtime remembers a row it read: the working set lives from one
- * read entry (`openReadSnapshot`: `query`, `count`, `sum`, `exists`,
- * `currentShapeOf`, `visibleCurrent`) to the next on one thread, never past
- * the end of a commit, a seed, or a tick, and never past a read made outside
- * any scope, which is a unit of work of its own. Observed from the store's side through a `MemoryStore` that counts
- * the by-key fetches and lets the test write a row beside the runtime, as a
- * database trigger or the engineer's own SQL would.
+ * How long the runtime remembers a row it read. Inside a `scope { }` the working set
+ * lives from the scope's first read entry (`openReadSnapshot`: `query`, `count`, `sum`,
+ * `exists`, `existsFor`, `currentShapeOf`, `visibleCurrent`) until a commit, a seed, or
+ * a tick made in that scope, or the scope's end: every read of the scope is answered
+ * from one snapshot and a row is fetched once. A read made outside any scope is a unit
+ * of work of its own and holds nothing when it returns. Observed from the store's side
+ * through a `MemoryStore` that counts the by-key fetches and lets the test write a row
+ * beside the runtime, as a database trigger or the engineer's own SQL would.
  */
 class WorkingSetTest {
 
@@ -76,17 +77,32 @@ class WorkingSetTest {
     }
 
     @Test
-    fun `within one read entry a row is fetched once, and the next entry fetches it again`() {
+    fun `a scope's reads are one snapshot, so the next read in the scope does not fetch the row again`() {
         val (sys, store) = system()
         val ada = sys.scope { accepted(sys.commit("Customer", mapOf("name" to "Ada"))) }
         sys.scope {
             val id = sys.idOf(ada)
-            sys.currentShapeOf(id) // the entry: clears the working set, opens the read unit
+            sys.currentShapeOf(id) // the scope's first read entry: opens the snapshot
             sys.get(id, "name"); sys.get(id, "tier"); sys.get(id, "name")
-            assertEquals(1, store.fetchedByKey.size, "three field reads in one entry share one fetch")
-            sys.currentShapeOf(id) // the next entry
+            assertEquals(1, store.fetchedByKey.size, "three field reads share one fetch")
+            sys.currentShapeOf(id) // the next read entry in the same scope
+            assertEquals("Ada", sys.get(id, "name"))
+            assertEquals(1, store.fetchedByKey.size, "the second entry reused the row the first had fetched")
+        }
+        assertEquals("Ada", sys.scope { sys.readName(ada) })
+        assertEquals(2, store.fetchedByKey.size, "the next scope is a new snapshot and fetches the row for itself")
+    }
+
+    @Test
+    fun `a viewer's fetch by identity is one read entry, so the row is fetched once`() {
+        val (sys, store) = system()
+        val ada = sys.scope { accepted(sys.commit("Customer", mapOf("name" to "Ada"))) }
+        sys.scope {
+            val id = sys.idOf(ada)
+            assertEquals(true, sys.existsFor(viewer = null, root = "Customer", id = id))
             sys.get(id, "name")
-            assertEquals(2, store.fetchedByKey.size, "a new entry starts from an empty working set and fetches the row again")
+            assertEquals(1, store.fetchedByKey.size, "the check and the field read after it share one fetch")
+            assertEquals(false, sys.existsFor(viewer = null, root = "Promote", id = id), "a Customer is no Promote")
         }
     }
 

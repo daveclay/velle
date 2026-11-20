@@ -112,6 +112,11 @@ class VelleApiTest {
         assertEquals("0.00", ada["largestPayment"])
         assertEquals("Customer", ada["shape"])
 
+        // a caller that names the members it wants gets the record's shape, its key, and those, and nothing else is evaluated
+        assertEquals(setOf("shape", "key", "name"), api.read("Customer", ada["key"]!!, null, selected = setOf("name")).keys)
+        assertEquals(setOf("shape", "key"), api.read("Customer", ada["key"]!!, null, selected = emptySet()).keys)
+        assertEquals(setOf("shape", "key", "name"), api.query("Customer", null, emptyList(), null, null, null, selected = setOf("name")).items().single().keys)
+
         // a reference supplied as a bare key, a date as text, Money as text and as a number
         accepted(api.commit("BillCustomer", mapOf("customer" to ada["key"], "due" to "2026-04-01"), null))
         val invoice = api.query("Invoice", null, listOf("due"), null, null, null).items().single()

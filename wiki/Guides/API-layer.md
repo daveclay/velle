@@ -49,7 +49,7 @@ The operations, each a public function on `VelleApi`:
 | `commit(act, body, actor)` | checks the act exists and, when it is declared `by`, that an actor came; turns the body into the runtime's input through `Wire.input`; commits; answers accepted with the reference, or refused with the reason and the rejection as data |
 | `read(root, key, viewer)` | finds the record by the store's key; not found when gone, not a member of the refinement, or not visible to the viewer; answers `Wire.record` |
 | `readEach(refs, viewer)` | the records behind several references in one scope, null in place of any the viewer may not see; what a GraphQL collection field calls |
-| `query(root, where, orderBy, size, after, viewer)` | parses `where` with `Parser.parsePredicate`, the order with `-` for descending, the page and its cursor; runs `system.query`; answers the items and the next cursor through `Cursor.encode` |
+| `query(root, where, orderBy, size, after, viewer)` | parses `where` with `Parser.parsePredicate`, the order with `-` for descending, the page and its cursor; runs `system.query`; answers the items and the next cursor through `Cursor.encode`. `query`, `read`, and `readEach` take an optional `selected`, the names of the members and `is<Refinement>` flags the caller wants; a record then holds its shape, its key, and those, and no other member is evaluated |
 | `count(root, where, viewer)` | the same query, counted |
 | `tick(schedule)` | `system.tick`; answers the time and the rejections |
 | `latestTick(schedule)`, `latestTicks()` | `system.latestTick`; answers the schedule and the moment it last ran, null before its first tick, for one schedule or for every schedule the description names. A tick is not a record ([§17](Reference-17-Schedule-triggers)), so no viewer is asked for |
@@ -72,6 +72,7 @@ object VelleGraphQL {
     const val ACTOR = "velle.actor"
     fun schema(api: VelleApi, ticks: Boolean = false): GraphQLSchema = SchemaBuilder(api, ticks).build()
     fun graphQL(api: VelleApi, ticks: Boolean = false): GraphQL = ...
+    fun configure(engine: GraphQL.Builder, api: VelleApi): GraphQL.Builder = ...
     object ExceptionHandler : DataFetcherExceptionHandler { ... }
     fun actorOf(env: DataFetchingEnvironment): Ref<*>? = env.graphQlContext.get<Ref<*>?>(ACTOR)
 }
@@ -79,11 +80,12 @@ object VelleGraphQL {
 
 - `schema` builds the whole schema in one pass of `SchemaBuilder`, a private class in the same file, over the model. It needs the `VelleApi` and not just the model because every data fetcher it registers calls one of the operations above. In the builder, `objectType`, `interfaceType`, and `union` make the output types, `queryType` and `mutationType` the roots, and the input types are `actInput` for an act, `nestedInput` for a part or a value supplied by value, `byValueInput` for a field named in `with`, `partsField` and `mixedPartInput` for a part list, and `refInput` for a reference; `toWire` and `mapToWire` turn a coerced input back into the map `Wire.input` reads.
 - `ACTOR` is the key under which a transport places the request's actor in the GraphQL context. Every fetcher reads it with `actorOf` and passes it as the actor or the viewer. The schema itself never sees an HTTP request.
+- `configure` gives an engine what it needs beside the schema: the `ExceptionHandler`, and execution strategies that run one request's fetchers inside one `api.scope { }`. Every read of a request is then answered from one snapshot ([evaluation](evaluation), "A read is a read-only snapshot"), and a record the request reaches twice, once in a list and once by following a reference to it, is fetched from the store once. `graphQL` is `configure` over `schema`. A host that builds its own engine calls `configure`, as `apis/spring` does.
 - `ExceptionHandler` turns an `ApiException` into a GraphQL error whose `extensions.kind` is the exception's kind, so a client can tell a bad request from an unauthorized one.
 
 What the builder makes, per model element:
 
-- For each readable shape or single-base refinement, an object type with a field per member and per flag. A reference member's fetcher calls `api.readEach` for the records behind it, so one query walks the graph. A cross-base refinement, a static union or a union of refinements ([§9](Reference-09-Composing-refinements)), becomes a GraphQL union of its shapes whose type resolver answers from the record's `shape`. A shape other shapes take with `is` becomes a GraphQL interface carrying the fields it declares, which each taker's object type implements.
+- For each readable shape or single-base refinement, an object type with a field per member and per flag. A reference member's fetcher calls `api.read`, and a collection's `api.readEach`, for the records behind it, so one query walks the graph. Every record fetcher hands the API the fields the query selects, so a member the query does not ask for is not evaluated: a table that shows a referenced record's key reads nothing else of that record. A cross-base refinement, a static union or a union of refinements ([§9](Reference-09-Composing-refinements)), becomes a GraphQL union of its shapes whose type resolver answers from the record's `shape`. A shape other shapes take with `is` becomes a GraphQL interface carrying the fields it declares, which each taker's object type implements.
 - For each readable root, three query fields: one by key, one paged query taking `where`, `orderBy`, `first`, and `after`, and one count. Their fetchers are `api.read`, `api.query`, and `api.count`.
 - For each exposed act, one mutation whose input type mirrors the act's fields as `Describe` lists them: a scalar by type, a plain single-shape reference as `ID`, a reference that may name a union operand or a sibling as `RefInput`, a field named in `with` as an input holding `existing` or exactly one `new<Operand>`, a part collection as a list of nested input types, and a part collection whose parts are of several shapes that take one shape with `is` as a list of inputs each holding exactly one `new<Taker>`, since GraphQL has no input unions. The fetcher turns the input back into the JSON form `Wire.input` reads, with `asNew` becoming `"@new"`, and calls `api.commit`. The outcome type carries the acceptance, the reference, the record read back, or the refusal.
 - One scalar per wire scalar that is not a GraphQL builtin, and one per extension type in the model under its own name. Each scalar validates through `api.wire.scalar` and passes the wire text through unchanged, so the value a client sends is the text REST would take.
@@ -144,7 +146,7 @@ fun velleActorFilter(resolver: ActorResolver): OncePerRequestFilter = object : O
 @Bean @ConditionalOnClass(GraphQlSource::class) @ConditionalOnMissingBean(GraphQlSource::class)
 fun velleGraphQlSource(api: VelleApi, props: VelleProperties): GraphQlSource =
     GraphQlSource.builder(VelleGraphQL.schema(api, props.api.ticks))
-        .configureGraphQl { it.defaultDataFetcherExceptionHandler(VelleGraphQL.ExceptionHandler) }
+        .configureGraphQl { engine -> VelleGraphQL.configure(engine, api) }
         .build()
 
 @Bean @ConditionalOnClass(WebGraphQlInterceptor::class)

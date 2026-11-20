@@ -73,18 +73,26 @@ class Wire(private val system: VelleSystem) {
      * The record [id] read as [scope] (its shape, or a refinement it is a member of)
      * for [viewer]: every member of the scope, a field the viewer may not see as null,
      * and on a shape one `is<Refinement>` flag per refinement of it.
+     *
+     * With [selected], the record holds its shape, its key, and only the members and flags
+     * named there, and nothing else is evaluated: a caller that shows two members of a record
+     * does not pay for a sum over its parts. Null selects everything.
      */
-    fun record(id: Long, scope: String, viewer: Long?): Map<String, Any?> {
+    fun record(id: Long, scope: String, viewer: Long?, selected: Set<String>? = null): Map<String, Any?> {
         val shape = system.shapeOf(id)
         val hidden = system.hiddenFields(viewer, id, scope)
         val out = linkedMapOf<String, Any?>()
         out["shape"] = shape
         out["key"] = system.refFor(id).key.value
-        for (m in model.membersOf(scope).values) {
-            if (m.name == "id" || m.transient) continue // a transient field is never in the record (Reference §4)
-            out[m.name] = if (m.name in hidden) null else out(memberValue(id, scope, m.name, m.owner), m.type)
+        for (member in model.membersOf(scope).values) {
+            if (member.name == "id" || member.transient) continue // a transient field is never in the record (Reference §4)
+            if (selected != null && member.name !in selected) continue
+            out[member.name] = if (member.name in hidden) null else out(memberValue(id, scope, member.name, member.owner), member.type)
         }
-        if (scope in model.shapes) for (r in flagsOf(shape)) out["is$r"] = system.isMember(id, r)
+        if (scope in model.shapes) for (refinement in flagsOf(shape)) {
+            if (selected != null && "is$refinement" !in selected) continue
+            out["is$refinement"] = system.isMember(id, refinement)
+        }
         return out
     }
 
