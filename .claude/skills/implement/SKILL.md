@@ -68,13 +68,10 @@ Directory rules load on their own when files are touched:
 
 ## 3. Running the suite
 
-`./gradlew test --continue -q --max-workers=2`. There is a baseline of
-failures in `compiler` from fixture drift; the number was 16 on 2026-10-24
-(BillingFixtureTest 2, DiagramGenTest 1, QueryCompilerTest 1,
-RuleGraphGenTest 2, RuntimeTest 9, StateFlowGenTest 1). Compare names, not
-counts: parse `**/build/test-results/test/*.xml` for `<testcase>` elements
-holding a `<failure>` and diff against the baseline. Anything outside it is
-new and yours.
+`./gradlew test --continue -q --max-workers=2`. The suite has no expected
+failures: every failing test is a failure to fix or to report. Name them by
+parsing `**/build/test-results/test/*.xml` for `<testcase>` elements holding
+a `<failure>`.
 
 PostgreSQL tests (`stores/postgres`, the billing, enrollment, and gallery
 flows) run through Testcontainers, need Docker, and are skipped without it.
@@ -114,8 +111,7 @@ See the `oq` skill §5.
 ## 5. Before reporting done
 
 - Every module regenerated and its golden test green.
-- The suite run, with the failures outside the baseline named in the
-  report, or none.
+- The suite run, with every failure named in the report, or none.
 - Every wiki page touched read once as a Velle author who has never seen
   the language (`wiki/CLAUDE.md`).
 - No tag of the settled OQ left anywhere but the settled table and test or

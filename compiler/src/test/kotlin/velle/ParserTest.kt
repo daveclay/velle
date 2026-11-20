@@ -21,9 +21,9 @@ class BillingFixtureTest {
 
     @Test
     fun `declaration inventory`() {
-        assertEquals(14, all<ShapeDecl>().size)
+        assertEquals(17, all<ShapeDecl>().size)
         assertEquals(8, all<RefinementDecl>().size)
-        assertEquals(8, all<RuleDecl>().size)
+        assertEquals(11, all<RuleDecl>().size)
         assertEquals(3, all<NeverDecl>().size)
     }
 
@@ -132,7 +132,7 @@ class BillingFixtureTest {
     @Test
     fun `nevers are inline refinements over act shapes`() {
         val targets = all<NeverDecl>().map { assertIs<RefName>(it.target) }
-        assertEquals(setOf("LineItem", "Payment"), targets.map { it.name }.toSet())
+        assertEquals(setOf("LineItem", "SubmitPayment"), targets.map { it.name }.toSet())
         assertTrue(targets.all { it.where != null })
     }
 }

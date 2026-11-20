@@ -6,6 +6,7 @@ import java.time.Instant
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
@@ -103,10 +104,26 @@ class QueryCompilerTest {
 
     @Test
     fun `never target over a decimal column still compiles - encoding is the renderer's concern`() {
-        val m = billing()
-        val target = m.nevers.single { m.baseOfExpr(it.target) == "Payment" }.target
-        val f = compiler(m).filterFor(target)
-        assertEquals(QF.Cmp("amount", "<=", QConst.QNum(BigDecimal(0))), f)
+        val model = inline(
+            """
+            act Deposit {
+                amount: decimal
+            }
+            never (Deposit where amount <= 0)
+            """.trimIndent()
+        )
+        val filter = compiler(model).filterFor(model.nevers.single().target)
+        assertEquals(QF.Cmp("amount", "<=", QConst.QNum(BigDecimal(0))), filter)
+    }
+
+    @Test
+    fun `never target over an extension type's column compares against the type's own reading of the constant`() {
+        val model = billing()
+        val target = model.nevers.single { model.baseOfExpr(it.target) == "SubmitPayment" }.target
+        val comparison = assertIs<QF.Cmp>(compiler(model).filterFor(target))
+        assertEquals("amount", comparison.field)
+        assertEquals("<=", comparison.op)
+        assertEquals(velle.finance.Money.ZERO, assertIs<QConst.QExt>(comparison.value).value)
     }
 
     @Test

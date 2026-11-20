@@ -1,8 +1,8 @@
 package velle
 
 import java.io.File
-import java.math.BigDecimal
 import java.time.LocalDate
+import velle.finance.Money
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -25,13 +25,24 @@ class RuntimeTest {
         return assertIs<CommitResult.Accepted>(r, "commit of $shape refused: $r").id
     }
 
-    private fun num(v: Any?): BigDecimal = assertIs<BigDecimal>(v)
+    /** The one record of [shape] that [commitAct] left behind: billing's customers, invoices, and payments are each made by a rule, never committed. */
+    private fun VelleSystem.recordMadeBy(shape: String, commitAct: () -> Unit): Long {
+        val recordsBefore = instancesOf(shape).toSet()
+        commitAct()
+        return instancesOf(shape).single { record -> record !in recordsBefore }
+    }
+
+    private fun VelleSystem.signUp(name: String, email: String): Long =
+        recordMadeBy("Customer") { mustCommit("SignUp", "name" to name, "email" to email) }
+
+    private fun VelleSystem.billCustomer(customer: Long, due: LocalDate): Long =
+        recordMadeBy("Invoice") { mustCommit("BillCustomer", "customer" to customer, "due" to due) }
 
     @Test
     fun `an act's consequence lands in the same transaction`() {
         val sys = newSystem()
         sys.scope {
-            val cust = sys.mustCommit("Customer", "name" to "Ada", "email" to "old@x.com")
+            val cust = sys.signUp("Ada", "old@x.com")
             sys.mustCommit("CorrectEmail", "customer" to cust, "corrected" to "new@x.com")
             assertEquals("new@x.com", sys.get(cust, "email"))
         }
@@ -41,14 +52,14 @@ class RuntimeTest {
     fun `derived properties recompute from current data`() {
         val sys = newSystem()
         sys.scope {
-            val cust = sys.mustCommit("Customer", "name" to "Ada", "email" to "a@x.com")
-            val inv = sys.mustCommit("Invoice", "customer" to cust, "due" to LocalDate.of(2026, 2, 1))
-            assertEquals(0, num(sys.get(inv, "total")).compareTo(BigDecimal.ZERO))
+            val cust = sys.signUp("Ada", "a@x.com")
+            val inv = sys.billCustomer(cust, LocalDate.of(2026, 2, 1))
+            assertEquals(Money.ZERO, sys.get(inv, "total"))
 
             sys.mustCommit("LineItem", "invoice" to inv, "description" to "widgets",
-                "price" to BigDecimal("100"), "quantity" to 2)
-            assertEquals(0, num(sys.get(inv, "total")).compareTo(BigDecimal("200")))
-            assertEquals(0, num(sys.get(inv, "balance")).compareTo(BigDecimal("200")))
+                "price" to Money.of("100"), "quantity" to 2)
+            assertEquals(Money.of("200"), sys.get(inv, "total"))
+            assertEquals(Money.of("200"), sys.get(inv, "balance"))
             assertEquals("open", sys.get(inv, "status"))
             assertNotNull(sys.get(inv, "reference")) // initially randomUUID
             assertNotNull(sys.get(inv, "issuedOn"))  // timestamp on create
@@ -59,11 +70,11 @@ class RuntimeTest {
     fun `door-checked prohibitions refuse the act and commit nothing`() {
         val sys = newSystem()
         sys.scope {
-            val cust = sys.mustCommit("Customer", "name" to "Ada", "email" to "a@x.com")
-            val inv = sys.mustCommit("Invoice", "customer" to cust, "due" to LocalDate.of(2026, 2, 1))
-            val refused = sys.commit("Payment", mapOf("invoice" to inv, "amount" to BigDecimal.ZERO))
+            val cust = sys.signUp("Ada", "a@x.com")
+            val inv = sys.billCustomer(cust, LocalDate.of(2026, 2, 1))
+            val refused = sys.commit("SubmitPayment", mapOf("invoice" to inv, "amount" to Money.ZERO))
             val r = assertIs<CommitResult.Refused>(refused)
-            assertTrue("Payment" in r.reason, r.reason)
+            assertTrue("SubmitPayment" in r.reason, r.reason)
             assertEquals(emptyList(), sys.instancesOf("Payment"))
         }
     }
@@ -72,25 +83,25 @@ class RuntimeTest {
     fun `payment cascade - receipt in-transaction, email after, fold updated`() {
         val sys = newSystem()
         sys.scope {
-            val cust = sys.mustCommit("Customer", "name" to "Ada", "email" to "a@x.com")
-            val inv = sys.mustCommit("Invoice", "customer" to cust, "due" to LocalDate.of(2026, 2, 1))
+            val cust = sys.signUp("Ada", "a@x.com")
+            val inv = sys.billCustomer(cust, LocalDate.of(2026, 2, 1))
             sys.mustCommit("LineItem", "invoice" to inv, "description" to "widgets",
-                "price" to BigDecimal("100"), "quantity" to 2)
+                "price" to Money.of("100"), "quantity" to 2)
 
-            val payment = assertIs<CommitResult.Accepted>(sys.commit("Payment", mapOf("invoice" to inv, "amount" to BigDecimal("200"))))
+            val payment = assertIs<CommitResult.Accepted>(sys.commit("SubmitPayment", mapOf("invoice" to inv, "amount" to Money.of("200"))))
 
             assertTrue(sys.isMember(inv, "PaidInvoice"))
             assertEquals("paid", sys.get(inv, "status"))
             assertEquals(1, sys.instancesOf("Receipt").size)       // entry rule, same transaction
             assertEquals(1, sys.instancesOf("ReceiptEmail").size)  // after-commit queue drained
-            assertEquals(0, num(sys.get(cust, "largestPayment")).compareTo(BigDecimal("200")))
+            assertEquals(Money.of("200"), sys.get(cust, "largestPayment"))
             assertEquals(emptyList(), payment.afterCommitFailures) // the after-commit firing landed
             assertEquals(emptyList(), payment.afterCommitRejections)
 
             // a second, smaller payment: no new PaidInvoice entry, fold keeps the max
-            sys.mustCommit("Payment", "invoice" to inv, "amount" to BigDecimal("50"))
+            sys.mustCommit("SubmitPayment", "invoice" to inv, "amount" to Money.of("50"))
             assertEquals(1, sys.instancesOf("Receipt").size)
-            assertEquals(0, num(sys.get(cust, "largestPayment")).compareTo(BigDecimal("200")))
+            assertEquals(Money.of("200"), sys.get(cust, "largestPayment"))
         }
     }
 
@@ -98,10 +109,10 @@ class RuntimeTest {
     fun `the weekly sweep reminds, its evidence rate-limits, and time reopens it`() {
         val sys = newSystem()
         sys.scope {
-            val cust = sys.mustCommit("Customer", "name" to "Ada", "email" to "a@x.com")
-            val inv = sys.mustCommit("Invoice", "customer" to cust, "due" to LocalDate.of(2025, 12, 1))
+            val cust = sys.signUp("Ada", "a@x.com")
+            val inv = sys.billCustomer(cust, LocalDate.of(2025, 12, 1))
             sys.mustCommit("LineItem", "invoice" to inv, "description" to "widgets",
-                "price" to BigDecimal("100"), "quantity" to 1)
+                "price" to Money.of("100"), "quantity" to 1)
 
             sys.tick("Weekly")
             assertEquals(1, sys.instancesOf("Reminder").size)
@@ -121,10 +132,10 @@ class RuntimeTest {
     fun `archived invoices are not actionable for the sweep`() {
         val sys = newSystem()
         sys.scope {
-            val cust = sys.mustCommit("Customer", "name" to "Ada", "email" to "a@x.com")
-            val inv = sys.mustCommit("Invoice", "customer" to cust, "due" to LocalDate.of(2025, 12, 1))
+            val cust = sys.signUp("Ada", "a@x.com")
+            val inv = sys.billCustomer(cust, LocalDate.of(2025, 12, 1))
             sys.mustCommit("LineItem", "invoice" to inv, "description" to "widgets",
-                "price" to BigDecimal("50"), "quantity" to 1)
+                "price" to Money.of("50"), "quantity" to 1)
             sys.mustCommit("ArchiveRequest", "invoice" to inv)
 
             sys.tick("Weekly")
@@ -136,9 +147,9 @@ class RuntimeTest {
     fun `issuance freezes the due date through the rejection partition`() {
         val sys = newSystem()
         sys.scope {
-            val cust = sys.mustCommit("Customer", "name" to "Ada", "email" to "a@x.com")
-            val issued = sys.mustCommit("Invoice", "customer" to cust, "due" to LocalDate.of(2026, 2, 1))
-            val draft = sys.mustCommit("Invoice", "customer" to cust, "due" to LocalDate.of(2026, 2, 1))
+            val cust = sys.signUp("Ada", "a@x.com")
+            val issued = sys.billCustomer(cust, LocalDate.of(2026, 2, 1))
+            val draft = sys.billCustomer(cust, LocalDate.of(2026, 2, 1))
             sys.mustCommit("Issuance", "invoice" to issued)
             assertTrue(sys.isMember(issued, "IssuedInvoice"))
 
@@ -158,8 +169,8 @@ class RuntimeTest {
     fun `captures fix entry-moment data and the exit rule is their last reader`() {
         val sys = newSystem()
         sys.scope {
-            val cust = sys.mustCommit("Customer", "name" to "Ada", "email" to "a@x.com")
-            val inv = sys.mustCommit("Invoice", "customer" to cust, "due" to LocalDate.of(2026, 2, 1))
+            val cust = sys.signUp("Ada", "a@x.com")
+            val inv = sys.billCustomer(cust, LocalDate.of(2026, 2, 1))
 
             val entryDay = LocalDate.of(2026, 1, 1) // system start date
             sys.mustCommit("ArchiveRequest", "invoice" to inv)
@@ -190,7 +201,7 @@ class RuntimeTest {
     fun `on-update timestamps advance when a stored field is written`() {
         val sys = newSystem()
         sys.scope {
-            val cust = sys.mustCommit("Customer", "name" to "Ada", "email" to "a@x.com")
+            val cust = sys.signUp("Ada", "a@x.com")
             // Review-style on-update isn't in billing; verify create-timestamps stay fixed instead
             val created = sys.get(cust, "signedUpOn")
             sys.advanceDays(1)

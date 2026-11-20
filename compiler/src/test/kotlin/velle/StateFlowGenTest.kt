@@ -16,10 +16,9 @@ class StateFlowGenTest {
     @Test
     fun `disjoint payment memberships share one axis with directed and hedged edges`() {
         assertTrue("**PaidInvoice / OverdueInvoice**" in invoice, "complementary balance comparisons should group")
-        // never (Payment where amount <= 0) pins the fold's sign: a Payment only moves toward Paid
-        assertTrue("otherwise --> PaidInvoice : commitPayment" in invoice)
-        assertTrue("OverdueInvoice --> otherwise : commitPayment" in invoice)
-        assertFalse("PaidInvoice --> otherwise : commitPayment" in invoice, "a Payment can never un-pay")
+        // a LineItem with a positive quantity and no negative price only raises the balance: one way into Overdue
+        assertTrue("otherwise --> OverdueInvoice : commitLineItem" in invoice)
+        assertFalse("OverdueInvoice --> otherwise : commitLineItem" in invoice, "a LineItem can never clear an overdue balance")
         // a LineItem moves total and balance in opposite senses — no proof, hedge both ways
         assertTrue("otherwise --> PaidInvoice : commitLineItem — may flip" in invoice)
         assertTrue("PaidInvoice --> otherwise : commitLineItem — may flip" in invoice)
@@ -27,6 +26,18 @@ class StateFlowGenTest {
         assertTrue("otherwise --> OverdueInvoice : time passes" in invoice)
         // a rule's write with no provable direction hedges too
         assertTrue("ApplyDueChange writes Invoice.due — may flip" in invoice)
+    }
+
+    /** OQ158: a payment only moves an invoice toward paid. That was proven while
+     *  `never (Payment where amount <= 0)` stood on the record. The refusal now stands on the
+     *  transient SubmitPayment and the proof does not follow the amount through rule
+     *  RecordPayment, so every payment edge is hedged both ways. This pins what is drawn today. */
+    @Test
+    fun `a payment is drawn as able to un-pay an invoice`() {
+        assertTrue("otherwise --> PaidInvoice : RecordPayment inserts Payment — may flip" in invoice)
+        assertTrue("PaidInvoice --> otherwise : RecordPayment inserts Payment — may flip" in invoice)
+        assertTrue("otherwise --> OverdueInvoice : RecordPayment inserts Payment — may flip" in invoice)
+        assertTrue("OverdueInvoice --> otherwise : RecordPayment inserts Payment — may flip" in invoice)
     }
 
     @Test

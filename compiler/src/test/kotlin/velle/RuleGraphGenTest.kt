@@ -12,17 +12,27 @@ class RuleGraphGenTest {
 
     @Test
     fun `boundary nevers become accept-refuse diamonds`() {
-        assertTrue("commitPayment --> qPayment{\"amount <= 0 ?\"}" in graph)
-        assertTrue("qPayment -->|\"violated — refused, nothing begins\"| refPayment([\"refusal\"])" in graph)
-        assertTrue("qPayment -->|\"passes\"| envPayment[\"the Payment envelope\"]" in graph)
         // LineItem's two boundary nevers fold into one question
-        assertTrue("qLineItem{\"quantity <= 0 or price < 0 ?\"}" in graph)
+        assertTrue("commitLineItem --> qLineItem{\"quantity <= 0 or price < 0 ?\"}" in graph)
+        assertTrue("qLineItem -->|\"violated — refused, nothing begins\"| refLineItem([\"refusal\"])" in graph)
+        assertTrue("qLineItem -->|\"passes\"| envLineItem[\"the LineItem envelope\"]" in graph)
+    }
+
+    /** OQ157: the graph draws a transient act only through its partitions, so SubmitPayment,
+     *  which has a refusal and a rule of its own and no partition, is drawn doing nothing.
+     *  This pins what is drawn today; the fix turns each assertion around. */
+    @Test
+    fun `a transient act with no partition is drawn with no refusal and no rule`() {
+        assertFalse("qSubmitPayment" in graph, "never (SubmitPayment where amount <= 0) has no diamond")
+        assertFalse("commitSubmitPayment --" in graph, "rule RecordPayment when SubmitPayment has no edge")
+        assertFalse("commitSignUp --" in graph, "rule AdmitCustomer when SignUp has no edge")
+        assertFalse("commitBillCustomer --" in graph, "rule OpenInvoice when BillCustomer has no edge")
     }
 
     @Test
     fun `guarded fan-out carries conditions without claiming exclusivity`() {
-        assertTrue("envPayment --> TrackLargestPayment" in graph, "unconditional firing has no guard label")
-        assertTrue("envPayment -->|\"when PaidInvoice\"| SendReceipt" in graph)
+        assertTrue("RecordPayment -->|\"inserts Payment\"| TrackLargestPayment" in graph, "unconditional firing has no guard label")
+        assertTrue("RecordPayment -->|\"inserts Payment — when PaidInvoice\"| SendReceipt" in graph)
     }
 
     @Test
@@ -34,14 +44,21 @@ class RuleGraphGenTest {
 
     @Test
     fun `direction proofs prune impossible edges`() {
-        // a payment only lowers balance: it can quiet RemindOverdue, never arm it
-        assertFalse("envPayment -.->" in graph, "no Payment edge crosses into the tick sweep")
         // an ArchiveRequest moves toward membership: it cannot cause the leaving rule
         assertFalse("commitArchiveRequest -->" in graph)
         assertFalse("commitArchiveRequest -.->" in graph)
         assertTrue("commitUnarchiveRequest -->|\"when leaving ArchivedInvoice\"| NoteUnarchival" in graph)
-        // a new Invoice is provably in no refinement: its act is inert
-        assertFalse("commitInvoice --" in graph)
+        // a new Invoice is provably in no refinement: the rule that opens one wakes nothing
+        assertFalse("OpenInvoice --" in graph)
+    }
+
+    /** OQ158: a payment only lowers a balance, so it can quiet RemindOverdue and never arm it.
+     *  That was proven while `never (Payment where amount <= 0)` stood on the record. The refusal
+     *  now stands on the transient SubmitPayment and the proof does not follow the amount through
+     *  rule RecordPayment, so the arming edge is drawn. This pins what is drawn today. */
+    @Test
+    fun `a payment is drawn arming the overdue sweep`() {
+        assertTrue("RecordPayment -.->|\"inserts Payment — swept every Weekly — when ActionableOverdue …\"| RemindOverdue" in graph)
     }
 
     @Test

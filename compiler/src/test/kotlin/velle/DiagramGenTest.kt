@@ -20,8 +20,10 @@ class DiagramGenTest {
 
     @Test
     fun `payment cascade shows in-envelope firings, the boundary, and the backstop`() {
-        val payment = sequences.substringAfter("### commitPayment").substringBefore("\n### ")
-        // in-envelope: the fold and the receipt share the payment's transaction
+        val payment = sequences.substringAfter("### commitSubmitPayment").substringBefore("\n### ")
+        // in-envelope: the payment record, the fold, and the receipt share the submission's transaction
+        assertTrue("RecordPayment" in payment)
+        assertTrue("insert Payment" in payment)
         assertTrue("TrackLargestPayment" in payment)
         assertTrue("SendReceipt" in payment)
         assertTrue("insert Receipt" in payment)
@@ -30,7 +32,7 @@ class DiagramGenTest {
         assertTrue("insert ReceiptEmail" in payment)
         assertTrue("backstop — every Hourly tick" in payment)
         // the boundary never on payments guards this envelope
-        assertTrue("never Payment where amount <= 0" in payment)
+        assertTrue("never SubmitPayment where amount <= 0" in payment)
     }
 
     @Test
