@@ -94,26 +94,25 @@ class PharmacyStatementsTest {
         // a drug's stock, price, and prescriptions are members nobody asked for
         val unasked = statements.filter { statement -> listOf("StockLot", "PriceChange", "Prescription", "Fill", "PurchaseOrder").any { table -> "\"$table\"" in statement } }
         assertEquals(emptyList(), unasked.distinct())
-        // one request is one snapshot: the list, the actor, and each distinct drug's row and ingredients
-        // once. Following a reference to a drug the list already read sends nothing.
-        val drugsNamed = items.flatMap { item -> listOf((item as Map<*, *>)["drugA"], item["drugB"]) }.distinct().size
-        assertTrue(statements.size <= 2 + drugsNamed * 2, "${statements.size} statements for ${items.size} interactions naming $drugsNamed drugs: ${statements.groupingBy { statement -> statement }.eachCount()}")
+        // one request is one snapshot: the list and the actor, then the drugs the interactions name as
+        // drugA in one statement and their ingredients in another, and the same two for drugB
+        assertTrue(statements.size <= 6, "${statements.size} statements for ${items.size} interactions: ${statements.groupingBy { statement -> statement }.eachCount()}")
     }
 
     /**
-     * What a whole record costs today, pinned so a change to it is seen: every member of every
-     * drug is evaluated one record at a time, and each related record read on the way is a
-     * statement of its own, so the same few statements are sent over and over.
+     * What a list of whole records costs: every member of every drug is evaluated, and the records
+     * each member reads are fetched for all the drugs together, so the count is one statement per
+     * kind of related record and does not grow with the number of drugs.
      */
     @Test
-    fun `a list of whole drugs sends a statement for every related record it reads`() {
+    fun `a list of whole drugs sends one statement per kind of related record, not one per drug`() {
         lateinit var body: String
         val statements = statementsOf {
             body = mvc.get("/api/shapes/Drug") { header("X-Velle-Actor", "Staff:1") }.andExpect { status { isOk() } }.andReturn().response.contentAsString
         }
         val drugs = (parse(body)["items"] as List<*>).size
         assertEquals(Roster.drugs.size, drugs)
-        assertTrue(statements.size > drugs * 5, "${statements.size} statements for $drugs drugs")
-        assertTrue(statements.distinct().size <= 20, "the statements differ only in the key they ask for: ${statements.distinct()}")
+        assertTrue(drugs > 20, "enough drugs that a statement per drug would show")
+        assertTrue(statements.size <= 20, "${statements.size} statements for $drugs drugs: ${statements.map { statement -> statement.take(60) }}")
     }
 }

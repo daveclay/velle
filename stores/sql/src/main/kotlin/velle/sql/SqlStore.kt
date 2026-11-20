@@ -472,6 +472,14 @@ open class SqlStore(
     override fun fetchByKey(shape: String, key: StoreKey): Row? =
         select(shape, """WHERE id = ?""") { it.setLong(1, keyLong(key)) }.singleOrNull()
 
+    /** Several rows by key: one statement for the rows, however many keys. */
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> =
+        keys.distinct().chunked(keysPerStatement).flatMap { some ->
+            select(shape, "WHERE id IN (${placeholders(some.size)})") { statement ->
+                some.forEachIndexed { index, key -> statement.setLong(index + 1, keyLong(key)) }
+            }
+        }
+
     /** The scan read, in key order: creation order, since keys are never reused. */
     override fun fetchAll(shape: String): List<Row> = select(shape, "")
 
@@ -486,6 +494,33 @@ open class SqlStore(
         else
             select(shape, """WHERE "$field" = ?""") { it.setLong(1, keyLong(target.key)) }
     }
+
+    /** The join read for several targets in one statement; a union-typed field matches each target shape with its own keys. */
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> {
+        val union = columnsOf(shape).first { it.name == field }.union
+        return targets.distinct().chunked(keysPerStatement).flatMap { some ->
+            if (union) referencingAnyOfUnion(shape, field, some)
+            else select(shape, """WHERE "$field" IN (${placeholders(some.size)})""") { statement ->
+                some.forEachIndexed { index, target -> statement.setLong(index + 1, keyLong(target.key)) }
+            }
+        }
+    }
+
+    private fun referencingAnyOfUnion(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> {
+        val keysByShape = targets.groupBy({ target -> target.shape }, { target -> keyLong(target.key) }).toList()
+        val where = keysByShape.joinToString(" OR ") { (_, keys) -> """("${shapeColumn(field)}" = ? AND "$field" IN (${placeholders(keys.size)}))""" }
+        val arguments: List<Any> = keysByShape.flatMap { (targetShape, keys) -> listOf<Any>(targetShape) + keys }
+        return select(shape, "WHERE $where") { statement ->
+            arguments.forEachIndexed { index, argument ->
+                if (argument is String) statement.setString(index + 1, argument) else statement.setLong(index + 1, argument as Long)
+            }
+        }
+    }
+
+    /** How many keys one statement names: under every dialect's limit on bound parameters. */
+    private val keysPerStatement = 500
+
+    private fun placeholders(count: Int): String = List(count) { "?" }.joinToString(", ")
 
     override fun fetchCaptures(instance: Ref.Persisted, refinement: String): Map<String, Any?>? {
         val cs = model.captureSchemas.find { it.refinement == refinement } ?: return null
@@ -523,9 +558,10 @@ open class SqlStore(
         if (where == "TRUE") return fetchAll(shape)
         return onConnection { conn -> conn.prepareStatement("""SELECT t0.* FROM "$shape" t0 WHERE $where ORDER BY t0.id""").use { ps ->
             r.binds.forEachIndexed { i, b -> ps.setObject(i + 1, b) }
-            ps.executeQuery().use { rs ->
+            val rows = ps.executeQuery().use { rs ->
                 buildList { while (rs.next()) add(readRow(shape, rs)) }
             }
+            withCollections(conn, shape, rows, everyRow = false)
         } }
     }
 
@@ -733,15 +769,29 @@ open class SqlStore(
         }
     }
 
+    /** The rows of [shape] under [where], and each collection field of all of them in one statement more. */
     private fun select(shape: String, where: String, bind: (PreparedStatement) -> Unit = {}): List<Row> = onConnection { conn ->
-        conn.prepareStatement("""SELECT * FROM "$shape" $where ORDER BY id""").use { ps ->
+        val rows = conn.prepareStatement("""SELECT * FROM "$shape" $where ORDER BY id""").use { ps ->
             bind(ps)
             ps.executeQuery().use { rs ->
                 buildList { while (rs.next()) add(readRow(shape, rs)) }
             }
         }
+        withCollections(conn, shape, rows, everyRow = where.isEmpty())
     }
 
+    /** [rows] with their collection fields, each field read once for all of them; [everyRow] when the rows are the whole table. */
+    private fun withCollections(conn: Connection, shape: String, rows: List<Row>, everyRow: Boolean): List<Row> {
+        val collections = collectionsOf(shape)
+        if (rows.isEmpty() || collections.isEmpty()) return rows
+        val owners = if (everyRow) null else rows.map { row -> keyLong(row.key) }
+        val membersByField = collections.associate { coll -> coll.name to readCollections(conn, shape, coll, owners) }
+        return rows.map { row ->
+            row.copy(fields = row.fields + membersByField.mapValues { (_, membersByOwner) -> membersByOwner[keyLong(row.key)].orEmpty() })
+        }
+    }
+
+    /** The row's own columns; its collection fields are read for all rows of one statement together ([withCollections]). */
     private fun readRow(shape: String, rs: ResultSet): Row {
         val key = rs.getLong("id")
         val fields = buildMap {
@@ -749,7 +799,6 @@ open class SqlStore(
                 if (rs.getObject(c.name) == null) continue
                 put(c.name, readColumn(c.type, c.name, rs, c.union))
             }
-            for (coll in collectionsOf(shape)) put(coll.name, readCollection(shape, coll, key))
         }
         return Row(shape, StoreKey(key), fields)
     }
@@ -765,23 +814,31 @@ open class SqlStore(
         else -> scalarColumn(t).read(rs, name)
     }
 
-    /** A collection's members in membership order (the junction's `pos` column). */
-    private fun readCollection(shape: String, coll: Coll, owner: Long): List<Any> = onConnection { conn ->
-        conn.prepareStatement("""SELECT * FROM "${junctionTable(shape, coll.name)}" WHERE owner = ? ORDER BY pos""").use { ps ->
-            ps.setLong(1, owner)
-            ps.executeQuery().use { rs ->
-                buildList {
-                    while (rs.next()) add(
-                        if (coll.elem is VType.Inst) Ref.Persisted(
-                            if (coll.union) rs.getString("target_shape") else coll.elem.shape,
-                            StoreKey(keyStorage.read(rs, "target") as Long),
-                        )
-                        else readColumn(coll.elem, "value", rs, union = false)
-                    )
+    /**
+     * A collection field's members for [owners], or for every owner when null (a scan), each
+     * owner's in membership order (the junction's `pos` column): one statement per [keysPerStatement] owners.
+     */
+    private fun readCollections(conn: Connection, shape: String, coll: Coll, owners: List<Long>?): Map<Long, List<Any>> {
+        val table = junctionTable(shape, coll.name)
+        val membersByOwner = LinkedHashMap<Long, MutableList<Any>>()
+        fun read(where: String, some: List<Long>) =
+            conn.prepareStatement("""SELECT * FROM "$table" $where ORDER BY owner, pos""").use { ps ->
+                some.forEachIndexed { index, owner -> ps.setLong(index + 1, owner) }
+                ps.executeQuery().use { rs ->
+                    while (rs.next()) membersByOwner.getOrPut(rs.getLong("owner")) { mutableListOf() }.add(readMember(coll, rs))
                 }
             }
-        }
+        if (owners == null) read("", emptyList())
+        else owners.chunked(keysPerStatement).forEach { some -> read("WHERE owner IN (${placeholders(some.size)})", some) }
+        return membersByOwner
     }
+
+    private fun readMember(coll: Coll, rs: ResultSet): Any =
+        if (coll.elem is VType.Inst) Ref.Persisted(
+            if (coll.union) rs.getString("target_shape") else coll.elem.shape,
+            StoreKey(keyStorage.read(rs, "target") as Long),
+        )
+        else readColumn(coll.elem, "value", rs, union = false)
 
     // ── the commit callback: the transaction's mutation set, atomically ──────
 

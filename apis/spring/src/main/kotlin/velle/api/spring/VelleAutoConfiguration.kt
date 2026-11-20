@@ -43,6 +43,7 @@ import velle.VelleSystem
 import velle.api.VelleApi
 import velle.api.graphql.VelleGraphQL
 import velle.postgres.PostgresStore
+import velle.FetchTogether
 import velle.sql.SqlStore
 import velle.sqlite.SqliteStore
 import java.time.Clock
@@ -95,6 +96,7 @@ class VelleAutoConfiguration {
         val declared = store.ifAvailable
         if (declared == null && props.store.enabled) dataSource.ifAvailable { ds -> attach(system, ds, props.store.createSchema) }
         else if (declared == null) log.info("Velle runs in memory: velle.store.enabled is false")
+        system.fetchTogether = FetchTogether(props.store.fetchLimit, props.store.fetchLimitByShape)
         return VelleApi(system, clock.getIfAvailable { Clock.systemUTC() })
     }
 

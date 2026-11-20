@@ -46,6 +46,13 @@ class VelleProperties {
         var enabled: Boolean = true
         /** Create the model's tables at startup when they do not exist yet. */
         var createSchema: Boolean = true
+        /**
+         * How many records one fetch asks the store for when the runtime fetches for the records
+         * that arrived together (`velle.FetchTogether`). One fetches a record at a time.
+         */
+        var fetchLimit: Int = 500
+        /** The same limit for one shape's records, by shape name, where it should differ. */
+        var fetchLimitByShape: Map<String, Int> = emptyMap()
     }
 
     class Ticker {

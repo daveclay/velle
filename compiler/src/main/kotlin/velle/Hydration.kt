@@ -74,6 +74,22 @@ sealed interface RowRef {
 }
 
 /**
+ * How many records one fetch asks for. When the runtime needs the related records of one
+ * record, it asks at the same time for every record that arrived from the store with it
+ * ([StateResolver.fetchByKeys], [StateResolver.fetchReferencingAny]), up to this many; the
+ * rest are fetched when one of them is needed. [limit] holds for every shape, and
+ * [limitByShape] replaces it for the shape whose records are being fetched. A limit of one
+ * fetches one record at a time. The limit never changes what a read answers.
+ */
+data class FetchTogether(val limit: Int = 500, val limitByShape: Map<String, Int> = emptyMap()) {
+    init {
+        require(limit >= 1 && limitByShape.values.all { shapeLimit -> shapeLimit >= 1 }) { "a fetch limit is at least 1" }
+    }
+
+    fun limitFor(shape: String): Int = limitByShape[shape] ?: limit
+}
+
+/**
  * One instance as the engineer's storage holds it: stored fields and timestamp
  * fields only (derived properties recompute; refinement membership is the
  * predicate; captures travel on their own channel). Scalar values are plain
@@ -119,6 +135,14 @@ interface StateResolver {
     fun fetchByKey(shape: String, key: StoreKey): Row?
 
     /**
+     * Several rows by key at once: the rows of [shape] whose key is among [keys], in any
+     * order, a key with no row left out. An exact read like [fetchByKey], which the default
+     * calls once per key; a store that can answer in one trip overrides it.
+     */
+    fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> =
+        keys.mapNotNull { key -> fetchByKey(shape, key) }
+
+    /**
      * The scan read: all rows of a shape (refinement candidates, tick sweeps,
      * `never` checks). The order rows come back in is the order the query
      * surface reports them (`VelleSystem.instancesOf`), ahead of anything the
@@ -129,6 +153,14 @@ interface StateResolver {
 
     /** The join read: rows of [shape] whose to-one [field] references [target]. */
     fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row>
+
+    /**
+     * The join read for several targets at once: the rows of [shape] whose to-one [field]
+     * references any of [targets], each row once. An exact read like [fetchReferencing],
+     * which the default calls once per target; a store that can answer in one trip overrides it.
+     */
+    fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> =
+        targets.distinct().flatMap { target -> fetchReferencing(shape, field, target) }
 
     /**
      * The filtered scan read: rows of [shape] that may satisfy [filter] — the

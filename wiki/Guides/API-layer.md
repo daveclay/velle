@@ -120,6 +120,7 @@ fun velleApi(system: VelleSystem, props: VelleProperties, dataSource: ObjectProv
              store: ObjectProvider<SqlStore>, clock: ObjectProvider<Clock>): VelleApi {
     val declared = store.ifAvailable
     if (declared == null && props.store.enabled) dataSource.ifAvailable { ds -> attach(system, ds, props.store.createSchema) }
+    system.fetchTogether = FetchTogether(props.store.fetchLimit, props.store.fetchLimitByShape)
     return VelleApi(system, clock.getIfAvailable { Clock.systemUTC() })
 }
 ```
@@ -185,7 +186,7 @@ class Ticker {
 
 `VelleRestController` in `apis/spring/src/main/kotlin/velle/api/spring/VelleRestController.kt` is thin on purpose. Each endpoint is one line that reads the actor from the request attribute and calls the matching `VelleApi` function; `commit` sets 200 or 422 from the outcome's `accepted`; one `@ExceptionHandler` maps `ApiException.Kind` onto 400, 404, and 401. Nothing about any spec is in it.
 
-`VelleProperties` in `apis/spring/src/main/kotlin/velle/api/spring/VelleProperties.kt` binds `velle.*`: `api.path` and `api.ticks`, `store.enabled` and `store.create-schema`, `ticker.enabled`, `schedules` as a map from schedule name to a cron expression, written alone or as `cron` and `zone`, `console.enabled` and `console.path`.
+`VelleProperties` in `apis/spring/src/main/kotlin/velle/api/spring/VelleProperties.kt` binds `velle.*`: `api.path` and `api.ticks`, `store.enabled` and `store.create-schema`, `store.fetch-limit` and `store.fetch-limit-by-shape` (how many records one fetch asks for, [Store API](Store-API), "What the runtime fetches together"), `ticker.enabled`, `schedules` as a map from schedule name to a cron expression, written alone or as `cron` and `zone`, `console.enabled` and `console.path`.
 
 `VelleConsole` in `apis/spring/src/main/kotlin/velle/api/spring/VelleConsole.kt` serves one resource, `velle/console.html`, at `velle.console.path`, after substituting the API path, the GraphQL path, and the ticks flag into three placeholders. The resource is not in the starter's sources. It is built from the React and TypeScript project in `console/` by the Gradle project `:console`, whose `buildConsole` task runs Vite and writes one HTML file with the script and the styles inside it; the starter's `processResources` copies that file in. Gradle downloads the Node it runs. On load the page fetches `GET /api` and keeps the description; every view is rendered from it: the shape list and act list from `shapes` and `acts`, a table's columns from a shape's members, a form's inputs from an act's fields and their kinds, the schedule pages from `schedules`. Every other call is a GraphQL request built from the description by `console/src/graphql/documents.ts`: a page of a shape, a count, a record by key, an act's mutation, the `ticks` query and the `tick` mutation. One optional header the developer typed, kept in the browser's local storage, is added to each request. The views in `console/src/components/` take the description and a client as React properties and import nothing from `console/src/frame/`, which holds the sidebar, the routes, and the request header.
 

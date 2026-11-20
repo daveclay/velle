@@ -57,7 +57,7 @@ val result = billing.commit(NewSignUp("Ada", "ada@x.com"))
 val ref = (result as Commit.Accepted).ref
 val customer = billing.read(ref)              // fetched from the store now, trigger's value included
 val same = billing.read(ref)                  // not fetched again: the scope still holds the row
-val invoices = billing.read.invoices.orderBy { due.ascending }.list()   // one fetch per invoice, one per distinct customer not already read
+val invoices = billing.read.invoices.orderBy { due.ascending }.list()   // one fetch for the invoices, one more for the customers they reach
 ```
 
 - `billing.commit` runs the transaction and writes the commit to the store. What it built in memory is dropped as it returns.

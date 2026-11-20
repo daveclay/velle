@@ -500,6 +500,82 @@ abstract class SqlStoreConformance {
         }
     }
 
+    // ── several records in one statement ─────────────────────────────────────
+
+    /** Notes the text of every statement the store prepares. */
+    protected class Statements(private val inner: DataSource) : DataSource by inner {
+        val sent = mutableListOf<String>()
+        override fun getConnection(): Connection {
+            val connection = inner.connection
+            return java.lang.reflect.Proxy.newProxyInstance(Connection::class.java.classLoader, arrayOf(Connection::class.java)) { _, method, arguments ->
+                if (method.name == "prepareStatement") sent += arguments[0] as String
+                try { if (arguments == null) method.invoke(connection) else method.invoke(connection, *arguments) } catch (thrown: java.lang.reflect.InvocationTargetException) { throw thrown.targetException }
+            } as Connection
+        }
+    }
+
+    @Test
+    fun `several keys are read in one statement, and each collection field of the rows in one more`() {
+        val statements = Statements(ds())
+        val a = attach(statements)
+        val ada = a.customer("Ada", tags = listOf("vip", "early"))
+        a.customer("Bo", tags = listOf("late"))
+        val cy = a.customer("Cy", notes = listOf("called", "called"))
+        statements.sent.clear()
+        val rows = a.store.fetchByKeys("Customer", listOf(cy.key, ada.key, StoreKey(999L)))
+        assertEquals(setOf("Ada", "Cy"), rows.map { row -> row.fields["name"] }.toSet(), "a key with no row is left out")
+        val byName = rows.associateBy { row -> row.fields["name"] }
+        assertEquals(listOf("vip", "early"), byName.getValue("Ada").fields["tags"], "each row has its own members, in their order")
+        assertEquals(emptyList<Any>(), byName.getValue("Ada").fields["notes"])
+        assertEquals(listOf("called", "called"), byName.getValue("Cy").fields["notes"])
+        assertEquals(3, statements.sent.size, "the rows, their tags, their notes: ${statements.sent}")
+        assertEquals(emptyList(), a.store.fetchByKeys("Customer", emptyList()))
+
+        statements.sent.clear()
+        val everyone = a.store.fetchAll("Customer")
+        assertEquals(listOf(listOf("vip", "early"), listOf("late"), emptyList()), everyone.map { row -> row.fields["tags"] })
+        assertEquals(3, statements.sent.size, "a scan reads each collection field once, not once per row: ${statements.sent}")
+
+        // a narrowed scan carries the collection fields too, read once for the rows it returned
+        a.customer("Di", tier = 3, tags = listOf("gold", "vip"))
+        a.customer("Ed", tier = 4, tags = listOf("gold"))
+        statements.sent.clear()
+        a.sys.scope {
+            val gold = a.sys.instancesOf("Gold")
+            assertEquals(listOf(listOf("gold", "vip"), listOf("gold")), gold.map { customer -> a.sys.get(customer, "tags") })
+        }
+        assertEquals(3, statements.sent.size, statements.sent.toString())
+    }
+
+    @Test
+    fun `the records pointing at any of several records are read in one statement, by key and shape for a union`() {
+        val statements = Statements(ds())
+        val a = attach(statements)
+        val ada = a.customer("Ada")
+        val bo = a.customer("Bo")
+        val cy = a.customer("Cy")
+        accepted(a.sys.commit("Order", mapOf("customer" to a.id(ada), "total" to BigDecimal("1.00"))))
+        accepted(a.sys.commit("Order", mapOf("customer" to a.id(bo), "total" to BigDecimal("2.00"))))
+        accepted(a.sys.commit("Order", mapOf("customer" to a.id(ada), "total" to BigDecimal("3.00"))))
+        statements.sent.clear()
+        val orders = a.store.fetchReferencingAny("Order", "customer", listOf(ada, cy))
+        assertEquals(listOf(BigDecimal("1.00"), BigDecimal("3.00")), orders.map { row -> row.fields["total"] })
+        assertEquals(1, statements.sent.size, statements.sent.toString())
+        assertEquals(emptyList(), a.store.fetchReferencingAny("Order", "customer", emptyList()))
+
+        val post = accepted(a.sys.commit("Post", mapOf("title" to "Hello")))!!
+        val photo = accepted(a.sys.commit("Photo", mapOf("caption" to "Sunset")))!!
+        val otherPost = accepted(a.sys.commit("Post", mapOf("title" to "Again")))!!
+        // Post#1 and Photo#1 share a key
+        accepted(a.sys.commit("Comment", mapOf("target" to a.id(post), "body" to "first")))
+        accepted(a.sys.commit("Comment", mapOf("target" to a.id(photo), "body" to "nice")))
+        accepted(a.sys.commit("Comment", mapOf("target" to a.id(otherPost), "body" to "again")))
+        statements.sent.clear()
+        val onPhotoAndOther = a.store.fetchReferencingAny("Comment", "target", listOf(photo, otherPost))
+        assertEquals(listOf("nice", "again"), onPhotoAndOther.map { row -> row.fields["body"] }, "the comment on Post#1 is not one on Photo#1")
+        assertEquals(1, statements.sent.size, statements.sent.toString())
+    }
+
     // ── captures across processes, re-entry, retraction ──────────────────────
 
     @Test

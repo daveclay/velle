@@ -31,8 +31,11 @@ A store implements three Kotlin interfaces from `compiler/src/main/kotlin/velle/
 ```kotlin
 interface StateResolver {
     fun fetchByKey(shape: String, key: StoreKey): Row?
+    fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = keys.mapNotNull { key -> fetchByKey(shape, key) }
     fun fetchAll(shape: String): List<Row>
     fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row>
+    fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> =
+        targets.distinct().flatMap { target -> fetchReferencing(shape, field, target) }
     fun fetchCandidates(shape: String, filter: QF): List<Row> = fetchAll(shape)
     fun fetchCaptures(instance: Ref.Persisted, refinement: String): Map<String, Any?>?
 }
@@ -41,6 +44,7 @@ interface StateResolver {
 - `fetchByKey` returns one row by the key the store gave it, or nothing when no such row exists. The runtime calls it to follow a `one` field ([§6](Reference-06-Relationships)) and to answer `read.invoice(key)`.
 - `fetchAll` returns every row of a shape. The runtime calls it to find the members of a refinement ([§8](Reference-08-Refinements)), to run a sweep ([§16](Reference-16-Sweeps)), and to check a `never` ([§21](Reference-21-never)).
 - `fetchReferencing` returns the rows of a shape whose `one` field points at a given record. The runtime calls it to read an inferred inverse, such as a customer's invoices.
+- `fetchByKeys` and `fetchReferencingAny` are the same two reads for several records at once: the rows with any of several keys, and the rows whose `one` field points at any of several records. Each has a default that asks the one-record read once per record, so a store that has no faster way leaves them alone. A store that can answer in one trip overrides them: the SQL store sends one statement, and reads each `many` field of the rows it returns in one statement more.
 - `fetchCandidates` returns the rows of a shape that may satisfy a filter. It has a default, which returns every row, and the next section is about it.
 - `fetchCaptures` returns the values a refinement remembered for one record when the record entered it ([§13](Reference-13-Exit-triggers)), or nothing when the record is not a member now.
 
@@ -91,11 +95,31 @@ What the SQL store in `stores/sql/` does with each call:
 
 A store with nothing to open leaves `begin` at its default, which returns a unit that does nothing. A store over a message queue or a file decides what a read's snapshot and a write's turn mean for it.
 
+## What the runtime fetches together
+
+The runtime evaluates one record at a time, and a member of a record often needs other records: `onHand` on a `Drug` in `examples/pharmacy/pharmacy.velle` needs the drug's stock lots. Asked one drug at a time, a list of 35 drugs is 35 trips to the store for stock lots alone. So the runtime asks for more than the one record in front of it:
+
+- When it needs the records pointing at one record, it asks at the same time for the records pointing at every record that came back from the store in the same fetch, through `fetchReferencingAny`. The stock lots of all 35 drugs arrive in one trip.
+- When it follows a reference, it asks at the same time for every record the rows of that fetch reference in the same field, through `fetchByKeys`.
+- The rows that come back are a group in their turn, so the fills of every stock lot arrive in one trip as well.
+
+One fetch asks for at most 500 records. Past that, the fetch takes the record that is needed and the next 499 of its group, and the rest are fetched when one of them is needed. The owner of a system changes the limit, for every shape or for the shape whose records are being fetched:
+
+```kotlin
+system.fetchTogether = FetchTogether(limit = 500, limitByShape = mapOf("StockLot" to 2000))
+```
+
+- `limit` holds for every shape. `limitByShape` replaces it for one shape's records. A limit of 1 fetches one record at a time.
+- With `apis/spring` the same two are `velle.store.fetch-limit` and `velle.store.fetch-limit-by-shape.StockLot`.
+- The limit never changes what a read answers. A larger one makes fewer trips and may bring in records nobody reads; a smaller one makes more trips.
+
+This happens in a commit and a tick as it does in a read, and it is pinned by `compiler/src/test/kotlin/velle/WorkingSetTest.kt`.
+
 ## What a store must do
 
 These are the parts of the contract where a mistake changes what the spec means. Nothing in Velle can detect a breach of them. The spec still validates, the generated tests still pass in memory, and the running system quietly stops doing what the spec proved it would do.
 
-- **Keyed reads and join reads are exact.** `fetchByKey` returns the row or nothing. `fetchAll` returns every row of the shape. `fetchReferencing` returns every row whose field points at the target and no other. A missing row here is a record the spec cannot see, so a rule does not fire, a prohibition does not hold, and a run-once guard ([§18](Reference-18-Run-once-guards)) that reads "no such record yet" fires twice.
+- **Keyed reads and join reads are exact.** `fetchByKey` returns the row or nothing. `fetchAll` returns every row of the shape. `fetchReferencing` returns every row whose field points at the target and no other. `fetchByKeys` and `fetchReferencingAny` are under the same rule for each key and each target they are given: a store that overrides one returns every such row, each once. A missing row here is a record the spec cannot see, so a rule does not fire, a prohibition does not hold, and a run-once guard ([§18](Reference-18-Run-once-guards)) that reads "no such record yet" fires twice.
 - **Capture reads are exact.** The values a refinement remembered are state the spec's exit rules depend on. A store facing a spec with captures decides how to keep them, as a table per refinement or as columns on the base table, and the generated typed store has one method per refinement that remembers values, returning a class with one property per value. There is no default for this read: a store for a spec with no captures returns nothing from it.
 - **A commit lands whole or not at all.** Everything in one commit set becomes durable together. If the database throws, the callback throws, and the whole commit rolls back with nothing written. The callback runs inside the commit, so throwing from it is the rollback signal. The SQL store in `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt` writes every entry inside the write unit's transaction and commits it when the unit ends with `Committed`, rolling back on a refusal or a failure.
 - **Keys are the store's and are never reused.** The store assigns every key and reports it back from `onCommit`. It must return the same representation it accepts, since the runtime maps keys to records by equality. A deleted row's key must never be given to a later row. A surviving record may still hold a reference to a deleted one, and that reference reads as absent only while the dead key stays dead. The SQLite store declares its keys `INTEGER PRIMARY KEY AUTOINCREMENT` for this reason.

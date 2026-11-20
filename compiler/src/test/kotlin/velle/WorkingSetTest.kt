@@ -39,6 +39,22 @@ class WorkingSetTest {
             fetchedByKey.add(key)
             return inner.fetchByKey(shape, key)
         }
+        /** The keys of each several-keys fetch, one entry per call. */
+        val fetchedByKeys = mutableListOf<List<StoreKey>>()
+        override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> {
+            fetchedByKeys.add(keys)
+            return inner.fetchByKeys(shape, keys)
+        }
+        /** The targets of each fetch of the records pointing at one record or at several, one entry per call. */
+        val fetchedReferencing = mutableListOf<List<Ref.Persisted>>()
+        override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> {
+            fetchedReferencing.add(listOf(target))
+            return inner.fetchReferencing(shape, field, target)
+        }
+        override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> {
+            fetchedReferencing.add(targets)
+            return inner.fetchReferencingAny(shape, field, targets)
+        }
         /** A write beside the runtime: what a trigger or hand-written SQL does to a row. */
         fun sideWrite(target: Ref.Persisted, field: String, value: Any?) =
             inner.onCommit(CommitSet(created = emptyList(), assigned = listOf(CommitSet.Assign(target, field, value))))
@@ -103,6 +119,69 @@ class WorkingSetTest {
             sys.get(id, "name")
             assertEquals(1, store.fetchedByKey.size, "the check and the field read after it share one fetch")
             assertEquals(false, sys.existsFor(viewer = null, root = "Promote", id = id), "a Customer is no Promote")
+        }
+    }
+
+    /** Three customers, the first promoted twice and the second once, each in a scope of its own; the counts start after them. */
+    private fun threeCustomers(sys: VelleSystem, store: Counting): List<Ref.Persisted> {
+        val customers = listOf("Ada", "Bo", "Cy").map { name -> sys.scope { accepted(sys.commit("Customer", mapOf("name" to name))) } }
+        for (promoted in listOf(customers[0], customers[1], customers[0]))
+            sys.scope { accepted(sys.commit("Promote", mapOf("customer" to sys.idOf(promoted)))) }
+        store.fetchedByKey.clear()
+        store.fetchedByKeys.clear()
+        store.fetchedReferencing.clear()
+        return customers
+    }
+
+    @Test
+    fun `the records pointing at the rows of one fetch are fetched together, for all of them at once`() {
+        val (sys, store) = system()
+        val customers = threeCustomers(sys, store)
+        sys.scope {
+            val listed = sys.instancesOf("Customer") // one fetch returns the three rows
+            assertEquals(listOf(2, 1, 0), listed.map { customer -> (sys.get(customer, "promotes") as List<*>).size })
+            assertEquals(listOf(customers), store.fetchedReferencing, "one fetch asked for the promotions of all three")
+        }
+    }
+
+    @Test
+    fun `the references the rows of one fetch hold in one field are fetched together`() {
+        val (sys, store) = system()
+        val customers = threeCustomers(sys, store)
+        sys.scope {
+            val promotions = sys.instancesOf("Promote") // three rows, naming two customers
+            val names = promotions.map { promotion -> sys.get(sys.get(promotion, "customer") as Long, "name") }
+            assertEquals(listOf("Ada", "Bo", "Ada"), names)
+            assertEquals(listOf(listOf(customers[0].key, customers[1].key)), store.fetchedByKeys, "one fetch for the two customers named")
+            assertEquals(0, store.fetchedByKey.size)
+        }
+    }
+
+    @Test
+    fun `no fetch asks for more records than the limit, and the rest are fetched when they are needed`() {
+        val (sys, store) = system()
+        val customers = threeCustomers(sys, store)
+        sys.fetchTogether = FetchTogether(limit = 2)
+        sys.scope {
+            val listed = sys.instancesOf("Customer")
+            sys.get(listed[0], "promotes")
+            assertEquals(listOf(customers.take(2)), store.fetchedReferencing, "the record needed and one more")
+            sys.get(listed[1], "promotes")
+            assertEquals(1, store.fetchedReferencing.size, "the second was already fetched for")
+            assertEquals(0, (sys.get(listed[2], "promotes") as List<*>).size)
+            assertEquals(listOf(customers.take(2), customers.drop(2)), store.fetchedReferencing, "the third is fetched for when it is needed")
+        }
+    }
+
+    @Test
+    fun `the limit can be set for the shape being fetched, and a limit of one fetches one record at a time`() {
+        val (sys, store) = system()
+        val customers = threeCustomers(sys, store)
+        sys.fetchTogether = FetchTogether(limit = 500, limitByShape = mapOf("Promote" to 1))
+        sys.scope {
+            val listed = sys.instancesOf("Customer")
+            sys.get(listed[0], "promotes")
+            assertEquals(listOf(listOf(customers[0])), store.fetchedReferencing)
         }
     }
 

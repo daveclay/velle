@@ -255,6 +255,8 @@ class VelleSystem(
         val fetchedRefs = mutableSetOf<Triple<String, String, Long>>()
         val fetchedFilters = mutableSetOf<Pair<String, QF>>()
         val fetchMisses = mutableSetOf<Long>()
+        /** Handle to the handles it arrived with: the rows one fetch returned, or the references those rows hold in one field. */
+        val arrivedWith = HashMap<Long, List<Long>>()
         val idShape = HashMap<Long, String>()
         val keyOf = HashMap<Long, StoreKey>()
         val handleOf = HashMap<Ref.Persisted, Long>()
@@ -358,6 +360,18 @@ class VelleSystem(
      *  answers it once. */
     private val fetchMisses: MutableSet<Long> get() = s.fetchMisses
 
+    /**
+     * How many records one fetch asks the store for when the runtime fetches for the records that
+     * arrived together. The owner of the system sets it, for every shape or shape by shape.
+     */
+    @Volatile
+    var fetchTogether: FetchTogether = FetchTogether()
+        set(value) {
+            val unknown = value.limitByShape.keys.filter { shape -> shape !in model.shapes }
+            require(unknown.isEmpty()) { "no shape ${unknown.joinToString { shape -> "'$shape'" }} to set a fetch limit for" }
+            field = value
+        }
+
     /** Run over [resolver], [onCommit], and [tickMemory] instead of the in-memory store, the three parts of one store (Hydration.kt). */
     fun connect(resolver: StateResolver, onCommit: CommitCallback, tickMemory: TickMemory) {
         this.resolver = resolver
@@ -439,6 +453,7 @@ class VelleSystem(
         fetchedRefs.clear()
         fetchedFilters.clear()
         fetchMisses.clear()
+        s.arrivedWith.clear()
         captures.clear()
         captureMisses.clear()
     }
@@ -477,8 +492,53 @@ class VelleSystem(
         val shape = idShape[id] ?: return null
         val key = keyOf[id] ?: return null // no key: never persisted (rolled back, or another session's handle)
         if (id in fetchMisses) return null
-        val row = reader().fetchByKey(shape, key) ?: return null.also { fetchMisses.add(id) }
-        return hydrateIfAbsent(row)
+        val together = arrivedWithNeeding(id, fetchTogether.limitFor(shape)) { other ->
+            idShape[other] == shape && keyOf[other] != null && other !in instances && other !in fetchMisses
+        }
+        if (together.size == 1) {
+            val row = reader().fetchByKey(shape, key) ?: return null.also { fetchMisses.add(id) }
+            return hydrateIfAbsent(row)
+        }
+        hydrateTogether(reader().fetchByKeys(shape, together.map { other -> keyOf.getValue(other) }))
+        fetchMisses.addAll(together.filter { other -> other !in instances })
+        return instances[id]
+    }
+
+    /**
+     * [id] and the handles that arrived with it for which [needsFetch] holds, [id] first and then
+     * in the order they arrived, at most [limit] of them: what one fetch asks for, so the related
+     * records of a list are read in one trip to the store and not one trip per record. The handles
+     * left out are fetched for when one of them is needed.
+     */
+    private fun arrivedWithNeeding(id: Long, limit: Int, needsFetch: (Long) -> Boolean): List<Long> {
+        val group = s.arrivedWith[id] ?: return listOf(id)
+        if (limit <= 1) return listOf(id)
+        val position = group.indexOf(id)
+        val fromHere = group.subList(position + 1, group.size).asSequence() + group.subList(0, position).asSequence()
+        return listOf(id) + fromHere.filter(needsFetch).take(limit - 1).toList()
+    }
+
+    /** Hydrates the rows one fetch returned and notes that they, and the references they hold in each field, arrived together. */
+    private fun hydrateTogether(rows: List<Row>): List<Instance> {
+        val hydrated = rows.map { row -> hydrateIfAbsent(row) }
+        if (hydrated.size > 1) {
+            val handles = hydrated.map { instance -> instance.id }
+            for (handle in handles) s.arrivedWith[handle] = handles
+        }
+        for (field in hydrated.flatMap { instance -> instance.fields.keys }.distinct()) noteReferencesTogether(hydrated, field)
+        return hydrated
+    }
+
+    private fun noteReferencesTogether(hydrated: List<Instance>, field: String) {
+        val referenced = hydrated.flatMap { instance -> referencedBy(instance.fields[field]) }.distinct()
+        if (referenced.size < 2) return
+        for (handle in referenced) if (handle !in instances) s.arrivedWith[handle] = referenced
+    }
+
+    private fun referencedBy(value: Value?): List<Long> = when (value) {
+        is Value.VRef -> listOf(value.id)
+        is Value.VColl -> value.ids
+        else -> emptyList()
     }
 
     /**
@@ -491,7 +551,7 @@ class VelleSystem(
      */
     internal fun idsOf(shape: String): List<Long> {
         if (shape !in model.transients && fetchedAll.add(shape)) {
-            val fetched = reader().fetchAll(shape).map { hydrateIfAbsent(it).id }
+            val fetched = hydrateTogether(reader().fetchAll(shape)).map { it.id }
             val list = byShape.getOrPut(shape) { mutableListOf() }
             val fetchedSet = fetched.toSet()
             val (persisted, unpersisted) = list.filter { it !in fetchedSet }.partition { keyOf[it] != null }
@@ -515,7 +575,7 @@ class VelleSystem(
         if (shape in model.transients || shape in fetchedAll || filter == QF.True)
             return idsOf(shape)
         if (fetchedFilters.add(shape to filter))
-            reader().fetchCandidates(shape, filter).forEach { hydrateIfAbsent(it) }
+            hydrateTogether(reader().fetchCandidates(shape, filter))
         return liveIds(shape)
     }
 
@@ -531,8 +591,15 @@ class VelleSystem(
         // anything storage holds — nothing to fetch
         val key = keyOf[targetId] ?: return
         val targetShape = idShape[targetId] ?: return
-        if (fetchedRefs.add(Triple(shape, field, targetId)))
-            reader().fetchReferencing(shape, field, Ref.Persisted(targetShape, key)).forEach { hydrateIfAbsent(it) }
+        if (Triple(shape, field, targetId) in fetchedRefs) return
+        val together = arrivedWithNeeding(targetId, fetchTogether.limitFor(shape)) { other ->
+            idShape[other] == targetShape && keyOf[other] != null && Triple(shape, field, other) !in fetchedRefs
+        }
+        for (other in together) fetchedRefs.add(Triple(shape, field, other))
+        val rows =
+            if (together.size == 1) reader().fetchReferencing(shape, field, Ref.Persisted(targetShape, key))
+            else reader().fetchReferencingAny(shape, field, together.map { other -> Ref.Persisted(targetShape, keyOf.getValue(other)) })
+        hydrateTogether(rows)
     }
 
     private fun hydrateIfAbsent(row: Row): Instance {

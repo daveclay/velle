@@ -75,6 +75,16 @@ class MemoryStore(private val model: Model) : StateResolver, CommitCallback, Tic
         rows[shape]?.values?.filter { it.fields[field] == target }.orEmpty()
     }
 
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = reading {
+        val rowsOfShape = rows[shape] ?: return@reading emptyList()
+        keys.distinct().mapNotNull { key -> rowsOfShape[key] }
+    }
+
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = reading {
+        val wanted = targets.toSet()
+        rows[shape]?.values?.filter { row -> row.fields[field] in wanted }.orEmpty()
+    }
+
     override fun fetchCaptures(instance: Ref.Persisted, refinement: String): Map<String, Any?>? =
         reading { captures[instance to refinement] }
 
