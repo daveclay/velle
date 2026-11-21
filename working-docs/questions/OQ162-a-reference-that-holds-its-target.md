@@ -180,6 +180,8 @@ Read when the request arrives, the test would refuse all three, because shop 3 p
 
 This is not a new rule of evaluation. `evaluation.md`, "The door's moment", already says a prohibition's meaning is the settled transaction, and that one reading what the request's handling changes is evaluated after the handling. What is new is that `is held` on a record the commit deleted counts the required references still pointing at it.
 
+The test is read once per request, never twice. Which moment is fixed per `never` at compile time, by the rule `evaluation.md` already has. When no rule the request can fire creates, assigns, or deletes a required reference to the shape, the rules cannot change who holds the record, so the test is read when the request arrives and a refused request runs no rule. `never (CloseAccount where seller is held)` beside `rule ApplyClose when CloseAccount { delete seller }` in D2 is read on arrival. Deleting the record itself does not change who holds it and does not move the test to the end. The `never` over `ReplaceManager` above is read at the end, because `ApplyReplace` assigns `Shop.manager`.
+
 A rule's condition is different: it is read when the rule fires. So for the two other forms of D2, the deleting rule's condition and the `undeletable` refinement, the compiler refuses a commit that deletes a record of a shape and also creates or assigns a required reference to that shape, and the error names the `never` form as the way to say it. `working-docs/examples/survey/24-delete-and-point-at-one-rule.velle` is the plainly wrong case: one rule creates a listing for the seller it deletes. With a `never`, that request is always refused when its commit ends.
 
 Costs:
