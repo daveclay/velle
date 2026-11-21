@@ -69,7 +69,9 @@ Costs:
 
 ### D2. A rule that deletes answers with a built-in test for "something holds this record"
 
-Should Velle have a test, written on a record, that is true while any required reference points at it, and should check V24 pass when every way of reaching the `delete` excludes it?
+Should Velle have a built-in test that is true while a required reference points at a record?
+
+A rule could then delete a record only where that test is false. Check V24 would read the test and nothing else.
 
 Recommendation: yes.
 
