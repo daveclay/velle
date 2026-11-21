@@ -1,6 +1,6 @@
 # OQ160 — What happens to the records that point at a record when it is deleted
 
-**Status:** opened 2026-11-21, split out of OQ155 at Dave's direction: "Leaving a reference to a deleted record is not how systems work". On 2026-11-21 Dave set the frame the file now follows: the product owner and the engineer choose, per case, between refusing the delete and clearing the references. D1 to D4 await Dave. Nothing built, and two things are not yet checked (§4).
+**Status:** opened 2026-11-21, split out of OQ155 at Dave's direction: "Leaving a reference to a deleted record is not how systems work". On 2026-11-21 Dave set the frame the file now follows: the product owner and the engineer choose, per case, between refusing the delete and clearing the references. D1 to D4 await Dave, and D1 waits on OQ162. Nothing built, and two things are not yet checked (§4).
 
 **In plain terms:** A user asks to delete a record that other records point at. The product owner and the engineer have two answers to choose from: the user may not delete it while anything points at it, or it is deleted and the pointers are cleared. Most of the time the product owner wants the first, and the user must be told why in the words of the business, not by an error from the database. Velle can say the second today and cannot say the first.
 
@@ -43,6 +43,8 @@ This is why the store contract forbids reusing a key (`wiki/Guides/Store-API.md`
 The two answers are chosen per reference, by the product owner and the engineer. D1 lets the spec say "refuse the delete". D2 asks whether a reference that is cleared must say so. D3 and D4 are about what the store holds after a reference is cleared.
 
 ### D1. A rule may delete a record that a required reference points at when the spec turns the request away while any record points at it
+
+This decision waits on `working-docs/QUESTIONS.md` OQ162, which asks whether the same thing is said with a language structure the compiler reads directly. A yes to OQ162 D2 answers this with no.
 
 Should the compiler accept `working-docs/examples/survey/24-delete-pointed-at-never-refused.velle`, where the listing's seller is required and a `never` refuses the request to close an account while a listing points at the seller?
 

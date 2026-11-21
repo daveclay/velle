@@ -2,11 +2,11 @@
 
 **Status:** open (2026-10-14) — the runtime model is settled (Reference §22; `evaluation.md` "The universal transaction"); these are the items it left open, plus one the peptides pass found
 **In plain terms:** the runtime still reads a watched shape's whole table once per transaction where the committed record names the one row that could have changed; the generated system's clock is harness-controlled where production wants real time; and two records committed in one clock instant tie on a `timestamp on create`, which breaks any ledger ordered by it.
-**See:** Reference §10, §12 (the ledger), §22 · `compiler/src/main/kotlin/velle/Runtime.kt`, `Hydration.kt`, `Codegen.kt` (`clock()`)
+**See:** Reference §10, §12 (the ledger), §22 · `compiler/src/main/kotlin/velle/ConditionWatchers.kt`, `CommitProcessor.kt`, `WorkingSet.kt`, `Hydration.kt`, `Codegen.kt` (`clock()`)
 
 ---
 
-## 1. Reverse-path candidate narrowing (`Runtime.kt`: relevance gating and the candidate pre-filter)
+## 1. Reverse-path candidate narrowing (`ConditionWatchers.kt` and `CommitProcessor.kt`: relevance gating; `WorkingSet.kt`: the candidate pre-filter)
 
 A non-self-contained commit watcher (`PaidInvoice` reads `Payment` rows) still scans its base once per envelope. The right fix derives the affected instances from the mutation itself: the committed `Payment` names its `invoice`. That is impact analysis applied per commit, walking the predicate's read paths (not just its read sets) backward from the mutation. Two smaller items ride with it: bare-shape conditions (`when Payment`) scan their own table only to diff entrants that are, by construction, exactly the commit's creates; and aggregate pre-filters (`count(...) == 0` as NOT EXISTS, sums as aggregation subqueries), which the query IR does not carry yet.
 
