@@ -1,0 +1,26 @@
+-- "An employee leaves and another takes over their shop", as one request. The
+-- rule points the shop at the successor and deletes the employee who leaves.
+-- It is right for every request but one that names the same employee twice,
+-- which would leave the shop pointing at an employee who is gone. The
+-- compiler accepts it today, with the shop's manager declared as a reference
+-- that may go absent; with `manager: one Employee` check V24 refuses it.
+
+act Employee {
+    name: text
+}
+
+act Shop {
+    name: text
+    manager: one Employee? initially required
+}
+
+transient act ReplaceManager {
+    shop: one Shop
+    departing: one Employee
+    successor: one Employee
+}
+
+rule ApplyReplace when ReplaceManager {
+    shop.manager = successor
+    delete departing
+}
