@@ -1,6 +1,6 @@
 # Open questions — the directory
 
-One line per open question (OQ) here, and nothing else. An OQ whose context fits in its line is only the line. An OQ with more lives in `questions/OQ<n>-*.md`, where the file's header states the question in plain terms before the dense part begins, and the discussion, the decisions, and the work items as `- [ ]` lines are in the file. OQ tags are stable — numbers are never renumbered or reused (next free: OQ160), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
+One line per open question (OQ) here, and nothing else. An OQ whose context fits in its line is only the line. An OQ with more lives in `questions/OQ<n>-*.md`, where the file's header states the question in plain terms before the dense part begins, and the discussion, the decisions, and the work items as `- [ ]` lines are in the file. OQ tags are stable — numbers are never renumbered or reused (next free: OQ161), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
 
 **Every work item has a tag** (Dave, 2026-11-11). A work item is one action, verb-first, one line. It is a `- [ ]` line in the file of the OQ that holds its context, or, when no OQ holds it, an OQ of its own: a tagged line here, `- **OQ<n>** — <the action>`, with a file only once its context outgrows the line. A `- [ ]` line never stands here, so every piece of work can be named by a tag. This file is a directory; an OQ file holds the details. OQs are grouped by the part of Velle they change, not by where they were found; S-numbers, P-numbers, and B-numbers are findings of the peptides, pharmacy, and batches passes, recorded in OQ16's calibration record.
 
@@ -69,7 +69,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **OQ105** — Decide whether builtin `double` should ride the `DOUBLE` storage class (a floating column) rather than `DECIMAL` as it does today for exactness (OQ67 residue).
 - **OQ119** — Render a derived property in the pre-filter (`compiler/src/main/kotlin/velle/Query.kt`, `resolveHops` returns null for a derived hop) by inlining its expression, so a read filtering on `reference == "INV-0042"` over a derived `reference: text = "INV-${number}"`, or on `balance`, narrows in the store instead of reading every row; today every such comparison degrades to every row and the evaluator decides (`wiki/Guides/Store-API.md`, "What a store can do"). Wanted once such a read is measured slow.
 - **[OQ154](questions/OQ154-records-changed-outside-velle.md)** — what Velle promises, and what it reports, when a row is changed or removed outside Velle: clause U5 of `evaluation.md` is reworded, and a record the runtime cannot read raises an error naming it · opened 2026-11-20 from Dave's aside on OQ153 D4; D1 decided; D2 to D5 await Dave; nothing built; two work items
-- **[OQ155](questions/OQ155-foreign-keys-in-the-sql-store.md)** — whether the tables the SQL store creates declare foreign keys, so the database refuses to remove a record others point at · opened 2026-11-20 from Dave's note on OQ153 D4; D1 to D4 await Dave, D2 rewritten and D4 added 2026-11-21; five work items
+- **[OQ155](questions/OQ155-foreign-keys-in-the-sql-store.md)** — whether the tables the SQL store creates declare foreign keys, so the database refuses to remove a record others point at · opened 2026-11-20 from Dave's note on OQ153 D4; D1, D3, and D4 await Dave, D4 waiting on OQ160; D2 moved to OQ160 on 2026-11-21; four work items
 - **[OQ57](questions/OQ57-reads-after-oq51.md)** — reads after OQ51: what a query loads, promises, and leaves to the store · OQ51 settled 2026-10-12; most items stated by Dave at the settling; eight work items
 
 ## Serving: the API layer, REST, GraphQL, the Spring Boot starter
@@ -101,6 +101,7 @@ A frontend framework grown from the console: given the model description and not
 ## Deletion, erasure, retention
 
 - **[OQ27](questions/OQ27-erasure.md)** — erasure and retention (right-to-be-forgotten) · language-side resolved via OQ37-R10 (`? initially required` + ordinary `= none` rules); residue: compilation's unretrievability guarantee. The delete rulings are Reference §12 "Deletion" and `checks.md` V23–V28; their stress test is under OQ16.
+- **[OQ160](questions/OQ160-references-to-a-deleted-record.md)** — whether the store empties every stored reference to a record when a rule deletes it, where today the pointing row keeps the dead key and Velle reads it as absent · opened 2026-11-21, split out of OQ155 at Dave's direction; D1 and D2 await Dave; nothing built; two work items
 
 ## Larger language questions
 
