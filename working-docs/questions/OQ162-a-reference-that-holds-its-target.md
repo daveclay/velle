@@ -1,6 +1,6 @@
 # OQ162 — How a spec says a record cannot be deleted while another record points at it
 
-**Status:** opened 2026-11-21 from Dave's remark on OQ160 D1: he had been weighing a shorthand for preventing a delete while a shape is referenced, and "this has made me think it's worthy of a language structure so the validator can read it more clearly". That a structure is wanted is Dave's. Where it is said and how it is spelled are proposals. D1 to D3 are decided. Nothing built; the plan is §3 and awaits Dave's look before the build starts.
+**Status:** opened 2026-11-21 from Dave's remark on OQ160 D1: he had been weighing a shorthand for preventing a delete while a shape is referenced, and "this has made me think it's worthy of a language structure so the validator can read it more clearly". That a structure is wanted is Dave's. Where it is said and how it is spelled are proposals. D1 to D3 are decided. D4, added 2026-11-21 from OQ161's third case, awaits Dave. Nothing built; the plan in §3 does not yet hold D4's changes.
 
 **In plain terms:** Most of the time a product owner does not want a record deleted while other records point at it. Velle has no way to say that directly today. The question is what the spec's author writes to say it, so that the compiler can read it as a statement and does not have to work it out from how a condition happens to be worded.
 
@@ -10,7 +10,7 @@
 
 ## Roster
 
-- **D1**, **D2**, **D3**: the decisions, in §2.
+- **D1** to **D4**: the decisions, in §2.
 - **A required reference**: a `one` field with no `?`, such as `seller: one Seller`. It always points at a record.
 - **Holds**: used in this file for what D1 proposes a required reference does to the record it points at. A listing holds its seller when the seller cannot be deleted while the listing points at it. It is not a Velle keyword unless D3 makes it one.
 - **A foreign key**: a constraint declared on a column, shared among database engineers, saying its value must be the key of a row in another table.
@@ -130,9 +130,60 @@ The declarations are those of D2, where the line is `never (CloseAccount where s
 
 **Decided:** `is held`, Dave, 2026-11-21.
 
+### D4. A commit never both deletes a record and makes a required reference point at a record of that shape
+
+Should the compiler refuse a rule, or two rules that can fire from one commit, that delete a record of a shape and also create or assign a required reference to that shape?
+
+Recommendation: yes.
+
+The gap this closes: `is held` is read when the request arrives. A record that the same commit makes point at the seller does not exist yet, so the test is false, the request is let in, and the seller is deleted while held.
+
+```
+act Seller {                                -- compiler: a persistent shape
+    name: text                              -- compiler: a text column "name"
+}
+
+act Listing {                               -- compiler: a persistent shape
+    title: text                             -- compiler: a text column "title"
+    seller: one Seller                      -- compiler: required, so this listing holds its seller (D1)
+}
+
+transient act CloseAccount {                -- compiler: transient, so the request is not kept
+    seller: one Seller                      -- compiler: the caller names one existing Seller
+}
+
+never (CloseAccount where seller is held)   -- compiler: a refusal, read when the request arrives; no listing made by this commit exists yet
+
+rule ApplyClose when CloseAccount {         -- compiler: runs once per CloseAccount that was not refused
+    Listing from { title: "Closed", seller: seller }
+                                            -- compiler: creates a Listing with a required reference to a Seller
+    delete seller                           -- compiler, with this decision: an error, because this commit also creates a required reference to a Seller
+                                            -- compiler, without it: accepted, and the new listing is left holding a seller that is gone
+}
+```
+
+This is `working-docs/examples/survey/24-delete-and-point-at-one-rule.velle` with the field made required and the `never` written with `is held`. That file passes today, with the field declared `? initially required`. The same commit written as two rules, `working-docs/examples/survey/24-delete-and-point-at-two-rules-refused.velle`, is refused today by check V15 for its unstated order, which is a different reason.
+
+The check is by shape, not by record: a commit that deletes one seller may not create a listing for any seller. Check V23 already treats assigning a field and deleting the record this way across rules, with the reason "there is no business sentence 'change it and also remove it, at once'" (`checks.md` V23).
+
+The alternative is to give `is held` its meaning at the end of the transaction, as `evaluation.md`, "The door's moment", does for a prohibition that reads what the request's handling moves. The `never` would then be read after the rules have run, and would count references to a record the commit has already deleted. A rule's condition is read when the rule fires and not at the end, so the condition and `undeletable` forms of D2 would still need this compile-time check.
+
+Costs:
+
+- "Close this account and hand its listings to another seller" cannot be one request. Moving the listings assigns `Listing.seller`, a required reference to `Seller`, in a commit that deletes a `Seller`. It is two requests: move the listings, then close the account. The alternative would allow it in one, for the `never` form only.
+- The check is coarse. A commit that deletes seller A and creates a listing for seller B is refused although nothing is left pointing at a deleted record.
+- It leans on the principle that a design in which a wrong state cannot be represented beats one in which it is checked.
+
+#### Proposed changes
+
+- `compiler/src/main/kotlin/velle/Validator.kt`, check V24: a rule body, or two rules that can fire from one commit, that delete a record of a shape and create or assign a required reference to that shape is an error naming both statements.
+- `wiki/Normative/checks.md`, V24, and Reference §12, "What you can and cannot write".
+- `compiler/src/test/resources/diagnostics/`: one refused spec per message.
+- `working-docs/examples/survey/24-delete-and-point-at-one-rule.velle` is rewritten with a required field and renamed `-refused`, with its README row.
+
 ## 3. The build
 
-In build order. Each line is mirrored by a work item in §4.
+In build order. Each line is mirrored by a work item in §4. D4 is not decided, and its changes are not in this list yet.
 
 1. **Grammar and parser.** `x is held` joins the `is` tests beside `is none`, `is some`, `is empty`, and `is <Refinement>` (`compiler/src/main/kotlin/velle/Ast.kt`, `IsExpr`, a new kind `"held"`). Its subject is a record of a stored shape. On a scalar, a collection, or a transient act it is an error. `x is not held` is its opposite.
 2. **Runtime.** The test is true when a record of any shape points at the subject through a required `one` field, including a required field typed with a union that has the subject's shape as an operand. An optional field, a `? initially required` field, and a `many` field never count (D1).

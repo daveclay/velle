@@ -1,0 +1,26 @@
+-- The same commit as two rules: ApplyClose deletes the seller and
+-- LeaveFarewell creates a listing for it. Check V15 refuses the pair, because
+-- LeaveFarewell reads a seller ApplyClose deletes and the order is unstated.
+
+act Seller {
+    name: text
+}
+
+act Listing {
+    title: text
+    seller: one Seller? initially required
+}
+
+transient act CloseAccount {
+    seller: one Seller
+}
+
+never (CloseAccount where exists (Listing where seller == this.seller))
+
+rule ApplyClose when CloseAccount {
+    delete seller
+}
+
+rule LeaveFarewell when CloseAccount {
+    Listing from { title: "Closed", seller: seller }
+}
