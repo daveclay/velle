@@ -1,6 +1,6 @@
 # OQ162 — How a spec says a record cannot be deleted while another record points at it
 
-**Status:** opened 2026-11-21 from Dave's remark on OQ160 D1: he had been weighing a shorthand for preventing a delete while a shape is referenced, and "this has made me think it's worthy of a language structure so the validator can read it more clearly". That a structure is wanted is Dave's. Where it is said and how it is spelled are proposals. D1 to D3 await Dave. Nothing built. OQ160 D1 waits on this.
+**Status:** opened 2026-11-21 from Dave's remark on OQ160 D1: he had been weighing a shorthand for preventing a delete while a shape is referenced, and "this has made me think it's worthy of a language structure so the validator can read it more clearly". That a structure is wanted is Dave's. Where it is said and how it is spelled are proposals. D1 is decided. D2 and D3 await Dave. Nothing built. OQ160 D1 waits on this.
 
 **In plain terms:** Most of the time a product owner does not want a record deleted while other records point at it. Velle has no way to say that directly today. The question is what the spec's author writes to say it, so that the compiler can read it as a statement and does not have to work it out from how a condition happens to be worded.
 
@@ -25,7 +25,7 @@ What passes today is `working-docs/examples/survey/24-delete-pointed-at-workarou
 
 ## 2. What to decide
 
-### D1. A required reference holds the record it points at
+### D1. A required reference holds the record it points at · Decided 2026-11-21
 
 Does `seller: one Seller` on `Listing` itself say that a seller cannot be deleted while a listing points at it, with no further word on the field?
 
@@ -64,6 +64,8 @@ Costs:
 
 - Reference §6 and Reference §12, "Deletion": a required reference holds its target.
 - `wiki/Normative/checks.md`, V24: reworded from stranding to holding. What discharges it is D2.
+
+**Decided:** yes, Dave, 2026-11-21.
 
 ### D2. A rule that deletes answers with a built-in test for "something holds this record"
 
