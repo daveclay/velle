@@ -1,6 +1,6 @@
 # Open questions — the directory
 
-One line per open question (OQ) here, and nothing else. An OQ whose context fits in its line is only the line. An OQ with more lives in `questions/OQ<n>-*.md`, where the file's header states the question in plain terms before the dense part begins, and the discussion, the decisions, and the work items as `- [ ]` lines are in the file. OQ tags are stable — numbers are never renumbered or reused (next free: OQ163), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
+One line per open question (OQ) here, and nothing else. An OQ whose context fits in its line is only the line. An OQ with more lives in `questions/OQ<n>-*.md`, where the file's header states the question in plain terms before the dense part begins, and the discussion, the decisions, and the work items as `- [ ]` lines are in the file. OQ tags are stable — numbers are never renumbered or reused (next free: OQ164), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
 
 **Every work item has a tag** (Dave, 2026-11-11). A work item is one action, verb-first, one line. It is a `- [ ]` line in the file of the OQ that holds its context, or, when no OQ holds it, an OQ of its own: a tagged line here, `- **OQ<n>** — <the action>`, with a file only once its context outgrows the line. A `- [ ]` line never stands here, so every piece of work can be named by a tag. This file is a directory; an OQ file holds the details. OQs are grouped by the part of Velle they change, not by where they were found; S-numbers, P-numbers, and B-numbers are findings of the peptides, pharmacy, and batches passes, recorded in OQ16's calibration record.
 
@@ -48,6 +48,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 
 ## Serialization domains and concurrency
 
+- **[OQ163](questions/OQ163-partial-queue-key-path.md)** — when a queue key's path stops at an absent reference, does a rule firing key the last record it reached, where an act keys nothing? · opened 2026-11-21 from the `Runtime.kt` refactor; both behaviours pinned in `PartialKeyPathProbeTest`; D1 awaits Dave; one work item
 - **[OQ55](questions/OQ55-serialization-domain-precision.md)** — the widths realistic specs produce: forty-one A5 advisories on peptides, fifty-seven on pharmacy, nearly all a series read through an inferred inverse · the derivation is sound (OQ40, OQ42 settled) and the ruling stays advisory (`patterns.md`, "A wide domain: the two authors"); this is precision; six work items
 
 ## Spec generation
