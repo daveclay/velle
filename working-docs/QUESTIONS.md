@@ -101,7 +101,7 @@ A frontend framework grown from the console: given the model description and not
 ## Deletion, erasure, retention
 
 - **[OQ27](questions/OQ27-erasure.md)** — erasure and retention (right-to-be-forgotten) · language-side resolved via OQ37-R10 (`? initially required` + ordinary `= none` rules); residue: compilation's unretrievability guarantee. The delete rulings are Reference §12 "Deletion" and `checks.md` V23–V28; their stress test is under OQ16.
-- **[OQ160](questions/OQ160-references-to-a-deleted-record.md)** — whether the store empties every stored reference to a record when a rule deletes it, where today the pointing row keeps the dead key and Velle reads it as absent · opened 2026-11-21, split out of OQ155 at Dave's direction; D1 and D2 await Dave; nothing built; two work items
+- **[OQ160](questions/OQ160-references-to-a-deleted-record.md)** — what happens to the records that point at a record when it is deleted: the spec refuses the delete while anything points at it, which Velle cannot say today for a required reference, or the references are cleared, where today the pointing row keeps the dead key · opened 2026-11-21, split out of OQ155 at Dave's direction, and reframed by Dave the same day; D1 to D4 await Dave; nothing built; four work items
 
 ## Larger language questions
 

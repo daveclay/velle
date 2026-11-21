@@ -1,0 +1,30 @@
+-- The same sentence with the refusal kept as a record: ApplyClose deletes
+-- only a seller no listing points at, and RefuseClose records the request
+-- that was turned away. Check V24 refuses the delete all the same: it does
+-- not read the rule's condition.
+
+act Seller {
+    name: text
+}
+
+act Listing {
+    title: text
+    seller: one Seller
+}
+
+transient act CloseAccount {
+    seller: one Seller
+}
+
+shape CloseRefusal {
+    sellerName: text
+    refusedOn: timestamp on create
+}
+
+rule ApplyClose when (CloseAccount where not exists (Listing where seller == this.seller)) {
+    delete seller
+}
+
+rule RefuseClose when (CloseAccount where exists (Listing where seller == this.seller)) {
+    CloseRefusal from { sellerName: seller.name }
+}

@@ -1,0 +1,26 @@
+-- The same sentence said about the seller: a seller with listings is
+-- `undeletable`, and the `never` turns away the request for one. Check V24
+-- refuses the delete all the same: it does not read the `undeletable` state.
+
+act Seller {
+    name: text
+}
+
+act Listing {
+    title: text
+    seller: one Seller
+}
+
+shape SellerWithListings = Seller where exists (Listing where seller == this) {
+    undeletable
+}
+
+transient act CloseAccount {
+    seller: one Seller
+}
+
+never (CloseAccount where seller is SellerWithListings)
+
+rule ApplyClose when (CloseAccount where seller is not SellerWithListings) {
+    delete seller
+}
