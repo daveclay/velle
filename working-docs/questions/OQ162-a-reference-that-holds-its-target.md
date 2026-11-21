@@ -1,10 +1,10 @@
 # OQ162 — How a spec says a record cannot be deleted while another record points at it
 
-**Status:** opened 2026-11-21 from Dave's remark on OQ160 D1: he had been weighing a shorthand for preventing a delete while a shape is referenced, and "this has made me think it's worthy of a language structure so the validator can read it more clearly". That a structure is wanted is Dave's. Where it is said and how it is spelled are proposals. D1 is decided. D2 and D3 await Dave. Nothing built. OQ160 D1 waits on this.
+**Status:** opened 2026-11-21 from Dave's remark on OQ160 D1: he had been weighing a shorthand for preventing a delete while a shape is referenced, and "this has made me think it's worthy of a language structure so the validator can read it more clearly". That a structure is wanted is Dave's. Where it is said and how it is spelled are proposals. D1 and D2 are decided. D3 awaits Dave. Nothing built.
 
 **In plain terms:** Most of the time a product owner does not want a record deleted while other records point at it. Velle has no way to say that directly today. The question is what the spec's author writes to say it, so that the compiler can read it as a statement and does not have to work it out from how a condition happens to be worded.
 
-**See:** `checks.md` V24, the check that refuses a delete a required reference could be left pointing at nothing by. Reference §12, "Deletion". Reference §21, on a refusal. `working-docs/examples/survey/README.md`, the four `24-delete-pointed-at-` rows, which show what the compiler does today. `working-docs/QUESTIONS.md` OQ160, whose D1 proposes proving the same thing from a `never` and waits on this. `working-docs/QUESTIONS.md` OQ161, on requests that arrive together. `working-docs/QUESTIONS.md` OQ155, on foreign keys.
+**See:** `checks.md` V24, the check that refuses a delete a required reference could be left pointing at nothing by. Reference §12, "Deletion". Reference §21, on a refusal. `working-docs/examples/survey/README.md`, the four `24-delete-pointed-at-` rows, which show what the compiler does today. `working-docs/QUESTIONS.md` OQ160, whose D1 proposed proving the same thing from a `never` and was answered by D2 here. `working-docs/QUESTIONS.md` OQ161, on requests that arrive together. `working-docs/QUESTIONS.md` OQ155, on foreign keys.
 
 ---
 
@@ -67,7 +67,7 @@ Costs:
 
 **Decided:** yes, Dave, 2026-11-21.
 
-### D2. A rule that deletes answers with a built-in test for "something holds this record"
+### D2. A rule that deletes answers with a built-in test for "something holds this record" · Decided 2026-11-21
 
 Should Velle have a built-in test that is true while a required reference points at a record?
 
@@ -114,6 +114,8 @@ Costs:
 - Reference §10 and Reference §12, `wiki/Normative/checks.md` V24, `wiki/Normative/grammar.md`.
 - `examples/moderation/moderation.velle`: a required reference to `Seller` with the refusal, beside the `Listing.seller` that goes absent.
 - `working-docs/examples/survey/`: the `24-delete-pointed-at-` files rewritten with the test, and their README rows.
+
+**Decided:** yes, Dave, 2026-11-21.
 
 ### D3. How the test is spelled
 
