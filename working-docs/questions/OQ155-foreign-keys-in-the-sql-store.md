@@ -1,6 +1,6 @@
 # OQ155 — Whether the tables Velle creates declare foreign keys
 
-**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1 decided. D2 was rewritten on 2026-11-21 at Dave's direction and awaits him again, with D3 and the new D4. Nothing built, and five things are not yet checked (§4).
+**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1, D2, D3, and D4 await Dave. On 2026-11-21 Dave cleared his answers to D1 and D2, D2 was rewritten at his direction, and D4 was added. Nothing built, and five things are not yet checked (§4).
 
 **In plain terms:** When one record points at another, the database could be told so, and it would then refuse to remove a record that others still point at. Velle creates the tables and does not tell the database this today. The question is whether it should.
 
@@ -29,7 +29,7 @@ Three facts shape the answer:
 
 ## 2. What to decide
 
-### D1. The tables Velle creates declare a foreign key for a reference to a shape no rule deletes · Decided 2026-11-21
+### D1. The tables Velle creates declare a foreign key for a reference to a shape no rule deletes
 
 Should `createSchema` declare a foreign key on every column and junction table that holds a reference to one shape, when no rule in the spec deletes records of that shape?
 
@@ -49,8 +49,6 @@ In `examples/pharmacy/pharmacy.velle`, `Interaction` points at `Drug`, and no ru
 - `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `createSchema`: the constraint, for a reference whose shape is outside `Model.deletedShapes` and is not a union.
 - `stores/sql/src/testFixtures/kotlin/velle/sql/SqlStoreConformance.kt`: a test that removing a pointed-at row with SQL is refused, and that every existing scenario still passes.
 - `wiki/Guides/Store-API.md`: which references are constrained.
-
-**Decided:** yes (Dave, 2026-11-21). The recommendation he answered was conditional on the three checks in §4, which are not yet run.
 
 ### D2. When a rule deletes a record, every stored reference to it is emptied
 
@@ -175,7 +173,7 @@ Recommendation: yes, the store empties them itself.
 
 Costs:
 
-- This widens D1, which Dave decided on 2026-11-21 for shapes no rule deletes only. A yes here is a yes to that.
+- This widens D1, which asks only about shapes no rule deletes. A yes here answers D1 with yes for every shape.
 - A row of any shape removed outside Velle is refused by the database while another row points at it. With the alternative the database would empty the pointing rows and allow it. This limits the maintenance OQ154 D1 says is the engineer's to do, for every shape and not only the ones D1 named.
 - The store runs one `UPDATE` per column and one `DELETE` per junction table that can point at the deleted shape. The store creates no index on a reference column today (no `CREATE INDEX` appears under `stores/`), so each such statement reads the whole pointing table. The alternative has the same cost inside the database.
 - A union reference still has no foreign key, so the database does not refuse a write naming a missing record there, and an outside removal can leave one pointing at nothing.
@@ -188,7 +186,7 @@ Costs:
 
 ## 3. The build
 
-Not written. D2, D3, and D4 await Dave.
+Not written. Nothing is decided.
 
 ## 4. Work items
 
