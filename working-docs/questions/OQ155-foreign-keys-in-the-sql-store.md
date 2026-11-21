@@ -10,7 +10,7 @@
 
 ## Roster
 
-- **D1**, **D3**, **D4**: the decisions, in §2. **D2** moved to OQ160 as its D1.
+- **D1**, **D3**, **D4**: the decisions, in §2. **D2** moved to OQ160, where it is D3.
 - **A foreign key**: a constraint declared on a column, shared among database engineers, saying its value must be the key of a row in another table. The database refuses a write that would break it.
 - **A union reference**: a field whose type is a shape declared as `A or B` (Reference §9). The store holds it as two columns, the key and the name of the shape.
 - **A junction table**: the table, shared among database engineers as a term, that holds a `many` field. It has one row per member, with the owner's key and the member's key.
@@ -52,7 +52,7 @@ In `examples/pharmacy/pharmacy.velle`, `Interaction` points at `Drug`, and no ru
 
 ### D2. Moved to OQ160
 
-Whether a reference to a deleted record is emptied is `working-docs/QUESTIONS.md` OQ160, D1, since 2026-11-21. What foreign key a reference to a shape some rule deletes declares is D4.
+Whether a reference to a deleted record is emptied is `working-docs/QUESTIONS.md` OQ160, D3, since 2026-11-21. What foreign key a reference to a shape some rule deletes declares is D4.
 
 ### D3. A database that already exists is not altered
 
@@ -67,7 +67,7 @@ Costs:
 
 ### D4. A reference to a shape some rule deletes declares the same foreign key as D1's
 
-If OQ160 decides that the store empties every reference to a record before removing it (`working-docs/QUESTIONS.md` OQ160, D1 and D2), should every reference to one shape declare the plain foreign key of D1, whether or not a rule deletes that shape?
+If OQ160 decides that the store empties every reference to a record before removing it (`working-docs/QUESTIONS.md` OQ160, D3 and D4), should every reference to one shape declare the plain foreign key of D1, whether or not a rule deletes that shape?
 
 This decision waits on OQ160. If OQ160 leaves references in place, a foreign key on such a column would make the database refuse the rule's own delete, and the answer here is that nothing is declared, as today.
 
