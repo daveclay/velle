@@ -1,6 +1,6 @@
 # OQ162 — How a spec says a record cannot be deleted while another record points at it
 
-**Status:** opened 2026-11-21 from Dave's remark on OQ160 D1: he had been weighing a shorthand for preventing a delete while a shape is referenced, and "this has made me think it's worthy of a language structure so the validator can read it more clearly". That a structure is wanted is Dave's. Where it is said and how it is spelled are proposals. D1 and D2 are decided. D3 awaits Dave. Nothing built.
+**Status:** opened 2026-11-21 from Dave's remark on OQ160 D1: he had been weighing a shorthand for preventing a delete while a shape is referenced, and "this has made me think it's worthy of a language structure so the validator can read it more clearly". That a structure is wanted is Dave's. Where it is said and how it is spelled are proposals. D1 to D3 are decided. Nothing built; the plan is §3 and awaits Dave's look before the build starts.
 
 **In plain terms:** Most of the time a product owner does not want a record deleted while other records point at it. Velle has no way to say that directly today. The question is what the spec's author writes to say it, so that the compiler can read it as a statement and does not have to work it out from how a condition happens to be worded.
 
@@ -117,7 +117,7 @@ Costs:
 
 **Decided:** yes, Dave, 2026-11-21.
 
-### D3. How the test is spelled
+### D3. How the test is spelled · Decided 2026-11-21
 
 Given D2, is the test spelled `seller is held`?
 
@@ -128,10 +128,30 @@ Recommendation: undecided between two, leaning to `is held`.
 
 The declarations are those of D2, where the line is `never (CloseAccount where seller is held)`.
 
+**Decided:** `is held`, Dave, 2026-11-21.
+
 ## 3. The build
 
-Not written. Nothing is decided.
+In build order. Each line is mirrored by a work item in §4.
+
+1. **Grammar and parser.** `x is held` joins the `is` tests beside `is none`, `is some`, `is empty`, and `is <Refinement>` (`compiler/src/main/kotlin/velle/Ast.kt`, `IsExpr`, a new kind `"held"`). Its subject is a record of a stored shape. On a scalar, a collection, or a transient act it is an error. `x is not held` is its opposite.
+2. **Runtime.** The test is true when a record of any shape points at the subject through a required `one` field, including a required field typed with a union that has the subject's shape as an operand. An optional field, a `? initially required` field, and a `many` field never count (D1).
+3. **Check V24** (`compiler/src/main/kotlin/velle/Validator.kt`). A rule that deletes a record a required reference could point at passes when a `never` over its trigger, its own condition, or an `undeletable` refinement of the deleted shape excludes `is held` for the deleted record. The resolution "the pointing record is deleted in the same commit" stays. The error text names `is held` first and `? initially required` second.
+4. **The refusal's message.** A refusal found by `is held` names the records holding the subject, by shape and field.
+5. **Tests.** `compiler/src/test/kotlin/velle/DeleteValidatorTest.kt`: V24 passes for each of the three forms and fails without one, fails when the test is written on another record than the deleted one, and still fails for a hand-written `exists`. A runtime test: a held seller's `CloseAccount` is refused naming the listing, and the same request commits once the listing is gone.
+6. **Regenerate** every example's output.
+7. **Wiki.** Reference §6: a required reference holds its target. Reference §10: the `is held` test. Reference §12, "Deletion" and "What the compiler checks": the refusal as the first way to delete a held record. `wiki/Normative/checks.md` V24. `wiki/Normative/grammar.md`. `wiki/Normative/GLOSSARY.md`: "holds".
+8. **Examples.** `examples/moderation/moderation.velle` gains a shape with a required reference to `Seller` and the refusal over `CloseAccount`, beside the `Listing.seller` that goes absent. The three `working-docs/examples/survey/24-delete-pointed-at-*-refused.velle` files are rewritten with `is held` and renamed without `-refused`; `24-delete-pointed-at-workaround.velle` is deleted; a new `24-delete-pointed-at-exists-refused.velle` keeps the hand-written `exists` that V24 does not read. The README rows follow.
+9. **Settle.** The settled row in `working-docs/QUESTIONS.md`, OQ160's pointers to this OQ reworded to point at Reference §12, and this file deleted.
 
 ## 4. Work items
 
-None yet.
+- [ ] Add `is held` to the grammar, the parser, and the type check of its subject.
+- [ ] Evaluate `is held` in the runtime over every required `one` field that can point at the subject's shape.
+- [ ] Make check V24 pass when a `never`, the rule's condition, or an `undeletable` refinement excludes `is held`, and reword its error.
+- [ ] Name the holding records in the refusal's message.
+- [ ] Write the validator tests and the runtime test.
+- [ ] Regenerate every example's output and run the full suite.
+- [ ] Write the wiki changes: Reference §6, §10, §12, `checks.md` V24, `grammar.md`, `GLOSSARY.md`.
+- [ ] Grow `examples/moderation/moderation.velle` and rewrite the `24-delete-pointed-at-` survey files and README rows.
+- [ ] Settle: the settled row, OQ160's pointers, and this file deleted.
