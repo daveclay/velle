@@ -1324,7 +1324,7 @@ class ReadSummary {
     internal val derivedSeen = mutableSetOf<Pair<String, String>>()
 
     // The three members below serve the runtime's relevance analysis (which
-    // commits can change this predicate's value — Runtime.kt, hydration); the
+    // commits can change this predicate's value — ConditionWatchers.kt); the
     // validator checks deliberately keep reading only the sets above.
 
     /** shapes whose instance sets are consulted through relationship collections

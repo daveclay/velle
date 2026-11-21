@@ -85,8 +85,8 @@ Coined terms used across the documents, one line each, with the pointer that def
 - **hydration / resolver** — the runtime demand-fetches the state an envelope needs through engineer-implemented storage questions: by key, by reference, by shape, captures (`Hydration.kt`, `StateResolver`; [Store API](Store-API)).
 - **candidate pre-filter / superset contract** — a compiled query trusted only for *exclusion*: it may over-return, never under-return; the authoritative predicate check stays in one evaluator, in memory (`Hydration.kt`, `fetchCandidates`; `Query.kt`; [Store API](Store-API), "What a store can do").
 - **polarity-dual** — how the pre-filter compiler keeps the superset contract: inexpressible predicate parts degrade to TRUE in positive position, FALSE under an odd number of negations (`Query.kt`).
-- **relevance gating** — a commit evaluates only the watched conditions its mutation footprint can affect, per static read summaries (`Runtime.kt`).
-- **self-contained condition** — one reading nothing beyond the base shape's own columns; the criterion for using the pre-filter soundly mid-envelope (`Runtime.kt`).
+- **relevance gating** — a commit evaluates only the watched conditions its mutation footprint can affect, per static read summaries (`ConditionWatchers.kt`, `CommitProcessor.kt`).
+- **self-contained condition** — one reading nothing beyond the base shape's own columns; the criterion for using the pre-filter soundly mid-envelope (`ConditionWatchers.kt`).
 - **scan floor** — the fallback fetch: all of a shape, when no keyed or filtered path applies.
 - **retraction** — deletion of a capture row at the exit commit's close: the contract's one sanctioned delete, legal because a capture is memory, not a record of the world ([`evaluation.md`](evaluation) [U2](evaluation#the-universal-transaction); `Hydration.kt`, `Retraction`).
 - **session handle / store key** — runtime identity is process-local; durable identity belongs to the store and round-trips as `Ref.Persisted`/`StoreKey` (`Hydration.kt`). Session handles never reach the engineer: the surface works in references (below).
