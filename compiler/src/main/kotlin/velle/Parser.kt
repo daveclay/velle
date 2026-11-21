@@ -772,21 +772,26 @@ class Parser(private val tokens: List<Token>) {
             t.isKw("none") -> { next(); IsExpr(subject, "none") }
             t.isKw("some") -> { next(); IsExpr(subject, "some") }
             t.isKw("empty") -> { next(); IsExpr(subject, "empty") }
+            isHeldWord(t) -> { next(); IsExpr(subject, "held") }
             t.isKw("not") -> {
                 next()
                 val r = peek()
                 when {
                     r.isKw("empty") -> { next(); IsExpr(subject, "notEmpty") }
+                    isHeldWord(r) -> { next(); NotExpr(IsExpr(subject, "held")) }
                     // `x is not Shape` is the spelling of non-membership; it is the same
                     // predicate as the general negation `not (x is Shape)`, so it parses to the same tree.
                     r.type == TokType.UIDENT -> { next(); NotExpr(IsExpr(subject, "refinement", r.text)) }
-                    else -> fail("expected 'empty' or RefinementName after 'is not'", r)
+                    else -> fail("expected 'empty', 'held', or RefinementName after 'is not'", r)
                 }
             }
             t.type == TokType.UIDENT -> { next(); IsExpr(subject, "refinement", t.text) }
-            else -> fail("expected none/some/empty/'not empty'/RefinementName/'not' RefinementName after 'is'", t)
+            else -> fail("expected none/some/empty/'not empty'/held/'not held'/RefinementName/'not' RefinementName after 'is'", t)
         }
     }
+
+    /** `held` is a word only after `is` (Reference §10), so a field may still be named `held`. */
+    private fun isHeldWord(token: Token): Boolean = token.type == TokType.LIDENT && token.text == "held"
 
     private fun parseExists(): Expr {
         expectKw("exists")

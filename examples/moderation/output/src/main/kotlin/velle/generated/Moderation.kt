@@ -39,11 +39,29 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun commit(input: NewDiscardDraft): Commit<NewDiscardDraft, Nothing?> =
         boundary("DiscardDraft", input).carryingNoRecord(input)
 
+    /** Queue key: [payout.seller].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
+    fun commit(input: NewPayout): Commit<NewPayout, Ref<Payout>> =
+        boundary("Payout", input).carrying(input)
+
+    /** Queue keys: [settlePayout.payout], [settlePayout.payout.seller].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
+    fun commit(input: NewSettlePayout): Commit<NewSettlePayout, Nothing?> =
+        boundary("SettlePayout", input).carryingNoRecord(input)
+
     /** Queue key: [closeAccount.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewCloseAccount): Commit<NewCloseAccount, Nothing?> =
         boundary("CloseAccount", input).carryingNoRecord(input)
+
+    /** Queue keys: [handOverAndClose.departing], [handOverAndClose.payout], [handOverAndClose.payout.seller], [handOverAndClose.successor].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
+    fun commit(input: NewHandOverAndClose): Commit<NewHandOverAndClose, Nothing?> =
+        boundary("HandOverAndClose", input).carryingNoRecord(input)
 
     fun sellers(): List<Seller> = all("Seller") { materializeSeller(it) }
     fun listings(): List<Listing> = all("Listing") { materializeListing(it) }
@@ -54,6 +72,8 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun reporterNotices(): List<ReporterNotice> = all("ReporterNotice") { materializeReporterNotice(it) }
     fun discardRecords(): List<DiscardRecord> = all("DiscardRecord") { materializeDiscardRecord(it) }
     fun discardRefusals(): List<DiscardRefusal> = all("DiscardRefusal") { materializeDiscardRefusal(it) }
+    fun payouts(): List<Payout> = all("Payout") { materializePayout(it) }
+    fun settlements(): List<Settlement> = all("Settlement") { materializeSettlement(it) }
     fun drafts(): List<Draft> = all("Draft") { materializeDraft(it) }
     fun publishedListings(): List<PublishedListing> = all("PublishedListing") { materializePublishedListing(it) }
     fun orphanReports(): List<OrphanReport> = all("OrphanReport") { materializeOrphanReport(it) }
@@ -109,6 +129,16 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         fun discardRefusal(key: StoreKey): DiscardRefusal = byKey("DiscardRefusal", key)
         fun discardRefusal(key: Long): DiscardRefusal = discardRefusal(StoreKey(key))
 
+        val payouts: PayoutQuery get() = query("Payout", PayoutFields()) { materializePayout(it) }
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun payout(key: StoreKey): Payout = byKey("Payout", key)
+        fun payout(key: Long): Payout = payout(StoreKey(key))
+
+        val settlements: SettlementQuery get() = query("Settlement", SettlementFields()) { materializeSettlement(it) }
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun settlement(key: StoreKey): Settlement = byKey("Settlement", key)
+        fun settlement(key: Long): Settlement = settlement(StoreKey(key))
+
         val drafts: DraftQuery get() = query("Draft", DraftFields()) { materializeDraft(it) }
         /** The record behind [ref] as a member of Draft, or null when it is not one. */
         fun draft(ref: Ref<Listing>): Draft? = member("Draft", ref) { materializeDraft(it) }
@@ -137,6 +167,8 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         "ReporterNotice" -> materializeReporterNotice(id)
         "DiscardRecord" -> materializeDiscardRecord(id)
         "DiscardRefusal" -> materializeDiscardRefusal(id)
+        "Payout" -> materializePayout(id)
+        "Settlement" -> materializeSettlement(id)
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
@@ -145,6 +177,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         name = system.get(id, "name") as String,
         listings = (system.get(id, "listings") as List<*>).map { system.refFor(it as Long) },
         sellerNotices = (system.get(id, "sellerNotices") as List<*>).map { system.refFor(it as Long) },
+        payouts = (system.get(id, "payouts") as List<*>).map { system.refFor(it as Long) },
     )
 
     private fun materializeListing(id: Long): Listing = Listing(
@@ -207,6 +240,19 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
+    private fun materializePayout(id: Long): Payout = Payout(
+        key = system.refFor(id).key,
+        seller = system.refFor(system.get(id, "seller") as Long),
+        amount = (system.get(id, "amount") as BigDecimal).intValueExact(),
+    )
+
+    private fun materializeSettlement(id: Long): Settlement = Settlement(
+        key = system.refFor(id).key,
+        sellerName = system.get(id, "sellerName") as String,
+        amount = (system.get(id, "amount") as BigDecimal).intValueExact(),
+        settledOn = system.get(id, "settledOn") as Instant,
+    )
+
     private fun materializeDraft(id: Long): Draft = Draft(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
@@ -255,6 +301,8 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 -- and the trigger family that tells a state's two exit causes apart
 -- (Reference §13, "Deletion as a second exit cause"): `when leaving not
 -- deleted`, `when deleted`, and `when leaving or deleted`.
+-- A payout shows the other answer to a deletion: a required reference holds
+-- the seller it points at, and `is held` refuses the request to close.
 --
 -- Comment convention (as in payments.velle): plain comments tell the business
 -- story; `velle:` comments note the language machinery on show.
@@ -429,12 +477,67 @@ rule RefuseDiscard when (DiscardDraft where listing is not Draft) {
 
 -- ── Closing a seller's account ───────────────────────────────────────────────
 
+-- A payout is money owed to a seller, and it always has one: the reference is
+-- required. A required reference holds the record it points at, so a seller
+-- who is owed a payout cannot close their account. A listing's seller, above,
+-- is the other choice: it lets go, and the listing lives on without one.
+-- velle: a required reference holds its target (Reference §6); a seller is
+-- held while a payout points at it
+act Payout {
+    seller: one Seller
+    amount: integer
+}
+
+-- Paying it out removes the payout and keeps what was paid, by copy.
+transient act SettlePayout {
+    payout: one Payout
+}
+
+shape Settlement {
+    sellerName: text
+    amount: integer
+    settledOn: timestamp on create
+}
+
+rule ApplySettle when SettlePayout {
+    Settlement from { sellerName: payout.seller.name, amount: payout.amount }
+    delete payout
+}
+
 transient act CloseAccount {
     seller: one Seller
 }
 
+-- "A seller who is still owed money cannot close their account." The request
+-- is turned away, and the refusal names the payout that holds the seller.
+-- velle: `is held` (Reference §10), the test a deleting rule answers a
+-- required reference with (checks.md V24)
+never (CloseAccount where seller is held)
+
 rule ApplyClose when CloseAccount {
     delete seller
+}
+
+-- "Hand this payout to another seller and close the first account", as one
+-- request. The rule moves the payout and deletes the seller it moved it from.
+-- The `never` is read when the commit ends, with the payout already moved, so
+-- the request goes through when nothing is left pointing at the departing
+-- seller. It is refused when the departing seller is owed another payout, and
+-- when the caller names one seller as both.
+-- velle: a `never` that reads what the request's own rule assigns is read at
+-- the end of the commit (evaluation.md, "The door's moment"); `is held` then
+-- counts the references left pointing at the record the commit deleted
+transient act HandOverAndClose {
+    payout: one Payout
+    departing: one Seller
+    successor: one Seller
+}
+
+never (HandOverAndClose where departing is held)
+
+rule ApplyHandOver when HandOverAndClose {
+    payout.seller = successor
+    delete departing
 }
 
 -- The orphan side is the point, not a residue: "what does the business do
@@ -464,6 +567,8 @@ typealias ListingReportQuery = TypedQuery<ListingReportFields, ListingReport>
 typealias ReporterNoticeQuery = TypedQuery<ReporterNoticeFields, ReporterNotice>
 typealias DiscardRecordQuery = TypedQuery<DiscardRecordFields, DiscardRecord>
 typealias DiscardRefusalQuery = TypedQuery<DiscardRefusalFields, DiscardRefusal>
+typealias PayoutQuery = TypedQuery<PayoutFields, Payout>
+typealias SettlementQuery = TypedQuery<SettlementFields, Settlement>
 typealias DraftQuery = TypedQuery<DraftFields, Draft>
 typealias PublishedListingQuery = TypedQuery<PublishedListingFields, PublishedListing>
 typealias OrphanReportQuery = TypedQuery<OrphanReportFields, OrphanReport>
@@ -536,6 +641,30 @@ data class NewDiscardDraft(
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "DiscardDraft") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
+data class NewPayout(
+    val seller: Ref<Seller>,
+    val amount: Int,
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+        put("seller", system.idOf(seller))
+        put("amount", amount)
+    }
+    override fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Payout") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
+}
+
+data class NewSettlePayout(
+    val payout: Ref<Payout>,
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+        put("payout", system.idOf(payout))
+    }
+    override fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "SettlePayout") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
+}
+
 data class NewCloseAccount(
     val seller: Ref<Seller>,
 ) : NewValue {
@@ -545,6 +674,21 @@ data class NewCloseAccount(
     override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CloseAccount") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
+}
+
+data class NewHandOverAndClose(
+    val payout: Ref<Payout>,
+    val departing: Ref<Seller>,
+    val successor: Ref<Seller>,
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+        put("payout", system.idOf(payout))
+        put("departing", system.idOf(departing))
+        put("successor", system.idOf(successor))
+    }
+    override fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "HandOverAndClose") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 
@@ -558,6 +702,7 @@ data class Seller(
     val name: String,
     val listings: List<Ref<Listing>>,
     val sellerNotices: List<Ref<SellerNotice>>,
+    val payouts: List<Ref<Payout>>,
 ) : Ref<Seller> {
     override val shape: String get() = "Seller"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -655,6 +800,27 @@ data class DiscardRefusal(
     val refusedOn: Instant,
 ) : Ref<DiscardRefusal> {
     override val shape: String get() = "DiscardRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+data class Payout(
+    override val key: StoreKey,
+    val seller: Ref<Seller>,
+    val amount: Int,
+) : Ref<Payout> {
+    override val shape: String get() = "Payout"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+data class Settlement(
+    override val key: StoreKey,
+    val sellerName: String,
+    val amount: Int,
+    val settledOn: Instant,
+) : Ref<Settlement> {
+    override val shape: String get() = "Settlement"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -772,6 +938,17 @@ class DiscardRefusalFields(path: List<String> = emptyList()) : Fields(path) {
     val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
 }
 
+class PayoutFields(path: List<String> = emptyList()) : Fields(path) {
+    val seller: SellerFields get() = SellerFields(fieldPath + "seller")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+}
+
+class SettlementFields(path: List<String> = emptyList()) : Fields(path) {
+    val sellerName: TextField get() = TextField(fieldPath + "sellerName")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val settledOn: DateTimeField get() = DateTimeField(fieldPath + "settledOn")
+}
+
 class DraftFields(path: List<String> = emptyList()) : Fields(path) {
     val title: TextField get() = TextField(fieldPath + "title")
     val seller: SellerFields get() = SellerFields(fieldPath + "seller")
@@ -804,7 +981,7 @@ class OrphanedListingFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = ModerationSystem()
     println("Velle MockHarness — Moderation")
-    println("Commits: commit(NewSeller(...)), commit(NewListing(...)), commit(NewPublish(...)), commit(NewListingReport(...)), commit(NewDiscardDraft(...)), commit(NewCloseAccount(...))")
+    println("Commits: commit(NewSeller(...)), commit(NewListing(...)), commit(NewPublish(...)), commit(NewListingReport(...)), commit(NewDiscardDraft(...)), commit(NewPayout(...)), commit(NewSettlePayout(...)), commit(NewCloseAccount(...)), commit(NewHandOverAndClose(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>
@@ -818,4 +995,6 @@ fun main() {
     println("ReporterNotice: " + sys.reporterNotices().size)
     println("DiscardRecord: " + sys.discardRecords().size)
     println("DiscardRefusal: " + sys.discardRefusals().size)
+    println("Payout: " + sys.payouts().size)
+    println("Settlement: " + sys.settlements().size)
 }

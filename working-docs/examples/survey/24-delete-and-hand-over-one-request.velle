@@ -1,9 +1,9 @@
 -- "An employee leaves and another takes over their shop", as one request. The
 -- rule points the shop at the successor and deletes the employee who leaves.
--- It is right for every request but one that names the same employee twice,
--- which would leave the shop pointing at an employee who is gone. The
--- compiler accepts it today, with the shop's manager declared as a reference
--- that may go absent; with `manager: one Employee` check V24 refuses it.
+-- The `never` reads `Shop.manager`, which the rule assigns, so it is read when
+-- the commit ends. The request goes through when nothing is left pointing at
+-- the departing employee. It is refused when the caller names one employee as
+-- both, and when a second shop still points at the departing one.
 
 act Employee {
     name: text
@@ -11,7 +11,7 @@ act Employee {
 
 act Shop {
     name: text
-    manager: one Employee? initially required
+    manager: one Employee
 }
 
 transient act ReplaceManager {
@@ -19,6 +19,8 @@ transient act ReplaceManager {
     departing: one Employee
     successor: one Employee
 }
+
+never (ReplaceManager where departing is held)
 
 rule ApplyReplace when ReplaceManager {
     shop.manager = successor

@@ -8,14 +8,14 @@ act Seller {
 
 act Listing {
     title: text
-    seller: one Seller? initially required
+    seller: one Seller
 }
 
 transient act CloseAccount {
     seller: one Seller
 }
 
-never (CloseAccount where exists (Listing where seller == this.seller))
+never (CloseAccount where seller is held)
 
 rule ApplyClose when CloseAccount {
     delete seller

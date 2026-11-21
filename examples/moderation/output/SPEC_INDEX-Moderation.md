@@ -22,9 +22,17 @@ each case below is an executable test.
 - ApplyDiscard - a new DiscardDraft produces a DiscardRecord
 - RefuseDiscard - a new DiscardDraft produces a DiscardRefusal
 
+## SettlePayoutSpec.kt
+
+- ApplySettle - a new SettlePayout produces a Settlement
+
 ## CloseAccountSpec.kt
 
 - ApplyClose - a new CloseAccount 
+
+## HandOverAndCloseSpec.kt
+
+- ApplyHandOver - a new HandOverAndClose sets payout.seller
 
 ## OrphanedListingSpec.kt
 
@@ -35,4 +43,6 @@ each case below is an executable test.
 
 ## Not yet generated
 
+- never #2: non-comparison predicate
+- never #3: non-comparison predicate
 - never #1: non-literal bound

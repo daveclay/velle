@@ -1,0 +1,24 @@
+-- One rule creates a listing for a seller and deletes that seller, in one
+-- commit. The compiler accepts it, because the `never` is read when the commit
+-- ends: every request is then refused, since the listing the rule made holds
+-- the seller it deleted. The rule can never succeed, and no check says so.
+
+act Seller {
+    name: text
+}
+
+act Listing {
+    title: text
+    seller: one Seller
+}
+
+transient act CloseAccount {
+    seller: one Seller
+}
+
+never (CloseAccount where seller is held)
+
+rule ApplyClose when CloseAccount {
+    Listing from { title: "Closed", seller: seller }
+    delete seller
+}

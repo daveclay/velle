@@ -7,6 +7,8 @@
 -- and the trigger family that tells a state's two exit causes apart
 -- (Reference §13, "Deletion as a second exit cause"): `when leaving not
 -- deleted`, `when deleted`, and `when leaving or deleted`.
+-- A payout shows the other answer to a deletion: a required reference holds
+-- the seller it points at, and `is held` refuses the request to close.
 --
 -- Comment convention (as in payments.velle): plain comments tell the business
 -- story; `velle:` comments note the language machinery on show.
@@ -181,12 +183,67 @@ rule RefuseDiscard when (DiscardDraft where listing is not Draft) {
 
 -- ── Closing a seller's account ───────────────────────────────────────────────
 
+-- A payout is money owed to a seller, and it always has one: the reference is
+-- required. A required reference holds the record it points at, so a seller
+-- who is owed a payout cannot close their account. A listing's seller, above,
+-- is the other choice: it lets go, and the listing lives on without one.
+-- velle: a required reference holds its target (Reference §6); a seller is
+-- held while a payout points at it
+act Payout {
+    seller: one Seller
+    amount: integer
+}
+
+-- Paying it out removes the payout and keeps what was paid, by copy.
+transient act SettlePayout {
+    payout: one Payout
+}
+
+shape Settlement {
+    sellerName: text
+    amount: integer
+    settledOn: timestamp on create
+}
+
+rule ApplySettle when SettlePayout {
+    Settlement from { sellerName: payout.seller.name, amount: payout.amount }
+    delete payout
+}
+
 transient act CloseAccount {
     seller: one Seller
 }
 
+-- "A seller who is still owed money cannot close their account." The request
+-- is turned away, and the refusal names the payout that holds the seller.
+-- velle: `is held` (Reference §10), the test a deleting rule answers a
+-- required reference with (checks.md V24)
+never (CloseAccount where seller is held)
+
 rule ApplyClose when CloseAccount {
     delete seller
+}
+
+-- "Hand this payout to another seller and close the first account", as one
+-- request. The rule moves the payout and deletes the seller it moved it from.
+-- The `never` is read when the commit ends, with the payout already moved, so
+-- the request goes through when nothing is left pointing at the departing
+-- seller. It is refused when the departing seller is owed another payout, and
+-- when the caller names one seller as both.
+-- velle: a `never` that reads what the request's own rule assigns is read at
+-- the end of the commit (evaluation.md, "The door's moment"); `is held` then
+-- counts the references left pointing at the record the commit deleted
+transient act HandOverAndClose {
+    payout: one Payout
+    departing: one Seller
+    successor: one Seller
+}
+
+never (HandOverAndClose where departing is held)
+
+rule ApplyHandOver when HandOverAndClose {
+    payout.seller = successor
+    delete departing
 }
 
 -- The orphan side is the point, not a residue: "what does the business do

@@ -35,6 +35,66 @@ open class ModerationFlowTest {
     }
 
     @Test
+    fun `a seller owed a payout cannot close their account until it is settled`() {
+        val ada = seller("Ada")
+        accept(sys.commit(NewPayout(ada, 40)))
+        val payout = sys.payouts().single()
+
+        val refusal = assertIs<Commit.Refused<*, *>>(sys.commit(NewCloseAccount(ada)), "a held seller is not deleted")
+        assertTrue("held by Payout.seller" in refusal.reason, "the refusal names what holds the seller: ${refusal.reason}")
+        assertEquals(listOf(ada), sys.sellers(), "the seller is still there")
+
+        accept(sys.commit(NewSettlePayout(payout)))
+        assertEquals("Ada", sys.read(sys.settlements().single()).sellerName, "what was paid is kept by copy")
+
+        accept(sys.commit(NewCloseAccount(ada)))
+        assertEquals(emptyList(), sys.sellers(), "nothing holds the seller now")
+    }
+
+    private fun payout(seller: Seller, amount: Int): Payout {
+        accept(sys.commit(NewPayout(seller, amount)))
+        return sys.payouts().last()
+    }
+
+    @Test
+    fun `a payout handed to another seller lets the first account close in the same request`() {
+        val ada = seller("Ada")
+        val bo = seller("Bo")
+        val owed = payout(ada, 40)
+
+        accept(sys.commit(NewHandOverAndClose(owed, ada, bo)))
+
+        assertEquals(listOf(bo), sys.sellers(), "the departing seller is gone")
+        assertEquals(bo, sys.read(owed).seller, "and the payout is owed to the successor")
+    }
+
+    @Test
+    fun `a hand-over naming one seller as both is refused and changes nothing`() {
+        val ada = seller("Ada")
+        val owed = payout(ada, 40)
+
+        val refusal = assertIs<Commit.Refused<*, *>>(sys.commit(NewHandOverAndClose(owed, ada, ada)), "the payout would point at a deleted seller")
+
+        assertTrue("held by Payout.seller" in refusal.reason, "the refusal names what holds the seller: ${refusal.reason}")
+        assertEquals(listOf(ada), sys.sellers())
+        assertEquals(ada, sys.read(owed).seller)
+    }
+
+    @Test
+    fun `a hand-over is refused while the departing seller is owed another payout`() {
+        val ada = seller("Ada")
+        val bo = seller("Bo")
+        val first = payout(ada, 40)
+        val second = payout(ada, 15)
+
+        assertIs<Commit.Refused<*, *>>(sys.commit(NewHandOverAndClose(first, ada, bo)), "the second payout still holds the seller")
+
+        assertEquals(listOf(ada, bo), sys.sellers())
+        assertEquals(ada, sys.read(first).seller, "the first payout was not moved")
+        assertEquals(ada, sys.read(second).seller)
+    }
+
+    @Test
     fun `discarding a draft deletes the listing and leaves the records the rules made`() {
         val ada = seller("Ada")
         val lamp = listing(ada, "brass lamp")

@@ -1,0 +1,7 @@
+-- `is held` asks whether a required reference points at a record, and a
+-- seller's name is a text, not a record.
+act Seller { name: text }
+act Listing { title: text, seller: one Seller }
+transient act CloseAccount { seller: one Seller }
+never (CloseAccount where seller.name is held)
+rule ApplyClose when (CloseAccount where seller is not held) { delete seller }

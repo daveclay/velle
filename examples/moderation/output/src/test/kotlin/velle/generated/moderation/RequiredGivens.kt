@@ -38,8 +38,14 @@ interface RequiredGivens {
     /** Commit ONE new 'DiscardDraft' that enters 'DiscardDraft' at its commit. The act is transient — nothing to return. */
     fun discardDraftForRefuseDiscard()
 
+    /** Commit ONE new 'SettlePayout' that enters 'SettlePayout' at its commit. The act is transient — nothing to return. */
+    fun settlePayout()
+
     /** Commit ONE new 'CloseAccount' that enters 'CloseAccount' at its commit. The act is transient — nothing to return. */
     fun closeAccount()
+
+    /** Commit ONE new 'HandOverAndClose' that enters 'HandOverAndClose' at its commit. The act is transient — nothing to return. */
+    fun handOverAndClose()
 
     /** Perform the commit(s) that make ONE new subject enter 'OrphanedListing'; return the subject. */
     fun listingForSweepOrphanedDrafts(): Listing

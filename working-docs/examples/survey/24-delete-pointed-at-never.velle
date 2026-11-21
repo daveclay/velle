@@ -1,0 +1,23 @@
+-- "A seller who still has listings cannot close their account", said as a
+-- refusal over the request. The listing's seller is required, so a listing
+-- holds its seller. The `never` turns away every CloseAccount whose seller is
+-- held, and check V24 reads it: ApplyClose only deletes a seller nothing holds.
+
+act Seller {
+    name: text
+}
+
+act Listing {
+    title: text
+    seller: one Seller
+}
+
+transient act CloseAccount {
+    seller: one Seller
+}
+
+never (CloseAccount where seller is held)
+
+rule ApplyClose when CloseAccount {
+    delete seller
+}

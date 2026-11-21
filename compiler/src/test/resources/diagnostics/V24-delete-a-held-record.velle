@@ -1,0 +1,6 @@
+-- A rule deletes a record a required reference can point at, and nothing says
+-- what happens to a seller a listing points at.
+act Seller { name: text }
+act Listing { title: text, seller: one Seller }
+transient act CloseAccount { seller: one Seller }
+rule ApplyClose when CloseAccount { delete seller }

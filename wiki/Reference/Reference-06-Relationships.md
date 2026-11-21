@@ -40,7 +40,31 @@ act Student {
 
 A `many` set carries no data about each link. If a link needs data of its own, such as when it was made or a grade, write a shape for it with a `one` field to each end. That shape is a business fact, not ceremony.
 
-Declaring a relationship says nothing about what happens when a linked record is deleted. See [§12, "Deletion"](Reference-12-Assignment#deletion-delete) for that.
+## A required reference holds its target
+
+How a `one` link is declared says what happens when someone asks to delete the record it points at. There are two answers, and the product owner picks one for each link.
+
+From `examples/moderation/moderation.velle`:
+
+```
+act Listing {
+    title: text
+    seller: one Seller? initially required
+    isDraft: boolean initially true
+}
+
+act Payout {
+    seller: one Seller
+    amount: integer
+}
+```
+
+- `Payout.seller: one Seller` is required, so a payout always has a seller. A required link **holds** the record it points at: a seller cannot be deleted while a payout points at it.
+- `Listing.seller: one Seller? initially required` lets go. A listing must name a seller when it is created, and if that seller is later deleted the listing stays, with `seller` reading as absent.
+- An optional link, `advisor: one Advisor?`, also lets go, and so does a `many` set: the deleted record leaves the set.
+- A required link typed with a union ([§9](Reference-09-Composing-refinements)) holds a record of any shape in the union.
+
+A rule that deletes a held shape's record says what happens to a held one, with the `is held` test ([§10](Reference-10-Predicate-expressions#testing-presence-emptiness-membership-and-holding-with-is)). [§12, "Deleting a record that others point at"](Reference-12-Assignment#deleting-a-record-that-others-point-at) shows how.
 
 ### Rules the compiler enforces
 

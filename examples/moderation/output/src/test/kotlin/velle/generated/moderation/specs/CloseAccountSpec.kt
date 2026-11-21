@@ -11,6 +11,8 @@ import velle.generated.moderation.*
  *     delete seller
  * }
  *
+ * never (CloseAccount where seller is held)
+ *
  */
 class CloseAccountSpec : SpecSupport() {
 

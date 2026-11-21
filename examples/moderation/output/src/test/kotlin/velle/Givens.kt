@@ -56,6 +56,19 @@ class Givens(private val sys: ModerationSystem) : RequiredGivens {
         sys.commit(NewDiscardDraft(listing, "too late"))
     }
 
+    /** A payout owed to a seller, then paid out. */
+    override fun settlePayout() {
+        sys.commit(NewPayout(seller(), 40))
+        sys.commit(NewSettlePayout(sys.payouts().last()))
+    }
+
+    /** A payout owed to one seller, handed to another as the first closes. */
+    override fun handOverAndClose() {
+        val departing = seller()
+        sys.commit(NewPayout(departing, 40))
+        sys.commit(NewHandOverAndClose(sys.payouts().last(), departing, seller()))
+    }
+
     override fun closeAccount() {
         sys.commit(NewCloseAccount(seller()))
     }

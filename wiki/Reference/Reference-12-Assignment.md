@@ -154,10 +154,68 @@ What you can and cannot write:
 - The target is one record, named by a fixed path such as `delete this` or `delete listing`, never a collection. To delete several records, write a rule whose subject is each one; it fires once per record ([§16](Reference-16-Sweeps)).
 - A rule may read the record it deletes, and create other records from what it reads, in the same commit.
 - A commit may not both assign a field of a record and delete that record.
-- A deletion leaves nothing behind: no tombstone, no `is deleted` test, no reference that outlives its target. To remember a deletion, create a record for it, as `DiscardRecord` does. To react to one, use `when deleted` ([§13](Reference-13-Exit-triggers#deletion-as-a-second-exit-cause-when-deleted)).
+- A deletion leaves nothing behind: no tombstone, no `is deleted` test, no link still pointing at the deleted record. To remember a deletion, create a record for it, as `DiscardRecord` does. To react to one, use `when deleted` ([§13](Reference-13-Exit-triggers#deletion-as-a-second-exit-cause-when-deleted)).
 - A refinement may declare `undeletable`, which forbids deleting a record while it is a member. It is written where `frozen` is written ([§8](Reference-08-Refinements#frozen-fields-frozen)).
 
 Delete current-state records such as a `Customer` or a `Listing`. Records of something that happened, such as a committed act or a `DiscardRecord`, are kept.
+
+### Deleting a record that others point at
+
+When a user asks to delete a record that other records point at, there are two answers. Either the request is turned away while anything points at the record, or the record is deleted and the links to it go absent. Each link says which, by how it is declared ([§6, "A required reference holds its target"](Reference-06-Relationships#a-required-reference-holds-its-target)). A rule that deletes a record some required link can point at must then say what happens to a held one, with `is held` ([§10](Reference-10-Predicate-expressions#testing-presence-emptiness-membership-and-holding-with-is)).
+
+"A seller who is still owed money cannot close their account." From `examples/moderation/moderation.velle`:
+
+```
+act Payout {
+    seller: one Seller
+    amount: integer
+}
+
+transient act CloseAccount {
+    seller: one Seller
+}
+
+never (CloseAccount where seller is held)
+
+rule ApplyClose when CloseAccount {
+    delete seller
+}
+```
+
+- `Payout.seller` is required, so a payout holds its seller.
+- The `never` turns away a `CloseAccount` whose seller is held. The user is told the request was refused and which payout holds the seller ([§21](Reference-21-never)).
+- `ApplyClose` then only ever deletes a seller nothing holds. Without the `never`, the compiler rejects the rule.
+- `Listing.seller` in the same file is declared `? initially required`. A listing does not hold its seller, so listings do not stop the account closing. They stay, and `seller` reads as absent.
+
+There are three ways to answer, and the author chooses:
+
+- **Turn the request away**, with a `never` over the request, as above.
+- **Record the refusal.** Condition the deleting rule on `seller is not held`, and write a second rule on `seller is held` that creates a record of the request that was turned away. A rule that runs on a schedule has no request to turn away, so it uses a condition too: `this is not held` in the rule's `where`, with `delete this` in its body.
+- **Delete the pointing record too.** A rule that deletes the payout and the seller in one body needs no test.
+
+A request may move the links and delete the record at once. "Hand this payout to another seller and close the first account," from the same file:
+
+```
+transient act HandOverAndClose {
+    payout: one Payout
+    departing: one Seller
+    successor: one Seller
+}
+
+never (HandOverAndClose where departing is held)
+
+rule ApplyHandOver when HandOverAndClose {
+    payout.seller = successor
+    delete departing
+}
+```
+
+- The rule points the payout at the successor and deletes the departing seller.
+- The `never` reads a field the request's own rule assigns, so it is checked when the commit ends, with the payout already moved. Nothing is written to the store before that check.
+- The request goes through when nothing is left pointing at the departing seller.
+- It is refused when the departing seller is owed a second payout, and when the caller names one seller as both. In each case a payout would be left pointing at a seller that is gone, and the refusal names that payout.
+
+Only a `never` is checked when the commit ends. A rule's condition is read before the rule runs, so a rule conditioned on `departing is not held` cannot also point a required link at a seller. The compiler rejects it and names the `never` to write.
 
 ## What the compiler checks
 
@@ -166,7 +224,7 @@ Delete current-state records such as a `Customer` or a `Listing`. Records of som
 - **Rejects** an assignment in a shape body.
 - **Rejects** assigning a value of another type than the field's, `note.locked = 5` on a `boolean`, and assigning a value that may be absent by declaration to a required field, naming the `is some` test to write or the `?` to declare ([checks.md, F2](checks#f2--type-checking)).
 - **Rejects** a `delete` whose target is a collection or a transient act, two deletes of one record in one commit, and a commit that both assigns a field of a record and deletes it ([checks.md, V23](checks#v23--delete-statement-legality-coarse)).
-- **Rejects** deleting a record that a required `one` reference still points at, unless the referrer is deleted in the same commit, declares the reference `? initially required`, or keeps copies of what it needs. Optional and `many` references need nothing. There is no cascade ([checks.md, V24](checks#v24--referential-completeness-coarse)).
+- **Rejects** a rule that deletes a record a required `one` link can point at, unless a `never` over the request refuses it while `is held`, the rule's own condition says `is not held`, or the rule deletes the pointing record as well. Links that let go need nothing. There is no cascade. It also rejects a rule conditioned on `is not held` when the same commit can point a required link at a record of the deleted shape ([checks.md, V24](checks#v24--referential-completeness-coarse)).
 - **Rejects** a delete when a `not exists` guard, a singular `(Shape for ...)` read, or a `never` depends on the deleted shape, unless the deleting rule's condition provably excludes those records ([checks.md, V25](checks#v25--existence-dependency-coarse), [V26](checks#v26--deleters-join-never-induction-coarse)).
 - **Rejects** a delete that could reach a record in an `undeletable` refinement. The usual fix is to trigger the deleting rule on the deletable subset, as `ApplyDiscard` does with `Draft` ([checks.md, V27](checks#v27--the-deletion-gate)).
 - **Rejects** a `when leaving` rule with `after commit` or a schedule that a deletion could hand a record that no longer exists ([checks.md, V28](checks#v28--deletion-stranding)).

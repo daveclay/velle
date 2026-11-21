@@ -1,10 +1,10 @@
 # OQ160 — What happens to the records that point at a record when it is deleted
 
-**Status:** opened 2026-11-21, split out of OQ155 at Dave's direction: "Leaving a reference to a deleted record is not how systems work". On 2026-11-21 Dave set the frame the file now follows: the product owner and the engineer choose, per case, between refusing the delete and clearing the references. D1 is decided. D2 to D4 await Dave. Nothing built, and two things are not yet checked (§4).
+**Status:** opened 2026-11-21, split out of OQ155 at Dave's direction: "Leaving a reference to a deleted record is not how systems work". On 2026-11-21 Dave set the frame the file now follows: the product owner and the engineer choose, per case, between refusing the delete and clearing the references. D1 is decided and built. D2 to D4 await Dave. Nothing of D2 to D4 is built, and two things are not yet checked (§4).
 
-**In plain terms:** A user asks to delete a record that other records point at. The product owner and the engineer have two answers to choose from: the user may not delete it while anything points at it, or it is deleted and the pointers are cleared. Most of the time the product owner wants the first, and the user must be told why in the words of the business, not by an error from the database. Velle can say the second today and cannot say the first.
+**In plain terms:** A user asks to delete a record that other records point at. The product owner and the engineer have two answers to choose from: the user may not delete it while anything points at it, or it is deleted and the pointers are cleared. Most of the time the product owner wants the first, and the user must be told why in the words of the business, not by an error from the database. Velle can say both. What is still open is what happens to the pointers that are cleared.
 
-**See:** Reference §12, "Deletion", and `checks.md` V24, which decide which references may survive a deletion. Reference §21, on a refusal and what it carries to the caller. `examples/moderation/moderation.velle`, the example of deletion. `working-docs/examples/survey/README.md`, the four `24-delete-pointed-at-` rows. `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `delete` (line 981), which removes the row. `wiki/Guides/Store-API.md`, the store contract. `working-docs/QUESTIONS.md` OQ155, on foreign keys, whose D1 and D4 depend on the answers here. `working-docs/QUESTIONS.md` OQ154, on rows removed outside Velle.
+**See:** Reference §12, "Deletion", and `checks.md` V24, which decide which references may survive a deletion. Reference §21, on a refusal and what it carries to the caller. `examples/moderation/moderation.velle`, the example of deletion. `working-docs/examples/survey/README.md`, the `24-delete-` rows. `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `delete` (line 981), which removes the row. `wiki/Guides/Store-API.md`, the store contract. `working-docs/QUESTIONS.md` OQ155, on foreign keys, whose D1 and D4 depend on the answers here. `working-docs/QUESTIONS.md` OQ154, on rows removed outside Velle.
 
 ---
 
@@ -20,15 +20,9 @@
 
 ## 1. What runs today
 
-### Refusing the delete cannot be said while the reference is required
+### Refusing the delete is said with `is held`
 
-Check V24 (`checks.md`) refuses a rule that deletes a record a required reference could point at, unless the pointing record is deleted in the same commit. It does not read anything else the spec says. Three spellings of "a seller who still has listings cannot close their account" are each refused with the same `[V24]` error (`working-docs/examples/survey/README.md`):
-
-- `working-docs/examples/survey/24-delete-pointed-at-never-refused.velle`: a `never` over the request `CloseAccount` turns it away while a listing points at the seller.
-- `working-docs/examples/survey/24-delete-pointed-at-condition-refused.velle`: the rule `ApplyClose` deletes only when no listing points at the seller, and the rule `RefuseClose` records the request that was turned away.
-- `working-docs/examples/survey/24-delete-pointed-at-undeletable-refused.velle`: the shape `SellerWithListings` is declared `undeletable`.
-
-What an author writes today instead is `working-docs/examples/survey/24-delete-pointed-at-workaround.velle`, which passes: the same `never`, with the field weakened to `seller: one Seller? initially required`. The `never` means no listing's seller can go absent. The field's type says it may. Every rule that reads `listing.seller` must then answer for an absence that cannot happen, and the product owner reading the shape is told a listing may have no seller.
+A required reference holds the record it points at, and a rule that deletes such a record answers with the `is held` test: a `never` over the request, the rule's own condition, or deleting the pointing record too (Reference §12, "Deleting a record that others point at"; `checks.md` V24). `examples/moderation/moderation.velle` shows it with `Payout.seller` and the `never` over `CloseAccount`. `compiler/src/test/kotlin/velle/HeldRecordTest.kt` pins it.
 
 ### Clearing the references is what an optional reference does, and the store keeps the dead key
 
@@ -40,62 +34,11 @@ This is why the store contract forbids reusing a key (`wiki/Guides/Store-API.md`
 
 ## 2. What to decide
 
-The two answers are chosen per reference, by the product owner and the engineer. D1 lets the spec say "refuse the delete". D2 asks whether a reference that is cleared must say so. D3 and D4 are about what the store holds after a reference is cleared.
+The two answers are chosen per reference, by the product owner and the engineer. D1, which let the spec say "refuse the delete", is built. D2 asks whether a reference that is cleared must say so. D3 and D4 are about what the store holds after a reference is cleared.
 
-### D1. A rule may delete a record that a required reference points at when the spec turns the request away while any record points at it · Decided 2026-11-21
+### D1. Refusing the delete for a required reference · Decided 2026-11-21
 
-This decision waits on `working-docs/QUESTIONS.md` OQ162, which asks whether the same thing is said with a language structure the compiler reads directly. A yes to OQ162 D2 answers this with no.
-
-Should the compiler accept `working-docs/examples/survey/24-delete-pointed-at-never-refused.velle`, where the listing's seller is required and a `never` refuses the request to close an account while a listing points at the seller?
-
-Recommendation: yes. This is the answer the product owner wants most of the time, and today it can only be written by declaring the reference as one that may go absent.
-
-```
-act Seller {                                -- compiler: a persistent shape, so the store creates table "Seller"
-    name: text                              -- compiler: a text column "name"
-}
-
-act Listing {                               -- compiler: a persistent shape, so the store creates table "Listing"
-    title: text                             -- compiler: a text column "title"
-    seller: one Seller                      -- compiler: a required reference; every Listing points at a Seller for as long as it exists
-}
-
-transient act CloseAccount {                -- compiler: transient, so no table; the request itself is not kept
-    seller: one Seller                      -- compiler: the caller names one existing Seller
-}
-
-never (CloseAccount where exists (Listing where seller == this.seller))
-                                            -- compiler: a refusal; a CloseAccount for a seller some Listing points at is turned away at the door
-                                            -- compiler, with this decision: also the proof V24 asks for, that no Listing points at a seller ApplyClose deletes
-
-rule ApplyClose when CloseAccount {         -- compiler: runs once per CloseAccount that was not refused
-    delete seller                           -- compiler today: [V24] error, "strands 'Listing.seller: one Seller'"
-                                            -- compiler, with this decision: accepted, because the `never` above covers Listing.seller
-}
-```
-
-What the user is told is the refusal, not an error from the database. Reference §21 says a refusal "carries the act, the records that would be in the forbidden state, the record the act was about, and the evaluation that found it, and a readable message is rendered from that data". The user who asks to close seller 7 is told the `CloseAccount` was refused because a `Listing` points at that seller.
-
-The author chooses how the refusal is kept, as for every `never`. `working-docs/examples/survey/24-delete-pointed-at-condition-refused.velle` says the same thing with the rule `ApplyClose` on the condition `not exists (Listing where seller == this.seller)` and the rule `RefuseClose` recording a `CloseRefusal`. `working-docs/examples/survey/24-delete-pointed-at-undeletable-refused.velle` says it with the shape `SellerWithListings` declared `undeletable`. A yes here accepts all three.
-
-When the spec says neither answer, the compiler still refuses the delete, as today, and the V24 error names both: refuse the request while a record points at it, or declare the reference as one that goes absent.
-
-Costs:
-
-- The compiler must prove that the refusal covers the reference. It can do that when the condition is written as `exists (Listing where seller == ...)` naming the pointing field and the record the rule deletes. A spec that says the same thing another way, such as through a count the seller keeps of its listings, is refused although it is right. The author rewrites the condition.
-- Every required reference to the deleted shape needs its own condition. A seller pointed at by `Listing.seller` and `Invoice.seller` needs both named, and adding a third shape that points at a seller makes the delete rule an error until its condition is added. That is the product owner being asked the question again for the new shape, which is the frame.
-- The guarantee is checked, not built into the shapes: the compiler proves the rule cannot fire, and the runtime evaluates the `never` on each request. The principle that a wrong state which cannot be represented beats one that is checked is met in the database only if the column also carries a foreign key (`working-docs/QUESTIONS.md` OQ155). With this decision that foreign key can be declared on a required reference to a shape a rule deletes, and the database's own refusal is never what the user sees, because the `never` has answered first.
-- A scheduled rule that deletes has no caller to refuse. It can only use the condition form, deleting the records nothing points at and leaving the rest.
-- Whether the refusal holds when several requests arrive together or in one commit is `working-docs/QUESTIONS.md` OQ161.
-
-#### Proposed changes
-
-- `compiler/src/main/kotlin/velle/`, check V24: a required reference is resolved when a `never` over the triggering act, the deleting rule's own condition, or an `undeletable` refinement of the deleted shape excludes every record the reference points at. The error text names this resolution first.
-- `wiki/Normative/checks.md`, V24, and Reference §12, "Deletion" and "What the compiler checks": the fourth resolution, with the seller and listing case.
-- `examples/moderation/moderation.velle`: a second shape pointing at `Seller` through a required reference, with the refusal, beside the `Listing.seller` that goes absent, so the example shows both answers.
-- `working-docs/examples/survey/`: the three `24-delete-pointed-at-*-refused` files become passing files and the workaround file is removed, with their README rows.
-
-**Decided:** no, 2026-11-21, by Dave's yes to OQ162 D2 (`working-docs/QUESTIONS.md` OQ162). The compiler reads a built-in test and does not work the answer out from the wording of a `never`. None of the proposed changes above is made; OQ162 holds the changes that replace them.
+**Decided:** Dave, 2026-11-21: not by having the compiler read the wording of a `never`, and yes by a language structure. It is built as the `is held` test: Reference §6, "A required reference holds its target"; Reference §12, "Deleting a record that others point at"; `checks.md` V24.
 
 ### D2. A plain optional reference and a `many` field are cleared without the spec saying so
 
@@ -124,7 +67,7 @@ rule ApplyRetire when RetireCoupon {        -- compiler: runs once per RetireCou
 
 This case is written for this decision and is in no example file. After `ApplyRetire`, a purchase made with the coupon cannot be told from one made with none. The product owner was never asked. In the frame of this OQ that is the less common wish applied silently.
 
-The alternative is an advisory on `delete coupon` naming `Purchase.coupon`, silenced by the refusal of D1 or by a spelling that says "cleared on purpose". For a `one` field that spelling could be `? initially required` only when the field is also required at creation, which `Purchase.coupon` is not. A new spelling would have to be designed, for `one` and for `many`.
+The alternative is an advisory on `delete coupon` naming `Purchase.coupon`, silenced by a refusal written with `is held` (Reference §12) or by a spelling that says "cleared on purpose". For a `one` field that spelling could be `? initially required` only when the field is also required at creation, which `Purchase.coupon` is not. A new spelling would have to be designed, for `one` and for `many`.
 
 Costs of yes:
 

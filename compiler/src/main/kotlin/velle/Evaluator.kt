@@ -297,6 +297,7 @@ class Evaluator(private val system: VelleSystem) {
     }
 
     private fun evalIs(e: IsExpr, ctx: Ctx): Value {
+        if (e.kind == "held") return Value.VBool(isHeld(e.subject, ctx))
         val v = eval(e.subject, ctx)
         return Value.VBool(
             when (e.kind) {
@@ -315,6 +316,47 @@ class Evaluator(private val system: VelleSystem) {
             }
         )
     }
+
+    /**
+     * `x is held` (Reference §10): some record that still exists points at `x` through a required
+     * reference. Read at the end of a commit that deleted `x`, it counts the references that commit
+     * left pointing at it, which is how a request that would strand one is refused
+     * (evaluation.md, "The door's moment").
+     */
+    private fun isHeld(subject: Expr, ctx: Ctx): Boolean {
+        val heldId = recordIncludingDeleted(subject, ctx) ?: return false
+        val heldRecord = system.instance(heldId) ?: return false
+        return model.holdingFields(heldRecord.shape).count { holding -> holdsThrough(holding, heldId) } > 0
+    }
+
+    /** Whether a record points at [heldId] through [holding], leaving the holders in the trace for the rejection. */
+    private fun holdsThrough(holding: HoldingField, heldId: Long): Boolean {
+        system.ensureReferencing(holding.shape, holding.field, heldId)
+        val holders = system.liveIds(holding.shape).filter { holderId -> storedReference(holderId, holding.field) == heldId }
+        if (holders.isEmpty()) return false
+        trace?.add(Trace.Read(heldId, "held by ${holding.shape}.${holding.field}", Value.VColl(holders, holding.shape)))
+        return true
+    }
+
+    /**
+     * The record [subject] names, whether or not this commit has deleted it. An ordinary read
+     * gives a reference to a deleted record as absent; `is held` is asked about exactly that record.
+     */
+    private fun recordIncludingDeleted(subject: Expr, ctx: Ctx): Long? {
+        val path = subject as? PathExpr ?: return (eval(subject, ctx) as? Value.VRef)?.id
+        if (path.segs.isNotEmpty()) {
+            val owner = eval(PathExpr(path.root, path.segs.dropLast(1)), ctx) as? Value.VRef ?: return null
+            return storedReference(owner.id, path.segs.last().name)
+        }
+        val named = eval(path, ctx)
+        if (named is Value.VRef) return named.id
+        val (_, innermostId) = ctx.innermost()
+        return storedReference(innermostId, path.root)
+    }
+
+    /** The record id a stored field of [ownerId] holds, as stored: a deleted record's id is still given. */
+    private fun storedReference(ownerId: Long, field: String): Long? =
+        (system.instance(ownerId)?.fields?.get(field) as? Value.VRef)?.id
 
     // ── collections, exists, aggregates ──────────────────────────────────────
 

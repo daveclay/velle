@@ -35,9 +35,9 @@ shape ProductOfFamily = Product where exists (SkuFamily where this.sku matches "
 - In a `like` pattern a piece is always characters: `body like "%[${tag}]%"` with a tag of `50%` matches `[50%]` and nothing else.
 - The compiler checks the fixed runs of a pattern with pieces when the spec compiles. A pattern that still does not compile when its pieces are in, a `Regex` piece that closes a group a run opened, fails the evaluation rather than reading as false.
 
-## Testing presence, emptiness, and membership with `is`
+## Testing presence, emptiness, membership, and holding with `is`
 
-`is` has three uses.
+`is` asks one of five things.
 
 **Presence of an optional value.** `assignee is none` and `response is some` test whether an optional field or an optional to-one relationship holds a value.
 
@@ -50,6 +50,8 @@ shape ProductOfFamily = Product where exists (SkuFamily where this.sku matches "
 A membership test is legal when the left side and the named refinement share a base shape, or when the named shape is an operand of the left side's static union ([§6](Reference-06-Relationships)): `target is Post` on a field `target: one Content`. A test between shapes with no base in common is a compile error, not a test that is always false.
 
 **A membership test also narrows.** Once `x is Refinement` holds earlier in the same `and` chain, the rest of the chain may read the refinement's own properties through `x` ([§8](Reference-08-Refinements); for a union operand's own fields, [§9](Reference-09-Composing-refinements)). In an `if` expression, the `else` branch of `x is A` over a union narrows to the operands the test did not name, since a record has exactly one base: the other operand of two, or the union of the rest, which a later test narrows further. `x is not A` narrows the branch it governs the same way, and its `else` narrows to `A`. A filter that names a refinement, `(claims where PaidClaim)`, holds members of `PaidClaim`, so a sum or a selector over it may read a property of `PaidClaim`'s body.
+
+**Whether a record is held.** `seller is held` asks whether any record points at the seller through a required `one` link ([§6, "A required reference holds its target"](Reference-06-Relationships#a-required-reference-holds-its-target)). `seller is not held` is the negation. Links that let go do not count: an optional link, one declared `? initially required`, and a `many` set. The left side is one record of a kept shape, never a value, a collection, or a [transient act](Reference-04-State-and-commits#transient-acts-transient-act). The test is how a rule that deletes a record answers for the records pointing at it ([§12, "Deleting a record that others point at"](Reference-12-Assignment#deleting-a-record-that-others-point-at)). `held` is a word only after `is`, so a field may still be named `held`.
 
 ## Testing for related records with `exists`
 
@@ -194,7 +196,7 @@ A number or a quoted text compared with a field of an [extension type](Reference
 
 ## What the compiler checks
 
-- The compiler rejects a comparison between values of different types, a text operator on a non-text value (except `contains` on a `many` of values, [§5](Reference-05-Scalars)), duration arithmetic on anything but a `Date`, `DateTime`, `time`, or `duration`, a `by` property that is not orderable, and `x is R` when `x` and `R` share no base shape ([checks.md, F2](checks#f2--type-checking)).
+- The compiler rejects a comparison between values of different types, a text operator on a non-text value (except `contains` on a `many` of values, [§5](Reference-05-Scalars)), duration arithmetic on anything but a `Date`, `DateTime`, `time`, or `duration`, a `by` property that is not orderable, `x is R` when `x` and `R` share no base shape, and `x is held` when `x` is not one record of a kept shape ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects a listed value after `in` that is not of the left side's type, a right side of `in` that is neither a list, a `many` of values, nor a collection of records beside a record, a list of values anywhere but after `in`, a `matches` whose right side is neither a quoted text, a text literal with pieces, nor a `Regex`, a quoted pattern that is not a regular expression, and a pattern with pieces whose fixed runs are not one around a placeholder for each piece, `is empty` on a value that is neither a collection nor a text, and a `sum` with no field over anything but a `many` of numbers or durations, or over the values of one that pass a filter ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects a `where` over a `many` of values that does not name each value with `as`, a `by`, a sum by a field, or a second binding over one, and names the `(values as value where ...)` form ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects a constant an extension type's reader refuses or does not read, and an operator, comparison, or `sum` the type does not declare, naming the Kotlin class to extend ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
@@ -226,8 +228,9 @@ comparison     := expr ("==" | "!=" | "<" | "<=" | ">" | ">=") expr
                                                            -- and `\` escapes either; `matches` takes a regular
                                                            -- expression (a text literal) the whole left must match
 listLiteral    := "[" (expr ("," expr)*)? "]"
-isExpr         := expr "is" ("none" | "some" | "empty" | "not empty" | ShapeName | "not" ShapeName)
+isExpr         := expr "is" ("none" | "some" | "empty" | "not empty" | "held" | "not held" | ShapeName | "not" ShapeName)
                                                            -- `empty` on a text: absent or whitespace only
+                                                           -- `held`: a required `one` link points at the record
 existsExpr     := "exists" ShapeName "for" expr           -- sugar; legal only when exactly one field matches expr's type
                | "exists" "(" collectionExpr ")"          -- general form; required when more than one field
                                                            -- matches, or more than one condition is needed

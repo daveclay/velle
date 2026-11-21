@@ -1,0 +1,12 @@
+-- A rule deletes an employee on the condition that no shop points at them, and
+-- the same rule points a shop at an employee. The condition is read before the
+-- rule runs, so it cannot see the reference the rule makes.
+act Employee { name: text }
+act Shop { name: text, manager: one Employee }
+transient act ReplaceManager { shop: one Shop, departing: one Employee, successor: one Employee }
+shape ReplaceRefusal { shopName: text }
+rule ApplyReplace when (ReplaceManager where departing is not held) {
+    shop.manager = successor
+    delete departing
+}
+rule RefuseReplace when (ReplaceManager where departing is held) { ReplaceRefusal from { shopName: shop.name } }

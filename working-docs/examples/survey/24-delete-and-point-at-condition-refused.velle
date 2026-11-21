@@ -1,0 +1,32 @@
+-- The hand-over with the delete on a condition and no `never`. A condition is
+-- read before the rule runs, so `departing is not held` cannot see the shop
+-- the same rule points at an employee. Check V24 refuses it and names the
+-- `never` to write.
+
+act Employee {
+    name: text
+}
+
+act Shop {
+    name: text
+    manager: one Employee
+}
+
+transient act ReplaceManager {
+    shop: one Shop
+    departing: one Employee
+    successor: one Employee
+}
+
+shape ReplaceRefusal {
+    shopName: text
+}
+
+rule ApplyReplace when (ReplaceManager where departing is not held) {
+    shop.manager = successor
+    delete departing
+}
+
+rule RefuseReplace when (ReplaceManager where departing is held) {
+    ReplaceRefusal from { shopName: shop.name }
+}

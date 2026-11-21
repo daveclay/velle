@@ -82,6 +82,21 @@ data class DiscardRefusalRow(
     val refusedOn: Instant,
 )
 
+/** One stored Payout row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class PayoutRow(
+    val key: StoreKey,
+    val seller: Ref.Persisted,
+    val amount: Int,
+)
+
+/** One stored Settlement row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class SettlementRow(
+    val key: StoreKey,
+    val sellerName: String,
+    val amount: Int,
+    val settledOn: Instant,
+)
+
 /**
  * Every question the Moderation spec can ask of storage, typed. Keyed and join
  * reads must be exact; every `...Candidates` read is under the superset
@@ -106,6 +121,8 @@ interface ModerationStore {
     fun reporterNotices(keys: List<StoreKey>): List<ReporterNoticeRow>
     fun discardRecords(keys: List<StoreKey>): List<DiscardRecordRow>
     fun discardRefusals(keys: List<StoreKey>): List<DiscardRefusalRow>
+    fun payouts(keys: List<StoreKey>): List<PayoutRow>
+    fun settlements(keys: List<StoreKey>): List<SettlementRow>
 
     // ── scan floor: all rows of a shape ──
     fun allSellers(): List<SellerRow>
@@ -117,12 +134,15 @@ interface ModerationStore {
     fun allReporterNotices(): List<ReporterNoticeRow>
     fun allDiscardRecords(): List<DiscardRecordRow>
     fun allDiscardRefusals(): List<DiscardRefusalRow>
+    fun allPayouts(): List<PayoutRow>
+    fun allSettlements(): List<SettlementRow>
 
     // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
     fun listingsBySellers(targets: List<Ref.Persisted>): List<ListingRow>
     fun sellerNoticesBySellers(targets: List<Ref.Persisted>): List<SellerNoticeRow>
     fun listingReportsByListings(targets: List<Ref.Persisted>): List<ListingReportRow>
     fun reporterNoticesByReports(targets: List<Ref.Persisted>): List<ReporterNoticeRow>
+    fun payoutsBySellers(targets: List<Ref.Persisted>): List<PayoutRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement Draft; rule NoteDiscard; rule SweepOrphanedDrafts — `Draft`.
@@ -150,6 +170,8 @@ fun ModerationStore.listingReport(key: StoreKey): ListingReportRow? = listingRep
 fun ModerationStore.reporterNotice(key: StoreKey): ReporterNoticeRow? = reporterNotices(listOf(key)).firstOrNull()
 fun ModerationStore.discardRecord(key: StoreKey): DiscardRecordRow? = discardRecords(listOf(key)).firstOrNull()
 fun ModerationStore.discardRefusal(key: StoreKey): DiscardRefusalRow? = discardRefusals(listOf(key)).firstOrNull()
+fun ModerationStore.payout(key: StoreKey): PayoutRow? = payouts(listOf(key)).firstOrNull()
+fun ModerationStore.settlement(key: StoreKey): SettlementRow? = settlements(listOf(key)).firstOrNull()
 fun ModerationStore.listingsBySeller(target: Ref.Persisted): List<ListingRow> =
     listingsBySellers(listOf(target))
 fun ModerationStore.sellerNoticesBySeller(target: Ref.Persisted): List<SellerNoticeRow> =
@@ -158,6 +180,8 @@ fun ModerationStore.listingReportsByListing(target: Ref.Persisted): List<Listing
     listingReportsByListings(listOf(target))
 fun ModerationStore.reporterNoticesByReport(target: Ref.Persisted): List<ReporterNoticeRow> =
     reporterNoticesByReports(listOf(target))
+fun ModerationStore.payoutsBySeller(target: Ref.Persisted): List<PayoutRow> =
+    payoutsBySellers(listOf(target))
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class ModerationStoreQuestions(model: Model) {
@@ -188,6 +212,8 @@ open class ModerationStoreOverGeneric(
     override fun reporterNotices(keys: List<StoreKey>): List<ReporterNoticeRow> = backend.fetchByKeys("ReporterNotice", keys).map { it.toReporterNoticeRow() }
     override fun discardRecords(keys: List<StoreKey>): List<DiscardRecordRow> = backend.fetchByKeys("DiscardRecord", keys).map { it.toDiscardRecordRow() }
     override fun discardRefusals(keys: List<StoreKey>): List<DiscardRefusalRow> = backend.fetchByKeys("DiscardRefusal", keys).map { it.toDiscardRefusalRow() }
+    override fun payouts(keys: List<StoreKey>): List<PayoutRow> = backend.fetchByKeys("Payout", keys).map { it.toPayoutRow() }
+    override fun settlements(keys: List<StoreKey>): List<SettlementRow> = backend.fetchByKeys("Settlement", keys).map { it.toSettlementRow() }
 
     override fun allSellers(): List<SellerRow> = backend.fetchAll("Seller").map { it.toSellerRow() }
     override fun allListings(): List<ListingRow> = backend.fetchAll("Listing").map { it.toListingRow() }
@@ -198,6 +224,8 @@ open class ModerationStoreOverGeneric(
     override fun allReporterNotices(): List<ReporterNoticeRow> = backend.fetchAll("ReporterNotice").map { it.toReporterNoticeRow() }
     override fun allDiscardRecords(): List<DiscardRecordRow> = backend.fetchAll("DiscardRecord").map { it.toDiscardRecordRow() }
     override fun allDiscardRefusals(): List<DiscardRefusalRow> = backend.fetchAll("DiscardRefusal").map { it.toDiscardRefusalRow() }
+    override fun allPayouts(): List<PayoutRow> = backend.fetchAll("Payout").map { it.toPayoutRow() }
+    override fun allSettlements(): List<SettlementRow> = backend.fetchAll("Settlement").map { it.toSettlementRow() }
 
     override fun listingsBySellers(targets: List<Ref.Persisted>): List<ListingRow> =
         backend.fetchReferencingAny("Listing", "seller", targets).map { it.toListingRow() }
@@ -207,6 +235,8 @@ open class ModerationStoreOverGeneric(
         backend.fetchReferencingAny("ListingReport", "listing", targets).map { it.toListingReportRow() }
     override fun reporterNoticesByReports(targets: List<Ref.Persisted>): List<ReporterNoticeRow> =
         backend.fetchReferencingAny("ReporterNotice", "report", targets).map { it.toReporterNoticeRow() }
+    override fun payoutsBySellers(targets: List<Ref.Persisted>): List<PayoutRow> =
+        backend.fetchReferencingAny("Payout", "seller", targets).map { it.toPayoutRow() }
 
     override fun draftCandidates(): List<ListingRow> =
         backend.fetchCandidates("Listing", questions.draftCandidates.instantiate(listOf()))
@@ -244,6 +274,8 @@ class ModerationStoreResolver(
         "ReporterNotice" -> store.reporterNotices(keys).map { it.toRow() }
         "DiscardRecord" -> store.discardRecords(keys).map { it.toRow() }
         "DiscardRefusal" -> store.discardRefusals(keys).map { it.toRow() }
+        "Payout" -> store.payouts(keys).map { it.toRow() }
+        "Settlement" -> store.settlements(keys).map { it.toRow() }
         else -> emptyList()
     }
 
@@ -257,6 +289,8 @@ class ModerationStoreResolver(
         "ReporterNotice" -> store.allReporterNotices().map { it.toRow() }
         "DiscardRecord" -> store.allDiscardRecords().map { it.toRow() }
         "DiscardRefusal" -> store.allDiscardRefusals().map { it.toRow() }
+        "Payout" -> store.allPayouts().map { it.toRow() }
+        "Settlement" -> store.allSettlements().map { it.toRow() }
         else -> emptyList()
     }
 
@@ -265,6 +299,7 @@ class ModerationStoreResolver(
         shape == "SellerNotice" && field == "seller" -> store.sellerNoticesBySellers(targets).map { it.toRow() }
         shape == "ListingReport" && field == "listing" -> store.listingReportsByListings(targets).map { it.toRow() }
         shape == "ReporterNotice" && field == "report" -> store.reporterNoticesByReports(targets).map { it.toRow() }
+        shape == "Payout" && field == "seller" -> store.payoutsBySellers(targets).map { it.toRow() }
         else -> emptyList()
     }
 
@@ -396,4 +431,28 @@ fun DiscardRefusalRow.toRow(): Row = Row("DiscardRefusal", key, buildMap {
     put("listingTitle", listingTitle)
     put("reason", reason)
     put("refusedOn", refusedOn)
+})
+
+fun Row.toPayoutRow(): PayoutRow = PayoutRow(
+    key = key,
+    seller = fields["seller"] as Ref.Persisted,
+    amount = (fields["amount"] as Number).toInt(),
+)
+
+fun PayoutRow.toRow(): Row = Row("Payout", key, buildMap {
+    put("seller", seller)
+    put("amount", amount)
+})
+
+fun Row.toSettlementRow(): SettlementRow = SettlementRow(
+    key = key,
+    sellerName = fields["sellerName"] as String,
+    amount = (fields["amount"] as Number).toInt(),
+    settledOn = fields["settledOn"] as Instant,
+)
+
+fun SettlementRow.toRow(): Row = Row("Settlement", key, buildMap {
+    put("sellerName", sellerName)
+    put("amount", amount)
+    put("settledOn", settledOn)
 })

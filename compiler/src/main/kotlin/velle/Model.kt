@@ -504,6 +504,30 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             .filter { member -> member.type.instanceShape()?.let { declared -> typeAccepts(declared, targetShape) } == true }
             .map { member -> member.name }
 
+    /**
+     * The fields that hold a record of [target] (Reference §6, "A required reference holds its
+     * target"): every stored, required `one` field of a kept shape whose type accepts it. A field
+     * typed with a union holds a record of any operand. An optional field, one declared
+     * `? initially required`, and a `many` field hold nothing: they let go when the record is deleted.
+     */
+    fun holdingFields(target: String): List<HoldingField> {
+        val targetBases = basesOf(target)
+        return shapes.entries
+            .filter { (shapeName, _) -> shapeName !in transients }
+            .flatMap { (shapeName, shape) -> shape.members.filterIsInstance<StoredProp>().mapNotNull { field -> holdingField(shapeName, field, targetBases) } }
+    }
+
+    private fun holdingField(shapeName: String, field: StoredProp, targetBases: Set<String>): HoldingField? {
+        val reference = field.type as? RelType ?: return null
+        if (reference.many || reference.optional) return null
+        if (targetBases.none { targetBase -> typeAccepts(reference.shape, targetBase) }) return null
+        return HoldingField(shapeName, field.name, reference.shape)
+    }
+
+    /** The shape of the record an `is held` test is written on, null when its subject is not a record. */
+    fun heldSubjectShape(test: IsExpr, subject: String, aliases: Map<String, String> = emptyMap(), root: String = subject): String? =
+        (test.subject as? PathExpr)?.let { path -> pathEndType(path, subject, aliases, root)?.instanceShape() }
+
     // ── member lookup ────────────────────────────────────────────────────────
 
     /**
@@ -1000,6 +1024,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             is IsExpr -> {
                 collectExpr(e.subject, subject, s, aliases, root)
                 e.refinement?.let { if (it in refinements) s.absorb(predicateSummary(it)) }
+                if (e.kind == "held") collectHolders(heldSubjectShape(e, subject, aliases, root), s)
             }
             is ExistsExpr -> {
                 e.shape?.let { consultShape(it, s) }
@@ -1039,6 +1064,16 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     /** A shape-or-refinement's instances are consulted: membership in a consulted
      *  *refinement* also depends on everything its own predicate reads. */
+    /** `x is held` reads every field that can hold `x`, and whether a record of each holding shape exists. */
+    private fun collectHolders(heldShape: String?, summary: ReadSummary) {
+        if (!summary.includesHeldReads) return
+        if (heldShape == null) { summary.opaque = true; return }
+        for (holding in holdingFields(heldShape)) {
+            summary.existsShapes.add(holding.shape)
+            summary.fields.add(holding.shape to holding.field)
+        }
+    }
+
     private fun consultShape(name: String, s: ReadSummary) {
         s.existsShapes.add(name)
         if (name in refinements) s.absorb(predicateSummary(name))
@@ -1227,6 +1262,9 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     }
 }
 
+/** A required `one` field [field] of [shape], declared with type [declaredType], that holds the record it points at. */
+data class HoldingField(val shape: String, val field: String, val declaredType: String)
+
 data class MemberInfo(
     val name: String,
     val owner: String,
@@ -1315,7 +1353,8 @@ sealed interface VType {
  *  (Reference §14): a value, never a record, so no member resolves on it. */
 const val VALUE_ALIAS = "<value>"
 
-class ReadSummary {
+/** [includesHeldReads] is false for the one question that sets them aside: which reads make a `never` a guarantee (checks.md V10). */
+class ReadSummary(val includesHeldReads: Boolean = true) {
     /** (owner shape, stored field) pairs the predicate/expression reads */
     val fields = mutableSetOf<Pair<String, String>>()
     /** shapes whose existence/instances are consulted (exists, selectors, for-queries) */

@@ -989,6 +989,7 @@ class Validator(private val model: Model) {
                         diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — 'is ${if (e.kind == "empty") "empty" else "not empty"}' tests a collection or a text, " +
                             "but '${Printer.expr(e.subject)}' is a ${registryName(t) ?: "value of another type"}"))
                 }
+                if (e.kind == "held") checkHeldSubject(e, scope)
                 e.refinement?.let { r ->
                     val rb = model.basesOf(r)
                     val subjectType = (e.subject as? PathExpr)?.let { pathTypeName(it, scope) }
@@ -3043,7 +3044,10 @@ class Validator(private val model: Model) {
 
     private fun checkNevers() {
         for (n in model.nevers) {
-            val s = ReadSummary()
+            // a refusal's `is held` is answered when the request's commit ends, with the references its
+            // rules moved in place (evaluation.md, "The door's moment"), so those reads ask no proof of the rules
+            val isRefusal = model.basesOfExpr(n.target).all { base -> base in model.transients }
+            val s = ReadSummary(includesHeldReads = !isRefusal)
             collectComposite(n.target, s)
             // a write names the shape written; a read names the declaration, which for a field
             // taken with `is` is the taken shape's (Reference §9), so match through the declaration
@@ -4110,6 +4114,15 @@ class Validator(private val model: Model) {
         }
     }
 
+    /** `x is held` asks whether a required reference points at `x`, so `x` is one record of a kept shape (Reference §10). */
+    private fun checkHeldSubject(test: IsExpr, scope: String) {
+        val subjectShape = (test.subject as? PathExpr)?.let { path -> pathTypeName(path, scope) }
+        val bases = subjectShape?.let { shape -> model.basesOf(shape) }.orEmpty()
+        if (bases.isNotEmpty() && bases.none { base -> base in model.transients }) return
+        diags.add(Diagnostic("F2", "'${Printer.expr(test)}' — 'is held' tests one record of a kept shape, " +
+            "and '${Printer.expr(test.subject)}' is not one"))
+    }
+
     private fun pathHasCollectionHop(t: PathExpr, scope: String): Boolean {
         val steps = if (t.root == "this") t.segs.map { it.name } else listOf(t.root) + t.segs.map { it.name }
         var current: String? = scope
@@ -4121,33 +4134,96 @@ class Validator(private val model: Model) {
         return false
     }
 
-    // V24 — referential completeness (cascade, OQ37): deleting an instance
-    // that required `one` references point at is illegal unless every referrer
-    // is resolved — deleted in the same commit (the cascade, spelled), the
-    // reference declared `? initially required` (absorbing — it goes absent),
-    // or restructured to copies. Never transitive magic: each hop is its own
-    // visible decision (Reference §8's freeze-depth precedent).
+    // V24 — a required reference holds the record it points at (Reference §6, §12).
+    // A rule may delete a record of a shape some required `one` field can point at
+    // only where no such field points at it. The author says so with `x is held`:
+    // a `never` over the request that refuses a held record, or the deleting rule's
+    // own condition excluding one. The other way is to delete the pointing record
+    // in the same rule. A reference declared `? initially required`, an optional
+    // one, and a `many` field hold nothing and need nothing.
     private fun checkReferentialCompleteness() {
         for (site in model.deleteSites) {
-            val cascaded = site.rule.body.filterIsInstance<DeleteStmt>()
-                .mapNotNull { s -> model.deleteSites.find { it.rule === site.rule && it.stmt === s }?.shape }
-                .toSet()
-            for ((refName, referrer) in model.shapes) {
-                if (refName in model.transients) continue // an act reads it within the commit — the last reader
-                for (f in referrer.members.filterIsInstance<StoredProp>()) {
-                    val t = f.type as? RelType ?: continue
-                    // a field typed with a union points at a record of any operand (Reference §6)
-                    if (!model.typeAccepts(t.shape, site.shape) || t.many || t.optional) continue
-                    if (refName in cascaded) continue // resolved at the same commit (coarse C4)
-                    diags.add(Diagnostic("V24", "${siteLabel(site)}, which strands " +
-                        "'$refName.${f.name}: one ${t.shape}' — deleting an instance required " +
-                        "references point at needs every referrer resolved: delete the referrer in the " +
-                        "same commit, declare the reference '${f.name}: one ${t.shape}? initially " +
-                        "required' (it then absorbs the deletion by going absent), or copy the fields " +
-                        "that must survive (OQ37)"))
-                }
+            val holdingFields = unresolvedHoldingFields(site)
+            if (holdingFields.isEmpty()) continue
+            when {
+                refusedWhileHeld(site) -> {}
+                conditionedOnNotHeld(site) -> reportReferencesMadeBesideTheDelete(site, holdingFields)
+                else -> holdingFields.forEach { holding -> reportHeldRecordDeleted(site, holding) }
             }
         }
+    }
+
+    /** The fields that hold a record [site] deletes, leaving out the shapes the same rule also deletes. */
+    private fun unresolvedHoldingFields(site: DeleteSite): List<HoldingField> {
+        val shapesDeletedByTheRule = model.deleteSites.filter { other -> other.rule === site.rule }.map { other -> other.shape }.toSet()
+        return model.holdingFields(site.shape).filter { holding -> holding.shape !in shapesDeletedByTheRule }
+    }
+
+    /** `<target> is held`, or `<target> is R` where R is exactly the held records of its base. */
+    private fun testsHeld(test: Expr, target: PathExpr): Boolean {
+        val isTest = test as? IsExpr ?: return false
+        if (isTest.subject != target) return false
+        if (isTest.kind == "held") return true
+        val refinement = isTest.refinement?.let { name -> model.refinements[name] } ?: return false
+        val predicate = (refinement.expr as? RefName)?.where
+        return predicate == IsExpr(PathExpr("this"), "held")
+    }
+
+    /** A `never` over the transient act that triggers the rule refuses every request whose target is held. */
+    private fun refusedWhileHeld(site: DeleteSite): Boolean {
+        val act = triggeringRequest(site.rule) ?: return false
+        return model.nevers.any { never ->
+            val target = never.target as? RefName ?: return@any false
+            target.name == act && target.where?.let { forbidden -> disjuncts(forbidden).any { disjunct -> testsHeld(disjunct, site.stmt.target) } } == true
+        }
+    }
+
+    /** The transient act a rule fires for, null for a rule over kept records or on a schedule. */
+    private fun triggeringRequest(rule: RuleDecl): String? =
+        model.baseOfExpr(rule.condition)?.takeIf { base -> base in model.transients }
+
+    private fun disjuncts(predicate: Expr): List<Expr> =
+        if (predicate is Binary && predicate.op == "or") disjuncts(predicate.left) + disjuncts(predicate.right)
+        else listOf(predicate)
+
+    private fun conditionedOnNotHeld(site: DeleteSite): Boolean =
+        conditionConjuncts(site.rule.condition).any { conjunct -> conjunct is NotExpr && testsHeld(conjunct.inner, site.stmt.target) }
+
+    private fun reportHeldRecordDeleted(site: DeleteSite, holding: HoldingField) {
+        val target = Printer.expr(site.stmt.target)
+        val refuse = triggeringRequest(site.rule)?.let { act -> "refuse the request with 'never ($act where $target is held)', " }.orEmpty()
+        diags.add(Diagnostic("V24", "${siteLabel(site)}, and '${holding.shape}.${holding.field}: one ${holding.declaredType}' " +
+            "holds the record it points at, so a '${site.shape}' cannot be deleted while a '${holding.shape}' points at it: " +
+            "${refuse}condition the rule on '$target is not held', delete the '${holding.shape}' in the same rule, " +
+            "or declare the reference '${holding.field}: one ${holding.declaredType}? initially required' so it goes absent " +
+            "when the '${site.shape}' is deleted (Reference §12)"))
+    }
+
+    /**
+     * A condition is read when the rule fires, so `x is not held` cannot see a required reference
+     * the same commit points at a record of the deleted shape. Only a `never` is read when the
+     * commit ends (evaluation.md, "The door's moment").
+     */
+    private fun reportReferencesMadeBesideTheDelete(site: DeleteSite, holdingFields: List<HoldingField>) {
+        for (rule in model.rules.values) {
+            if (rule !== site.rule && (provablyDisjoint(rule, site.rule) || !canCoFire(rule, site.rule))) continue
+            val pointed = holdingFields.firstOrNull { holding -> pointsRequiredReference(rule, holding) } ?: continue
+            reportReferenceMadeBesideTheDelete(site, rule, pointed)
+        }
+    }
+
+    private fun pointsRequiredReference(rule: RuleDecl, holding: HoldingField): Boolean =
+        rule.creations().any { creation -> (model.baseOf(creation.shape) ?: creation.shape) == holding.shape } ||
+            writes.any { write -> write.rule === rule && write.owner == holding.shape && write.member.name == holding.field }
+
+    private fun reportReferenceMadeBesideTheDelete(site: DeleteSite, rule: RuleDecl, pointed: HoldingField) {
+        val target = Printer.expr(site.stmt.target)
+        val wayOut = triggeringRequest(site.rule)
+            ?.let { act -> "refuse the request with 'never ($act where $target is held)', which is read when the commit ends, and drop the condition" }
+            ?: "move one of the two to a commit of its own"
+        diags.add(Diagnostic("V24", "${siteLabel(site)} on the condition '$target is not held', and rule '${rule.name}' " +
+            "can point '${pointed.shape}.${pointed.field}' at a '${site.shape}' in the same commit. The condition is read " +
+            "before the rules run, so it cannot see that reference: $wayOut (Reference §12)"))
     }
 
     // V25 — existence is spent in proofs (OQ37's genuinely new check). Two

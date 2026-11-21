@@ -1,0 +1,22 @@
+-- The refusal written by hand, as a test for a listing that points at the
+-- seller. It turns away the same requests as `seller is held`, and check V24
+-- does not read it: the compiler reads the `is held` test and nothing else.
+
+act Seller {
+    name: text
+}
+
+act Listing {
+    title: text
+    seller: one Seller
+}
+
+transient act CloseAccount {
+    seller: one Seller
+}
+
+never (CloseAccount where exists (Listing where seller == this.seller))
+
+rule ApplyClose when CloseAccount {
+    delete seller
+}

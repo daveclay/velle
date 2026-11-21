@@ -1,0 +1,25 @@
+-- The same sentence said about the seller: HeldSeller is the sellers some
+-- required reference points at, and the request for one is refused. Check V24
+-- reads `seller is not HeldSeller` as `seller is not held`, because HeldSeller
+-- is declared exactly `Seller where this is held`.
+
+act Seller {
+    name: text
+}
+
+act Listing {
+    title: text
+    seller: one Seller
+}
+
+shape HeldSeller = Seller where this is held
+
+transient act CloseAccount {
+    seller: one Seller
+}
+
+never (CloseAccount where seller is HeldSeller)
+
+rule ApplyClose when (CloseAccount where seller is not HeldSeller) {
+    delete seller
+}
