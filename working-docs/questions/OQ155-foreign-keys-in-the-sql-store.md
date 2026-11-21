@@ -1,6 +1,6 @@
 # OQ155 — Whether the tables Velle creates declare foreign keys
 
-**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1 decided; D2 and D3 await Dave. Nothing built, and three things are not yet checked (§4).
+**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1 and D2 decided; D3 awaits Dave. Nothing built, and three things are not yet checked (§4).
 
 **In plain terms:** When one record points at another, the database could be told so, and it would then refuse to remove a record that others still point at. Velle creates the tables and does not tell the database this today. The question is whether it should.
 
@@ -51,7 +51,7 @@ In `examples/pharmacy/pharmacy.velle`, `Interaction` points at `Drug`, and no ru
 
 **Decided:** yes (Dave, 2026-11-21). The recommendation he answered was conditional on the three checks in §4, which are not yet run.
 
-### D2. A reference to a shape some rule deletes gets no foreign key
+### D2. A reference to a shape some rule deletes gets no foreign key · Decided 2026-11-21
 
 For a reference to a shape that a rule deletes, should the store declare nothing, as today, where the alternative is a foreign key that empties the pointing column when the row is removed?
 
@@ -60,6 +60,8 @@ Recommendation: yes, nothing. The alternative changes a surviving record's store
 Costs:
 
 - A row of such a shape removed outside Velle looks exactly like one a rule deleted, so nothing reports it. OQ154 D1 already accepts that.
+
+**Decided:** yes, nothing (Dave, 2026-11-21).
 
 ### D3. A database that already exists is not altered
 
