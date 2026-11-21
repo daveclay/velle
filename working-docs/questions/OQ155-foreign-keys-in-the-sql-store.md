@@ -1,6 +1,6 @@
 # OQ155 — Whether the tables Velle creates declare foreign keys
 
-**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. Not designed. D1, D2, and D3 await Dave. Nothing built, and three things are not yet checked (§4).
+**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1 decided; D2 and D3 await Dave. Nothing built, and three things are not yet checked (§4).
 
 **In plain terms:** When one record points at another, the database could be told so, and it would then refuse to remove a record that others still point at. Velle creates the tables and does not tell the database this today. The question is whether it should.
 
@@ -28,7 +28,7 @@ Three facts shape the answer:
 
 ## 2. What to decide
 
-### D1. The tables Velle creates declare a foreign key for a reference to a shape no rule deletes
+### D1. The tables Velle creates declare a foreign key for a reference to a shape no rule deletes · Decided 2026-11-21
 
 Should `createSchema` declare a foreign key on every column and junction table that holds a reference to one shape, when no rule in the spec deletes records of that shape?
 
@@ -48,6 +48,8 @@ In `examples/pharmacy/pharmacy.velle`, `Interaction` points at `Drug`, and no ru
 - `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `createSchema`: the constraint, for a reference whose shape is outside `Model.deletedShapes` and is not a union.
 - `stores/sql/src/testFixtures/kotlin/velle/sql/SqlStoreConformance.kt`: a test that removing a pointed-at row with SQL is refused, and that every existing scenario still passes.
 - `wiki/Guides/Store-API.md`: which references are constrained.
+
+**Decided:** yes (Dave, 2026-11-21). The recommendation he answered was conditional on the three checks in §4, which are not yet run.
 
 ### D2. A reference to a shape some rule deletes gets no foreign key
 
