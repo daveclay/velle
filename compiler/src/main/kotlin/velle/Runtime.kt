@@ -289,13 +289,28 @@ class VelleSystem(
      *  instance reads as absent — `is none` true, `?.` propagates — with no
      *  write anywhere; a collection silently loses the member. Applied to
      *  values read out of fields, never to a subject read by id. */
-    internal fun normalizeRead(v: Value): Value = when (v) {
-        is Value.VRef -> if (v.id in pendingDeleted || instance(v.id) == null) Value.VNone else v
+    internal fun normalizeRead(value: Value): Value = when (value) {
+        is Value.VRef -> if (pointsAtARecord(value.id)) value else Value.VNone
         is Value.VColl -> {
-            val live = v.ids.filter { it !in pendingDeleted && instance(it) != null }
-            if (live.size == v.ids.size) v else Value.VColl(live, v.shape)
+            val live = value.ids.filter { memberId -> pointsAtARecord(memberId) }
+            if (live.size == value.ids.size) value else Value.VColl(live, value.shape)
         }
-        else -> v
+        else -> value
+    }
+
+    /**
+     * Whether a stored reference to [id] still points at a record. A record of a shape no rule
+     * deletes (`Model.deletedShapes`) cannot have been deleted, so a reference to one is taken
+     * as it stands and its record is not fetched to find out. For a shape some rule deletes,
+     * the record is looked for.
+     */
+    private fun pointsAtARecord(id: Long): Boolean {
+        if (id in pendingDeleted) return false
+        if (id in instances) return true
+        val shape = idShape[id] ?: return false
+        if (keyOf[id] == null) return false
+        if (shape !in model.deletedShapes) return true
+        return instance(id) != null
     }
     internal val captures: MutableMap<Pair<Long, String>, Map<String, Value>> get() = s.captures
 
@@ -490,14 +505,10 @@ class VelleSystem(
     internal fun instance(id: Long): Instance? {
         instances[id]?.let { return it }
         val shape = idShape[id] ?: return null
-        val key = keyOf[id] ?: return null // no key: never persisted (rolled back, or another session's handle)
+        if (keyOf[id] == null) return null // no key: never persisted (rolled back, or another session's handle)
         if (id in fetchMisses) return null
         val together = arrivedWithNeeding(id, fetchTogether.limitFor(shape)) { other ->
             idShape[other] == shape && keyOf[other] != null && other !in instances && other !in fetchMisses
-        }
-        if (together.size == 1) {
-            val row = reader().fetchByKey(shape, key) ?: return null.also { fetchMisses.add(id) }
-            return hydrateIfAbsent(row)
         }
         hydrateTogether(reader().fetchByKeys(shape, together.map { other -> keyOf.getValue(other) }))
         fetchMisses.addAll(together.filter { other -> other !in instances })
@@ -589,17 +600,14 @@ class VelleSystem(
         if (shape in model.transients || shape in fetchedAll) return
         // an unpersisted target (created this envelope) can't be referenced by
         // anything storage holds — nothing to fetch
-        val key = keyOf[targetId] ?: return
+        if (keyOf[targetId] == null) return
         val targetShape = idShape[targetId] ?: return
         if (Triple(shape, field, targetId) in fetchedRefs) return
         val together = arrivedWithNeeding(targetId, fetchTogether.limitFor(shape)) { other ->
             idShape[other] == targetShape && keyOf[other] != null && Triple(shape, field, other) !in fetchedRefs
         }
         for (other in together) fetchedRefs.add(Triple(shape, field, other))
-        val rows =
-            if (together.size == 1) reader().fetchReferencing(shape, field, Ref.Persisted(targetShape, key))
-            else reader().fetchReferencingAny(shape, field, together.map { other -> Ref.Persisted(targetShape, keyOf.getValue(other)) })
-        hydrateTogether(rows)
+        hydrateTogether(reader().fetchReferencingAny(shape, field, together.map { other -> Ref.Persisted(targetShape, keyOf.getValue(other)) }))
     }
 
     private fun hydrateIfAbsent(row: Row): Instance {

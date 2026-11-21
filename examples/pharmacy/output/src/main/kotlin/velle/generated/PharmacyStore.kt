@@ -437,55 +437,57 @@ interface PharmacyStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun staff(key: StoreKey): StaffRow?
-    fun licenceRenewal(key: StoreKey): LicenceRenewalRow?
-    fun licenceReminder(key: StoreKey): LicenceReminderRow?
-    fun ingredient(key: StoreKey): IngredientRow?
-    fun drug(key: StoreKey): DrugRow?
-    fun interaction(key: StoreKey): InteractionRow?
-    fun priceChange(key: StoreKey): PriceChangeRow?
-    fun priceWithdrawal(key: StoreKey): PriceWithdrawalRow?
-    fun priceWithdrawalRefusal(key: StoreKey): PriceWithdrawalRefusalRow?
-    fun stockLot(key: StoreKey): StockLotRow?
-    fun stockAdjustment(key: StoreKey): StockAdjustmentRow?
-    fun countConfirmation(key: StoreKey): CountConfirmationRow?
-    fun quarantine(key: StoreKey): QuarantineRow?
-    fun recall(key: StoreKey): RecallRow?
-    fun recallNotice(key: StoreKey): RecallNoticeRow?
-    fun purchaseOrder(key: StoreKey): PurchaseOrderRow?
-    fun insurancePlan(key: StoreKey): InsurancePlanRow?
-    fun patient(key: StoreKey): PatientRow?
-    fun prescriber(key: StoreKey): PrescriberRow?
-    fun notice(key: StoreKey): NoticeRow?
-    fun prescriberOrder(key: StoreKey): PrescriberOrderRow?
-    fun prescription(key: StoreKey): PrescriptionRow?
-    fun discontinuation(key: StoreKey): DiscontinuationRow?
-    fun correctionRefusal(key: StoreKey): CorrectionRefusalRow?
-    fun entryVoid(key: StoreKey): EntryVoidRow?
-    fun voidRefusal(key: StoreKey): VoidRefusalRow?
-    fun conflictOverride(key: StoreKey): ConflictOverrideRow?
-    fun pharmacistAlert(key: StoreKey): PharmacistAlertRow?
-    fun monitoringCheck(key: StoreKey): MonitoringCheckRow?
-    fun fill(key: StoreKey): FillRow?
-    fun fillRefusal(key: StoreKey): FillRefusalRow?
-    fun controlledLogEntry(key: StoreKey): ControlledLogEntryRow?
-    fun verification(key: StoreKey): VerificationRow?
-    fun counselling(key: StoreKey): CounsellingRow?
-    fun returnToStock(key: StoreKey): ReturnToStockRow?
-    fun counterExit(key: StoreKey): CounterExitRow?
-    fun pickup(key: StoreKey): PickupRow?
-    fun counterAlert(key: StoreKey): CounterAlertRow?
-    fun refillTask(key: StoreKey): RefillTaskRow?
-    fun refillRefusal(key: StoreKey): RefillRefusalRow?
-    fun authorisationRequest(key: StoreKey): AuthorisationRequestRow?
-    fun taskNag(key: StoreKey): TaskNagRow?
-    fun autoRefillEnrolment(key: StoreKey): AutoRefillEnrolmentRow?
-    fun autoRefillCancellation(key: StoreKey): AutoRefillCancellationRow?
-    fun claim(key: StoreKey): ClaimRow?
-    fun claimResponse(key: StoreKey): ClaimResponseRow?
-    fun claimFollowUp(key: StoreKey): ClaimFollowUpRow?
-    fun controlledInventorySnapshot(key: StoreKey): ControlledInventorySnapshotRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun staffs(keys: List<StoreKey>): List<StaffRow>
+    fun licenceRenewals(keys: List<StoreKey>): List<LicenceRenewalRow>
+    fun licenceReminders(keys: List<StoreKey>): List<LicenceReminderRow>
+    fun ingredients(keys: List<StoreKey>): List<IngredientRow>
+    fun drugs(keys: List<StoreKey>): List<DrugRow>
+    fun interactions(keys: List<StoreKey>): List<InteractionRow>
+    fun priceChanges(keys: List<StoreKey>): List<PriceChangeRow>
+    fun priceWithdrawals(keys: List<StoreKey>): List<PriceWithdrawalRow>
+    fun priceWithdrawalRefusals(keys: List<StoreKey>): List<PriceWithdrawalRefusalRow>
+    fun stockLots(keys: List<StoreKey>): List<StockLotRow>
+    fun stockAdjustments(keys: List<StoreKey>): List<StockAdjustmentRow>
+    fun countConfirmations(keys: List<StoreKey>): List<CountConfirmationRow>
+    fun quarantines(keys: List<StoreKey>): List<QuarantineRow>
+    fun recalls(keys: List<StoreKey>): List<RecallRow>
+    fun recallNotices(keys: List<StoreKey>): List<RecallNoticeRow>
+    fun purchaseOrders(keys: List<StoreKey>): List<PurchaseOrderRow>
+    fun insurancePlans(keys: List<StoreKey>): List<InsurancePlanRow>
+    fun patients(keys: List<StoreKey>): List<PatientRow>
+    fun prescribers(keys: List<StoreKey>): List<PrescriberRow>
+    fun notices(keys: List<StoreKey>): List<NoticeRow>
+    fun prescriberOrders(keys: List<StoreKey>): List<PrescriberOrderRow>
+    fun prescriptions(keys: List<StoreKey>): List<PrescriptionRow>
+    fun discontinuations(keys: List<StoreKey>): List<DiscontinuationRow>
+    fun correctionRefusals(keys: List<StoreKey>): List<CorrectionRefusalRow>
+    fun entryVoids(keys: List<StoreKey>): List<EntryVoidRow>
+    fun voidRefusals(keys: List<StoreKey>): List<VoidRefusalRow>
+    fun conflictOverrides(keys: List<StoreKey>): List<ConflictOverrideRow>
+    fun pharmacistAlerts(keys: List<StoreKey>): List<PharmacistAlertRow>
+    fun monitoringChecks(keys: List<StoreKey>): List<MonitoringCheckRow>
+    fun fills(keys: List<StoreKey>): List<FillRow>
+    fun fillRefusals(keys: List<StoreKey>): List<FillRefusalRow>
+    fun controlledLogEntrys(keys: List<StoreKey>): List<ControlledLogEntryRow>
+    fun verifications(keys: List<StoreKey>): List<VerificationRow>
+    fun counsellings(keys: List<StoreKey>): List<CounsellingRow>
+    fun returnToStocks(keys: List<StoreKey>): List<ReturnToStockRow>
+    fun counterExits(keys: List<StoreKey>): List<CounterExitRow>
+    fun pickups(keys: List<StoreKey>): List<PickupRow>
+    fun counterAlerts(keys: List<StoreKey>): List<CounterAlertRow>
+    fun refillTasks(keys: List<StoreKey>): List<RefillTaskRow>
+    fun refillRefusals(keys: List<StoreKey>): List<RefillRefusalRow>
+    fun authorisationRequests(keys: List<StoreKey>): List<AuthorisationRequestRow>
+    fun taskNags(keys: List<StoreKey>): List<TaskNagRow>
+    fun autoRefillEnrolments(keys: List<StoreKey>): List<AutoRefillEnrolmentRow>
+    fun autoRefillCancellations(keys: List<StoreKey>): List<AutoRefillCancellationRow>
+    fun claims(keys: List<StoreKey>): List<ClaimRow>
+    fun claimResponses(keys: List<StoreKey>): List<ClaimResponseRow>
+    fun claimFollowUps(keys: List<StoreKey>): List<ClaimFollowUpRow>
+    fun controlledInventorySnapshots(keys: List<StoreKey>): List<ControlledInventorySnapshotRow>
 
     // ── scan floor: all rows of a shape ──
     fun allStaffs(): List<StaffRow>
@@ -537,64 +539,64 @@ interface PharmacyStore {
     fun allClaimFollowUps(): List<ClaimFollowUpRow>
     fun allControlledInventorySnapshots(): List<ControlledInventorySnapshotRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun licenceRenewalsByPharmacist(target: Ref.Persisted): List<LicenceRenewalRow>
-    fun licenceRemindersByPharmacist(target: Ref.Persisted): List<LicenceReminderRow>
-    fun interactionsByDrugA(target: Ref.Persisted): List<InteractionRow>
-    fun interactionsByDrugB(target: Ref.Persisted): List<InteractionRow>
-    fun priceChangesByDrug(target: Ref.Persisted): List<PriceChangeRow>
-    fun priceWithdrawalsByDrug(target: Ref.Persisted): List<PriceWithdrawalRow>
-    fun priceWithdrawalRefusalsByPriceChange(target: Ref.Persisted): List<PriceWithdrawalRefusalRow>
-    fun stockLotsByDrug(target: Ref.Persisted): List<StockLotRow>
-    fun stockLotsByPurchaseOrder(target: Ref.Persisted): List<StockLotRow>
-    fun stockAdjustmentsByLot(target: Ref.Persisted): List<StockAdjustmentRow>
-    fun stockAdjustmentsByCountedBy(target: Ref.Persisted): List<StockAdjustmentRow>
-    fun countConfirmationsByLot(target: Ref.Persisted): List<CountConfirmationRow>
-    fun countConfirmationsByCountedBy(target: Ref.Persisted): List<CountConfirmationRow>
-    fun quarantinesByLot(target: Ref.Persisted): List<QuarantineRow>
-    fun recallsByLot(target: Ref.Persisted): List<RecallRow>
-    fun recallNoticesByFill(target: Ref.Persisted): List<RecallNoticeRow>
-    fun recallNoticesByPatient(target: Ref.Persisted): List<RecallNoticeRow>
-    fun purchaseOrdersByDrug(target: Ref.Persisted): List<PurchaseOrderRow>
-    fun patientsByPlan(target: Ref.Persisted): List<PatientRow>
-    fun noticesByRecipient(target: Ref.Persisted): List<NoticeRow>
-    fun prescriberOrdersByPrescriber(target: Ref.Persisted): List<PrescriberOrderRow>
-    fun prescriberOrdersByPatient(target: Ref.Persisted): List<PrescriberOrderRow>
-    fun prescriptionsByOrder(target: Ref.Persisted): List<PrescriptionRow>
-    fun prescriptionsByDrug(target: Ref.Persisted): List<PrescriptionRow>
-    fun discontinuationsByPrescription(target: Ref.Persisted): List<DiscontinuationRow>
-    fun discontinuationsByPrescriber(target: Ref.Persisted): List<DiscontinuationRow>
-    fun correctionRefusalsByPrescription(target: Ref.Persisted): List<CorrectionRefusalRow>
-    fun entryVoidsByPrescription(target: Ref.Persisted): List<EntryVoidRow>
-    fun entryVoidsByPharmacist(target: Ref.Persisted): List<EntryVoidRow>
-    fun voidRefusalsByPrescription(target: Ref.Persisted): List<VoidRefusalRow>
-    fun conflictOverridesByPrescription(target: Ref.Persisted): List<ConflictOverrideRow>
-    fun pharmacistAlertsByPrescription(target: Ref.Persisted): List<PharmacistAlertRow>
-    fun monitoringChecksByPrescription(target: Ref.Persisted): List<MonitoringCheckRow>
-    fun fillsByPrescription(target: Ref.Persisted): List<FillRow>
-    fun fillsByLot(target: Ref.Persisted): List<FillRow>
-    fun fillsByFilledBy(target: Ref.Persisted): List<FillRow>
-    fun fillRefusalsByPrescription(target: Ref.Persisted): List<FillRefusalRow>
-    fun controlledLogEntrysByFill(target: Ref.Persisted): List<ControlledLogEntryRow>
-    fun controlledLogEntrysByDrug(target: Ref.Persisted): List<ControlledLogEntryRow>
-    fun verificationsByFill(target: Ref.Persisted): List<VerificationRow>
-    fun verificationsByPharmacist(target: Ref.Persisted): List<VerificationRow>
-    fun counsellingsByFill(target: Ref.Persisted): List<CounsellingRow>
-    fun returnToStocksByFill(target: Ref.Persisted): List<ReturnToStockRow>
-    fun counterExitsByFill(target: Ref.Persisted): List<CounterExitRow>
-    fun pickupsByFill(target: Ref.Persisted): List<PickupRow>
-    fun counterAlertsByFill(target: Ref.Persisted): List<CounterAlertRow>
-    fun refillTasksByPrescription(target: Ref.Persisted): List<RefillTaskRow>
-    fun refillRefusalsByPrescription(target: Ref.Persisted): List<RefillRefusalRow>
-    fun authorisationRequestsByPrescription(target: Ref.Persisted): List<AuthorisationRequestRow>
-    fun taskNagsByTask(target: Ref.Persisted): List<TaskNagRow>
-    fun autoRefillEnrolmentsByPrescription(target: Ref.Persisted): List<AutoRefillEnrolmentRow>
-    fun autoRefillCancellationsByPrescription(target: Ref.Persisted): List<AutoRefillCancellationRow>
-    fun claimsByFill(target: Ref.Persisted): List<ClaimRow>
-    fun claimsByPlan(target: Ref.Persisted): List<ClaimRow>
-    fun claimResponsesByClaim(target: Ref.Persisted): List<ClaimResponseRow>
-    fun claimFollowUpsByClaim(target: Ref.Persisted): List<ClaimFollowUpRow>
-    fun controlledInventorySnapshotsByDrug(target: Ref.Persisted): List<ControlledInventorySnapshotRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun licenceRenewalsByPharmacists(targets: List<Ref.Persisted>): List<LicenceRenewalRow>
+    fun licenceRemindersByPharmacists(targets: List<Ref.Persisted>): List<LicenceReminderRow>
+    fun interactionsByDrugAs(targets: List<Ref.Persisted>): List<InteractionRow>
+    fun interactionsByDrugBs(targets: List<Ref.Persisted>): List<InteractionRow>
+    fun priceChangesByDrugs(targets: List<Ref.Persisted>): List<PriceChangeRow>
+    fun priceWithdrawalsByDrugs(targets: List<Ref.Persisted>): List<PriceWithdrawalRow>
+    fun priceWithdrawalRefusalsByPriceChanges(targets: List<Ref.Persisted>): List<PriceWithdrawalRefusalRow>
+    fun stockLotsByDrugs(targets: List<Ref.Persisted>): List<StockLotRow>
+    fun stockLotsByPurchaseOrders(targets: List<Ref.Persisted>): List<StockLotRow>
+    fun stockAdjustmentsByLots(targets: List<Ref.Persisted>): List<StockAdjustmentRow>
+    fun stockAdjustmentsByCountedBys(targets: List<Ref.Persisted>): List<StockAdjustmentRow>
+    fun countConfirmationsByLots(targets: List<Ref.Persisted>): List<CountConfirmationRow>
+    fun countConfirmationsByCountedBys(targets: List<Ref.Persisted>): List<CountConfirmationRow>
+    fun quarantinesByLots(targets: List<Ref.Persisted>): List<QuarantineRow>
+    fun recallsByLots(targets: List<Ref.Persisted>): List<RecallRow>
+    fun recallNoticesByFills(targets: List<Ref.Persisted>): List<RecallNoticeRow>
+    fun recallNoticesByPatients(targets: List<Ref.Persisted>): List<RecallNoticeRow>
+    fun purchaseOrdersByDrugs(targets: List<Ref.Persisted>): List<PurchaseOrderRow>
+    fun patientsByPlans(targets: List<Ref.Persisted>): List<PatientRow>
+    fun noticesByRecipients(targets: List<Ref.Persisted>): List<NoticeRow>
+    fun prescriberOrdersByPrescribers(targets: List<Ref.Persisted>): List<PrescriberOrderRow>
+    fun prescriberOrdersByPatients(targets: List<Ref.Persisted>): List<PrescriberOrderRow>
+    fun prescriptionsByOrders(targets: List<Ref.Persisted>): List<PrescriptionRow>
+    fun prescriptionsByDrugs(targets: List<Ref.Persisted>): List<PrescriptionRow>
+    fun discontinuationsByPrescriptions(targets: List<Ref.Persisted>): List<DiscontinuationRow>
+    fun discontinuationsByPrescribers(targets: List<Ref.Persisted>): List<DiscontinuationRow>
+    fun correctionRefusalsByPrescriptions(targets: List<Ref.Persisted>): List<CorrectionRefusalRow>
+    fun entryVoidsByPrescriptions(targets: List<Ref.Persisted>): List<EntryVoidRow>
+    fun entryVoidsByPharmacists(targets: List<Ref.Persisted>): List<EntryVoidRow>
+    fun voidRefusalsByPrescriptions(targets: List<Ref.Persisted>): List<VoidRefusalRow>
+    fun conflictOverridesByPrescriptions(targets: List<Ref.Persisted>): List<ConflictOverrideRow>
+    fun pharmacistAlertsByPrescriptions(targets: List<Ref.Persisted>): List<PharmacistAlertRow>
+    fun monitoringChecksByPrescriptions(targets: List<Ref.Persisted>): List<MonitoringCheckRow>
+    fun fillsByPrescriptions(targets: List<Ref.Persisted>): List<FillRow>
+    fun fillsByLots(targets: List<Ref.Persisted>): List<FillRow>
+    fun fillsByFilledBys(targets: List<Ref.Persisted>): List<FillRow>
+    fun fillRefusalsByPrescriptions(targets: List<Ref.Persisted>): List<FillRefusalRow>
+    fun controlledLogEntrysByFills(targets: List<Ref.Persisted>): List<ControlledLogEntryRow>
+    fun controlledLogEntrysByDrugs(targets: List<Ref.Persisted>): List<ControlledLogEntryRow>
+    fun verificationsByFills(targets: List<Ref.Persisted>): List<VerificationRow>
+    fun verificationsByPharmacists(targets: List<Ref.Persisted>): List<VerificationRow>
+    fun counsellingsByFills(targets: List<Ref.Persisted>): List<CounsellingRow>
+    fun returnToStocksByFills(targets: List<Ref.Persisted>): List<ReturnToStockRow>
+    fun counterExitsByFills(targets: List<Ref.Persisted>): List<CounterExitRow>
+    fun pickupsByFills(targets: List<Ref.Persisted>): List<PickupRow>
+    fun counterAlertsByFills(targets: List<Ref.Persisted>): List<CounterAlertRow>
+    fun refillTasksByPrescriptions(targets: List<Ref.Persisted>): List<RefillTaskRow>
+    fun refillRefusalsByPrescriptions(targets: List<Ref.Persisted>): List<RefillRefusalRow>
+    fun authorisationRequestsByPrescriptions(targets: List<Ref.Persisted>): List<AuthorisationRequestRow>
+    fun taskNagsByTasks(targets: List<Ref.Persisted>): List<TaskNagRow>
+    fun autoRefillEnrolmentsByPrescriptions(targets: List<Ref.Persisted>): List<AutoRefillEnrolmentRow>
+    fun autoRefillCancellationsByPrescriptions(targets: List<Ref.Persisted>): List<AutoRefillCancellationRow>
+    fun claimsByFills(targets: List<Ref.Persisted>): List<ClaimRow>
+    fun claimsByPlans(targets: List<Ref.Persisted>): List<ClaimRow>
+    fun claimResponsesByClaims(targets: List<Ref.Persisted>): List<ClaimResponseRow>
+    fun claimFollowUpsByClaims(targets: List<Ref.Persisted>): List<ClaimFollowUpRow>
+    fun controlledInventorySnapshotsByDrugs(targets: List<Ref.Persisted>): List<ControlledInventorySnapshotRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement Pharmacist; refinement LicensedPharmacist; refinement LicenceExpiringSoon — `Pharmacist`.
@@ -737,6 +739,171 @@ interface PharmacyStore {
     fun readyForPickupCapture(instance: Ref.Persisted): ReadyForPickupCapture?
 }
 
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun PharmacyStore.staff(key: StoreKey): StaffRow? = staffs(listOf(key)).firstOrNull()
+fun PharmacyStore.licenceRenewal(key: StoreKey): LicenceRenewalRow? = licenceRenewals(listOf(key)).firstOrNull()
+fun PharmacyStore.licenceReminder(key: StoreKey): LicenceReminderRow? = licenceReminders(listOf(key)).firstOrNull()
+fun PharmacyStore.ingredient(key: StoreKey): IngredientRow? = ingredients(listOf(key)).firstOrNull()
+fun PharmacyStore.drug(key: StoreKey): DrugRow? = drugs(listOf(key)).firstOrNull()
+fun PharmacyStore.interaction(key: StoreKey): InteractionRow? = interactions(listOf(key)).firstOrNull()
+fun PharmacyStore.priceChange(key: StoreKey): PriceChangeRow? = priceChanges(listOf(key)).firstOrNull()
+fun PharmacyStore.priceWithdrawal(key: StoreKey): PriceWithdrawalRow? = priceWithdrawals(listOf(key)).firstOrNull()
+fun PharmacyStore.priceWithdrawalRefusal(key: StoreKey): PriceWithdrawalRefusalRow? = priceWithdrawalRefusals(listOf(key)).firstOrNull()
+fun PharmacyStore.stockLot(key: StoreKey): StockLotRow? = stockLots(listOf(key)).firstOrNull()
+fun PharmacyStore.stockAdjustment(key: StoreKey): StockAdjustmentRow? = stockAdjustments(listOf(key)).firstOrNull()
+fun PharmacyStore.countConfirmation(key: StoreKey): CountConfirmationRow? = countConfirmations(listOf(key)).firstOrNull()
+fun PharmacyStore.quarantine(key: StoreKey): QuarantineRow? = quarantines(listOf(key)).firstOrNull()
+fun PharmacyStore.recall(key: StoreKey): RecallRow? = recalls(listOf(key)).firstOrNull()
+fun PharmacyStore.recallNotice(key: StoreKey): RecallNoticeRow? = recallNotices(listOf(key)).firstOrNull()
+fun PharmacyStore.purchaseOrder(key: StoreKey): PurchaseOrderRow? = purchaseOrders(listOf(key)).firstOrNull()
+fun PharmacyStore.insurancePlan(key: StoreKey): InsurancePlanRow? = insurancePlans(listOf(key)).firstOrNull()
+fun PharmacyStore.patient(key: StoreKey): PatientRow? = patients(listOf(key)).firstOrNull()
+fun PharmacyStore.prescriber(key: StoreKey): PrescriberRow? = prescribers(listOf(key)).firstOrNull()
+fun PharmacyStore.notice(key: StoreKey): NoticeRow? = notices(listOf(key)).firstOrNull()
+fun PharmacyStore.prescriberOrder(key: StoreKey): PrescriberOrderRow? = prescriberOrders(listOf(key)).firstOrNull()
+fun PharmacyStore.prescription(key: StoreKey): PrescriptionRow? = prescriptions(listOf(key)).firstOrNull()
+fun PharmacyStore.discontinuation(key: StoreKey): DiscontinuationRow? = discontinuations(listOf(key)).firstOrNull()
+fun PharmacyStore.correctionRefusal(key: StoreKey): CorrectionRefusalRow? = correctionRefusals(listOf(key)).firstOrNull()
+fun PharmacyStore.entryVoid(key: StoreKey): EntryVoidRow? = entryVoids(listOf(key)).firstOrNull()
+fun PharmacyStore.voidRefusal(key: StoreKey): VoidRefusalRow? = voidRefusals(listOf(key)).firstOrNull()
+fun PharmacyStore.conflictOverride(key: StoreKey): ConflictOverrideRow? = conflictOverrides(listOf(key)).firstOrNull()
+fun PharmacyStore.pharmacistAlert(key: StoreKey): PharmacistAlertRow? = pharmacistAlerts(listOf(key)).firstOrNull()
+fun PharmacyStore.monitoringCheck(key: StoreKey): MonitoringCheckRow? = monitoringChecks(listOf(key)).firstOrNull()
+fun PharmacyStore.fill(key: StoreKey): FillRow? = fills(listOf(key)).firstOrNull()
+fun PharmacyStore.fillRefusal(key: StoreKey): FillRefusalRow? = fillRefusals(listOf(key)).firstOrNull()
+fun PharmacyStore.controlledLogEntry(key: StoreKey): ControlledLogEntryRow? = controlledLogEntrys(listOf(key)).firstOrNull()
+fun PharmacyStore.verification(key: StoreKey): VerificationRow? = verifications(listOf(key)).firstOrNull()
+fun PharmacyStore.counselling(key: StoreKey): CounsellingRow? = counsellings(listOf(key)).firstOrNull()
+fun PharmacyStore.returnToStock(key: StoreKey): ReturnToStockRow? = returnToStocks(listOf(key)).firstOrNull()
+fun PharmacyStore.counterExit(key: StoreKey): CounterExitRow? = counterExits(listOf(key)).firstOrNull()
+fun PharmacyStore.pickup(key: StoreKey): PickupRow? = pickups(listOf(key)).firstOrNull()
+fun PharmacyStore.counterAlert(key: StoreKey): CounterAlertRow? = counterAlerts(listOf(key)).firstOrNull()
+fun PharmacyStore.refillTask(key: StoreKey): RefillTaskRow? = refillTasks(listOf(key)).firstOrNull()
+fun PharmacyStore.refillRefusal(key: StoreKey): RefillRefusalRow? = refillRefusals(listOf(key)).firstOrNull()
+fun PharmacyStore.authorisationRequest(key: StoreKey): AuthorisationRequestRow? = authorisationRequests(listOf(key)).firstOrNull()
+fun PharmacyStore.taskNag(key: StoreKey): TaskNagRow? = taskNags(listOf(key)).firstOrNull()
+fun PharmacyStore.autoRefillEnrolment(key: StoreKey): AutoRefillEnrolmentRow? = autoRefillEnrolments(listOf(key)).firstOrNull()
+fun PharmacyStore.autoRefillCancellation(key: StoreKey): AutoRefillCancellationRow? = autoRefillCancellations(listOf(key)).firstOrNull()
+fun PharmacyStore.claim(key: StoreKey): ClaimRow? = claims(listOf(key)).firstOrNull()
+fun PharmacyStore.claimResponse(key: StoreKey): ClaimResponseRow? = claimResponses(listOf(key)).firstOrNull()
+fun PharmacyStore.claimFollowUp(key: StoreKey): ClaimFollowUpRow? = claimFollowUps(listOf(key)).firstOrNull()
+fun PharmacyStore.controlledInventorySnapshot(key: StoreKey): ControlledInventorySnapshotRow? = controlledInventorySnapshots(listOf(key)).firstOrNull()
+fun PharmacyStore.licenceRenewalsByPharmacist(target: Ref.Persisted): List<LicenceRenewalRow> =
+    licenceRenewalsByPharmacists(listOf(target))
+fun PharmacyStore.licenceRemindersByPharmacist(target: Ref.Persisted): List<LicenceReminderRow> =
+    licenceRemindersByPharmacists(listOf(target))
+fun PharmacyStore.interactionsByDrugA(target: Ref.Persisted): List<InteractionRow> =
+    interactionsByDrugAs(listOf(target))
+fun PharmacyStore.interactionsByDrugB(target: Ref.Persisted): List<InteractionRow> =
+    interactionsByDrugBs(listOf(target))
+fun PharmacyStore.priceChangesByDrug(target: Ref.Persisted): List<PriceChangeRow> =
+    priceChangesByDrugs(listOf(target))
+fun PharmacyStore.priceWithdrawalsByDrug(target: Ref.Persisted): List<PriceWithdrawalRow> =
+    priceWithdrawalsByDrugs(listOf(target))
+fun PharmacyStore.priceWithdrawalRefusalsByPriceChange(target: Ref.Persisted): List<PriceWithdrawalRefusalRow> =
+    priceWithdrawalRefusalsByPriceChanges(listOf(target))
+fun PharmacyStore.stockLotsByDrug(target: Ref.Persisted): List<StockLotRow> =
+    stockLotsByDrugs(listOf(target))
+fun PharmacyStore.stockLotsByPurchaseOrder(target: Ref.Persisted): List<StockLotRow> =
+    stockLotsByPurchaseOrders(listOf(target))
+fun PharmacyStore.stockAdjustmentsByLot(target: Ref.Persisted): List<StockAdjustmentRow> =
+    stockAdjustmentsByLots(listOf(target))
+fun PharmacyStore.stockAdjustmentsByCountedBy(target: Ref.Persisted): List<StockAdjustmentRow> =
+    stockAdjustmentsByCountedBys(listOf(target))
+fun PharmacyStore.countConfirmationsByLot(target: Ref.Persisted): List<CountConfirmationRow> =
+    countConfirmationsByLots(listOf(target))
+fun PharmacyStore.countConfirmationsByCountedBy(target: Ref.Persisted): List<CountConfirmationRow> =
+    countConfirmationsByCountedBys(listOf(target))
+fun PharmacyStore.quarantinesByLot(target: Ref.Persisted): List<QuarantineRow> =
+    quarantinesByLots(listOf(target))
+fun PharmacyStore.recallsByLot(target: Ref.Persisted): List<RecallRow> =
+    recallsByLots(listOf(target))
+fun PharmacyStore.recallNoticesByFill(target: Ref.Persisted): List<RecallNoticeRow> =
+    recallNoticesByFills(listOf(target))
+fun PharmacyStore.recallNoticesByPatient(target: Ref.Persisted): List<RecallNoticeRow> =
+    recallNoticesByPatients(listOf(target))
+fun PharmacyStore.purchaseOrdersByDrug(target: Ref.Persisted): List<PurchaseOrderRow> =
+    purchaseOrdersByDrugs(listOf(target))
+fun PharmacyStore.patientsByPlan(target: Ref.Persisted): List<PatientRow> =
+    patientsByPlans(listOf(target))
+fun PharmacyStore.noticesByRecipient(target: Ref.Persisted): List<NoticeRow> =
+    noticesByRecipients(listOf(target))
+fun PharmacyStore.prescriberOrdersByPrescriber(target: Ref.Persisted): List<PrescriberOrderRow> =
+    prescriberOrdersByPrescribers(listOf(target))
+fun PharmacyStore.prescriberOrdersByPatient(target: Ref.Persisted): List<PrescriberOrderRow> =
+    prescriberOrdersByPatients(listOf(target))
+fun PharmacyStore.prescriptionsByOrder(target: Ref.Persisted): List<PrescriptionRow> =
+    prescriptionsByOrders(listOf(target))
+fun PharmacyStore.prescriptionsByDrug(target: Ref.Persisted): List<PrescriptionRow> =
+    prescriptionsByDrugs(listOf(target))
+fun PharmacyStore.discontinuationsByPrescription(target: Ref.Persisted): List<DiscontinuationRow> =
+    discontinuationsByPrescriptions(listOf(target))
+fun PharmacyStore.discontinuationsByPrescriber(target: Ref.Persisted): List<DiscontinuationRow> =
+    discontinuationsByPrescribers(listOf(target))
+fun PharmacyStore.correctionRefusalsByPrescription(target: Ref.Persisted): List<CorrectionRefusalRow> =
+    correctionRefusalsByPrescriptions(listOf(target))
+fun PharmacyStore.entryVoidsByPrescription(target: Ref.Persisted): List<EntryVoidRow> =
+    entryVoidsByPrescriptions(listOf(target))
+fun PharmacyStore.entryVoidsByPharmacist(target: Ref.Persisted): List<EntryVoidRow> =
+    entryVoidsByPharmacists(listOf(target))
+fun PharmacyStore.voidRefusalsByPrescription(target: Ref.Persisted): List<VoidRefusalRow> =
+    voidRefusalsByPrescriptions(listOf(target))
+fun PharmacyStore.conflictOverridesByPrescription(target: Ref.Persisted): List<ConflictOverrideRow> =
+    conflictOverridesByPrescriptions(listOf(target))
+fun PharmacyStore.pharmacistAlertsByPrescription(target: Ref.Persisted): List<PharmacistAlertRow> =
+    pharmacistAlertsByPrescriptions(listOf(target))
+fun PharmacyStore.monitoringChecksByPrescription(target: Ref.Persisted): List<MonitoringCheckRow> =
+    monitoringChecksByPrescriptions(listOf(target))
+fun PharmacyStore.fillsByPrescription(target: Ref.Persisted): List<FillRow> =
+    fillsByPrescriptions(listOf(target))
+fun PharmacyStore.fillsByLot(target: Ref.Persisted): List<FillRow> =
+    fillsByLots(listOf(target))
+fun PharmacyStore.fillsByFilledBy(target: Ref.Persisted): List<FillRow> =
+    fillsByFilledBys(listOf(target))
+fun PharmacyStore.fillRefusalsByPrescription(target: Ref.Persisted): List<FillRefusalRow> =
+    fillRefusalsByPrescriptions(listOf(target))
+fun PharmacyStore.controlledLogEntrysByFill(target: Ref.Persisted): List<ControlledLogEntryRow> =
+    controlledLogEntrysByFills(listOf(target))
+fun PharmacyStore.controlledLogEntrysByDrug(target: Ref.Persisted): List<ControlledLogEntryRow> =
+    controlledLogEntrysByDrugs(listOf(target))
+fun PharmacyStore.verificationsByFill(target: Ref.Persisted): List<VerificationRow> =
+    verificationsByFills(listOf(target))
+fun PharmacyStore.verificationsByPharmacist(target: Ref.Persisted): List<VerificationRow> =
+    verificationsByPharmacists(listOf(target))
+fun PharmacyStore.counsellingsByFill(target: Ref.Persisted): List<CounsellingRow> =
+    counsellingsByFills(listOf(target))
+fun PharmacyStore.returnToStocksByFill(target: Ref.Persisted): List<ReturnToStockRow> =
+    returnToStocksByFills(listOf(target))
+fun PharmacyStore.counterExitsByFill(target: Ref.Persisted): List<CounterExitRow> =
+    counterExitsByFills(listOf(target))
+fun PharmacyStore.pickupsByFill(target: Ref.Persisted): List<PickupRow> =
+    pickupsByFills(listOf(target))
+fun PharmacyStore.counterAlertsByFill(target: Ref.Persisted): List<CounterAlertRow> =
+    counterAlertsByFills(listOf(target))
+fun PharmacyStore.refillTasksByPrescription(target: Ref.Persisted): List<RefillTaskRow> =
+    refillTasksByPrescriptions(listOf(target))
+fun PharmacyStore.refillRefusalsByPrescription(target: Ref.Persisted): List<RefillRefusalRow> =
+    refillRefusalsByPrescriptions(listOf(target))
+fun PharmacyStore.authorisationRequestsByPrescription(target: Ref.Persisted): List<AuthorisationRequestRow> =
+    authorisationRequestsByPrescriptions(listOf(target))
+fun PharmacyStore.taskNagsByTask(target: Ref.Persisted): List<TaskNagRow> =
+    taskNagsByTasks(listOf(target))
+fun PharmacyStore.autoRefillEnrolmentsByPrescription(target: Ref.Persisted): List<AutoRefillEnrolmentRow> =
+    autoRefillEnrolmentsByPrescriptions(listOf(target))
+fun PharmacyStore.autoRefillCancellationsByPrescription(target: Ref.Persisted): List<AutoRefillCancellationRow> =
+    autoRefillCancellationsByPrescriptions(listOf(target))
+fun PharmacyStore.claimsByFill(target: Ref.Persisted): List<ClaimRow> =
+    claimsByFills(listOf(target))
+fun PharmacyStore.claimsByPlan(target: Ref.Persisted): List<ClaimRow> =
+    claimsByPlans(listOf(target))
+fun PharmacyStore.claimResponsesByClaim(target: Ref.Persisted): List<ClaimResponseRow> =
+    claimResponsesByClaims(listOf(target))
+fun PharmacyStore.claimFollowUpsByClaim(target: Ref.Persisted): List<ClaimFollowUpRow> =
+    claimFollowUpsByClaims(listOf(target))
+fun PharmacyStore.controlledInventorySnapshotsByDrug(target: Ref.Persisted): List<ControlledInventorySnapshotRow> =
+    controlledInventorySnapshotsByDrugs(listOf(target))
+
 /** The candidate questions as recognizable templates (QTemplate). */
 class PharmacyStoreQuestions(model: Model) {
     val pharmacistCandidates = QTemplate.of(model, "Staff", RefName("Pharmacist"))
@@ -798,54 +965,54 @@ open class PharmacyStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun staff(key: StoreKey): StaffRow? = backend.fetchByKey("Staff", key)?.toStaffRow()
-    override fun licenceRenewal(key: StoreKey): LicenceRenewalRow? = backend.fetchByKey("LicenceRenewal", key)?.toLicenceRenewalRow()
-    override fun licenceReminder(key: StoreKey): LicenceReminderRow? = backend.fetchByKey("LicenceReminder", key)?.toLicenceReminderRow()
-    override fun ingredient(key: StoreKey): IngredientRow? = backend.fetchByKey("Ingredient", key)?.toIngredientRow()
-    override fun drug(key: StoreKey): DrugRow? = backend.fetchByKey("Drug", key)?.toDrugRow()
-    override fun interaction(key: StoreKey): InteractionRow? = backend.fetchByKey("Interaction", key)?.toInteractionRow()
-    override fun priceChange(key: StoreKey): PriceChangeRow? = backend.fetchByKey("PriceChange", key)?.toPriceChangeRow()
-    override fun priceWithdrawal(key: StoreKey): PriceWithdrawalRow? = backend.fetchByKey("PriceWithdrawal", key)?.toPriceWithdrawalRow()
-    override fun priceWithdrawalRefusal(key: StoreKey): PriceWithdrawalRefusalRow? = backend.fetchByKey("PriceWithdrawalRefusal", key)?.toPriceWithdrawalRefusalRow()
-    override fun stockLot(key: StoreKey): StockLotRow? = backend.fetchByKey("StockLot", key)?.toStockLotRow()
-    override fun stockAdjustment(key: StoreKey): StockAdjustmentRow? = backend.fetchByKey("StockAdjustment", key)?.toStockAdjustmentRow()
-    override fun countConfirmation(key: StoreKey): CountConfirmationRow? = backend.fetchByKey("CountConfirmation", key)?.toCountConfirmationRow()
-    override fun quarantine(key: StoreKey): QuarantineRow? = backend.fetchByKey("Quarantine", key)?.toQuarantineRow()
-    override fun recall(key: StoreKey): RecallRow? = backend.fetchByKey("Recall", key)?.toRecallRow()
-    override fun recallNotice(key: StoreKey): RecallNoticeRow? = backend.fetchByKey("RecallNotice", key)?.toRecallNoticeRow()
-    override fun purchaseOrder(key: StoreKey): PurchaseOrderRow? = backend.fetchByKey("PurchaseOrder", key)?.toPurchaseOrderRow()
-    override fun insurancePlan(key: StoreKey): InsurancePlanRow? = backend.fetchByKey("InsurancePlan", key)?.toInsurancePlanRow()
-    override fun patient(key: StoreKey): PatientRow? = backend.fetchByKey("Patient", key)?.toPatientRow()
-    override fun prescriber(key: StoreKey): PrescriberRow? = backend.fetchByKey("Prescriber", key)?.toPrescriberRow()
-    override fun notice(key: StoreKey): NoticeRow? = backend.fetchByKey("Notice", key)?.toNoticeRow()
-    override fun prescriberOrder(key: StoreKey): PrescriberOrderRow? = backend.fetchByKey("PrescriberOrder", key)?.toPrescriberOrderRow()
-    override fun prescription(key: StoreKey): PrescriptionRow? = backend.fetchByKey("Prescription", key)?.toPrescriptionRow()
-    override fun discontinuation(key: StoreKey): DiscontinuationRow? = backend.fetchByKey("Discontinuation", key)?.toDiscontinuationRow()
-    override fun correctionRefusal(key: StoreKey): CorrectionRefusalRow? = backend.fetchByKey("CorrectionRefusal", key)?.toCorrectionRefusalRow()
-    override fun entryVoid(key: StoreKey): EntryVoidRow? = backend.fetchByKey("EntryVoid", key)?.toEntryVoidRow()
-    override fun voidRefusal(key: StoreKey): VoidRefusalRow? = backend.fetchByKey("VoidRefusal", key)?.toVoidRefusalRow()
-    override fun conflictOverride(key: StoreKey): ConflictOverrideRow? = backend.fetchByKey("ConflictOverride", key)?.toConflictOverrideRow()
-    override fun pharmacistAlert(key: StoreKey): PharmacistAlertRow? = backend.fetchByKey("PharmacistAlert", key)?.toPharmacistAlertRow()
-    override fun monitoringCheck(key: StoreKey): MonitoringCheckRow? = backend.fetchByKey("MonitoringCheck", key)?.toMonitoringCheckRow()
-    override fun fill(key: StoreKey): FillRow? = backend.fetchByKey("Fill", key)?.toFillRow()
-    override fun fillRefusal(key: StoreKey): FillRefusalRow? = backend.fetchByKey("FillRefusal", key)?.toFillRefusalRow()
-    override fun controlledLogEntry(key: StoreKey): ControlledLogEntryRow? = backend.fetchByKey("ControlledLogEntry", key)?.toControlledLogEntryRow()
-    override fun verification(key: StoreKey): VerificationRow? = backend.fetchByKey("Verification", key)?.toVerificationRow()
-    override fun counselling(key: StoreKey): CounsellingRow? = backend.fetchByKey("Counselling", key)?.toCounsellingRow()
-    override fun returnToStock(key: StoreKey): ReturnToStockRow? = backend.fetchByKey("ReturnToStock", key)?.toReturnToStockRow()
-    override fun counterExit(key: StoreKey): CounterExitRow? = backend.fetchByKey("CounterExit", key)?.toCounterExitRow()
-    override fun pickup(key: StoreKey): PickupRow? = backend.fetchByKey("Pickup", key)?.toPickupRow()
-    override fun counterAlert(key: StoreKey): CounterAlertRow? = backend.fetchByKey("CounterAlert", key)?.toCounterAlertRow()
-    override fun refillTask(key: StoreKey): RefillTaskRow? = backend.fetchByKey("RefillTask", key)?.toRefillTaskRow()
-    override fun refillRefusal(key: StoreKey): RefillRefusalRow? = backend.fetchByKey("RefillRefusal", key)?.toRefillRefusalRow()
-    override fun authorisationRequest(key: StoreKey): AuthorisationRequestRow? = backend.fetchByKey("AuthorisationRequest", key)?.toAuthorisationRequestRow()
-    override fun taskNag(key: StoreKey): TaskNagRow? = backend.fetchByKey("TaskNag", key)?.toTaskNagRow()
-    override fun autoRefillEnrolment(key: StoreKey): AutoRefillEnrolmentRow? = backend.fetchByKey("AutoRefillEnrolment", key)?.toAutoRefillEnrolmentRow()
-    override fun autoRefillCancellation(key: StoreKey): AutoRefillCancellationRow? = backend.fetchByKey("AutoRefillCancellation", key)?.toAutoRefillCancellationRow()
-    override fun claim(key: StoreKey): ClaimRow? = backend.fetchByKey("Claim", key)?.toClaimRow()
-    override fun claimResponse(key: StoreKey): ClaimResponseRow? = backend.fetchByKey("ClaimResponse", key)?.toClaimResponseRow()
-    override fun claimFollowUp(key: StoreKey): ClaimFollowUpRow? = backend.fetchByKey("ClaimFollowUp", key)?.toClaimFollowUpRow()
-    override fun controlledInventorySnapshot(key: StoreKey): ControlledInventorySnapshotRow? = backend.fetchByKey("ControlledInventorySnapshot", key)?.toControlledInventorySnapshotRow()
+    override fun staffs(keys: List<StoreKey>): List<StaffRow> = backend.fetchByKeys("Staff", keys).map { it.toStaffRow() }
+    override fun licenceRenewals(keys: List<StoreKey>): List<LicenceRenewalRow> = backend.fetchByKeys("LicenceRenewal", keys).map { it.toLicenceRenewalRow() }
+    override fun licenceReminders(keys: List<StoreKey>): List<LicenceReminderRow> = backend.fetchByKeys("LicenceReminder", keys).map { it.toLicenceReminderRow() }
+    override fun ingredients(keys: List<StoreKey>): List<IngredientRow> = backend.fetchByKeys("Ingredient", keys).map { it.toIngredientRow() }
+    override fun drugs(keys: List<StoreKey>): List<DrugRow> = backend.fetchByKeys("Drug", keys).map { it.toDrugRow() }
+    override fun interactions(keys: List<StoreKey>): List<InteractionRow> = backend.fetchByKeys("Interaction", keys).map { it.toInteractionRow() }
+    override fun priceChanges(keys: List<StoreKey>): List<PriceChangeRow> = backend.fetchByKeys("PriceChange", keys).map { it.toPriceChangeRow() }
+    override fun priceWithdrawals(keys: List<StoreKey>): List<PriceWithdrawalRow> = backend.fetchByKeys("PriceWithdrawal", keys).map { it.toPriceWithdrawalRow() }
+    override fun priceWithdrawalRefusals(keys: List<StoreKey>): List<PriceWithdrawalRefusalRow> = backend.fetchByKeys("PriceWithdrawalRefusal", keys).map { it.toPriceWithdrawalRefusalRow() }
+    override fun stockLots(keys: List<StoreKey>): List<StockLotRow> = backend.fetchByKeys("StockLot", keys).map { it.toStockLotRow() }
+    override fun stockAdjustments(keys: List<StoreKey>): List<StockAdjustmentRow> = backend.fetchByKeys("StockAdjustment", keys).map { it.toStockAdjustmentRow() }
+    override fun countConfirmations(keys: List<StoreKey>): List<CountConfirmationRow> = backend.fetchByKeys("CountConfirmation", keys).map { it.toCountConfirmationRow() }
+    override fun quarantines(keys: List<StoreKey>): List<QuarantineRow> = backend.fetchByKeys("Quarantine", keys).map { it.toQuarantineRow() }
+    override fun recalls(keys: List<StoreKey>): List<RecallRow> = backend.fetchByKeys("Recall", keys).map { it.toRecallRow() }
+    override fun recallNotices(keys: List<StoreKey>): List<RecallNoticeRow> = backend.fetchByKeys("RecallNotice", keys).map { it.toRecallNoticeRow() }
+    override fun purchaseOrders(keys: List<StoreKey>): List<PurchaseOrderRow> = backend.fetchByKeys("PurchaseOrder", keys).map { it.toPurchaseOrderRow() }
+    override fun insurancePlans(keys: List<StoreKey>): List<InsurancePlanRow> = backend.fetchByKeys("InsurancePlan", keys).map { it.toInsurancePlanRow() }
+    override fun patients(keys: List<StoreKey>): List<PatientRow> = backend.fetchByKeys("Patient", keys).map { it.toPatientRow() }
+    override fun prescribers(keys: List<StoreKey>): List<PrescriberRow> = backend.fetchByKeys("Prescriber", keys).map { it.toPrescriberRow() }
+    override fun notices(keys: List<StoreKey>): List<NoticeRow> = backend.fetchByKeys("Notice", keys).map { it.toNoticeRow() }
+    override fun prescriberOrders(keys: List<StoreKey>): List<PrescriberOrderRow> = backend.fetchByKeys("PrescriberOrder", keys).map { it.toPrescriberOrderRow() }
+    override fun prescriptions(keys: List<StoreKey>): List<PrescriptionRow> = backend.fetchByKeys("Prescription", keys).map { it.toPrescriptionRow() }
+    override fun discontinuations(keys: List<StoreKey>): List<DiscontinuationRow> = backend.fetchByKeys("Discontinuation", keys).map { it.toDiscontinuationRow() }
+    override fun correctionRefusals(keys: List<StoreKey>): List<CorrectionRefusalRow> = backend.fetchByKeys("CorrectionRefusal", keys).map { it.toCorrectionRefusalRow() }
+    override fun entryVoids(keys: List<StoreKey>): List<EntryVoidRow> = backend.fetchByKeys("EntryVoid", keys).map { it.toEntryVoidRow() }
+    override fun voidRefusals(keys: List<StoreKey>): List<VoidRefusalRow> = backend.fetchByKeys("VoidRefusal", keys).map { it.toVoidRefusalRow() }
+    override fun conflictOverrides(keys: List<StoreKey>): List<ConflictOverrideRow> = backend.fetchByKeys("ConflictOverride", keys).map { it.toConflictOverrideRow() }
+    override fun pharmacistAlerts(keys: List<StoreKey>): List<PharmacistAlertRow> = backend.fetchByKeys("PharmacistAlert", keys).map { it.toPharmacistAlertRow() }
+    override fun monitoringChecks(keys: List<StoreKey>): List<MonitoringCheckRow> = backend.fetchByKeys("MonitoringCheck", keys).map { it.toMonitoringCheckRow() }
+    override fun fills(keys: List<StoreKey>): List<FillRow> = backend.fetchByKeys("Fill", keys).map { it.toFillRow() }
+    override fun fillRefusals(keys: List<StoreKey>): List<FillRefusalRow> = backend.fetchByKeys("FillRefusal", keys).map { it.toFillRefusalRow() }
+    override fun controlledLogEntrys(keys: List<StoreKey>): List<ControlledLogEntryRow> = backend.fetchByKeys("ControlledLogEntry", keys).map { it.toControlledLogEntryRow() }
+    override fun verifications(keys: List<StoreKey>): List<VerificationRow> = backend.fetchByKeys("Verification", keys).map { it.toVerificationRow() }
+    override fun counsellings(keys: List<StoreKey>): List<CounsellingRow> = backend.fetchByKeys("Counselling", keys).map { it.toCounsellingRow() }
+    override fun returnToStocks(keys: List<StoreKey>): List<ReturnToStockRow> = backend.fetchByKeys("ReturnToStock", keys).map { it.toReturnToStockRow() }
+    override fun counterExits(keys: List<StoreKey>): List<CounterExitRow> = backend.fetchByKeys("CounterExit", keys).map { it.toCounterExitRow() }
+    override fun pickups(keys: List<StoreKey>): List<PickupRow> = backend.fetchByKeys("Pickup", keys).map { it.toPickupRow() }
+    override fun counterAlerts(keys: List<StoreKey>): List<CounterAlertRow> = backend.fetchByKeys("CounterAlert", keys).map { it.toCounterAlertRow() }
+    override fun refillTasks(keys: List<StoreKey>): List<RefillTaskRow> = backend.fetchByKeys("RefillTask", keys).map { it.toRefillTaskRow() }
+    override fun refillRefusals(keys: List<StoreKey>): List<RefillRefusalRow> = backend.fetchByKeys("RefillRefusal", keys).map { it.toRefillRefusalRow() }
+    override fun authorisationRequests(keys: List<StoreKey>): List<AuthorisationRequestRow> = backend.fetchByKeys("AuthorisationRequest", keys).map { it.toAuthorisationRequestRow() }
+    override fun taskNags(keys: List<StoreKey>): List<TaskNagRow> = backend.fetchByKeys("TaskNag", keys).map { it.toTaskNagRow() }
+    override fun autoRefillEnrolments(keys: List<StoreKey>): List<AutoRefillEnrolmentRow> = backend.fetchByKeys("AutoRefillEnrolment", keys).map { it.toAutoRefillEnrolmentRow() }
+    override fun autoRefillCancellations(keys: List<StoreKey>): List<AutoRefillCancellationRow> = backend.fetchByKeys("AutoRefillCancellation", keys).map { it.toAutoRefillCancellationRow() }
+    override fun claims(keys: List<StoreKey>): List<ClaimRow> = backend.fetchByKeys("Claim", keys).map { it.toClaimRow() }
+    override fun claimResponses(keys: List<StoreKey>): List<ClaimResponseRow> = backend.fetchByKeys("ClaimResponse", keys).map { it.toClaimResponseRow() }
+    override fun claimFollowUps(keys: List<StoreKey>): List<ClaimFollowUpRow> = backend.fetchByKeys("ClaimFollowUp", keys).map { it.toClaimFollowUpRow() }
+    override fun controlledInventorySnapshots(keys: List<StoreKey>): List<ControlledInventorySnapshotRow> = backend.fetchByKeys("ControlledInventorySnapshot", keys).map { it.toControlledInventorySnapshotRow() }
 
     override fun allStaffs(): List<StaffRow> = backend.fetchAll("Staff").map { it.toStaffRow() }
     override fun allLicenceRenewals(): List<LicenceRenewalRow> = backend.fetchAll("LicenceRenewal").map { it.toLicenceRenewalRow() }
@@ -896,120 +1063,120 @@ open class PharmacyStoreOverGeneric(
     override fun allClaimFollowUps(): List<ClaimFollowUpRow> = backend.fetchAll("ClaimFollowUp").map { it.toClaimFollowUpRow() }
     override fun allControlledInventorySnapshots(): List<ControlledInventorySnapshotRow> = backend.fetchAll("ControlledInventorySnapshot").map { it.toControlledInventorySnapshotRow() }
 
-    override fun licenceRenewalsByPharmacist(target: Ref.Persisted): List<LicenceRenewalRow> =
-        backend.fetchReferencing("LicenceRenewal", "pharmacist", target).map { it.toLicenceRenewalRow() }
-    override fun licenceRemindersByPharmacist(target: Ref.Persisted): List<LicenceReminderRow> =
-        backend.fetchReferencing("LicenceReminder", "pharmacist", target).map { it.toLicenceReminderRow() }
-    override fun interactionsByDrugA(target: Ref.Persisted): List<InteractionRow> =
-        backend.fetchReferencing("Interaction", "drugA", target).map { it.toInteractionRow() }
-    override fun interactionsByDrugB(target: Ref.Persisted): List<InteractionRow> =
-        backend.fetchReferencing("Interaction", "drugB", target).map { it.toInteractionRow() }
-    override fun priceChangesByDrug(target: Ref.Persisted): List<PriceChangeRow> =
-        backend.fetchReferencing("PriceChange", "drug", target).map { it.toPriceChangeRow() }
-    override fun priceWithdrawalsByDrug(target: Ref.Persisted): List<PriceWithdrawalRow> =
-        backend.fetchReferencing("PriceWithdrawal", "drug", target).map { it.toPriceWithdrawalRow() }
-    override fun priceWithdrawalRefusalsByPriceChange(target: Ref.Persisted): List<PriceWithdrawalRefusalRow> =
-        backend.fetchReferencing("PriceWithdrawalRefusal", "priceChange", target).map { it.toPriceWithdrawalRefusalRow() }
-    override fun stockLotsByDrug(target: Ref.Persisted): List<StockLotRow> =
-        backend.fetchReferencing("StockLot", "drug", target).map { it.toStockLotRow() }
-    override fun stockLotsByPurchaseOrder(target: Ref.Persisted): List<StockLotRow> =
-        backend.fetchReferencing("StockLot", "purchaseOrder", target).map { it.toStockLotRow() }
-    override fun stockAdjustmentsByLot(target: Ref.Persisted): List<StockAdjustmentRow> =
-        backend.fetchReferencing("StockAdjustment", "lot", target).map { it.toStockAdjustmentRow() }
-    override fun stockAdjustmentsByCountedBy(target: Ref.Persisted): List<StockAdjustmentRow> =
-        backend.fetchReferencing("StockAdjustment", "countedBy", target).map { it.toStockAdjustmentRow() }
-    override fun countConfirmationsByLot(target: Ref.Persisted): List<CountConfirmationRow> =
-        backend.fetchReferencing("CountConfirmation", "lot", target).map { it.toCountConfirmationRow() }
-    override fun countConfirmationsByCountedBy(target: Ref.Persisted): List<CountConfirmationRow> =
-        backend.fetchReferencing("CountConfirmation", "countedBy", target).map { it.toCountConfirmationRow() }
-    override fun quarantinesByLot(target: Ref.Persisted): List<QuarantineRow> =
-        backend.fetchReferencing("Quarantine", "lot", target).map { it.toQuarantineRow() }
-    override fun recallsByLot(target: Ref.Persisted): List<RecallRow> =
-        backend.fetchReferencing("Recall", "lot", target).map { it.toRecallRow() }
-    override fun recallNoticesByFill(target: Ref.Persisted): List<RecallNoticeRow> =
-        backend.fetchReferencing("RecallNotice", "fill", target).map { it.toRecallNoticeRow() }
-    override fun recallNoticesByPatient(target: Ref.Persisted): List<RecallNoticeRow> =
-        backend.fetchReferencing("RecallNotice", "patient", target).map { it.toRecallNoticeRow() }
-    override fun purchaseOrdersByDrug(target: Ref.Persisted): List<PurchaseOrderRow> =
-        backend.fetchReferencing("PurchaseOrder", "drug", target).map { it.toPurchaseOrderRow() }
-    override fun patientsByPlan(target: Ref.Persisted): List<PatientRow> =
-        backend.fetchReferencing("Patient", "plan", target).map { it.toPatientRow() }
-    override fun noticesByRecipient(target: Ref.Persisted): List<NoticeRow> =
-        backend.fetchReferencing("Notice", "recipient", target).map { it.toNoticeRow() }
-    override fun prescriberOrdersByPrescriber(target: Ref.Persisted): List<PrescriberOrderRow> =
-        backend.fetchReferencing("PrescriberOrder", "prescriber", target).map { it.toPrescriberOrderRow() }
-    override fun prescriberOrdersByPatient(target: Ref.Persisted): List<PrescriberOrderRow> =
-        backend.fetchReferencing("PrescriberOrder", "patient", target).map { it.toPrescriberOrderRow() }
-    override fun prescriptionsByOrder(target: Ref.Persisted): List<PrescriptionRow> =
-        backend.fetchReferencing("Prescription", "order", target).map { it.toPrescriptionRow() }
-    override fun prescriptionsByDrug(target: Ref.Persisted): List<PrescriptionRow> =
-        backend.fetchReferencing("Prescription", "drug", target).map { it.toPrescriptionRow() }
-    override fun discontinuationsByPrescription(target: Ref.Persisted): List<DiscontinuationRow> =
-        backend.fetchReferencing("Discontinuation", "prescription", target).map { it.toDiscontinuationRow() }
-    override fun discontinuationsByPrescriber(target: Ref.Persisted): List<DiscontinuationRow> =
-        backend.fetchReferencing("Discontinuation", "prescriber", target).map { it.toDiscontinuationRow() }
-    override fun correctionRefusalsByPrescription(target: Ref.Persisted): List<CorrectionRefusalRow> =
-        backend.fetchReferencing("CorrectionRefusal", "prescription", target).map { it.toCorrectionRefusalRow() }
-    override fun entryVoidsByPrescription(target: Ref.Persisted): List<EntryVoidRow> =
-        backend.fetchReferencing("EntryVoid", "prescription", target).map { it.toEntryVoidRow() }
-    override fun entryVoidsByPharmacist(target: Ref.Persisted): List<EntryVoidRow> =
-        backend.fetchReferencing("EntryVoid", "pharmacist", target).map { it.toEntryVoidRow() }
-    override fun voidRefusalsByPrescription(target: Ref.Persisted): List<VoidRefusalRow> =
-        backend.fetchReferencing("VoidRefusal", "prescription", target).map { it.toVoidRefusalRow() }
-    override fun conflictOverridesByPrescription(target: Ref.Persisted): List<ConflictOverrideRow> =
-        backend.fetchReferencing("ConflictOverride", "prescription", target).map { it.toConflictOverrideRow() }
-    override fun pharmacistAlertsByPrescription(target: Ref.Persisted): List<PharmacistAlertRow> =
-        backend.fetchReferencing("PharmacistAlert", "prescription", target).map { it.toPharmacistAlertRow() }
-    override fun monitoringChecksByPrescription(target: Ref.Persisted): List<MonitoringCheckRow> =
-        backend.fetchReferencing("MonitoringCheck", "prescription", target).map { it.toMonitoringCheckRow() }
-    override fun fillsByPrescription(target: Ref.Persisted): List<FillRow> =
-        backend.fetchReferencing("Fill", "prescription", target).map { it.toFillRow() }
-    override fun fillsByLot(target: Ref.Persisted): List<FillRow> =
-        backend.fetchReferencing("Fill", "lot", target).map { it.toFillRow() }
-    override fun fillsByFilledBy(target: Ref.Persisted): List<FillRow> =
-        backend.fetchReferencing("Fill", "filledBy", target).map { it.toFillRow() }
-    override fun fillRefusalsByPrescription(target: Ref.Persisted): List<FillRefusalRow> =
-        backend.fetchReferencing("FillRefusal", "prescription", target).map { it.toFillRefusalRow() }
-    override fun controlledLogEntrysByFill(target: Ref.Persisted): List<ControlledLogEntryRow> =
-        backend.fetchReferencing("ControlledLogEntry", "fill", target).map { it.toControlledLogEntryRow() }
-    override fun controlledLogEntrysByDrug(target: Ref.Persisted): List<ControlledLogEntryRow> =
-        backend.fetchReferencing("ControlledLogEntry", "drug", target).map { it.toControlledLogEntryRow() }
-    override fun verificationsByFill(target: Ref.Persisted): List<VerificationRow> =
-        backend.fetchReferencing("Verification", "fill", target).map { it.toVerificationRow() }
-    override fun verificationsByPharmacist(target: Ref.Persisted): List<VerificationRow> =
-        backend.fetchReferencing("Verification", "pharmacist", target).map { it.toVerificationRow() }
-    override fun counsellingsByFill(target: Ref.Persisted): List<CounsellingRow> =
-        backend.fetchReferencing("Counselling", "fill", target).map { it.toCounsellingRow() }
-    override fun returnToStocksByFill(target: Ref.Persisted): List<ReturnToStockRow> =
-        backend.fetchReferencing("ReturnToStock", "fill", target).map { it.toReturnToStockRow() }
-    override fun counterExitsByFill(target: Ref.Persisted): List<CounterExitRow> =
-        backend.fetchReferencing("CounterExit", "fill", target).map { it.toCounterExitRow() }
-    override fun pickupsByFill(target: Ref.Persisted): List<PickupRow> =
-        backend.fetchReferencing("Pickup", "fill", target).map { it.toPickupRow() }
-    override fun counterAlertsByFill(target: Ref.Persisted): List<CounterAlertRow> =
-        backend.fetchReferencing("CounterAlert", "fill", target).map { it.toCounterAlertRow() }
-    override fun refillTasksByPrescription(target: Ref.Persisted): List<RefillTaskRow> =
-        backend.fetchReferencing("RefillTask", "prescription", target).map { it.toRefillTaskRow() }
-    override fun refillRefusalsByPrescription(target: Ref.Persisted): List<RefillRefusalRow> =
-        backend.fetchReferencing("RefillRefusal", "prescription", target).map { it.toRefillRefusalRow() }
-    override fun authorisationRequestsByPrescription(target: Ref.Persisted): List<AuthorisationRequestRow> =
-        backend.fetchReferencing("AuthorisationRequest", "prescription", target).map { it.toAuthorisationRequestRow() }
-    override fun taskNagsByTask(target: Ref.Persisted): List<TaskNagRow> =
-        backend.fetchReferencing("TaskNag", "task", target).map { it.toTaskNagRow() }
-    override fun autoRefillEnrolmentsByPrescription(target: Ref.Persisted): List<AutoRefillEnrolmentRow> =
-        backend.fetchReferencing("AutoRefillEnrolment", "prescription", target).map { it.toAutoRefillEnrolmentRow() }
-    override fun autoRefillCancellationsByPrescription(target: Ref.Persisted): List<AutoRefillCancellationRow> =
-        backend.fetchReferencing("AutoRefillCancellation", "prescription", target).map { it.toAutoRefillCancellationRow() }
-    override fun claimsByFill(target: Ref.Persisted): List<ClaimRow> =
-        backend.fetchReferencing("Claim", "fill", target).map { it.toClaimRow() }
-    override fun claimsByPlan(target: Ref.Persisted): List<ClaimRow> =
-        backend.fetchReferencing("Claim", "plan", target).map { it.toClaimRow() }
-    override fun claimResponsesByClaim(target: Ref.Persisted): List<ClaimResponseRow> =
-        backend.fetchReferencing("ClaimResponse", "claim", target).map { it.toClaimResponseRow() }
-    override fun claimFollowUpsByClaim(target: Ref.Persisted): List<ClaimFollowUpRow> =
-        backend.fetchReferencing("ClaimFollowUp", "claim", target).map { it.toClaimFollowUpRow() }
-    override fun controlledInventorySnapshotsByDrug(target: Ref.Persisted): List<ControlledInventorySnapshotRow> =
-        backend.fetchReferencing("ControlledInventorySnapshot", "drug", target).map { it.toControlledInventorySnapshotRow() }
+    override fun licenceRenewalsByPharmacists(targets: List<Ref.Persisted>): List<LicenceRenewalRow> =
+        backend.fetchReferencingAny("LicenceRenewal", "pharmacist", targets).map { it.toLicenceRenewalRow() }
+    override fun licenceRemindersByPharmacists(targets: List<Ref.Persisted>): List<LicenceReminderRow> =
+        backend.fetchReferencingAny("LicenceReminder", "pharmacist", targets).map { it.toLicenceReminderRow() }
+    override fun interactionsByDrugAs(targets: List<Ref.Persisted>): List<InteractionRow> =
+        backend.fetchReferencingAny("Interaction", "drugA", targets).map { it.toInteractionRow() }
+    override fun interactionsByDrugBs(targets: List<Ref.Persisted>): List<InteractionRow> =
+        backend.fetchReferencingAny("Interaction", "drugB", targets).map { it.toInteractionRow() }
+    override fun priceChangesByDrugs(targets: List<Ref.Persisted>): List<PriceChangeRow> =
+        backend.fetchReferencingAny("PriceChange", "drug", targets).map { it.toPriceChangeRow() }
+    override fun priceWithdrawalsByDrugs(targets: List<Ref.Persisted>): List<PriceWithdrawalRow> =
+        backend.fetchReferencingAny("PriceWithdrawal", "drug", targets).map { it.toPriceWithdrawalRow() }
+    override fun priceWithdrawalRefusalsByPriceChanges(targets: List<Ref.Persisted>): List<PriceWithdrawalRefusalRow> =
+        backend.fetchReferencingAny("PriceWithdrawalRefusal", "priceChange", targets).map { it.toPriceWithdrawalRefusalRow() }
+    override fun stockLotsByDrugs(targets: List<Ref.Persisted>): List<StockLotRow> =
+        backend.fetchReferencingAny("StockLot", "drug", targets).map { it.toStockLotRow() }
+    override fun stockLotsByPurchaseOrders(targets: List<Ref.Persisted>): List<StockLotRow> =
+        backend.fetchReferencingAny("StockLot", "purchaseOrder", targets).map { it.toStockLotRow() }
+    override fun stockAdjustmentsByLots(targets: List<Ref.Persisted>): List<StockAdjustmentRow> =
+        backend.fetchReferencingAny("StockAdjustment", "lot", targets).map { it.toStockAdjustmentRow() }
+    override fun stockAdjustmentsByCountedBys(targets: List<Ref.Persisted>): List<StockAdjustmentRow> =
+        backend.fetchReferencingAny("StockAdjustment", "countedBy", targets).map { it.toStockAdjustmentRow() }
+    override fun countConfirmationsByLots(targets: List<Ref.Persisted>): List<CountConfirmationRow> =
+        backend.fetchReferencingAny("CountConfirmation", "lot", targets).map { it.toCountConfirmationRow() }
+    override fun countConfirmationsByCountedBys(targets: List<Ref.Persisted>): List<CountConfirmationRow> =
+        backend.fetchReferencingAny("CountConfirmation", "countedBy", targets).map { it.toCountConfirmationRow() }
+    override fun quarantinesByLots(targets: List<Ref.Persisted>): List<QuarantineRow> =
+        backend.fetchReferencingAny("Quarantine", "lot", targets).map { it.toQuarantineRow() }
+    override fun recallsByLots(targets: List<Ref.Persisted>): List<RecallRow> =
+        backend.fetchReferencingAny("Recall", "lot", targets).map { it.toRecallRow() }
+    override fun recallNoticesByFills(targets: List<Ref.Persisted>): List<RecallNoticeRow> =
+        backend.fetchReferencingAny("RecallNotice", "fill", targets).map { it.toRecallNoticeRow() }
+    override fun recallNoticesByPatients(targets: List<Ref.Persisted>): List<RecallNoticeRow> =
+        backend.fetchReferencingAny("RecallNotice", "patient", targets).map { it.toRecallNoticeRow() }
+    override fun purchaseOrdersByDrugs(targets: List<Ref.Persisted>): List<PurchaseOrderRow> =
+        backend.fetchReferencingAny("PurchaseOrder", "drug", targets).map { it.toPurchaseOrderRow() }
+    override fun patientsByPlans(targets: List<Ref.Persisted>): List<PatientRow> =
+        backend.fetchReferencingAny("Patient", "plan", targets).map { it.toPatientRow() }
+    override fun noticesByRecipients(targets: List<Ref.Persisted>): List<NoticeRow> =
+        backend.fetchReferencingAny("Notice", "recipient", targets).map { it.toNoticeRow() }
+    override fun prescriberOrdersByPrescribers(targets: List<Ref.Persisted>): List<PrescriberOrderRow> =
+        backend.fetchReferencingAny("PrescriberOrder", "prescriber", targets).map { it.toPrescriberOrderRow() }
+    override fun prescriberOrdersByPatients(targets: List<Ref.Persisted>): List<PrescriberOrderRow> =
+        backend.fetchReferencingAny("PrescriberOrder", "patient", targets).map { it.toPrescriberOrderRow() }
+    override fun prescriptionsByOrders(targets: List<Ref.Persisted>): List<PrescriptionRow> =
+        backend.fetchReferencingAny("Prescription", "order", targets).map { it.toPrescriptionRow() }
+    override fun prescriptionsByDrugs(targets: List<Ref.Persisted>): List<PrescriptionRow> =
+        backend.fetchReferencingAny("Prescription", "drug", targets).map { it.toPrescriptionRow() }
+    override fun discontinuationsByPrescriptions(targets: List<Ref.Persisted>): List<DiscontinuationRow> =
+        backend.fetchReferencingAny("Discontinuation", "prescription", targets).map { it.toDiscontinuationRow() }
+    override fun discontinuationsByPrescribers(targets: List<Ref.Persisted>): List<DiscontinuationRow> =
+        backend.fetchReferencingAny("Discontinuation", "prescriber", targets).map { it.toDiscontinuationRow() }
+    override fun correctionRefusalsByPrescriptions(targets: List<Ref.Persisted>): List<CorrectionRefusalRow> =
+        backend.fetchReferencingAny("CorrectionRefusal", "prescription", targets).map { it.toCorrectionRefusalRow() }
+    override fun entryVoidsByPrescriptions(targets: List<Ref.Persisted>): List<EntryVoidRow> =
+        backend.fetchReferencingAny("EntryVoid", "prescription", targets).map { it.toEntryVoidRow() }
+    override fun entryVoidsByPharmacists(targets: List<Ref.Persisted>): List<EntryVoidRow> =
+        backend.fetchReferencingAny("EntryVoid", "pharmacist", targets).map { it.toEntryVoidRow() }
+    override fun voidRefusalsByPrescriptions(targets: List<Ref.Persisted>): List<VoidRefusalRow> =
+        backend.fetchReferencingAny("VoidRefusal", "prescription", targets).map { it.toVoidRefusalRow() }
+    override fun conflictOverridesByPrescriptions(targets: List<Ref.Persisted>): List<ConflictOverrideRow> =
+        backend.fetchReferencingAny("ConflictOverride", "prescription", targets).map { it.toConflictOverrideRow() }
+    override fun pharmacistAlertsByPrescriptions(targets: List<Ref.Persisted>): List<PharmacistAlertRow> =
+        backend.fetchReferencingAny("PharmacistAlert", "prescription", targets).map { it.toPharmacistAlertRow() }
+    override fun monitoringChecksByPrescriptions(targets: List<Ref.Persisted>): List<MonitoringCheckRow> =
+        backend.fetchReferencingAny("MonitoringCheck", "prescription", targets).map { it.toMonitoringCheckRow() }
+    override fun fillsByPrescriptions(targets: List<Ref.Persisted>): List<FillRow> =
+        backend.fetchReferencingAny("Fill", "prescription", targets).map { it.toFillRow() }
+    override fun fillsByLots(targets: List<Ref.Persisted>): List<FillRow> =
+        backend.fetchReferencingAny("Fill", "lot", targets).map { it.toFillRow() }
+    override fun fillsByFilledBys(targets: List<Ref.Persisted>): List<FillRow> =
+        backend.fetchReferencingAny("Fill", "filledBy", targets).map { it.toFillRow() }
+    override fun fillRefusalsByPrescriptions(targets: List<Ref.Persisted>): List<FillRefusalRow> =
+        backend.fetchReferencingAny("FillRefusal", "prescription", targets).map { it.toFillRefusalRow() }
+    override fun controlledLogEntrysByFills(targets: List<Ref.Persisted>): List<ControlledLogEntryRow> =
+        backend.fetchReferencingAny("ControlledLogEntry", "fill", targets).map { it.toControlledLogEntryRow() }
+    override fun controlledLogEntrysByDrugs(targets: List<Ref.Persisted>): List<ControlledLogEntryRow> =
+        backend.fetchReferencingAny("ControlledLogEntry", "drug", targets).map { it.toControlledLogEntryRow() }
+    override fun verificationsByFills(targets: List<Ref.Persisted>): List<VerificationRow> =
+        backend.fetchReferencingAny("Verification", "fill", targets).map { it.toVerificationRow() }
+    override fun verificationsByPharmacists(targets: List<Ref.Persisted>): List<VerificationRow> =
+        backend.fetchReferencingAny("Verification", "pharmacist", targets).map { it.toVerificationRow() }
+    override fun counsellingsByFills(targets: List<Ref.Persisted>): List<CounsellingRow> =
+        backend.fetchReferencingAny("Counselling", "fill", targets).map { it.toCounsellingRow() }
+    override fun returnToStocksByFills(targets: List<Ref.Persisted>): List<ReturnToStockRow> =
+        backend.fetchReferencingAny("ReturnToStock", "fill", targets).map { it.toReturnToStockRow() }
+    override fun counterExitsByFills(targets: List<Ref.Persisted>): List<CounterExitRow> =
+        backend.fetchReferencingAny("CounterExit", "fill", targets).map { it.toCounterExitRow() }
+    override fun pickupsByFills(targets: List<Ref.Persisted>): List<PickupRow> =
+        backend.fetchReferencingAny("Pickup", "fill", targets).map { it.toPickupRow() }
+    override fun counterAlertsByFills(targets: List<Ref.Persisted>): List<CounterAlertRow> =
+        backend.fetchReferencingAny("CounterAlert", "fill", targets).map { it.toCounterAlertRow() }
+    override fun refillTasksByPrescriptions(targets: List<Ref.Persisted>): List<RefillTaskRow> =
+        backend.fetchReferencingAny("RefillTask", "prescription", targets).map { it.toRefillTaskRow() }
+    override fun refillRefusalsByPrescriptions(targets: List<Ref.Persisted>): List<RefillRefusalRow> =
+        backend.fetchReferencingAny("RefillRefusal", "prescription", targets).map { it.toRefillRefusalRow() }
+    override fun authorisationRequestsByPrescriptions(targets: List<Ref.Persisted>): List<AuthorisationRequestRow> =
+        backend.fetchReferencingAny("AuthorisationRequest", "prescription", targets).map { it.toAuthorisationRequestRow() }
+    override fun taskNagsByTasks(targets: List<Ref.Persisted>): List<TaskNagRow> =
+        backend.fetchReferencingAny("TaskNag", "task", targets).map { it.toTaskNagRow() }
+    override fun autoRefillEnrolmentsByPrescriptions(targets: List<Ref.Persisted>): List<AutoRefillEnrolmentRow> =
+        backend.fetchReferencingAny("AutoRefillEnrolment", "prescription", targets).map { it.toAutoRefillEnrolmentRow() }
+    override fun autoRefillCancellationsByPrescriptions(targets: List<Ref.Persisted>): List<AutoRefillCancellationRow> =
+        backend.fetchReferencingAny("AutoRefillCancellation", "prescription", targets).map { it.toAutoRefillCancellationRow() }
+    override fun claimsByFills(targets: List<Ref.Persisted>): List<ClaimRow> =
+        backend.fetchReferencingAny("Claim", "fill", targets).map { it.toClaimRow() }
+    override fun claimsByPlans(targets: List<Ref.Persisted>): List<ClaimRow> =
+        backend.fetchReferencingAny("Claim", "plan", targets).map { it.toClaimRow() }
+    override fun claimResponsesByClaims(targets: List<Ref.Persisted>): List<ClaimResponseRow> =
+        backend.fetchReferencingAny("ClaimResponse", "claim", targets).map { it.toClaimResponseRow() }
+    override fun claimFollowUpsByClaims(targets: List<Ref.Persisted>): List<ClaimFollowUpRow> =
+        backend.fetchReferencingAny("ClaimFollowUp", "claim", targets).map { it.toClaimFollowUpRow() }
+    override fun controlledInventorySnapshotsByDrugs(targets: List<Ref.Persisted>): List<ControlledInventorySnapshotRow> =
+        backend.fetchReferencingAny("ControlledInventorySnapshot", "drug", targets).map { it.toControlledInventorySnapshotRow() }
 
     override fun pharmacistCandidates(): List<StaffRow> =
         backend.fetchCandidates("Staff", questions.pharmacistCandidates.instantiate(listOf()))
@@ -1204,56 +1371,56 @@ class PharmacyStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Staff" -> store.staff(key)?.toRow()
-        "LicenceRenewal" -> store.licenceRenewal(key)?.toRow()
-        "LicenceReminder" -> store.licenceReminder(key)?.toRow()
-        "Ingredient" -> store.ingredient(key)?.toRow()
-        "Drug" -> store.drug(key)?.toRow()
-        "Interaction" -> store.interaction(key)?.toRow()
-        "PriceChange" -> store.priceChange(key)?.toRow()
-        "PriceWithdrawal" -> store.priceWithdrawal(key)?.toRow()
-        "PriceWithdrawalRefusal" -> store.priceWithdrawalRefusal(key)?.toRow()
-        "StockLot" -> store.stockLot(key)?.toRow()
-        "StockAdjustment" -> store.stockAdjustment(key)?.toRow()
-        "CountConfirmation" -> store.countConfirmation(key)?.toRow()
-        "Quarantine" -> store.quarantine(key)?.toRow()
-        "Recall" -> store.recall(key)?.toRow()
-        "RecallNotice" -> store.recallNotice(key)?.toRow()
-        "PurchaseOrder" -> store.purchaseOrder(key)?.toRow()
-        "InsurancePlan" -> store.insurancePlan(key)?.toRow()
-        "Patient" -> store.patient(key)?.toRow()
-        "Prescriber" -> store.prescriber(key)?.toRow()
-        "Notice" -> store.notice(key)?.toRow()
-        "PrescriberOrder" -> store.prescriberOrder(key)?.toRow()
-        "Prescription" -> store.prescription(key)?.toRow()
-        "Discontinuation" -> store.discontinuation(key)?.toRow()
-        "CorrectionRefusal" -> store.correctionRefusal(key)?.toRow()
-        "EntryVoid" -> store.entryVoid(key)?.toRow()
-        "VoidRefusal" -> store.voidRefusal(key)?.toRow()
-        "ConflictOverride" -> store.conflictOverride(key)?.toRow()
-        "PharmacistAlert" -> store.pharmacistAlert(key)?.toRow()
-        "MonitoringCheck" -> store.monitoringCheck(key)?.toRow()
-        "Fill" -> store.fill(key)?.toRow()
-        "FillRefusal" -> store.fillRefusal(key)?.toRow()
-        "ControlledLogEntry" -> store.controlledLogEntry(key)?.toRow()
-        "Verification" -> store.verification(key)?.toRow()
-        "Counselling" -> store.counselling(key)?.toRow()
-        "ReturnToStock" -> store.returnToStock(key)?.toRow()
-        "CounterExit" -> store.counterExit(key)?.toRow()
-        "Pickup" -> store.pickup(key)?.toRow()
-        "CounterAlert" -> store.counterAlert(key)?.toRow()
-        "RefillTask" -> store.refillTask(key)?.toRow()
-        "RefillRefusal" -> store.refillRefusal(key)?.toRow()
-        "AuthorisationRequest" -> store.authorisationRequest(key)?.toRow()
-        "TaskNag" -> store.taskNag(key)?.toRow()
-        "AutoRefillEnrolment" -> store.autoRefillEnrolment(key)?.toRow()
-        "AutoRefillCancellation" -> store.autoRefillCancellation(key)?.toRow()
-        "Claim" -> store.claim(key)?.toRow()
-        "ClaimResponse" -> store.claimResponse(key)?.toRow()
-        "ClaimFollowUp" -> store.claimFollowUp(key)?.toRow()
-        "ControlledInventorySnapshot" -> store.controlledInventorySnapshot(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Staff" -> store.staffs(keys).map { it.toRow() }
+        "LicenceRenewal" -> store.licenceRenewals(keys).map { it.toRow() }
+        "LicenceReminder" -> store.licenceReminders(keys).map { it.toRow() }
+        "Ingredient" -> store.ingredients(keys).map { it.toRow() }
+        "Drug" -> store.drugs(keys).map { it.toRow() }
+        "Interaction" -> store.interactions(keys).map { it.toRow() }
+        "PriceChange" -> store.priceChanges(keys).map { it.toRow() }
+        "PriceWithdrawal" -> store.priceWithdrawals(keys).map { it.toRow() }
+        "PriceWithdrawalRefusal" -> store.priceWithdrawalRefusals(keys).map { it.toRow() }
+        "StockLot" -> store.stockLots(keys).map { it.toRow() }
+        "StockAdjustment" -> store.stockAdjustments(keys).map { it.toRow() }
+        "CountConfirmation" -> store.countConfirmations(keys).map { it.toRow() }
+        "Quarantine" -> store.quarantines(keys).map { it.toRow() }
+        "Recall" -> store.recalls(keys).map { it.toRow() }
+        "RecallNotice" -> store.recallNotices(keys).map { it.toRow() }
+        "PurchaseOrder" -> store.purchaseOrders(keys).map { it.toRow() }
+        "InsurancePlan" -> store.insurancePlans(keys).map { it.toRow() }
+        "Patient" -> store.patients(keys).map { it.toRow() }
+        "Prescriber" -> store.prescribers(keys).map { it.toRow() }
+        "Notice" -> store.notices(keys).map { it.toRow() }
+        "PrescriberOrder" -> store.prescriberOrders(keys).map { it.toRow() }
+        "Prescription" -> store.prescriptions(keys).map { it.toRow() }
+        "Discontinuation" -> store.discontinuations(keys).map { it.toRow() }
+        "CorrectionRefusal" -> store.correctionRefusals(keys).map { it.toRow() }
+        "EntryVoid" -> store.entryVoids(keys).map { it.toRow() }
+        "VoidRefusal" -> store.voidRefusals(keys).map { it.toRow() }
+        "ConflictOverride" -> store.conflictOverrides(keys).map { it.toRow() }
+        "PharmacistAlert" -> store.pharmacistAlerts(keys).map { it.toRow() }
+        "MonitoringCheck" -> store.monitoringChecks(keys).map { it.toRow() }
+        "Fill" -> store.fills(keys).map { it.toRow() }
+        "FillRefusal" -> store.fillRefusals(keys).map { it.toRow() }
+        "ControlledLogEntry" -> store.controlledLogEntrys(keys).map { it.toRow() }
+        "Verification" -> store.verifications(keys).map { it.toRow() }
+        "Counselling" -> store.counsellings(keys).map { it.toRow() }
+        "ReturnToStock" -> store.returnToStocks(keys).map { it.toRow() }
+        "CounterExit" -> store.counterExits(keys).map { it.toRow() }
+        "Pickup" -> store.pickups(keys).map { it.toRow() }
+        "CounterAlert" -> store.counterAlerts(keys).map { it.toRow() }
+        "RefillTask" -> store.refillTasks(keys).map { it.toRow() }
+        "RefillRefusal" -> store.refillRefusals(keys).map { it.toRow() }
+        "AuthorisationRequest" -> store.authorisationRequests(keys).map { it.toRow() }
+        "TaskNag" -> store.taskNags(keys).map { it.toRow() }
+        "AutoRefillEnrolment" -> store.autoRefillEnrolments(keys).map { it.toRow() }
+        "AutoRefillCancellation" -> store.autoRefillCancellations(keys).map { it.toRow() }
+        "Claim" -> store.claims(keys).map { it.toRow() }
+        "ClaimResponse" -> store.claimResponses(keys).map { it.toRow() }
+        "ClaimFollowUp" -> store.claimFollowUps(keys).map { it.toRow() }
+        "ControlledInventorySnapshot" -> store.controlledInventorySnapshots(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -1308,64 +1475,64 @@ class PharmacyStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "LicenceRenewal" && field == "pharmacist" -> store.licenceRenewalsByPharmacist(target).map { it.toRow() }
-        shape == "LicenceReminder" && field == "pharmacist" -> store.licenceRemindersByPharmacist(target).map { it.toRow() }
-        shape == "Interaction" && field == "drugA" -> store.interactionsByDrugA(target).map { it.toRow() }
-        shape == "Interaction" && field == "drugB" -> store.interactionsByDrugB(target).map { it.toRow() }
-        shape == "PriceChange" && field == "drug" -> store.priceChangesByDrug(target).map { it.toRow() }
-        shape == "PriceWithdrawal" && field == "drug" -> store.priceWithdrawalsByDrug(target).map { it.toRow() }
-        shape == "PriceWithdrawalRefusal" && field == "priceChange" -> store.priceWithdrawalRefusalsByPriceChange(target).map { it.toRow() }
-        shape == "StockLot" && field == "drug" -> store.stockLotsByDrug(target).map { it.toRow() }
-        shape == "StockLot" && field == "purchaseOrder" -> store.stockLotsByPurchaseOrder(target).map { it.toRow() }
-        shape == "StockAdjustment" && field == "lot" -> store.stockAdjustmentsByLot(target).map { it.toRow() }
-        shape == "StockAdjustment" && field == "countedBy" -> store.stockAdjustmentsByCountedBy(target).map { it.toRow() }
-        shape == "CountConfirmation" && field == "lot" -> store.countConfirmationsByLot(target).map { it.toRow() }
-        shape == "CountConfirmation" && field == "countedBy" -> store.countConfirmationsByCountedBy(target).map { it.toRow() }
-        shape == "Quarantine" && field == "lot" -> store.quarantinesByLot(target).map { it.toRow() }
-        shape == "Recall" && field == "lot" -> store.recallsByLot(target).map { it.toRow() }
-        shape == "RecallNotice" && field == "fill" -> store.recallNoticesByFill(target).map { it.toRow() }
-        shape == "RecallNotice" && field == "patient" -> store.recallNoticesByPatient(target).map { it.toRow() }
-        shape == "PurchaseOrder" && field == "drug" -> store.purchaseOrdersByDrug(target).map { it.toRow() }
-        shape == "Patient" && field == "plan" -> store.patientsByPlan(target).map { it.toRow() }
-        shape == "Notice" && field == "recipient" -> store.noticesByRecipient(target).map { it.toRow() }
-        shape == "PrescriberOrder" && field == "prescriber" -> store.prescriberOrdersByPrescriber(target).map { it.toRow() }
-        shape == "PrescriberOrder" && field == "patient" -> store.prescriberOrdersByPatient(target).map { it.toRow() }
-        shape == "Prescription" && field == "order" -> store.prescriptionsByOrder(target).map { it.toRow() }
-        shape == "Prescription" && field == "drug" -> store.prescriptionsByDrug(target).map { it.toRow() }
-        shape == "Discontinuation" && field == "prescription" -> store.discontinuationsByPrescription(target).map { it.toRow() }
-        shape == "Discontinuation" && field == "prescriber" -> store.discontinuationsByPrescriber(target).map { it.toRow() }
-        shape == "CorrectionRefusal" && field == "prescription" -> store.correctionRefusalsByPrescription(target).map { it.toRow() }
-        shape == "EntryVoid" && field == "prescription" -> store.entryVoidsByPrescription(target).map { it.toRow() }
-        shape == "EntryVoid" && field == "pharmacist" -> store.entryVoidsByPharmacist(target).map { it.toRow() }
-        shape == "VoidRefusal" && field == "prescription" -> store.voidRefusalsByPrescription(target).map { it.toRow() }
-        shape == "ConflictOverride" && field == "prescription" -> store.conflictOverridesByPrescription(target).map { it.toRow() }
-        shape == "PharmacistAlert" && field == "prescription" -> store.pharmacistAlertsByPrescription(target).map { it.toRow() }
-        shape == "MonitoringCheck" && field == "prescription" -> store.monitoringChecksByPrescription(target).map { it.toRow() }
-        shape == "Fill" && field == "prescription" -> store.fillsByPrescription(target).map { it.toRow() }
-        shape == "Fill" && field == "lot" -> store.fillsByLot(target).map { it.toRow() }
-        shape == "Fill" && field == "filledBy" -> store.fillsByFilledBy(target).map { it.toRow() }
-        shape == "FillRefusal" && field == "prescription" -> store.fillRefusalsByPrescription(target).map { it.toRow() }
-        shape == "ControlledLogEntry" && field == "fill" -> store.controlledLogEntrysByFill(target).map { it.toRow() }
-        shape == "ControlledLogEntry" && field == "drug" -> store.controlledLogEntrysByDrug(target).map { it.toRow() }
-        shape == "Verification" && field == "fill" -> store.verificationsByFill(target).map { it.toRow() }
-        shape == "Verification" && field == "pharmacist" -> store.verificationsByPharmacist(target).map { it.toRow() }
-        shape == "Counselling" && field == "fill" -> store.counsellingsByFill(target).map { it.toRow() }
-        shape == "ReturnToStock" && field == "fill" -> store.returnToStocksByFill(target).map { it.toRow() }
-        shape == "CounterExit" && field == "fill" -> store.counterExitsByFill(target).map { it.toRow() }
-        shape == "Pickup" && field == "fill" -> store.pickupsByFill(target).map { it.toRow() }
-        shape == "CounterAlert" && field == "fill" -> store.counterAlertsByFill(target).map { it.toRow() }
-        shape == "RefillTask" && field == "prescription" -> store.refillTasksByPrescription(target).map { it.toRow() }
-        shape == "RefillRefusal" && field == "prescription" -> store.refillRefusalsByPrescription(target).map { it.toRow() }
-        shape == "AuthorisationRequest" && field == "prescription" -> store.authorisationRequestsByPrescription(target).map { it.toRow() }
-        shape == "TaskNag" && field == "task" -> store.taskNagsByTask(target).map { it.toRow() }
-        shape == "AutoRefillEnrolment" && field == "prescription" -> store.autoRefillEnrolmentsByPrescription(target).map { it.toRow() }
-        shape == "AutoRefillCancellation" && field == "prescription" -> store.autoRefillCancellationsByPrescription(target).map { it.toRow() }
-        shape == "Claim" && field == "fill" -> store.claimsByFill(target).map { it.toRow() }
-        shape == "Claim" && field == "plan" -> store.claimsByPlan(target).map { it.toRow() }
-        shape == "ClaimResponse" && field == "claim" -> store.claimResponsesByClaim(target).map { it.toRow() }
-        shape == "ClaimFollowUp" && field == "claim" -> store.claimFollowUpsByClaim(target).map { it.toRow() }
-        shape == "ControlledInventorySnapshot" && field == "drug" -> store.controlledInventorySnapshotsByDrug(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "LicenceRenewal" && field == "pharmacist" -> store.licenceRenewalsByPharmacists(targets).map { it.toRow() }
+        shape == "LicenceReminder" && field == "pharmacist" -> store.licenceRemindersByPharmacists(targets).map { it.toRow() }
+        shape == "Interaction" && field == "drugA" -> store.interactionsByDrugAs(targets).map { it.toRow() }
+        shape == "Interaction" && field == "drugB" -> store.interactionsByDrugBs(targets).map { it.toRow() }
+        shape == "PriceChange" && field == "drug" -> store.priceChangesByDrugs(targets).map { it.toRow() }
+        shape == "PriceWithdrawal" && field == "drug" -> store.priceWithdrawalsByDrugs(targets).map { it.toRow() }
+        shape == "PriceWithdrawalRefusal" && field == "priceChange" -> store.priceWithdrawalRefusalsByPriceChanges(targets).map { it.toRow() }
+        shape == "StockLot" && field == "drug" -> store.stockLotsByDrugs(targets).map { it.toRow() }
+        shape == "StockLot" && field == "purchaseOrder" -> store.stockLotsByPurchaseOrders(targets).map { it.toRow() }
+        shape == "StockAdjustment" && field == "lot" -> store.stockAdjustmentsByLots(targets).map { it.toRow() }
+        shape == "StockAdjustment" && field == "countedBy" -> store.stockAdjustmentsByCountedBys(targets).map { it.toRow() }
+        shape == "CountConfirmation" && field == "lot" -> store.countConfirmationsByLots(targets).map { it.toRow() }
+        shape == "CountConfirmation" && field == "countedBy" -> store.countConfirmationsByCountedBys(targets).map { it.toRow() }
+        shape == "Quarantine" && field == "lot" -> store.quarantinesByLots(targets).map { it.toRow() }
+        shape == "Recall" && field == "lot" -> store.recallsByLots(targets).map { it.toRow() }
+        shape == "RecallNotice" && field == "fill" -> store.recallNoticesByFills(targets).map { it.toRow() }
+        shape == "RecallNotice" && field == "patient" -> store.recallNoticesByPatients(targets).map { it.toRow() }
+        shape == "PurchaseOrder" && field == "drug" -> store.purchaseOrdersByDrugs(targets).map { it.toRow() }
+        shape == "Patient" && field == "plan" -> store.patientsByPlans(targets).map { it.toRow() }
+        shape == "Notice" && field == "recipient" -> store.noticesByRecipients(targets).map { it.toRow() }
+        shape == "PrescriberOrder" && field == "prescriber" -> store.prescriberOrdersByPrescribers(targets).map { it.toRow() }
+        shape == "PrescriberOrder" && field == "patient" -> store.prescriberOrdersByPatients(targets).map { it.toRow() }
+        shape == "Prescription" && field == "order" -> store.prescriptionsByOrders(targets).map { it.toRow() }
+        shape == "Prescription" && field == "drug" -> store.prescriptionsByDrugs(targets).map { it.toRow() }
+        shape == "Discontinuation" && field == "prescription" -> store.discontinuationsByPrescriptions(targets).map { it.toRow() }
+        shape == "Discontinuation" && field == "prescriber" -> store.discontinuationsByPrescribers(targets).map { it.toRow() }
+        shape == "CorrectionRefusal" && field == "prescription" -> store.correctionRefusalsByPrescriptions(targets).map { it.toRow() }
+        shape == "EntryVoid" && field == "prescription" -> store.entryVoidsByPrescriptions(targets).map { it.toRow() }
+        shape == "EntryVoid" && field == "pharmacist" -> store.entryVoidsByPharmacists(targets).map { it.toRow() }
+        shape == "VoidRefusal" && field == "prescription" -> store.voidRefusalsByPrescriptions(targets).map { it.toRow() }
+        shape == "ConflictOverride" && field == "prescription" -> store.conflictOverridesByPrescriptions(targets).map { it.toRow() }
+        shape == "PharmacistAlert" && field == "prescription" -> store.pharmacistAlertsByPrescriptions(targets).map { it.toRow() }
+        shape == "MonitoringCheck" && field == "prescription" -> store.monitoringChecksByPrescriptions(targets).map { it.toRow() }
+        shape == "Fill" && field == "prescription" -> store.fillsByPrescriptions(targets).map { it.toRow() }
+        shape == "Fill" && field == "lot" -> store.fillsByLots(targets).map { it.toRow() }
+        shape == "Fill" && field == "filledBy" -> store.fillsByFilledBys(targets).map { it.toRow() }
+        shape == "FillRefusal" && field == "prescription" -> store.fillRefusalsByPrescriptions(targets).map { it.toRow() }
+        shape == "ControlledLogEntry" && field == "fill" -> store.controlledLogEntrysByFills(targets).map { it.toRow() }
+        shape == "ControlledLogEntry" && field == "drug" -> store.controlledLogEntrysByDrugs(targets).map { it.toRow() }
+        shape == "Verification" && field == "fill" -> store.verificationsByFills(targets).map { it.toRow() }
+        shape == "Verification" && field == "pharmacist" -> store.verificationsByPharmacists(targets).map { it.toRow() }
+        shape == "Counselling" && field == "fill" -> store.counsellingsByFills(targets).map { it.toRow() }
+        shape == "ReturnToStock" && field == "fill" -> store.returnToStocksByFills(targets).map { it.toRow() }
+        shape == "CounterExit" && field == "fill" -> store.counterExitsByFills(targets).map { it.toRow() }
+        shape == "Pickup" && field == "fill" -> store.pickupsByFills(targets).map { it.toRow() }
+        shape == "CounterAlert" && field == "fill" -> store.counterAlertsByFills(targets).map { it.toRow() }
+        shape == "RefillTask" && field == "prescription" -> store.refillTasksByPrescriptions(targets).map { it.toRow() }
+        shape == "RefillRefusal" && field == "prescription" -> store.refillRefusalsByPrescriptions(targets).map { it.toRow() }
+        shape == "AuthorisationRequest" && field == "prescription" -> store.authorisationRequestsByPrescriptions(targets).map { it.toRow() }
+        shape == "TaskNag" && field == "task" -> store.taskNagsByTasks(targets).map { it.toRow() }
+        shape == "AutoRefillEnrolment" && field == "prescription" -> store.autoRefillEnrolmentsByPrescriptions(targets).map { it.toRow() }
+        shape == "AutoRefillCancellation" && field == "prescription" -> store.autoRefillCancellationsByPrescriptions(targets).map { it.toRow() }
+        shape == "Claim" && field == "fill" -> store.claimsByFills(targets).map { it.toRow() }
+        shape == "Claim" && field == "plan" -> store.claimsByPlans(targets).map { it.toRow() }
+        shape == "ClaimResponse" && field == "claim" -> store.claimResponsesByClaims(targets).map { it.toRow() }
+        shape == "ClaimFollowUp" && field == "claim" -> store.claimFollowUpsByClaims(targets).map { it.toRow() }
+        shape == "ControlledInventorySnapshot" && field == "drug" -> store.controlledInventorySnapshotsByDrugs(targets).map { it.toRow() }
         else -> emptyList()
     }
 

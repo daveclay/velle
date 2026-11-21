@@ -95,7 +95,8 @@ class PharmacyStatementsTest {
         val unasked = statements.filter { statement -> listOf("StockLot", "PriceChange", "Prescription", "Fill", "PurchaseOrder").any { table -> "\"$table\"" in statement } }
         assertEquals(emptyList(), unasked.distinct())
         // one request is one snapshot: the list and the actor, then the drugs the interactions name as
-        // drugA in one statement and their ingredients in another, and the same two for drugB
+        // drugA in one statement and their ingredients in another, and the same two for drugB. The
+        // drugs are fetched because following a reference checks that the caller may see its record
         assertTrue(statements.size <= 6, "${statements.size} statements for ${items.size} interactions: ${statements.groupingBy { statement -> statement }.eachCount()}")
     }
 

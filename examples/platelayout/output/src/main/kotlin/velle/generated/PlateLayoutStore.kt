@@ -65,12 +65,14 @@ interface PlateLayoutStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun containerType(key: StoreKey): ContainerTypeRow?
-    fun experimentDesign(key: StoreKey): ExperimentDesignRow?
-    fun condition(key: StoreKey): ConditionRow?
-    fun container(key: StoreKey): ContainerRow?
-    fun well(key: StoreKey): WellRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun containerTypes(keys: List<StoreKey>): List<ContainerTypeRow>
+    fun experimentDesigns(keys: List<StoreKey>): List<ExperimentDesignRow>
+    fun conditions(keys: List<StoreKey>): List<ConditionRow>
+    fun containers(keys: List<StoreKey>): List<ContainerRow>
+    fun wells(keys: List<StoreKey>): List<WellRow>
 
     // ── scan floor: all rows of a shape ──
     fun allContainerTypes(): List<ContainerTypeRow>
@@ -79,18 +81,36 @@ interface PlateLayoutStore {
     fun allContainers(): List<ContainerRow>
     fun allWells(): List<WellRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun experimentDesignsByContainerType(target: Ref.Persisted): List<ExperimentDesignRow>
-    fun conditionsByDesign(target: Ref.Persisted): List<ConditionRow>
-    fun containersByDesign(target: Ref.Persisted): List<ContainerRow>
-    fun wellsByContainer(target: Ref.Persisted): List<WellRow>
-    fun wellsByCondition(target: Ref.Persisted): List<WellRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun experimentDesignsByContainerTypes(targets: List<Ref.Persisted>): List<ExperimentDesignRow>
+    fun conditionsByDesigns(targets: List<Ref.Persisted>): List<ConditionRow>
+    fun containersByDesigns(targets: List<Ref.Persisted>): List<ContainerRow>
+    fun wellsByContainers(targets: List<Ref.Persisted>): List<WellRow>
+    fun wellsByConditions(targets: List<Ref.Persisted>): List<WellRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves never #2 — `ExperimentDesign where (containerCount < 1) or (replicates < 1)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never2Candidates(): List<ExperimentDesignRow>
 }
+
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun PlateLayoutStore.containerType(key: StoreKey): ContainerTypeRow? = containerTypes(listOf(key)).firstOrNull()
+fun PlateLayoutStore.experimentDesign(key: StoreKey): ExperimentDesignRow? = experimentDesigns(listOf(key)).firstOrNull()
+fun PlateLayoutStore.condition(key: StoreKey): ConditionRow? = conditions(listOf(key)).firstOrNull()
+fun PlateLayoutStore.container(key: StoreKey): ContainerRow? = containers(listOf(key)).firstOrNull()
+fun PlateLayoutStore.well(key: StoreKey): WellRow? = wells(listOf(key)).firstOrNull()
+fun PlateLayoutStore.experimentDesignsByContainerType(target: Ref.Persisted): List<ExperimentDesignRow> =
+    experimentDesignsByContainerTypes(listOf(target))
+fun PlateLayoutStore.conditionsByDesign(target: Ref.Persisted): List<ConditionRow> =
+    conditionsByDesigns(listOf(target))
+fun PlateLayoutStore.containersByDesign(target: Ref.Persisted): List<ContainerRow> =
+    containersByDesigns(listOf(target))
+fun PlateLayoutStore.wellsByContainer(target: Ref.Persisted): List<WellRow> =
+    wellsByContainers(listOf(target))
+fun PlateLayoutStore.wellsByCondition(target: Ref.Persisted): List<WellRow> =
+    wellsByConditions(listOf(target))
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class PlateLayoutStoreQuestions(model: Model) {
@@ -109,11 +129,11 @@ open class PlateLayoutStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun containerType(key: StoreKey): ContainerTypeRow? = backend.fetchByKey("ContainerType", key)?.toContainerTypeRow()
-    override fun experimentDesign(key: StoreKey): ExperimentDesignRow? = backend.fetchByKey("ExperimentDesign", key)?.toExperimentDesignRow()
-    override fun condition(key: StoreKey): ConditionRow? = backend.fetchByKey("Condition", key)?.toConditionRow()
-    override fun container(key: StoreKey): ContainerRow? = backend.fetchByKey("Container", key)?.toContainerRow()
-    override fun well(key: StoreKey): WellRow? = backend.fetchByKey("Well", key)?.toWellRow()
+    override fun containerTypes(keys: List<StoreKey>): List<ContainerTypeRow> = backend.fetchByKeys("ContainerType", keys).map { it.toContainerTypeRow() }
+    override fun experimentDesigns(keys: List<StoreKey>): List<ExperimentDesignRow> = backend.fetchByKeys("ExperimentDesign", keys).map { it.toExperimentDesignRow() }
+    override fun conditions(keys: List<StoreKey>): List<ConditionRow> = backend.fetchByKeys("Condition", keys).map { it.toConditionRow() }
+    override fun containers(keys: List<StoreKey>): List<ContainerRow> = backend.fetchByKeys("Container", keys).map { it.toContainerRow() }
+    override fun wells(keys: List<StoreKey>): List<WellRow> = backend.fetchByKeys("Well", keys).map { it.toWellRow() }
 
     override fun allContainerTypes(): List<ContainerTypeRow> = backend.fetchAll("ContainerType").map { it.toContainerTypeRow() }
     override fun allExperimentDesigns(): List<ExperimentDesignRow> = backend.fetchAll("ExperimentDesign").map { it.toExperimentDesignRow() }
@@ -121,16 +141,16 @@ open class PlateLayoutStoreOverGeneric(
     override fun allContainers(): List<ContainerRow> = backend.fetchAll("Container").map { it.toContainerRow() }
     override fun allWells(): List<WellRow> = backend.fetchAll("Well").map { it.toWellRow() }
 
-    override fun experimentDesignsByContainerType(target: Ref.Persisted): List<ExperimentDesignRow> =
-        backend.fetchReferencing("ExperimentDesign", "containerType", target).map { it.toExperimentDesignRow() }
-    override fun conditionsByDesign(target: Ref.Persisted): List<ConditionRow> =
-        backend.fetchReferencing("Condition", "design", target).map { it.toConditionRow() }
-    override fun containersByDesign(target: Ref.Persisted): List<ContainerRow> =
-        backend.fetchReferencing("Container", "design", target).map { it.toContainerRow() }
-    override fun wellsByContainer(target: Ref.Persisted): List<WellRow> =
-        backend.fetchReferencing("Well", "container", target).map { it.toWellRow() }
-    override fun wellsByCondition(target: Ref.Persisted): List<WellRow> =
-        backend.fetchReferencing("Well", "condition", target).map { it.toWellRow() }
+    override fun experimentDesignsByContainerTypes(targets: List<Ref.Persisted>): List<ExperimentDesignRow> =
+        backend.fetchReferencingAny("ExperimentDesign", "containerType", targets).map { it.toExperimentDesignRow() }
+    override fun conditionsByDesigns(targets: List<Ref.Persisted>): List<ConditionRow> =
+        backend.fetchReferencingAny("Condition", "design", targets).map { it.toConditionRow() }
+    override fun containersByDesigns(targets: List<Ref.Persisted>): List<ContainerRow> =
+        backend.fetchReferencingAny("Container", "design", targets).map { it.toContainerRow() }
+    override fun wellsByContainers(targets: List<Ref.Persisted>): List<WellRow> =
+        backend.fetchReferencingAny("Well", "container", targets).map { it.toWellRow() }
+    override fun wellsByConditions(targets: List<Ref.Persisted>): List<WellRow> =
+        backend.fetchReferencingAny("Well", "condition", targets).map { it.toWellRow() }
 
     override fun never2Candidates(): List<ExperimentDesignRow> =
         backend.fetchCandidates("ExperimentDesign", questions.never2Candidates.instantiate(listOf()))
@@ -146,13 +166,13 @@ class PlateLayoutStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "ContainerType" -> store.containerType(key)?.toRow()
-        "ExperimentDesign" -> store.experimentDesign(key)?.toRow()
-        "Condition" -> store.condition(key)?.toRow()
-        "Container" -> store.container(key)?.toRow()
-        "Well" -> store.well(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "ContainerType" -> store.containerTypes(keys).map { it.toRow() }
+        "ExperimentDesign" -> store.experimentDesigns(keys).map { it.toRow() }
+        "Condition" -> store.conditions(keys).map { it.toRow() }
+        "Container" -> store.containers(keys).map { it.toRow() }
+        "Well" -> store.wells(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -164,12 +184,12 @@ class PlateLayoutStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "ExperimentDesign" && field == "containerType" -> store.experimentDesignsByContainerType(target).map { it.toRow() }
-        shape == "Condition" && field == "design" -> store.conditionsByDesign(target).map { it.toRow() }
-        shape == "Container" && field == "design" -> store.containersByDesign(target).map { it.toRow() }
-        shape == "Well" && field == "container" -> store.wellsByContainer(target).map { it.toRow() }
-        shape == "Well" && field == "condition" -> store.wellsByCondition(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "ExperimentDesign" && field == "containerType" -> store.experimentDesignsByContainerTypes(targets).map { it.toRow() }
+        shape == "Condition" && field == "design" -> store.conditionsByDesigns(targets).map { it.toRow() }
+        shape == "Container" && field == "design" -> store.containersByDesigns(targets).map { it.toRow() }
+        shape == "Well" && field == "container" -> store.wellsByContainers(targets).map { it.toRow() }
+        shape == "Well" && field == "condition" -> store.wellsByConditions(targets).map { it.toRow() }
         else -> emptyList()
     }
 

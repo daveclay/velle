@@ -128,20 +128,22 @@ interface BillingStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun customer(key: StoreKey): CustomerRow?
-    fun correctEmail(key: StoreKey): CorrectEmailRow?
-    fun invoice(key: StoreKey): InvoiceRow?
-    fun lineItem(key: StoreKey): LineItemRow?
-    fun payment(key: StoreKey): PaymentRow?
-    fun receipt(key: StoreKey): ReceiptRow?
-    fun receiptEmail(key: StoreKey): ReceiptEmailRow?
-    fun reminder(key: StoreKey): ReminderRow?
-    fun issuance(key: StoreKey): IssuanceRow?
-    fun dueChangeRefusal(key: StoreKey): DueChangeRefusalRow?
-    fun archiveRequest(key: StoreKey): ArchiveRequestRow?
-    fun unarchiveRequest(key: StoreKey): UnarchiveRequestRow?
-    fun unarchiveNotice(key: StoreKey): UnarchiveNoticeRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun customers(keys: List<StoreKey>): List<CustomerRow>
+    fun correctEmails(keys: List<StoreKey>): List<CorrectEmailRow>
+    fun invoices(keys: List<StoreKey>): List<InvoiceRow>
+    fun lineItems(keys: List<StoreKey>): List<LineItemRow>
+    fun payments(keys: List<StoreKey>): List<PaymentRow>
+    fun receipts(keys: List<StoreKey>): List<ReceiptRow>
+    fun receiptEmails(keys: List<StoreKey>): List<ReceiptEmailRow>
+    fun reminders(keys: List<StoreKey>): List<ReminderRow>
+    fun issuances(keys: List<StoreKey>): List<IssuanceRow>
+    fun dueChangeRefusals(keys: List<StoreKey>): List<DueChangeRefusalRow>
+    fun archiveRequests(keys: List<StoreKey>): List<ArchiveRequestRow>
+    fun unarchiveRequests(keys: List<StoreKey>): List<UnarchiveRequestRow>
+    fun unarchiveNotices(keys: List<StoreKey>): List<UnarchiveNoticeRow>
 
     // ── scan floor: all rows of a shape ──
     fun allCustomers(): List<CustomerRow>
@@ -158,19 +160,19 @@ interface BillingStore {
     fun allUnarchiveRequests(): List<UnarchiveRequestRow>
     fun allUnarchiveNotices(): List<UnarchiveNoticeRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun correctEmailsByCustomer(target: Ref.Persisted): List<CorrectEmailRow>
-    fun invoicesByCustomer(target: Ref.Persisted): List<InvoiceRow>
-    fun lineItemsByInvoice(target: Ref.Persisted): List<LineItemRow>
-    fun paymentsByInvoice(target: Ref.Persisted): List<PaymentRow>
-    fun receiptsByInvoice(target: Ref.Persisted): List<ReceiptRow>
-    fun receiptEmailsByReceipt(target: Ref.Persisted): List<ReceiptEmailRow>
-    fun remindersByInvoice(target: Ref.Persisted): List<ReminderRow>
-    fun issuancesByInvoice(target: Ref.Persisted): List<IssuanceRow>
-    fun dueChangeRefusalsByInvoice(target: Ref.Persisted): List<DueChangeRefusalRow>
-    fun archiveRequestsByInvoice(target: Ref.Persisted): List<ArchiveRequestRow>
-    fun unarchiveRequestsByInvoice(target: Ref.Persisted): List<UnarchiveRequestRow>
-    fun unarchiveNoticesByInvoice(target: Ref.Persisted): List<UnarchiveNoticeRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun correctEmailsByCustomers(targets: List<Ref.Persisted>): List<CorrectEmailRow>
+    fun invoicesByCustomers(targets: List<Ref.Persisted>): List<InvoiceRow>
+    fun lineItemsByInvoices(targets: List<Ref.Persisted>): List<LineItemRow>
+    fun paymentsByInvoices(targets: List<Ref.Persisted>): List<PaymentRow>
+    fun receiptsByInvoices(targets: List<Ref.Persisted>): List<ReceiptRow>
+    fun receiptEmailsByReceipts(targets: List<Ref.Persisted>): List<ReceiptEmailRow>
+    fun remindersByInvoices(targets: List<Ref.Persisted>): List<ReminderRow>
+    fun issuancesByInvoices(targets: List<Ref.Persisted>): List<IssuanceRow>
+    fun dueChangeRefusalsByInvoices(targets: List<Ref.Persisted>): List<DueChangeRefusalRow>
+    fun archiveRequestsByInvoices(targets: List<Ref.Persisted>): List<ArchiveRequestRow>
+    fun unarchiveRequestsByInvoices(targets: List<Ref.Persisted>): List<UnarchiveRequestRow>
+    fun unarchiveNoticesByInvoices(targets: List<Ref.Persisted>): List<UnarchiveNoticeRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement UnemailedReceipt — `UnemailedReceipt`.
@@ -202,6 +204,46 @@ interface BillingStore {
     fun archivedInvoiceCapture(instance: Ref.Persisted): ArchivedInvoiceCapture?
 }
 
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun BillingStore.customer(key: StoreKey): CustomerRow? = customers(listOf(key)).firstOrNull()
+fun BillingStore.correctEmail(key: StoreKey): CorrectEmailRow? = correctEmails(listOf(key)).firstOrNull()
+fun BillingStore.invoice(key: StoreKey): InvoiceRow? = invoices(listOf(key)).firstOrNull()
+fun BillingStore.lineItem(key: StoreKey): LineItemRow? = lineItems(listOf(key)).firstOrNull()
+fun BillingStore.payment(key: StoreKey): PaymentRow? = payments(listOf(key)).firstOrNull()
+fun BillingStore.receipt(key: StoreKey): ReceiptRow? = receipts(listOf(key)).firstOrNull()
+fun BillingStore.receiptEmail(key: StoreKey): ReceiptEmailRow? = receiptEmails(listOf(key)).firstOrNull()
+fun BillingStore.reminder(key: StoreKey): ReminderRow? = reminders(listOf(key)).firstOrNull()
+fun BillingStore.issuance(key: StoreKey): IssuanceRow? = issuances(listOf(key)).firstOrNull()
+fun BillingStore.dueChangeRefusal(key: StoreKey): DueChangeRefusalRow? = dueChangeRefusals(listOf(key)).firstOrNull()
+fun BillingStore.archiveRequest(key: StoreKey): ArchiveRequestRow? = archiveRequests(listOf(key)).firstOrNull()
+fun BillingStore.unarchiveRequest(key: StoreKey): UnarchiveRequestRow? = unarchiveRequests(listOf(key)).firstOrNull()
+fun BillingStore.unarchiveNotice(key: StoreKey): UnarchiveNoticeRow? = unarchiveNotices(listOf(key)).firstOrNull()
+fun BillingStore.correctEmailsByCustomer(target: Ref.Persisted): List<CorrectEmailRow> =
+    correctEmailsByCustomers(listOf(target))
+fun BillingStore.invoicesByCustomer(target: Ref.Persisted): List<InvoiceRow> =
+    invoicesByCustomers(listOf(target))
+fun BillingStore.lineItemsByInvoice(target: Ref.Persisted): List<LineItemRow> =
+    lineItemsByInvoices(listOf(target))
+fun BillingStore.paymentsByInvoice(target: Ref.Persisted): List<PaymentRow> =
+    paymentsByInvoices(listOf(target))
+fun BillingStore.receiptsByInvoice(target: Ref.Persisted): List<ReceiptRow> =
+    receiptsByInvoices(listOf(target))
+fun BillingStore.receiptEmailsByReceipt(target: Ref.Persisted): List<ReceiptEmailRow> =
+    receiptEmailsByReceipts(listOf(target))
+fun BillingStore.remindersByInvoice(target: Ref.Persisted): List<ReminderRow> =
+    remindersByInvoices(listOf(target))
+fun BillingStore.issuancesByInvoice(target: Ref.Persisted): List<IssuanceRow> =
+    issuancesByInvoices(listOf(target))
+fun BillingStore.dueChangeRefusalsByInvoice(target: Ref.Persisted): List<DueChangeRefusalRow> =
+    dueChangeRefusalsByInvoices(listOf(target))
+fun BillingStore.archiveRequestsByInvoice(target: Ref.Persisted): List<ArchiveRequestRow> =
+    archiveRequestsByInvoices(listOf(target))
+fun BillingStore.unarchiveRequestsByInvoice(target: Ref.Persisted): List<UnarchiveRequestRow> =
+    unarchiveRequestsByInvoices(listOf(target))
+fun BillingStore.unarchiveNoticesByInvoice(target: Ref.Persisted): List<UnarchiveNoticeRow> =
+    unarchiveNoticesByInvoices(listOf(target))
+
 /** The candidate questions as recognizable templates (QTemplate). */
 class BillingStoreQuestions(model: Model) {
     val unemailedReceiptCandidates = QTemplate.of(model, "Receipt", RefName("UnemailedReceipt"))
@@ -226,19 +268,19 @@ open class BillingStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun customer(key: StoreKey): CustomerRow? = backend.fetchByKey("Customer", key)?.toCustomerRow()
-    override fun correctEmail(key: StoreKey): CorrectEmailRow? = backend.fetchByKey("CorrectEmail", key)?.toCorrectEmailRow()
-    override fun invoice(key: StoreKey): InvoiceRow? = backend.fetchByKey("Invoice", key)?.toInvoiceRow()
-    override fun lineItem(key: StoreKey): LineItemRow? = backend.fetchByKey("LineItem", key)?.toLineItemRow()
-    override fun payment(key: StoreKey): PaymentRow? = backend.fetchByKey("Payment", key)?.toPaymentRow()
-    override fun receipt(key: StoreKey): ReceiptRow? = backend.fetchByKey("Receipt", key)?.toReceiptRow()
-    override fun receiptEmail(key: StoreKey): ReceiptEmailRow? = backend.fetchByKey("ReceiptEmail", key)?.toReceiptEmailRow()
-    override fun reminder(key: StoreKey): ReminderRow? = backend.fetchByKey("Reminder", key)?.toReminderRow()
-    override fun issuance(key: StoreKey): IssuanceRow? = backend.fetchByKey("Issuance", key)?.toIssuanceRow()
-    override fun dueChangeRefusal(key: StoreKey): DueChangeRefusalRow? = backend.fetchByKey("DueChangeRefusal", key)?.toDueChangeRefusalRow()
-    override fun archiveRequest(key: StoreKey): ArchiveRequestRow? = backend.fetchByKey("ArchiveRequest", key)?.toArchiveRequestRow()
-    override fun unarchiveRequest(key: StoreKey): UnarchiveRequestRow? = backend.fetchByKey("UnarchiveRequest", key)?.toUnarchiveRequestRow()
-    override fun unarchiveNotice(key: StoreKey): UnarchiveNoticeRow? = backend.fetchByKey("UnarchiveNotice", key)?.toUnarchiveNoticeRow()
+    override fun customers(keys: List<StoreKey>): List<CustomerRow> = backend.fetchByKeys("Customer", keys).map { it.toCustomerRow() }
+    override fun correctEmails(keys: List<StoreKey>): List<CorrectEmailRow> = backend.fetchByKeys("CorrectEmail", keys).map { it.toCorrectEmailRow() }
+    override fun invoices(keys: List<StoreKey>): List<InvoiceRow> = backend.fetchByKeys("Invoice", keys).map { it.toInvoiceRow() }
+    override fun lineItems(keys: List<StoreKey>): List<LineItemRow> = backend.fetchByKeys("LineItem", keys).map { it.toLineItemRow() }
+    override fun payments(keys: List<StoreKey>): List<PaymentRow> = backend.fetchByKeys("Payment", keys).map { it.toPaymentRow() }
+    override fun receipts(keys: List<StoreKey>): List<ReceiptRow> = backend.fetchByKeys("Receipt", keys).map { it.toReceiptRow() }
+    override fun receiptEmails(keys: List<StoreKey>): List<ReceiptEmailRow> = backend.fetchByKeys("ReceiptEmail", keys).map { it.toReceiptEmailRow() }
+    override fun reminders(keys: List<StoreKey>): List<ReminderRow> = backend.fetchByKeys("Reminder", keys).map { it.toReminderRow() }
+    override fun issuances(keys: List<StoreKey>): List<IssuanceRow> = backend.fetchByKeys("Issuance", keys).map { it.toIssuanceRow() }
+    override fun dueChangeRefusals(keys: List<StoreKey>): List<DueChangeRefusalRow> = backend.fetchByKeys("DueChangeRefusal", keys).map { it.toDueChangeRefusalRow() }
+    override fun archiveRequests(keys: List<StoreKey>): List<ArchiveRequestRow> = backend.fetchByKeys("ArchiveRequest", keys).map { it.toArchiveRequestRow() }
+    override fun unarchiveRequests(keys: List<StoreKey>): List<UnarchiveRequestRow> = backend.fetchByKeys("UnarchiveRequest", keys).map { it.toUnarchiveRequestRow() }
+    override fun unarchiveNotices(keys: List<StoreKey>): List<UnarchiveNoticeRow> = backend.fetchByKeys("UnarchiveNotice", keys).map { it.toUnarchiveNoticeRow() }
 
     override fun allCustomers(): List<CustomerRow> = backend.fetchAll("Customer").map { it.toCustomerRow() }
     override fun allCorrectEmails(): List<CorrectEmailRow> = backend.fetchAll("CorrectEmail").map { it.toCorrectEmailRow() }
@@ -254,30 +296,30 @@ open class BillingStoreOverGeneric(
     override fun allUnarchiveRequests(): List<UnarchiveRequestRow> = backend.fetchAll("UnarchiveRequest").map { it.toUnarchiveRequestRow() }
     override fun allUnarchiveNotices(): List<UnarchiveNoticeRow> = backend.fetchAll("UnarchiveNotice").map { it.toUnarchiveNoticeRow() }
 
-    override fun correctEmailsByCustomer(target: Ref.Persisted): List<CorrectEmailRow> =
-        backend.fetchReferencing("CorrectEmail", "customer", target).map { it.toCorrectEmailRow() }
-    override fun invoicesByCustomer(target: Ref.Persisted): List<InvoiceRow> =
-        backend.fetchReferencing("Invoice", "customer", target).map { it.toInvoiceRow() }
-    override fun lineItemsByInvoice(target: Ref.Persisted): List<LineItemRow> =
-        backend.fetchReferencing("LineItem", "invoice", target).map { it.toLineItemRow() }
-    override fun paymentsByInvoice(target: Ref.Persisted): List<PaymentRow> =
-        backend.fetchReferencing("Payment", "invoice", target).map { it.toPaymentRow() }
-    override fun receiptsByInvoice(target: Ref.Persisted): List<ReceiptRow> =
-        backend.fetchReferencing("Receipt", "invoice", target).map { it.toReceiptRow() }
-    override fun receiptEmailsByReceipt(target: Ref.Persisted): List<ReceiptEmailRow> =
-        backend.fetchReferencing("ReceiptEmail", "receipt", target).map { it.toReceiptEmailRow() }
-    override fun remindersByInvoice(target: Ref.Persisted): List<ReminderRow> =
-        backend.fetchReferencing("Reminder", "invoice", target).map { it.toReminderRow() }
-    override fun issuancesByInvoice(target: Ref.Persisted): List<IssuanceRow> =
-        backend.fetchReferencing("Issuance", "invoice", target).map { it.toIssuanceRow() }
-    override fun dueChangeRefusalsByInvoice(target: Ref.Persisted): List<DueChangeRefusalRow> =
-        backend.fetchReferencing("DueChangeRefusal", "invoice", target).map { it.toDueChangeRefusalRow() }
-    override fun archiveRequestsByInvoice(target: Ref.Persisted): List<ArchiveRequestRow> =
-        backend.fetchReferencing("ArchiveRequest", "invoice", target).map { it.toArchiveRequestRow() }
-    override fun unarchiveRequestsByInvoice(target: Ref.Persisted): List<UnarchiveRequestRow> =
-        backend.fetchReferencing("UnarchiveRequest", "invoice", target).map { it.toUnarchiveRequestRow() }
-    override fun unarchiveNoticesByInvoice(target: Ref.Persisted): List<UnarchiveNoticeRow> =
-        backend.fetchReferencing("UnarchiveNotice", "invoice", target).map { it.toUnarchiveNoticeRow() }
+    override fun correctEmailsByCustomers(targets: List<Ref.Persisted>): List<CorrectEmailRow> =
+        backend.fetchReferencingAny("CorrectEmail", "customer", targets).map { it.toCorrectEmailRow() }
+    override fun invoicesByCustomers(targets: List<Ref.Persisted>): List<InvoiceRow> =
+        backend.fetchReferencingAny("Invoice", "customer", targets).map { it.toInvoiceRow() }
+    override fun lineItemsByInvoices(targets: List<Ref.Persisted>): List<LineItemRow> =
+        backend.fetchReferencingAny("LineItem", "invoice", targets).map { it.toLineItemRow() }
+    override fun paymentsByInvoices(targets: List<Ref.Persisted>): List<PaymentRow> =
+        backend.fetchReferencingAny("Payment", "invoice", targets).map { it.toPaymentRow() }
+    override fun receiptsByInvoices(targets: List<Ref.Persisted>): List<ReceiptRow> =
+        backend.fetchReferencingAny("Receipt", "invoice", targets).map { it.toReceiptRow() }
+    override fun receiptEmailsByReceipts(targets: List<Ref.Persisted>): List<ReceiptEmailRow> =
+        backend.fetchReferencingAny("ReceiptEmail", "receipt", targets).map { it.toReceiptEmailRow() }
+    override fun remindersByInvoices(targets: List<Ref.Persisted>): List<ReminderRow> =
+        backend.fetchReferencingAny("Reminder", "invoice", targets).map { it.toReminderRow() }
+    override fun issuancesByInvoices(targets: List<Ref.Persisted>): List<IssuanceRow> =
+        backend.fetchReferencingAny("Issuance", "invoice", targets).map { it.toIssuanceRow() }
+    override fun dueChangeRefusalsByInvoices(targets: List<Ref.Persisted>): List<DueChangeRefusalRow> =
+        backend.fetchReferencingAny("DueChangeRefusal", "invoice", targets).map { it.toDueChangeRefusalRow() }
+    override fun archiveRequestsByInvoices(targets: List<Ref.Persisted>): List<ArchiveRequestRow> =
+        backend.fetchReferencingAny("ArchiveRequest", "invoice", targets).map { it.toArchiveRequestRow() }
+    override fun unarchiveRequestsByInvoices(targets: List<Ref.Persisted>): List<UnarchiveRequestRow> =
+        backend.fetchReferencingAny("UnarchiveRequest", "invoice", targets).map { it.toUnarchiveRequestRow() }
+    override fun unarchiveNoticesByInvoices(targets: List<Ref.Persisted>): List<UnarchiveNoticeRow> =
+        backend.fetchReferencingAny("UnarchiveNotice", "invoice", targets).map { it.toUnarchiveNoticeRow() }
 
     override fun unemailedReceiptCandidates(): List<ReceiptRow> =
         backend.fetchCandidates("Receipt", questions.unemailedReceiptCandidates.instantiate(listOf()))
@@ -324,21 +366,21 @@ class BillingStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Customer" -> store.customer(key)?.toRow()
-        "CorrectEmail" -> store.correctEmail(key)?.toRow()
-        "Invoice" -> store.invoice(key)?.toRow()
-        "LineItem" -> store.lineItem(key)?.toRow()
-        "Payment" -> store.payment(key)?.toRow()
-        "Receipt" -> store.receipt(key)?.toRow()
-        "ReceiptEmail" -> store.receiptEmail(key)?.toRow()
-        "Reminder" -> store.reminder(key)?.toRow()
-        "Issuance" -> store.issuance(key)?.toRow()
-        "DueChangeRefusal" -> store.dueChangeRefusal(key)?.toRow()
-        "ArchiveRequest" -> store.archiveRequest(key)?.toRow()
-        "UnarchiveRequest" -> store.unarchiveRequest(key)?.toRow()
-        "UnarchiveNotice" -> store.unarchiveNotice(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Customer" -> store.customers(keys).map { it.toRow() }
+        "CorrectEmail" -> store.correctEmails(keys).map { it.toRow() }
+        "Invoice" -> store.invoices(keys).map { it.toRow() }
+        "LineItem" -> store.lineItems(keys).map { it.toRow() }
+        "Payment" -> store.payments(keys).map { it.toRow() }
+        "Receipt" -> store.receipts(keys).map { it.toRow() }
+        "ReceiptEmail" -> store.receiptEmails(keys).map { it.toRow() }
+        "Reminder" -> store.reminders(keys).map { it.toRow() }
+        "Issuance" -> store.issuances(keys).map { it.toRow() }
+        "DueChangeRefusal" -> store.dueChangeRefusals(keys).map { it.toRow() }
+        "ArchiveRequest" -> store.archiveRequests(keys).map { it.toRow() }
+        "UnarchiveRequest" -> store.unarchiveRequests(keys).map { it.toRow() }
+        "UnarchiveNotice" -> store.unarchiveNotices(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -358,19 +400,19 @@ class BillingStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "CorrectEmail" && field == "customer" -> store.correctEmailsByCustomer(target).map { it.toRow() }
-        shape == "Invoice" && field == "customer" -> store.invoicesByCustomer(target).map { it.toRow() }
-        shape == "LineItem" && field == "invoice" -> store.lineItemsByInvoice(target).map { it.toRow() }
-        shape == "Payment" && field == "invoice" -> store.paymentsByInvoice(target).map { it.toRow() }
-        shape == "Receipt" && field == "invoice" -> store.receiptsByInvoice(target).map { it.toRow() }
-        shape == "ReceiptEmail" && field == "receipt" -> store.receiptEmailsByReceipt(target).map { it.toRow() }
-        shape == "Reminder" && field == "invoice" -> store.remindersByInvoice(target).map { it.toRow() }
-        shape == "Issuance" && field == "invoice" -> store.issuancesByInvoice(target).map { it.toRow() }
-        shape == "DueChangeRefusal" && field == "invoice" -> store.dueChangeRefusalsByInvoice(target).map { it.toRow() }
-        shape == "ArchiveRequest" && field == "invoice" -> store.archiveRequestsByInvoice(target).map { it.toRow() }
-        shape == "UnarchiveRequest" && field == "invoice" -> store.unarchiveRequestsByInvoice(target).map { it.toRow() }
-        shape == "UnarchiveNotice" && field == "invoice" -> store.unarchiveNoticesByInvoice(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "CorrectEmail" && field == "customer" -> store.correctEmailsByCustomers(targets).map { it.toRow() }
+        shape == "Invoice" && field == "customer" -> store.invoicesByCustomers(targets).map { it.toRow() }
+        shape == "LineItem" && field == "invoice" -> store.lineItemsByInvoices(targets).map { it.toRow() }
+        shape == "Payment" && field == "invoice" -> store.paymentsByInvoices(targets).map { it.toRow() }
+        shape == "Receipt" && field == "invoice" -> store.receiptsByInvoices(targets).map { it.toRow() }
+        shape == "ReceiptEmail" && field == "receipt" -> store.receiptEmailsByReceipts(targets).map { it.toRow() }
+        shape == "Reminder" && field == "invoice" -> store.remindersByInvoices(targets).map { it.toRow() }
+        shape == "Issuance" && field == "invoice" -> store.issuancesByInvoices(targets).map { it.toRow() }
+        shape == "DueChangeRefusal" && field == "invoice" -> store.dueChangeRefusalsByInvoices(targets).map { it.toRow() }
+        shape == "ArchiveRequest" && field == "invoice" -> store.archiveRequestsByInvoices(targets).map { it.toRow() }
+        shape == "UnarchiveRequest" && field == "invoice" -> store.unarchiveRequestsByInvoices(targets).map { it.toRow() }
+        shape == "UnarchiveNotice" && field == "invoice" -> store.unarchiveNoticesByInvoices(targets).map { it.toRow() }
         else -> emptyList()
     }
 

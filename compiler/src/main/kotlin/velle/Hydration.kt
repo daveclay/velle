@@ -131,16 +131,14 @@ interface StateResolver {
      */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    /** Fetch one row by the store's own key — following a to-one reference. */
-    fun fetchByKey(shape: String, key: StoreKey): Row?
-
     /**
-     * Several rows by key at once: the rows of [shape] whose key is among [keys], in any
-     * order, a key with no row left out. An exact read like [fetchByKey], which the default
-     * calls once per key; a store that can answer in one trip overrides it.
+     * The read by the store's own key, which follows a to-one reference: the rows of [shape]
+     * whose key is among [keys], in any order, each row once, a key with no row left out.
+     * An exact read. This is the only by-key read a store implements. The runtime asks for
+     * one record through it as a list of one ([fetchByKey]), so a store has one answer to
+     * the question whether one key is asked for or several.
      */
-    fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> =
-        keys.mapNotNull { key -> fetchByKey(shape, key) }
+    fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row>
 
     /**
      * The scan read: all rows of a shape (refinement candidates, tick sweeps,
@@ -151,16 +149,12 @@ interface StateResolver {
      */
     fun fetchAll(shape: String): List<Row>
 
-    /** The join read: rows of [shape] whose to-one [field] references [target]. */
-    fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row>
-
     /**
-     * The join read for several targets at once: the rows of [shape] whose to-one [field]
-     * references any of [targets], each row once. An exact read like [fetchReferencing],
-     * which the default calls once per target; a store that can answer in one trip overrides it.
+     * The join read: the rows of [shape] whose to-one [field] references any of [targets],
+     * each row once. An exact read. This is the only join read a store implements; one
+     * target is asked for as a list of one ([fetchReferencing]).
      */
-    fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> =
-        targets.distinct().flatMap { target -> fetchReferencing(shape, field, target) }
+    fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row>
 
     /**
      * The filtered scan read: rows of [shape] that may satisfy [filter] — the
@@ -361,3 +355,10 @@ fun interface CommitCallback {
 data class CaptureSchema(val refinement: String, val base: String, val props: List<Prop>) {
     data class Prop(val name: String, val type: VType)
 }
+
+/** One row by the store's own key: [StateResolver.fetchByKeys] asked for one key. Not a method of the store, so no store can answer it differently. */
+fun StateResolver.fetchByKey(shape: String, key: StoreKey): Row? = fetchByKeys(shape, listOf(key)).firstOrNull()
+
+/** The rows referencing one target: [StateResolver.fetchReferencingAny] asked for one target. Not a method of the store, so no store can answer it differently. */
+fun StateResolver.fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> =
+    fetchReferencingAny(shape, field, listOf(target))

@@ -193,30 +193,32 @@ interface PaymentsStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun contact(key: StoreKey): ContactRow?
-    fun card(key: StoreKey): CardRow?
-    fun customer(key: StoreKey): CustomerRow?
-    fun cardUpdate(key: StoreKey): CardUpdateRow?
-    fun order(key: StoreKey): OrderRow?
-    fun chargeAttempt(key: StoreKey): ChargeAttemptRow?
-    fun chargeResponse(key: StoreKey): ChargeResponseRow?
-    fun attemptTimeout(key: StoreKey): AttemptTimeoutRow?
-    fun stockReservation(key: StoreKey): StockReservationRow?
-    fun reservationRelease(key: StoreKey): ReservationReleaseRow?
-    fun receipt(key: StoreKey): ReceiptRow?
-    fun shipment(key: StoreKey): ShipmentRow?
-    fun changeShippingAddress(key: StoreKey): ChangeShippingAddressRow?
-    fun addressChangeApplication(key: StoreKey): AddressChangeApplicationRow?
-    fun addressChangeRefusal(key: StoreKey): AddressChangeRefusalRow?
-    fun refund(key: StoreKey): RefundRow?
-    fun settlementReversal(key: StoreKey): SettlementReversalRow?
-    fun manualCharge(key: StoreKey): ManualChargeRow?
-    fun extensionRequest(key: StoreKey): ExtensionRequestRow?
-    fun paymentExtension(key: StoreKey): PaymentExtensionRow?
-    fun paymentReminder(key: StoreKey): PaymentReminderRow?
-    fun dunningFlag(key: StoreKey): DunningFlagRow?
-    fun dunningResolution(key: StoreKey): DunningResolutionRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun contacts(keys: List<StoreKey>): List<ContactRow>
+    fun cards(keys: List<StoreKey>): List<CardRow>
+    fun customers(keys: List<StoreKey>): List<CustomerRow>
+    fun cardUpdates(keys: List<StoreKey>): List<CardUpdateRow>
+    fun orders(keys: List<StoreKey>): List<OrderRow>
+    fun chargeAttempts(keys: List<StoreKey>): List<ChargeAttemptRow>
+    fun chargeResponses(keys: List<StoreKey>): List<ChargeResponseRow>
+    fun attemptTimeouts(keys: List<StoreKey>): List<AttemptTimeoutRow>
+    fun stockReservations(keys: List<StoreKey>): List<StockReservationRow>
+    fun reservationReleases(keys: List<StoreKey>): List<ReservationReleaseRow>
+    fun receipts(keys: List<StoreKey>): List<ReceiptRow>
+    fun shipments(keys: List<StoreKey>): List<ShipmentRow>
+    fun changeShippingAddresss(keys: List<StoreKey>): List<ChangeShippingAddressRow>
+    fun addressChangeApplications(keys: List<StoreKey>): List<AddressChangeApplicationRow>
+    fun addressChangeRefusals(keys: List<StoreKey>): List<AddressChangeRefusalRow>
+    fun refunds(keys: List<StoreKey>): List<RefundRow>
+    fun settlementReversals(keys: List<StoreKey>): List<SettlementReversalRow>
+    fun manualCharges(keys: List<StoreKey>): List<ManualChargeRow>
+    fun extensionRequests(keys: List<StoreKey>): List<ExtensionRequestRow>
+    fun paymentExtensions(keys: List<StoreKey>): List<PaymentExtensionRow>
+    fun paymentReminders(keys: List<StoreKey>): List<PaymentReminderRow>
+    fun dunningFlags(keys: List<StoreKey>): List<DunningFlagRow>
+    fun dunningResolutions(keys: List<StoreKey>): List<DunningResolutionRow>
 
     // ── scan floor: all rows of a shape ──
     fun allContacts(): List<ContactRow>
@@ -243,30 +245,30 @@ interface PaymentsStore {
     fun allDunningFlags(): List<DunningFlagRow>
     fun allDunningResolutions(): List<DunningResolutionRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun cardsByBillingContact(target: Ref.Persisted): List<CardRow>
-    fun customersByCard(target: Ref.Persisted): List<CustomerRow>
-    fun cardUpdatesByCustomer(target: Ref.Persisted): List<CardUpdateRow>
-    fun cardUpdatesByCard(target: Ref.Persisted): List<CardUpdateRow>
-    fun ordersByCustomer(target: Ref.Persisted): List<OrderRow>
-    fun chargeAttemptsByOrder(target: Ref.Persisted): List<ChargeAttemptRow>
-    fun chargeResponsesByAttempt(target: Ref.Persisted): List<ChargeResponseRow>
-    fun attemptTimeoutsByAttempt(target: Ref.Persisted): List<AttemptTimeoutRow>
-    fun stockReservationsByOrder(target: Ref.Persisted): List<StockReservationRow>
-    fun reservationReleasesByReservation(target: Ref.Persisted): List<ReservationReleaseRow>
-    fun receiptsByAttempt(target: Ref.Persisted): List<ReceiptRow>
-    fun shipmentsByOrder(target: Ref.Persisted): List<ShipmentRow>
-    fun changeShippingAddresssByOrder(target: Ref.Persisted): List<ChangeShippingAddressRow>
-    fun addressChangeApplicationsByChange(target: Ref.Persisted): List<AddressChangeApplicationRow>
-    fun addressChangeRefusalsByChange(target: Ref.Persisted): List<AddressChangeRefusalRow>
-    fun refundsByOrder(target: Ref.Persisted): List<RefundRow>
-    fun settlementReversalsByOrder(target: Ref.Persisted): List<SettlementReversalRow>
-    fun manualChargesByOrder(target: Ref.Persisted): List<ManualChargeRow>
-    fun extensionRequestsByOrder(target: Ref.Persisted): List<ExtensionRequestRow>
-    fun paymentExtensionsByOrder(target: Ref.Persisted): List<PaymentExtensionRow>
-    fun paymentRemindersByOrder(target: Ref.Persisted): List<PaymentReminderRow>
-    fun dunningFlagsByOrder(target: Ref.Persisted): List<DunningFlagRow>
-    fun dunningResolutionsByFlag(target: Ref.Persisted): List<DunningResolutionRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun cardsByBillingContacts(targets: List<Ref.Persisted>): List<CardRow>
+    fun customersByCards(targets: List<Ref.Persisted>): List<CustomerRow>
+    fun cardUpdatesByCustomers(targets: List<Ref.Persisted>): List<CardUpdateRow>
+    fun cardUpdatesByCards(targets: List<Ref.Persisted>): List<CardUpdateRow>
+    fun ordersByCustomers(targets: List<Ref.Persisted>): List<OrderRow>
+    fun chargeAttemptsByOrders(targets: List<Ref.Persisted>): List<ChargeAttemptRow>
+    fun chargeResponsesByAttempts(targets: List<Ref.Persisted>): List<ChargeResponseRow>
+    fun attemptTimeoutsByAttempts(targets: List<Ref.Persisted>): List<AttemptTimeoutRow>
+    fun stockReservationsByOrders(targets: List<Ref.Persisted>): List<StockReservationRow>
+    fun reservationReleasesByReservations(targets: List<Ref.Persisted>): List<ReservationReleaseRow>
+    fun receiptsByAttempts(targets: List<Ref.Persisted>): List<ReceiptRow>
+    fun shipmentsByOrders(targets: List<Ref.Persisted>): List<ShipmentRow>
+    fun changeShippingAddresssByOrders(targets: List<Ref.Persisted>): List<ChangeShippingAddressRow>
+    fun addressChangeApplicationsByChanges(targets: List<Ref.Persisted>): List<AddressChangeApplicationRow>
+    fun addressChangeRefusalsByChanges(targets: List<Ref.Persisted>): List<AddressChangeRefusalRow>
+    fun refundsByOrders(targets: List<Ref.Persisted>): List<RefundRow>
+    fun settlementReversalsByOrders(targets: List<Ref.Persisted>): List<SettlementReversalRow>
+    fun manualChargesByOrders(targets: List<Ref.Persisted>): List<ManualChargeRow>
+    fun extensionRequestsByOrders(targets: List<Ref.Persisted>): List<ExtensionRequestRow>
+    fun paymentExtensionsByOrders(targets: List<Ref.Persisted>): List<PaymentExtensionRow>
+    fun paymentRemindersByOrders(targets: List<Ref.Persisted>): List<PaymentReminderRow>
+    fun dunningFlagsByOrders(targets: List<Ref.Persisted>): List<DunningFlagRow>
+    fun dunningResolutionsByFlags(targets: List<Ref.Persisted>): List<DunningResolutionRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement NeverCharged — `NeverCharged`.
@@ -322,6 +324,78 @@ interface PaymentsStore {
     fun openDunningEpisodeCandidates(dueByBefore: LocalDate): List<OrderRow>
 }
 
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun PaymentsStore.contact(key: StoreKey): ContactRow? = contacts(listOf(key)).firstOrNull()
+fun PaymentsStore.card(key: StoreKey): CardRow? = cards(listOf(key)).firstOrNull()
+fun PaymentsStore.customer(key: StoreKey): CustomerRow? = customers(listOf(key)).firstOrNull()
+fun PaymentsStore.cardUpdate(key: StoreKey): CardUpdateRow? = cardUpdates(listOf(key)).firstOrNull()
+fun PaymentsStore.order(key: StoreKey): OrderRow? = orders(listOf(key)).firstOrNull()
+fun PaymentsStore.chargeAttempt(key: StoreKey): ChargeAttemptRow? = chargeAttempts(listOf(key)).firstOrNull()
+fun PaymentsStore.chargeResponse(key: StoreKey): ChargeResponseRow? = chargeResponses(listOf(key)).firstOrNull()
+fun PaymentsStore.attemptTimeout(key: StoreKey): AttemptTimeoutRow? = attemptTimeouts(listOf(key)).firstOrNull()
+fun PaymentsStore.stockReservation(key: StoreKey): StockReservationRow? = stockReservations(listOf(key)).firstOrNull()
+fun PaymentsStore.reservationRelease(key: StoreKey): ReservationReleaseRow? = reservationReleases(listOf(key)).firstOrNull()
+fun PaymentsStore.receipt(key: StoreKey): ReceiptRow? = receipts(listOf(key)).firstOrNull()
+fun PaymentsStore.shipment(key: StoreKey): ShipmentRow? = shipments(listOf(key)).firstOrNull()
+fun PaymentsStore.changeShippingAddress(key: StoreKey): ChangeShippingAddressRow? = changeShippingAddresss(listOf(key)).firstOrNull()
+fun PaymentsStore.addressChangeApplication(key: StoreKey): AddressChangeApplicationRow? = addressChangeApplications(listOf(key)).firstOrNull()
+fun PaymentsStore.addressChangeRefusal(key: StoreKey): AddressChangeRefusalRow? = addressChangeRefusals(listOf(key)).firstOrNull()
+fun PaymentsStore.refund(key: StoreKey): RefundRow? = refunds(listOf(key)).firstOrNull()
+fun PaymentsStore.settlementReversal(key: StoreKey): SettlementReversalRow? = settlementReversals(listOf(key)).firstOrNull()
+fun PaymentsStore.manualCharge(key: StoreKey): ManualChargeRow? = manualCharges(listOf(key)).firstOrNull()
+fun PaymentsStore.extensionRequest(key: StoreKey): ExtensionRequestRow? = extensionRequests(listOf(key)).firstOrNull()
+fun PaymentsStore.paymentExtension(key: StoreKey): PaymentExtensionRow? = paymentExtensions(listOf(key)).firstOrNull()
+fun PaymentsStore.paymentReminder(key: StoreKey): PaymentReminderRow? = paymentReminders(listOf(key)).firstOrNull()
+fun PaymentsStore.dunningFlag(key: StoreKey): DunningFlagRow? = dunningFlags(listOf(key)).firstOrNull()
+fun PaymentsStore.dunningResolution(key: StoreKey): DunningResolutionRow? = dunningResolutions(listOf(key)).firstOrNull()
+fun PaymentsStore.cardsByBillingContact(target: Ref.Persisted): List<CardRow> =
+    cardsByBillingContacts(listOf(target))
+fun PaymentsStore.customersByCard(target: Ref.Persisted): List<CustomerRow> =
+    customersByCards(listOf(target))
+fun PaymentsStore.cardUpdatesByCustomer(target: Ref.Persisted): List<CardUpdateRow> =
+    cardUpdatesByCustomers(listOf(target))
+fun PaymentsStore.cardUpdatesByCard(target: Ref.Persisted): List<CardUpdateRow> =
+    cardUpdatesByCards(listOf(target))
+fun PaymentsStore.ordersByCustomer(target: Ref.Persisted): List<OrderRow> =
+    ordersByCustomers(listOf(target))
+fun PaymentsStore.chargeAttemptsByOrder(target: Ref.Persisted): List<ChargeAttemptRow> =
+    chargeAttemptsByOrders(listOf(target))
+fun PaymentsStore.chargeResponsesByAttempt(target: Ref.Persisted): List<ChargeResponseRow> =
+    chargeResponsesByAttempts(listOf(target))
+fun PaymentsStore.attemptTimeoutsByAttempt(target: Ref.Persisted): List<AttemptTimeoutRow> =
+    attemptTimeoutsByAttempts(listOf(target))
+fun PaymentsStore.stockReservationsByOrder(target: Ref.Persisted): List<StockReservationRow> =
+    stockReservationsByOrders(listOf(target))
+fun PaymentsStore.reservationReleasesByReservation(target: Ref.Persisted): List<ReservationReleaseRow> =
+    reservationReleasesByReservations(listOf(target))
+fun PaymentsStore.receiptsByAttempt(target: Ref.Persisted): List<ReceiptRow> =
+    receiptsByAttempts(listOf(target))
+fun PaymentsStore.shipmentsByOrder(target: Ref.Persisted): List<ShipmentRow> =
+    shipmentsByOrders(listOf(target))
+fun PaymentsStore.changeShippingAddresssByOrder(target: Ref.Persisted): List<ChangeShippingAddressRow> =
+    changeShippingAddresssByOrders(listOf(target))
+fun PaymentsStore.addressChangeApplicationsByChange(target: Ref.Persisted): List<AddressChangeApplicationRow> =
+    addressChangeApplicationsByChanges(listOf(target))
+fun PaymentsStore.addressChangeRefusalsByChange(target: Ref.Persisted): List<AddressChangeRefusalRow> =
+    addressChangeRefusalsByChanges(listOf(target))
+fun PaymentsStore.refundsByOrder(target: Ref.Persisted): List<RefundRow> =
+    refundsByOrders(listOf(target))
+fun PaymentsStore.settlementReversalsByOrder(target: Ref.Persisted): List<SettlementReversalRow> =
+    settlementReversalsByOrders(listOf(target))
+fun PaymentsStore.manualChargesByOrder(target: Ref.Persisted): List<ManualChargeRow> =
+    manualChargesByOrders(listOf(target))
+fun PaymentsStore.extensionRequestsByOrder(target: Ref.Persisted): List<ExtensionRequestRow> =
+    extensionRequestsByOrders(listOf(target))
+fun PaymentsStore.paymentExtensionsByOrder(target: Ref.Persisted): List<PaymentExtensionRow> =
+    paymentExtensionsByOrders(listOf(target))
+fun PaymentsStore.paymentRemindersByOrder(target: Ref.Persisted): List<PaymentReminderRow> =
+    paymentRemindersByOrders(listOf(target))
+fun PaymentsStore.dunningFlagsByOrder(target: Ref.Persisted): List<DunningFlagRow> =
+    dunningFlagsByOrders(listOf(target))
+fun PaymentsStore.dunningResolutionsByFlag(target: Ref.Persisted): List<DunningResolutionRow> =
+    dunningResolutionsByFlags(listOf(target))
+
 /** The candidate questions as recognizable templates (QTemplate). */
 class PaymentsStoreQuestions(model: Model) {
     val neverChargedCandidates = QTemplate.of(model, "Order", RefName("NeverCharged"))
@@ -355,29 +429,29 @@ open class PaymentsStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun contact(key: StoreKey): ContactRow? = backend.fetchByKey("Contact", key)?.toContactRow()
-    override fun card(key: StoreKey): CardRow? = backend.fetchByKey("Card", key)?.toCardRow()
-    override fun customer(key: StoreKey): CustomerRow? = backend.fetchByKey("Customer", key)?.toCustomerRow()
-    override fun cardUpdate(key: StoreKey): CardUpdateRow? = backend.fetchByKey("CardUpdate", key)?.toCardUpdateRow()
-    override fun order(key: StoreKey): OrderRow? = backend.fetchByKey("Order", key)?.toOrderRow()
-    override fun chargeAttempt(key: StoreKey): ChargeAttemptRow? = backend.fetchByKey("ChargeAttempt", key)?.toChargeAttemptRow()
-    override fun chargeResponse(key: StoreKey): ChargeResponseRow? = backend.fetchByKey("ChargeResponse", key)?.toChargeResponseRow()
-    override fun attemptTimeout(key: StoreKey): AttemptTimeoutRow? = backend.fetchByKey("AttemptTimeout", key)?.toAttemptTimeoutRow()
-    override fun stockReservation(key: StoreKey): StockReservationRow? = backend.fetchByKey("StockReservation", key)?.toStockReservationRow()
-    override fun reservationRelease(key: StoreKey): ReservationReleaseRow? = backend.fetchByKey("ReservationRelease", key)?.toReservationReleaseRow()
-    override fun receipt(key: StoreKey): ReceiptRow? = backend.fetchByKey("Receipt", key)?.toReceiptRow()
-    override fun shipment(key: StoreKey): ShipmentRow? = backend.fetchByKey("Shipment", key)?.toShipmentRow()
-    override fun changeShippingAddress(key: StoreKey): ChangeShippingAddressRow? = backend.fetchByKey("ChangeShippingAddress", key)?.toChangeShippingAddressRow()
-    override fun addressChangeApplication(key: StoreKey): AddressChangeApplicationRow? = backend.fetchByKey("AddressChangeApplication", key)?.toAddressChangeApplicationRow()
-    override fun addressChangeRefusal(key: StoreKey): AddressChangeRefusalRow? = backend.fetchByKey("AddressChangeRefusal", key)?.toAddressChangeRefusalRow()
-    override fun refund(key: StoreKey): RefundRow? = backend.fetchByKey("Refund", key)?.toRefundRow()
-    override fun settlementReversal(key: StoreKey): SettlementReversalRow? = backend.fetchByKey("SettlementReversal", key)?.toSettlementReversalRow()
-    override fun manualCharge(key: StoreKey): ManualChargeRow? = backend.fetchByKey("ManualCharge", key)?.toManualChargeRow()
-    override fun extensionRequest(key: StoreKey): ExtensionRequestRow? = backend.fetchByKey("ExtensionRequest", key)?.toExtensionRequestRow()
-    override fun paymentExtension(key: StoreKey): PaymentExtensionRow? = backend.fetchByKey("PaymentExtension", key)?.toPaymentExtensionRow()
-    override fun paymentReminder(key: StoreKey): PaymentReminderRow? = backend.fetchByKey("PaymentReminder", key)?.toPaymentReminderRow()
-    override fun dunningFlag(key: StoreKey): DunningFlagRow? = backend.fetchByKey("DunningFlag", key)?.toDunningFlagRow()
-    override fun dunningResolution(key: StoreKey): DunningResolutionRow? = backend.fetchByKey("DunningResolution", key)?.toDunningResolutionRow()
+    override fun contacts(keys: List<StoreKey>): List<ContactRow> = backend.fetchByKeys("Contact", keys).map { it.toContactRow() }
+    override fun cards(keys: List<StoreKey>): List<CardRow> = backend.fetchByKeys("Card", keys).map { it.toCardRow() }
+    override fun customers(keys: List<StoreKey>): List<CustomerRow> = backend.fetchByKeys("Customer", keys).map { it.toCustomerRow() }
+    override fun cardUpdates(keys: List<StoreKey>): List<CardUpdateRow> = backend.fetchByKeys("CardUpdate", keys).map { it.toCardUpdateRow() }
+    override fun orders(keys: List<StoreKey>): List<OrderRow> = backend.fetchByKeys("Order", keys).map { it.toOrderRow() }
+    override fun chargeAttempts(keys: List<StoreKey>): List<ChargeAttemptRow> = backend.fetchByKeys("ChargeAttempt", keys).map { it.toChargeAttemptRow() }
+    override fun chargeResponses(keys: List<StoreKey>): List<ChargeResponseRow> = backend.fetchByKeys("ChargeResponse", keys).map { it.toChargeResponseRow() }
+    override fun attemptTimeouts(keys: List<StoreKey>): List<AttemptTimeoutRow> = backend.fetchByKeys("AttemptTimeout", keys).map { it.toAttemptTimeoutRow() }
+    override fun stockReservations(keys: List<StoreKey>): List<StockReservationRow> = backend.fetchByKeys("StockReservation", keys).map { it.toStockReservationRow() }
+    override fun reservationReleases(keys: List<StoreKey>): List<ReservationReleaseRow> = backend.fetchByKeys("ReservationRelease", keys).map { it.toReservationReleaseRow() }
+    override fun receipts(keys: List<StoreKey>): List<ReceiptRow> = backend.fetchByKeys("Receipt", keys).map { it.toReceiptRow() }
+    override fun shipments(keys: List<StoreKey>): List<ShipmentRow> = backend.fetchByKeys("Shipment", keys).map { it.toShipmentRow() }
+    override fun changeShippingAddresss(keys: List<StoreKey>): List<ChangeShippingAddressRow> = backend.fetchByKeys("ChangeShippingAddress", keys).map { it.toChangeShippingAddressRow() }
+    override fun addressChangeApplications(keys: List<StoreKey>): List<AddressChangeApplicationRow> = backend.fetchByKeys("AddressChangeApplication", keys).map { it.toAddressChangeApplicationRow() }
+    override fun addressChangeRefusals(keys: List<StoreKey>): List<AddressChangeRefusalRow> = backend.fetchByKeys("AddressChangeRefusal", keys).map { it.toAddressChangeRefusalRow() }
+    override fun refunds(keys: List<StoreKey>): List<RefundRow> = backend.fetchByKeys("Refund", keys).map { it.toRefundRow() }
+    override fun settlementReversals(keys: List<StoreKey>): List<SettlementReversalRow> = backend.fetchByKeys("SettlementReversal", keys).map { it.toSettlementReversalRow() }
+    override fun manualCharges(keys: List<StoreKey>): List<ManualChargeRow> = backend.fetchByKeys("ManualCharge", keys).map { it.toManualChargeRow() }
+    override fun extensionRequests(keys: List<StoreKey>): List<ExtensionRequestRow> = backend.fetchByKeys("ExtensionRequest", keys).map { it.toExtensionRequestRow() }
+    override fun paymentExtensions(keys: List<StoreKey>): List<PaymentExtensionRow> = backend.fetchByKeys("PaymentExtension", keys).map { it.toPaymentExtensionRow() }
+    override fun paymentReminders(keys: List<StoreKey>): List<PaymentReminderRow> = backend.fetchByKeys("PaymentReminder", keys).map { it.toPaymentReminderRow() }
+    override fun dunningFlags(keys: List<StoreKey>): List<DunningFlagRow> = backend.fetchByKeys("DunningFlag", keys).map { it.toDunningFlagRow() }
+    override fun dunningResolutions(keys: List<StoreKey>): List<DunningResolutionRow> = backend.fetchByKeys("DunningResolution", keys).map { it.toDunningResolutionRow() }
 
     override fun allContacts(): List<ContactRow> = backend.fetchAll("Contact").map { it.toContactRow() }
     override fun allCards(): List<CardRow> = backend.fetchAll("Card").map { it.toCardRow() }
@@ -403,52 +477,52 @@ open class PaymentsStoreOverGeneric(
     override fun allDunningFlags(): List<DunningFlagRow> = backend.fetchAll("DunningFlag").map { it.toDunningFlagRow() }
     override fun allDunningResolutions(): List<DunningResolutionRow> = backend.fetchAll("DunningResolution").map { it.toDunningResolutionRow() }
 
-    override fun cardsByBillingContact(target: Ref.Persisted): List<CardRow> =
-        backend.fetchReferencing("Card", "billingContact", target).map { it.toCardRow() }
-    override fun customersByCard(target: Ref.Persisted): List<CustomerRow> =
-        backend.fetchReferencing("Customer", "card", target).map { it.toCustomerRow() }
-    override fun cardUpdatesByCustomer(target: Ref.Persisted): List<CardUpdateRow> =
-        backend.fetchReferencing("CardUpdate", "customer", target).map { it.toCardUpdateRow() }
-    override fun cardUpdatesByCard(target: Ref.Persisted): List<CardUpdateRow> =
-        backend.fetchReferencing("CardUpdate", "card", target).map { it.toCardUpdateRow() }
-    override fun ordersByCustomer(target: Ref.Persisted): List<OrderRow> =
-        backend.fetchReferencing("Order", "customer", target).map { it.toOrderRow() }
-    override fun chargeAttemptsByOrder(target: Ref.Persisted): List<ChargeAttemptRow> =
-        backend.fetchReferencing("ChargeAttempt", "order", target).map { it.toChargeAttemptRow() }
-    override fun chargeResponsesByAttempt(target: Ref.Persisted): List<ChargeResponseRow> =
-        backend.fetchReferencing("ChargeResponse", "attempt", target).map { it.toChargeResponseRow() }
-    override fun attemptTimeoutsByAttempt(target: Ref.Persisted): List<AttemptTimeoutRow> =
-        backend.fetchReferencing("AttemptTimeout", "attempt", target).map { it.toAttemptTimeoutRow() }
-    override fun stockReservationsByOrder(target: Ref.Persisted): List<StockReservationRow> =
-        backend.fetchReferencing("StockReservation", "order", target).map { it.toStockReservationRow() }
-    override fun reservationReleasesByReservation(target: Ref.Persisted): List<ReservationReleaseRow> =
-        backend.fetchReferencing("ReservationRelease", "reservation", target).map { it.toReservationReleaseRow() }
-    override fun receiptsByAttempt(target: Ref.Persisted): List<ReceiptRow> =
-        backend.fetchReferencing("Receipt", "attempt", target).map { it.toReceiptRow() }
-    override fun shipmentsByOrder(target: Ref.Persisted): List<ShipmentRow> =
-        backend.fetchReferencing("Shipment", "order", target).map { it.toShipmentRow() }
-    override fun changeShippingAddresssByOrder(target: Ref.Persisted): List<ChangeShippingAddressRow> =
-        backend.fetchReferencing("ChangeShippingAddress", "order", target).map { it.toChangeShippingAddressRow() }
-    override fun addressChangeApplicationsByChange(target: Ref.Persisted): List<AddressChangeApplicationRow> =
-        backend.fetchReferencing("AddressChangeApplication", "change", target).map { it.toAddressChangeApplicationRow() }
-    override fun addressChangeRefusalsByChange(target: Ref.Persisted): List<AddressChangeRefusalRow> =
-        backend.fetchReferencing("AddressChangeRefusal", "change", target).map { it.toAddressChangeRefusalRow() }
-    override fun refundsByOrder(target: Ref.Persisted): List<RefundRow> =
-        backend.fetchReferencing("Refund", "order", target).map { it.toRefundRow() }
-    override fun settlementReversalsByOrder(target: Ref.Persisted): List<SettlementReversalRow> =
-        backend.fetchReferencing("SettlementReversal", "order", target).map { it.toSettlementReversalRow() }
-    override fun manualChargesByOrder(target: Ref.Persisted): List<ManualChargeRow> =
-        backend.fetchReferencing("ManualCharge", "order", target).map { it.toManualChargeRow() }
-    override fun extensionRequestsByOrder(target: Ref.Persisted): List<ExtensionRequestRow> =
-        backend.fetchReferencing("ExtensionRequest", "order", target).map { it.toExtensionRequestRow() }
-    override fun paymentExtensionsByOrder(target: Ref.Persisted): List<PaymentExtensionRow> =
-        backend.fetchReferencing("PaymentExtension", "order", target).map { it.toPaymentExtensionRow() }
-    override fun paymentRemindersByOrder(target: Ref.Persisted): List<PaymentReminderRow> =
-        backend.fetchReferencing("PaymentReminder", "order", target).map { it.toPaymentReminderRow() }
-    override fun dunningFlagsByOrder(target: Ref.Persisted): List<DunningFlagRow> =
-        backend.fetchReferencing("DunningFlag", "order", target).map { it.toDunningFlagRow() }
-    override fun dunningResolutionsByFlag(target: Ref.Persisted): List<DunningResolutionRow> =
-        backend.fetchReferencing("DunningResolution", "flag", target).map { it.toDunningResolutionRow() }
+    override fun cardsByBillingContacts(targets: List<Ref.Persisted>): List<CardRow> =
+        backend.fetchReferencingAny("Card", "billingContact", targets).map { it.toCardRow() }
+    override fun customersByCards(targets: List<Ref.Persisted>): List<CustomerRow> =
+        backend.fetchReferencingAny("Customer", "card", targets).map { it.toCustomerRow() }
+    override fun cardUpdatesByCustomers(targets: List<Ref.Persisted>): List<CardUpdateRow> =
+        backend.fetchReferencingAny("CardUpdate", "customer", targets).map { it.toCardUpdateRow() }
+    override fun cardUpdatesByCards(targets: List<Ref.Persisted>): List<CardUpdateRow> =
+        backend.fetchReferencingAny("CardUpdate", "card", targets).map { it.toCardUpdateRow() }
+    override fun ordersByCustomers(targets: List<Ref.Persisted>): List<OrderRow> =
+        backend.fetchReferencingAny("Order", "customer", targets).map { it.toOrderRow() }
+    override fun chargeAttemptsByOrders(targets: List<Ref.Persisted>): List<ChargeAttemptRow> =
+        backend.fetchReferencingAny("ChargeAttempt", "order", targets).map { it.toChargeAttemptRow() }
+    override fun chargeResponsesByAttempts(targets: List<Ref.Persisted>): List<ChargeResponseRow> =
+        backend.fetchReferencingAny("ChargeResponse", "attempt", targets).map { it.toChargeResponseRow() }
+    override fun attemptTimeoutsByAttempts(targets: List<Ref.Persisted>): List<AttemptTimeoutRow> =
+        backend.fetchReferencingAny("AttemptTimeout", "attempt", targets).map { it.toAttemptTimeoutRow() }
+    override fun stockReservationsByOrders(targets: List<Ref.Persisted>): List<StockReservationRow> =
+        backend.fetchReferencingAny("StockReservation", "order", targets).map { it.toStockReservationRow() }
+    override fun reservationReleasesByReservations(targets: List<Ref.Persisted>): List<ReservationReleaseRow> =
+        backend.fetchReferencingAny("ReservationRelease", "reservation", targets).map { it.toReservationReleaseRow() }
+    override fun receiptsByAttempts(targets: List<Ref.Persisted>): List<ReceiptRow> =
+        backend.fetchReferencingAny("Receipt", "attempt", targets).map { it.toReceiptRow() }
+    override fun shipmentsByOrders(targets: List<Ref.Persisted>): List<ShipmentRow> =
+        backend.fetchReferencingAny("Shipment", "order", targets).map { it.toShipmentRow() }
+    override fun changeShippingAddresssByOrders(targets: List<Ref.Persisted>): List<ChangeShippingAddressRow> =
+        backend.fetchReferencingAny("ChangeShippingAddress", "order", targets).map { it.toChangeShippingAddressRow() }
+    override fun addressChangeApplicationsByChanges(targets: List<Ref.Persisted>): List<AddressChangeApplicationRow> =
+        backend.fetchReferencingAny("AddressChangeApplication", "change", targets).map { it.toAddressChangeApplicationRow() }
+    override fun addressChangeRefusalsByChanges(targets: List<Ref.Persisted>): List<AddressChangeRefusalRow> =
+        backend.fetchReferencingAny("AddressChangeRefusal", "change", targets).map { it.toAddressChangeRefusalRow() }
+    override fun refundsByOrders(targets: List<Ref.Persisted>): List<RefundRow> =
+        backend.fetchReferencingAny("Refund", "order", targets).map { it.toRefundRow() }
+    override fun settlementReversalsByOrders(targets: List<Ref.Persisted>): List<SettlementReversalRow> =
+        backend.fetchReferencingAny("SettlementReversal", "order", targets).map { it.toSettlementReversalRow() }
+    override fun manualChargesByOrders(targets: List<Ref.Persisted>): List<ManualChargeRow> =
+        backend.fetchReferencingAny("ManualCharge", "order", targets).map { it.toManualChargeRow() }
+    override fun extensionRequestsByOrders(targets: List<Ref.Persisted>): List<ExtensionRequestRow> =
+        backend.fetchReferencingAny("ExtensionRequest", "order", targets).map { it.toExtensionRequestRow() }
+    override fun paymentExtensionsByOrders(targets: List<Ref.Persisted>): List<PaymentExtensionRow> =
+        backend.fetchReferencingAny("PaymentExtension", "order", targets).map { it.toPaymentExtensionRow() }
+    override fun paymentRemindersByOrders(targets: List<Ref.Persisted>): List<PaymentReminderRow> =
+        backend.fetchReferencingAny("PaymentReminder", "order", targets).map { it.toPaymentReminderRow() }
+    override fun dunningFlagsByOrders(targets: List<Ref.Persisted>): List<DunningFlagRow> =
+        backend.fetchReferencingAny("DunningFlag", "order", targets).map { it.toDunningFlagRow() }
+    override fun dunningResolutionsByFlags(targets: List<Ref.Persisted>): List<DunningResolutionRow> =
+        backend.fetchReferencingAny("DunningResolution", "flag", targets).map { it.toDunningResolutionRow() }
 
     override fun neverChargedCandidates(): List<OrderRow> =
         backend.fetchCandidates("Order", questions.neverChargedCandidates.instantiate(listOf()))
@@ -528,31 +602,31 @@ class PaymentsStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Contact" -> store.contact(key)?.toRow()
-        "Card" -> store.card(key)?.toRow()
-        "Customer" -> store.customer(key)?.toRow()
-        "CardUpdate" -> store.cardUpdate(key)?.toRow()
-        "Order" -> store.order(key)?.toRow()
-        "ChargeAttempt" -> store.chargeAttempt(key)?.toRow()
-        "ChargeResponse" -> store.chargeResponse(key)?.toRow()
-        "AttemptTimeout" -> store.attemptTimeout(key)?.toRow()
-        "StockReservation" -> store.stockReservation(key)?.toRow()
-        "ReservationRelease" -> store.reservationRelease(key)?.toRow()
-        "Receipt" -> store.receipt(key)?.toRow()
-        "Shipment" -> store.shipment(key)?.toRow()
-        "ChangeShippingAddress" -> store.changeShippingAddress(key)?.toRow()
-        "AddressChangeApplication" -> store.addressChangeApplication(key)?.toRow()
-        "AddressChangeRefusal" -> store.addressChangeRefusal(key)?.toRow()
-        "Refund" -> store.refund(key)?.toRow()
-        "SettlementReversal" -> store.settlementReversal(key)?.toRow()
-        "ManualCharge" -> store.manualCharge(key)?.toRow()
-        "ExtensionRequest" -> store.extensionRequest(key)?.toRow()
-        "PaymentExtension" -> store.paymentExtension(key)?.toRow()
-        "PaymentReminder" -> store.paymentReminder(key)?.toRow()
-        "DunningFlag" -> store.dunningFlag(key)?.toRow()
-        "DunningResolution" -> store.dunningResolution(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Contact" -> store.contacts(keys).map { it.toRow() }
+        "Card" -> store.cards(keys).map { it.toRow() }
+        "Customer" -> store.customers(keys).map { it.toRow() }
+        "CardUpdate" -> store.cardUpdates(keys).map { it.toRow() }
+        "Order" -> store.orders(keys).map { it.toRow() }
+        "ChargeAttempt" -> store.chargeAttempts(keys).map { it.toRow() }
+        "ChargeResponse" -> store.chargeResponses(keys).map { it.toRow() }
+        "AttemptTimeout" -> store.attemptTimeouts(keys).map { it.toRow() }
+        "StockReservation" -> store.stockReservations(keys).map { it.toRow() }
+        "ReservationRelease" -> store.reservationReleases(keys).map { it.toRow() }
+        "Receipt" -> store.receipts(keys).map { it.toRow() }
+        "Shipment" -> store.shipments(keys).map { it.toRow() }
+        "ChangeShippingAddress" -> store.changeShippingAddresss(keys).map { it.toRow() }
+        "AddressChangeApplication" -> store.addressChangeApplications(keys).map { it.toRow() }
+        "AddressChangeRefusal" -> store.addressChangeRefusals(keys).map { it.toRow() }
+        "Refund" -> store.refunds(keys).map { it.toRow() }
+        "SettlementReversal" -> store.settlementReversals(keys).map { it.toRow() }
+        "ManualCharge" -> store.manualCharges(keys).map { it.toRow() }
+        "ExtensionRequest" -> store.extensionRequests(keys).map { it.toRow() }
+        "PaymentExtension" -> store.paymentExtensions(keys).map { it.toRow() }
+        "PaymentReminder" -> store.paymentReminders(keys).map { it.toRow() }
+        "DunningFlag" -> store.dunningFlags(keys).map { it.toRow() }
+        "DunningResolution" -> store.dunningResolutions(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -582,30 +656,30 @@ class PaymentsStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "Card" && field == "billingContact" -> store.cardsByBillingContact(target).map { it.toRow() }
-        shape == "Customer" && field == "card" -> store.customersByCard(target).map { it.toRow() }
-        shape == "CardUpdate" && field == "customer" -> store.cardUpdatesByCustomer(target).map { it.toRow() }
-        shape == "CardUpdate" && field == "card" -> store.cardUpdatesByCard(target).map { it.toRow() }
-        shape == "Order" && field == "customer" -> store.ordersByCustomer(target).map { it.toRow() }
-        shape == "ChargeAttempt" && field == "order" -> store.chargeAttemptsByOrder(target).map { it.toRow() }
-        shape == "ChargeResponse" && field == "attempt" -> store.chargeResponsesByAttempt(target).map { it.toRow() }
-        shape == "AttemptTimeout" && field == "attempt" -> store.attemptTimeoutsByAttempt(target).map { it.toRow() }
-        shape == "StockReservation" && field == "order" -> store.stockReservationsByOrder(target).map { it.toRow() }
-        shape == "ReservationRelease" && field == "reservation" -> store.reservationReleasesByReservation(target).map { it.toRow() }
-        shape == "Receipt" && field == "attempt" -> store.receiptsByAttempt(target).map { it.toRow() }
-        shape == "Shipment" && field == "order" -> store.shipmentsByOrder(target).map { it.toRow() }
-        shape == "ChangeShippingAddress" && field == "order" -> store.changeShippingAddresssByOrder(target).map { it.toRow() }
-        shape == "AddressChangeApplication" && field == "change" -> store.addressChangeApplicationsByChange(target).map { it.toRow() }
-        shape == "AddressChangeRefusal" && field == "change" -> store.addressChangeRefusalsByChange(target).map { it.toRow() }
-        shape == "Refund" && field == "order" -> store.refundsByOrder(target).map { it.toRow() }
-        shape == "SettlementReversal" && field == "order" -> store.settlementReversalsByOrder(target).map { it.toRow() }
-        shape == "ManualCharge" && field == "order" -> store.manualChargesByOrder(target).map { it.toRow() }
-        shape == "ExtensionRequest" && field == "order" -> store.extensionRequestsByOrder(target).map { it.toRow() }
-        shape == "PaymentExtension" && field == "order" -> store.paymentExtensionsByOrder(target).map { it.toRow() }
-        shape == "PaymentReminder" && field == "order" -> store.paymentRemindersByOrder(target).map { it.toRow() }
-        shape == "DunningFlag" && field == "order" -> store.dunningFlagsByOrder(target).map { it.toRow() }
-        shape == "DunningResolution" && field == "flag" -> store.dunningResolutionsByFlag(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "Card" && field == "billingContact" -> store.cardsByBillingContacts(targets).map { it.toRow() }
+        shape == "Customer" && field == "card" -> store.customersByCards(targets).map { it.toRow() }
+        shape == "CardUpdate" && field == "customer" -> store.cardUpdatesByCustomers(targets).map { it.toRow() }
+        shape == "CardUpdate" && field == "card" -> store.cardUpdatesByCards(targets).map { it.toRow() }
+        shape == "Order" && field == "customer" -> store.ordersByCustomers(targets).map { it.toRow() }
+        shape == "ChargeAttempt" && field == "order" -> store.chargeAttemptsByOrders(targets).map { it.toRow() }
+        shape == "ChargeResponse" && field == "attempt" -> store.chargeResponsesByAttempts(targets).map { it.toRow() }
+        shape == "AttemptTimeout" && field == "attempt" -> store.attemptTimeoutsByAttempts(targets).map { it.toRow() }
+        shape == "StockReservation" && field == "order" -> store.stockReservationsByOrders(targets).map { it.toRow() }
+        shape == "ReservationRelease" && field == "reservation" -> store.reservationReleasesByReservations(targets).map { it.toRow() }
+        shape == "Receipt" && field == "attempt" -> store.receiptsByAttempts(targets).map { it.toRow() }
+        shape == "Shipment" && field == "order" -> store.shipmentsByOrders(targets).map { it.toRow() }
+        shape == "ChangeShippingAddress" && field == "order" -> store.changeShippingAddresssByOrders(targets).map { it.toRow() }
+        shape == "AddressChangeApplication" && field == "change" -> store.addressChangeApplicationsByChanges(targets).map { it.toRow() }
+        shape == "AddressChangeRefusal" && field == "change" -> store.addressChangeRefusalsByChanges(targets).map { it.toRow() }
+        shape == "Refund" && field == "order" -> store.refundsByOrders(targets).map { it.toRow() }
+        shape == "SettlementReversal" && field == "order" -> store.settlementReversalsByOrders(targets).map { it.toRow() }
+        shape == "ManualCharge" && field == "order" -> store.manualChargesByOrders(targets).map { it.toRow() }
+        shape == "ExtensionRequest" && field == "order" -> store.extensionRequestsByOrders(targets).map { it.toRow() }
+        shape == "PaymentExtension" && field == "order" -> store.paymentExtensionsByOrders(targets).map { it.toRow() }
+        shape == "PaymentReminder" && field == "order" -> store.paymentRemindersByOrders(targets).map { it.toRow() }
+        shape == "DunningFlag" && field == "order" -> store.dunningFlagsByOrders(targets).map { it.toRow() }
+        shape == "DunningResolution" && field == "flag" -> store.dunningResolutionsByFlags(targets).map { it.toRow() }
         else -> emptyList()
     }
 

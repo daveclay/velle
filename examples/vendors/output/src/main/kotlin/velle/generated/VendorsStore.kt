@@ -61,12 +61,14 @@ interface VendorsStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun staff(key: StoreKey): StaffRow?
-    fun vendorAssignment(key: StoreKey): VendorAssignmentRow?
-    fun vendor(key: StoreKey): VendorRow?
-    fun product(key: StoreKey): ProductRow?
-    fun marginAlert(key: StoreKey): MarginAlertRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun staffs(keys: List<StoreKey>): List<StaffRow>
+    fun vendorAssignments(keys: List<StoreKey>): List<VendorAssignmentRow>
+    fun vendors(keys: List<StoreKey>): List<VendorRow>
+    fun products(keys: List<StoreKey>): List<ProductRow>
+    fun marginAlerts(keys: List<StoreKey>): List<MarginAlertRow>
 
     // ── scan floor: all rows of a shape ──
     fun allStaffs(): List<StaffRow>
@@ -75,11 +77,11 @@ interface VendorsStore {
     fun allProducts(): List<ProductRow>
     fun allMarginAlerts(): List<MarginAlertRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun vendorAssignmentsByStaff(target: Ref.Persisted): List<VendorAssignmentRow>
-    fun vendorAssignmentsByVendor(target: Ref.Persisted): List<VendorAssignmentRow>
-    fun productsByVendor(target: Ref.Persisted): List<ProductRow>
-    fun marginAlertsByProduct(target: Ref.Persisted): List<MarginAlertRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun vendorAssignmentsByStaffs(targets: List<Ref.Persisted>): List<VendorAssignmentRow>
+    fun vendorAssignmentsByVendors(targets: List<Ref.Persisted>): List<VendorAssignmentRow>
+    fun productsByVendors(targets: List<Ref.Persisted>): List<ProductRow>
+    fun marginAlertsByProducts(targets: List<Ref.Persisted>): List<MarginAlertRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement Administrator — `Administrator`.
@@ -89,6 +91,22 @@ interface VendorsStore {
      *  Superset contract: any superset of the matching rows is correct. */
     fun flagThinMarginCandidates(): List<ProductRow>
 }
+
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun VendorsStore.staff(key: StoreKey): StaffRow? = staffs(listOf(key)).firstOrNull()
+fun VendorsStore.vendorAssignment(key: StoreKey): VendorAssignmentRow? = vendorAssignments(listOf(key)).firstOrNull()
+fun VendorsStore.vendor(key: StoreKey): VendorRow? = vendors(listOf(key)).firstOrNull()
+fun VendorsStore.product(key: StoreKey): ProductRow? = products(listOf(key)).firstOrNull()
+fun VendorsStore.marginAlert(key: StoreKey): MarginAlertRow? = marginAlerts(listOf(key)).firstOrNull()
+fun VendorsStore.vendorAssignmentsByStaff(target: Ref.Persisted): List<VendorAssignmentRow> =
+    vendorAssignmentsByStaffs(listOf(target))
+fun VendorsStore.vendorAssignmentsByVendor(target: Ref.Persisted): List<VendorAssignmentRow> =
+    vendorAssignmentsByVendors(listOf(target))
+fun VendorsStore.productsByVendor(target: Ref.Persisted): List<ProductRow> =
+    productsByVendors(listOf(target))
+fun VendorsStore.marginAlertsByProduct(target: Ref.Persisted): List<MarginAlertRow> =
+    marginAlertsByProducts(listOf(target))
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class VendorsStoreQuestions(model: Model) {
@@ -108,11 +126,11 @@ open class VendorsStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun staff(key: StoreKey): StaffRow? = backend.fetchByKey("Staff", key)?.toStaffRow()
-    override fun vendorAssignment(key: StoreKey): VendorAssignmentRow? = backend.fetchByKey("VendorAssignment", key)?.toVendorAssignmentRow()
-    override fun vendor(key: StoreKey): VendorRow? = backend.fetchByKey("Vendor", key)?.toVendorRow()
-    override fun product(key: StoreKey): ProductRow? = backend.fetchByKey("Product", key)?.toProductRow()
-    override fun marginAlert(key: StoreKey): MarginAlertRow? = backend.fetchByKey("MarginAlert", key)?.toMarginAlertRow()
+    override fun staffs(keys: List<StoreKey>): List<StaffRow> = backend.fetchByKeys("Staff", keys).map { it.toStaffRow() }
+    override fun vendorAssignments(keys: List<StoreKey>): List<VendorAssignmentRow> = backend.fetchByKeys("VendorAssignment", keys).map { it.toVendorAssignmentRow() }
+    override fun vendors(keys: List<StoreKey>): List<VendorRow> = backend.fetchByKeys("Vendor", keys).map { it.toVendorRow() }
+    override fun products(keys: List<StoreKey>): List<ProductRow> = backend.fetchByKeys("Product", keys).map { it.toProductRow() }
+    override fun marginAlerts(keys: List<StoreKey>): List<MarginAlertRow> = backend.fetchByKeys("MarginAlert", keys).map { it.toMarginAlertRow() }
 
     override fun allStaffs(): List<StaffRow> = backend.fetchAll("Staff").map { it.toStaffRow() }
     override fun allVendorAssignments(): List<VendorAssignmentRow> = backend.fetchAll("VendorAssignment").map { it.toVendorAssignmentRow() }
@@ -120,14 +138,14 @@ open class VendorsStoreOverGeneric(
     override fun allProducts(): List<ProductRow> = backend.fetchAll("Product").map { it.toProductRow() }
     override fun allMarginAlerts(): List<MarginAlertRow> = backend.fetchAll("MarginAlert").map { it.toMarginAlertRow() }
 
-    override fun vendorAssignmentsByStaff(target: Ref.Persisted): List<VendorAssignmentRow> =
-        backend.fetchReferencing("VendorAssignment", "staff", target).map { it.toVendorAssignmentRow() }
-    override fun vendorAssignmentsByVendor(target: Ref.Persisted): List<VendorAssignmentRow> =
-        backend.fetchReferencing("VendorAssignment", "vendor", target).map { it.toVendorAssignmentRow() }
-    override fun productsByVendor(target: Ref.Persisted): List<ProductRow> =
-        backend.fetchReferencing("Product", "vendor", target).map { it.toProductRow() }
-    override fun marginAlertsByProduct(target: Ref.Persisted): List<MarginAlertRow> =
-        backend.fetchReferencing("MarginAlert", "product", target).map { it.toMarginAlertRow() }
+    override fun vendorAssignmentsByStaffs(targets: List<Ref.Persisted>): List<VendorAssignmentRow> =
+        backend.fetchReferencingAny("VendorAssignment", "staff", targets).map { it.toVendorAssignmentRow() }
+    override fun vendorAssignmentsByVendors(targets: List<Ref.Persisted>): List<VendorAssignmentRow> =
+        backend.fetchReferencingAny("VendorAssignment", "vendor", targets).map { it.toVendorAssignmentRow() }
+    override fun productsByVendors(targets: List<Ref.Persisted>): List<ProductRow> =
+        backend.fetchReferencingAny("Product", "vendor", targets).map { it.toProductRow() }
+    override fun marginAlertsByProducts(targets: List<Ref.Persisted>): List<MarginAlertRow> =
+        backend.fetchReferencingAny("MarginAlert", "product", targets).map { it.toMarginAlertRow() }
 
     override fun administratorCandidates(): List<StaffRow> =
         backend.fetchCandidates("Staff", questions.administratorCandidates.instantiate(listOf()))
@@ -147,13 +165,13 @@ class VendorsStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Staff" -> store.staff(key)?.toRow()
-        "VendorAssignment" -> store.vendorAssignment(key)?.toRow()
-        "Vendor" -> store.vendor(key)?.toRow()
-        "Product" -> store.product(key)?.toRow()
-        "MarginAlert" -> store.marginAlert(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Staff" -> store.staffs(keys).map { it.toRow() }
+        "VendorAssignment" -> store.vendorAssignments(keys).map { it.toRow() }
+        "Vendor" -> store.vendors(keys).map { it.toRow() }
+        "Product" -> store.products(keys).map { it.toRow() }
+        "MarginAlert" -> store.marginAlerts(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -165,11 +183,11 @@ class VendorsStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "VendorAssignment" && field == "staff" -> store.vendorAssignmentsByStaff(target).map { it.toRow() }
-        shape == "VendorAssignment" && field == "vendor" -> store.vendorAssignmentsByVendor(target).map { it.toRow() }
-        shape == "Product" && field == "vendor" -> store.productsByVendor(target).map { it.toRow() }
-        shape == "MarginAlert" && field == "product" -> store.marginAlertsByProduct(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "VendorAssignment" && field == "staff" -> store.vendorAssignmentsByStaffs(targets).map { it.toRow() }
+        shape == "VendorAssignment" && field == "vendor" -> store.vendorAssignmentsByVendors(targets).map { it.toRow() }
+        shape == "Product" && field == "vendor" -> store.productsByVendors(targets).map { it.toRow() }
+        shape == "MarginAlert" && field == "product" -> store.marginAlertsByProducts(targets).map { it.toRow() }
         else -> emptyList()
     }
 

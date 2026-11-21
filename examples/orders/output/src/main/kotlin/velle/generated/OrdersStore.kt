@@ -114,19 +114,21 @@ interface OrdersStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun customer(key: StoreKey): CustomerRow?
-    fun product(key: StoreKey): ProductRow?
-    fun skuFamily(key: StoreKey): SkuFamilyRow?
-    fun order(key: StoreKey): OrderRow?
-    fun charge(key: StoreKey): ChargeRow?
-    fun orderLine(key: StoreKey): OrderLineRow?
-    fun customization(key: StoreKey): CustomizationRow?
-    fun reservation(key: StoreKey): ReservationRow?
-    fun quote(key: StoreKey): QuoteRow?
-    fun quoteLine(key: StoreKey): QuoteLineRow?
-    fun catalogueLine(key: StoreKey): CatalogueLineRow?
-    fun priceRecord(key: StoreKey): PriceRecordRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun customers(keys: List<StoreKey>): List<CustomerRow>
+    fun products(keys: List<StoreKey>): List<ProductRow>
+    fun skuFamilys(keys: List<StoreKey>): List<SkuFamilyRow>
+    fun orders(keys: List<StoreKey>): List<OrderRow>
+    fun charges(keys: List<StoreKey>): List<ChargeRow>
+    fun orderLines(keys: List<StoreKey>): List<OrderLineRow>
+    fun customizations(keys: List<StoreKey>): List<CustomizationRow>
+    fun reservations(keys: List<StoreKey>): List<ReservationRow>
+    fun quotes(keys: List<StoreKey>): List<QuoteRow>
+    fun quoteLines(keys: List<StoreKey>): List<QuoteLineRow>
+    fun catalogueLines(keys: List<StoreKey>): List<CatalogueLineRow>
+    fun priceRecords(keys: List<StoreKey>): List<PriceRecordRow>
 
     // ── scan floor: all rows of a shape ──
     fun allCustomers(): List<CustomerRow>
@@ -142,17 +144,17 @@ interface OrdersStore {
     fun allCatalogueLines(): List<CatalogueLineRow>
     fun allPriceRecords(): List<PriceRecordRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun ordersByCustomer(target: Ref.Persisted): List<OrderRow>
-    fun chargesByOrder(target: Ref.Persisted): List<ChargeRow>
-    fun orderLinesByOrder(target: Ref.Persisted): List<OrderLineRow>
-    fun orderLinesByProduct(target: Ref.Persisted): List<OrderLineRow>
-    fun customizationsByLine(target: Ref.Persisted): List<CustomizationRow>
-    fun reservationsByLine(target: Ref.Persisted): List<ReservationRow>
-    fun quotesByCustomer(target: Ref.Persisted): List<QuoteRow>
-    fun quoteLinesByQuote(target: Ref.Persisted): List<QuoteLineRow>
-    fun quoteLinesByProduct(target: Ref.Persisted): List<QuoteLineRow>
-    fun priceRecordsByProduct(target: Ref.Persisted): List<PriceRecordRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun ordersByCustomers(targets: List<Ref.Persisted>): List<OrderRow>
+    fun chargesByOrders(targets: List<Ref.Persisted>): List<ChargeRow>
+    fun orderLinesByOrders(targets: List<Ref.Persisted>): List<OrderLineRow>
+    fun orderLinesByProducts(targets: List<Ref.Persisted>): List<OrderLineRow>
+    fun customizationsByLines(targets: List<Ref.Persisted>): List<CustomizationRow>
+    fun reservationsByLines(targets: List<Ref.Persisted>): List<ReservationRow>
+    fun quotesByCustomers(targets: List<Ref.Persisted>): List<QuoteRow>
+    fun quoteLinesByQuotes(targets: List<Ref.Persisted>): List<QuoteLineRow>
+    fun quoteLinesByProducts(targets: List<Ref.Persisted>): List<QuoteLineRow>
+    fun priceRecordsByProducts(targets: List<Ref.Persisted>): List<PriceRecordRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement ProductInFamily; refinement ProductOfFamily — `ProductInFamily`.
@@ -162,6 +164,41 @@ interface OrdersStore {
      *  Superset contract: any superset of the matching rows is correct. */
     fun never2Candidates(): List<OrderLineRow>
 }
+
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun OrdersStore.customer(key: StoreKey): CustomerRow? = customers(listOf(key)).firstOrNull()
+fun OrdersStore.product(key: StoreKey): ProductRow? = products(listOf(key)).firstOrNull()
+fun OrdersStore.skuFamily(key: StoreKey): SkuFamilyRow? = skuFamilys(listOf(key)).firstOrNull()
+fun OrdersStore.order(key: StoreKey): OrderRow? = orders(listOf(key)).firstOrNull()
+fun OrdersStore.charge(key: StoreKey): ChargeRow? = charges(listOf(key)).firstOrNull()
+fun OrdersStore.orderLine(key: StoreKey): OrderLineRow? = orderLines(listOf(key)).firstOrNull()
+fun OrdersStore.customization(key: StoreKey): CustomizationRow? = customizations(listOf(key)).firstOrNull()
+fun OrdersStore.reservation(key: StoreKey): ReservationRow? = reservations(listOf(key)).firstOrNull()
+fun OrdersStore.quote(key: StoreKey): QuoteRow? = quotes(listOf(key)).firstOrNull()
+fun OrdersStore.quoteLine(key: StoreKey): QuoteLineRow? = quoteLines(listOf(key)).firstOrNull()
+fun OrdersStore.catalogueLine(key: StoreKey): CatalogueLineRow? = catalogueLines(listOf(key)).firstOrNull()
+fun OrdersStore.priceRecord(key: StoreKey): PriceRecordRow? = priceRecords(listOf(key)).firstOrNull()
+fun OrdersStore.ordersByCustomer(target: Ref.Persisted): List<OrderRow> =
+    ordersByCustomers(listOf(target))
+fun OrdersStore.chargesByOrder(target: Ref.Persisted): List<ChargeRow> =
+    chargesByOrders(listOf(target))
+fun OrdersStore.orderLinesByOrder(target: Ref.Persisted): List<OrderLineRow> =
+    orderLinesByOrders(listOf(target))
+fun OrdersStore.orderLinesByProduct(target: Ref.Persisted): List<OrderLineRow> =
+    orderLinesByProducts(listOf(target))
+fun OrdersStore.customizationsByLine(target: Ref.Persisted): List<CustomizationRow> =
+    customizationsByLines(listOf(target))
+fun OrdersStore.reservationsByLine(target: Ref.Persisted): List<ReservationRow> =
+    reservationsByLines(listOf(target))
+fun OrdersStore.quotesByCustomer(target: Ref.Persisted): List<QuoteRow> =
+    quotesByCustomers(listOf(target))
+fun OrdersStore.quoteLinesByQuote(target: Ref.Persisted): List<QuoteLineRow> =
+    quoteLinesByQuotes(listOf(target))
+fun OrdersStore.quoteLinesByProduct(target: Ref.Persisted): List<QuoteLineRow> =
+    quoteLinesByProducts(listOf(target))
+fun OrdersStore.priceRecordsByProduct(target: Ref.Persisted): List<PriceRecordRow> =
+    priceRecordsByProducts(listOf(target))
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class OrdersStoreQuestions(model: Model) {
@@ -181,18 +218,18 @@ open class OrdersStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun customer(key: StoreKey): CustomerRow? = backend.fetchByKey("Customer", key)?.toCustomerRow()
-    override fun product(key: StoreKey): ProductRow? = backend.fetchByKey("Product", key)?.toProductRow()
-    override fun skuFamily(key: StoreKey): SkuFamilyRow? = backend.fetchByKey("SkuFamily", key)?.toSkuFamilyRow()
-    override fun order(key: StoreKey): OrderRow? = backend.fetchByKey("Order", key)?.toOrderRow()
-    override fun charge(key: StoreKey): ChargeRow? = backend.fetchByKey("Charge", key)?.toChargeRow()
-    override fun orderLine(key: StoreKey): OrderLineRow? = backend.fetchByKey("OrderLine", key)?.toOrderLineRow()
-    override fun customization(key: StoreKey): CustomizationRow? = backend.fetchByKey("Customization", key)?.toCustomizationRow()
-    override fun reservation(key: StoreKey): ReservationRow? = backend.fetchByKey("Reservation", key)?.toReservationRow()
-    override fun quote(key: StoreKey): QuoteRow? = backend.fetchByKey("Quote", key)?.toQuoteRow()
-    override fun quoteLine(key: StoreKey): QuoteLineRow? = backend.fetchByKey("QuoteLine", key)?.toQuoteLineRow()
-    override fun catalogueLine(key: StoreKey): CatalogueLineRow? = backend.fetchByKey("CatalogueLine", key)?.toCatalogueLineRow()
-    override fun priceRecord(key: StoreKey): PriceRecordRow? = backend.fetchByKey("PriceRecord", key)?.toPriceRecordRow()
+    override fun customers(keys: List<StoreKey>): List<CustomerRow> = backend.fetchByKeys("Customer", keys).map { it.toCustomerRow() }
+    override fun products(keys: List<StoreKey>): List<ProductRow> = backend.fetchByKeys("Product", keys).map { it.toProductRow() }
+    override fun skuFamilys(keys: List<StoreKey>): List<SkuFamilyRow> = backend.fetchByKeys("SkuFamily", keys).map { it.toSkuFamilyRow() }
+    override fun orders(keys: List<StoreKey>): List<OrderRow> = backend.fetchByKeys("Order", keys).map { it.toOrderRow() }
+    override fun charges(keys: List<StoreKey>): List<ChargeRow> = backend.fetchByKeys("Charge", keys).map { it.toChargeRow() }
+    override fun orderLines(keys: List<StoreKey>): List<OrderLineRow> = backend.fetchByKeys("OrderLine", keys).map { it.toOrderLineRow() }
+    override fun customizations(keys: List<StoreKey>): List<CustomizationRow> = backend.fetchByKeys("Customization", keys).map { it.toCustomizationRow() }
+    override fun reservations(keys: List<StoreKey>): List<ReservationRow> = backend.fetchByKeys("Reservation", keys).map { it.toReservationRow() }
+    override fun quotes(keys: List<StoreKey>): List<QuoteRow> = backend.fetchByKeys("Quote", keys).map { it.toQuoteRow() }
+    override fun quoteLines(keys: List<StoreKey>): List<QuoteLineRow> = backend.fetchByKeys("QuoteLine", keys).map { it.toQuoteLineRow() }
+    override fun catalogueLines(keys: List<StoreKey>): List<CatalogueLineRow> = backend.fetchByKeys("CatalogueLine", keys).map { it.toCatalogueLineRow() }
+    override fun priceRecords(keys: List<StoreKey>): List<PriceRecordRow> = backend.fetchByKeys("PriceRecord", keys).map { it.toPriceRecordRow() }
 
     override fun allCustomers(): List<CustomerRow> = backend.fetchAll("Customer").map { it.toCustomerRow() }
     override fun allProducts(): List<ProductRow> = backend.fetchAll("Product").map { it.toProductRow() }
@@ -207,26 +244,26 @@ open class OrdersStoreOverGeneric(
     override fun allCatalogueLines(): List<CatalogueLineRow> = backend.fetchAll("CatalogueLine").map { it.toCatalogueLineRow() }
     override fun allPriceRecords(): List<PriceRecordRow> = backend.fetchAll("PriceRecord").map { it.toPriceRecordRow() }
 
-    override fun ordersByCustomer(target: Ref.Persisted): List<OrderRow> =
-        backend.fetchReferencing("Order", "customer", target).map { it.toOrderRow() }
-    override fun chargesByOrder(target: Ref.Persisted): List<ChargeRow> =
-        backend.fetchReferencing("Charge", "order", target).map { it.toChargeRow() }
-    override fun orderLinesByOrder(target: Ref.Persisted): List<OrderLineRow> =
-        backend.fetchReferencing("OrderLine", "order", target).map { it.toOrderLineRow() }
-    override fun orderLinesByProduct(target: Ref.Persisted): List<OrderLineRow> =
-        backend.fetchReferencing("OrderLine", "product", target).map { it.toOrderLineRow() }
-    override fun customizationsByLine(target: Ref.Persisted): List<CustomizationRow> =
-        backend.fetchReferencing("Customization", "line", target).map { it.toCustomizationRow() }
-    override fun reservationsByLine(target: Ref.Persisted): List<ReservationRow> =
-        backend.fetchReferencing("Reservation", "line", target).map { it.toReservationRow() }
-    override fun quotesByCustomer(target: Ref.Persisted): List<QuoteRow> =
-        backend.fetchReferencing("Quote", "customer", target).map { it.toQuoteRow() }
-    override fun quoteLinesByQuote(target: Ref.Persisted): List<QuoteLineRow> =
-        backend.fetchReferencing("QuoteLine", "quote", target).map { it.toQuoteLineRow() }
-    override fun quoteLinesByProduct(target: Ref.Persisted): List<QuoteLineRow> =
-        backend.fetchReferencing("QuoteLine", "product", target).map { it.toQuoteLineRow() }
-    override fun priceRecordsByProduct(target: Ref.Persisted): List<PriceRecordRow> =
-        backend.fetchReferencing("PriceRecord", "product", target).map { it.toPriceRecordRow() }
+    override fun ordersByCustomers(targets: List<Ref.Persisted>): List<OrderRow> =
+        backend.fetchReferencingAny("Order", "customer", targets).map { it.toOrderRow() }
+    override fun chargesByOrders(targets: List<Ref.Persisted>): List<ChargeRow> =
+        backend.fetchReferencingAny("Charge", "order", targets).map { it.toChargeRow() }
+    override fun orderLinesByOrders(targets: List<Ref.Persisted>): List<OrderLineRow> =
+        backend.fetchReferencingAny("OrderLine", "order", targets).map { it.toOrderLineRow() }
+    override fun orderLinesByProducts(targets: List<Ref.Persisted>): List<OrderLineRow> =
+        backend.fetchReferencingAny("OrderLine", "product", targets).map { it.toOrderLineRow() }
+    override fun customizationsByLines(targets: List<Ref.Persisted>): List<CustomizationRow> =
+        backend.fetchReferencingAny("Customization", "line", targets).map { it.toCustomizationRow() }
+    override fun reservationsByLines(targets: List<Ref.Persisted>): List<ReservationRow> =
+        backend.fetchReferencingAny("Reservation", "line", targets).map { it.toReservationRow() }
+    override fun quotesByCustomers(targets: List<Ref.Persisted>): List<QuoteRow> =
+        backend.fetchReferencingAny("Quote", "customer", targets).map { it.toQuoteRow() }
+    override fun quoteLinesByQuotes(targets: List<Ref.Persisted>): List<QuoteLineRow> =
+        backend.fetchReferencingAny("QuoteLine", "quote", targets).map { it.toQuoteLineRow() }
+    override fun quoteLinesByProducts(targets: List<Ref.Persisted>): List<QuoteLineRow> =
+        backend.fetchReferencingAny("QuoteLine", "product", targets).map { it.toQuoteLineRow() }
+    override fun priceRecordsByProducts(targets: List<Ref.Persisted>): List<PriceRecordRow> =
+        backend.fetchReferencingAny("PriceRecord", "product", targets).map { it.toPriceRecordRow() }
 
     override fun productInFamilyCandidates(): List<ProductRow> =
         backend.fetchCandidates("Product", questions.productInFamilyCandidates.instantiate(listOf()))
@@ -246,20 +283,20 @@ class OrdersStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Customer" -> store.customer(key)?.toRow()
-        "Product" -> store.product(key)?.toRow()
-        "SkuFamily" -> store.skuFamily(key)?.toRow()
-        "Order" -> store.order(key)?.toRow()
-        "Charge" -> store.charge(key)?.toRow()
-        "OrderLine" -> store.orderLine(key)?.toRow()
-        "Customization" -> store.customization(key)?.toRow()
-        "Reservation" -> store.reservation(key)?.toRow()
-        "Quote" -> store.quote(key)?.toRow()
-        "QuoteLine" -> store.quoteLine(key)?.toRow()
-        "CatalogueLine" -> store.catalogueLine(key)?.toRow()
-        "PriceRecord" -> store.priceRecord(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Customer" -> store.customers(keys).map { it.toRow() }
+        "Product" -> store.products(keys).map { it.toRow() }
+        "SkuFamily" -> store.skuFamilys(keys).map { it.toRow() }
+        "Order" -> store.orders(keys).map { it.toRow() }
+        "Charge" -> store.charges(keys).map { it.toRow() }
+        "OrderLine" -> store.orderLines(keys).map { it.toRow() }
+        "Customization" -> store.customizations(keys).map { it.toRow() }
+        "Reservation" -> store.reservations(keys).map { it.toRow() }
+        "Quote" -> store.quotes(keys).map { it.toRow() }
+        "QuoteLine" -> store.quoteLines(keys).map { it.toRow() }
+        "CatalogueLine" -> store.catalogueLines(keys).map { it.toRow() }
+        "PriceRecord" -> store.priceRecords(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -278,17 +315,17 @@ class OrdersStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "Order" && field == "customer" -> store.ordersByCustomer(target).map { it.toRow() }
-        shape == "Charge" && field == "order" -> store.chargesByOrder(target).map { it.toRow() }
-        shape == "OrderLine" && field == "order" -> store.orderLinesByOrder(target).map { it.toRow() }
-        shape == "OrderLine" && field == "product" -> store.orderLinesByProduct(target).map { it.toRow() }
-        shape == "Customization" && field == "line" -> store.customizationsByLine(target).map { it.toRow() }
-        shape == "Reservation" && field == "line" -> store.reservationsByLine(target).map { it.toRow() }
-        shape == "Quote" && field == "customer" -> store.quotesByCustomer(target).map { it.toRow() }
-        shape == "QuoteLine" && field == "quote" -> store.quoteLinesByQuote(target).map { it.toRow() }
-        shape == "QuoteLine" && field == "product" -> store.quoteLinesByProduct(target).map { it.toRow() }
-        shape == "PriceRecord" && field == "product" -> store.priceRecordsByProduct(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "Order" && field == "customer" -> store.ordersByCustomers(targets).map { it.toRow() }
+        shape == "Charge" && field == "order" -> store.chargesByOrders(targets).map { it.toRow() }
+        shape == "OrderLine" && field == "order" -> store.orderLinesByOrders(targets).map { it.toRow() }
+        shape == "OrderLine" && field == "product" -> store.orderLinesByProducts(targets).map { it.toRow() }
+        shape == "Customization" && field == "line" -> store.customizationsByLines(targets).map { it.toRow() }
+        shape == "Reservation" && field == "line" -> store.reservationsByLines(targets).map { it.toRow() }
+        shape == "Quote" && field == "customer" -> store.quotesByCustomers(targets).map { it.toRow() }
+        shape == "QuoteLine" && field == "quote" -> store.quoteLinesByQuotes(targets).map { it.toRow() }
+        shape == "QuoteLine" && field == "product" -> store.quoteLinesByProducts(targets).map { it.toRow() }
+        shape == "PriceRecord" && field == "product" -> store.priceRecordsByProducts(targets).map { it.toRow() }
         else -> emptyList()
     }
 

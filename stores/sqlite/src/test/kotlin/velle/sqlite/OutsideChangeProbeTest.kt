@@ -86,16 +86,17 @@ class OutsideChangeProbeTest {
     }
 
     @Test
-    fun `a reference to a removed row is read as absent, with no error`() {
+    fun `a reference to a removed row is still read as a reference, with no error`() {
+        // no rule deletes a Drug, so the runtime does not look for the row before answering
         outsideVelle("""DELETE FROM "Drug"""")
-        assertNull(read(interaction, "drug"))
+        system.scope { assertEquals(drug, system.refFor(system.get(system.idOf(interaction), "drug") as Long)) }
     }
 
     @Test
-    fun `a member derived through a removed row fails naming neither the record nor the field`() {
+    fun `a member derived through a removed row fails naming the runtime's private number for it`() {
         outsideVelle("""DELETE FROM "Drug"""")
         val failure = assertFailsWith<VelleRuntimeError> { read(interaction, "drugName") }
-        assertEquals("'.' through an absent value (validator narrowing gap)", failure.message)
+        assertEquals(true, failure.message!!.matches(Regex("missing instance \\d+")), failure.message)
     }
 
     @Test

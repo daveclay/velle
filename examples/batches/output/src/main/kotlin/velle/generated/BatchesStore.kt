@@ -94,17 +94,19 @@ interface BatchesStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun peptide(key: StoreKey): PeptideRow?
-    fun bacteriaStrain(key: StoreKey): BacteriaStrainRow?
-    fun fermenterRun(key: StoreKey): FermenterRunRow?
-    fun vendor(key: StoreKey): VendorRow?
-    fun fermentation(key: StoreKey): FermentationRow?
-    fun externalOrder(key: StoreKey): ExternalOrderRow?
-    fun composition(key: StoreKey): CompositionRow?
-    fun component(key: StoreKey): ComponentRow?
-    fun peptideBatch(key: StoreKey): PeptideBatchRow?
-    fun depletionNotice(key: StoreKey): DepletionNoticeRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun peptides(keys: List<StoreKey>): List<PeptideRow>
+    fun bacteriaStrains(keys: List<StoreKey>): List<BacteriaStrainRow>
+    fun fermenterRuns(keys: List<StoreKey>): List<FermenterRunRow>
+    fun vendors(keys: List<StoreKey>): List<VendorRow>
+    fun fermentations(keys: List<StoreKey>): List<FermentationRow>
+    fun externalOrders(keys: List<StoreKey>): List<ExternalOrderRow>
+    fun compositions(keys: List<StoreKey>): List<CompositionRow>
+    fun components(keys: List<StoreKey>): List<ComponentRow>
+    fun peptideBatchs(keys: List<StoreKey>): List<PeptideBatchRow>
+    fun depletionNotices(keys: List<StoreKey>): List<DepletionNoticeRow>
 
     // ── scan floor: all rows of a shape ──
     fun allPeptides(): List<PeptideRow>
@@ -118,15 +120,15 @@ interface BatchesStore {
     fun allPeptideBatchs(): List<PeptideBatchRow>
     fun allDepletionNotices(): List<DepletionNoticeRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun fermentationsByStrain(target: Ref.Persisted): List<FermentationRow>
-    fun fermentationsByRun(target: Ref.Persisted): List<FermentationRow>
-    fun externalOrdersByVendor(target: Ref.Persisted): List<ExternalOrderRow>
-    fun componentsByComposition(target: Ref.Persisted): List<ComponentRow>
-    fun componentsBySource(target: Ref.Persisted): List<ComponentRow>
-    fun peptideBatchsByPeptide(target: Ref.Persisted): List<PeptideBatchRow>
-    fun peptideBatchsByOrigin(target: Ref.Persisted): List<PeptideBatchRow>
-    fun depletionNoticesByBatch(target: Ref.Persisted): List<DepletionNoticeRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun fermentationsByStrains(targets: List<Ref.Persisted>): List<FermentationRow>
+    fun fermentationsByRuns(targets: List<Ref.Persisted>): List<FermentationRow>
+    fun externalOrdersByVendors(targets: List<Ref.Persisted>): List<ExternalOrderRow>
+    fun componentsByCompositions(targets: List<Ref.Persisted>): List<ComponentRow>
+    fun componentsBySources(targets: List<Ref.Persisted>): List<ComponentRow>
+    fun peptideBatchsByPeptides(targets: List<Ref.Persisted>): List<PeptideBatchRow>
+    fun peptideBatchsByOrigins(targets: List<Ref.Persisted>): List<PeptideBatchRow>
+    fun depletionNoticesByBatchs(targets: List<Ref.Persisted>): List<DepletionNoticeRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves never #1 — `Component where amountMg <= 0`.
@@ -136,6 +138,35 @@ interface BatchesStore {
      *  Superset contract: any superset of the matching rows is correct. */
     fun never2Candidates(): List<PeptideBatchRow>
 }
+
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun BatchesStore.peptide(key: StoreKey): PeptideRow? = peptides(listOf(key)).firstOrNull()
+fun BatchesStore.bacteriaStrain(key: StoreKey): BacteriaStrainRow? = bacteriaStrains(listOf(key)).firstOrNull()
+fun BatchesStore.fermenterRun(key: StoreKey): FermenterRunRow? = fermenterRuns(listOf(key)).firstOrNull()
+fun BatchesStore.vendor(key: StoreKey): VendorRow? = vendors(listOf(key)).firstOrNull()
+fun BatchesStore.fermentation(key: StoreKey): FermentationRow? = fermentations(listOf(key)).firstOrNull()
+fun BatchesStore.externalOrder(key: StoreKey): ExternalOrderRow? = externalOrders(listOf(key)).firstOrNull()
+fun BatchesStore.composition(key: StoreKey): CompositionRow? = compositions(listOf(key)).firstOrNull()
+fun BatchesStore.component(key: StoreKey): ComponentRow? = components(listOf(key)).firstOrNull()
+fun BatchesStore.peptideBatch(key: StoreKey): PeptideBatchRow? = peptideBatchs(listOf(key)).firstOrNull()
+fun BatchesStore.depletionNotice(key: StoreKey): DepletionNoticeRow? = depletionNotices(listOf(key)).firstOrNull()
+fun BatchesStore.fermentationsByStrain(target: Ref.Persisted): List<FermentationRow> =
+    fermentationsByStrains(listOf(target))
+fun BatchesStore.fermentationsByRun(target: Ref.Persisted): List<FermentationRow> =
+    fermentationsByRuns(listOf(target))
+fun BatchesStore.externalOrdersByVendor(target: Ref.Persisted): List<ExternalOrderRow> =
+    externalOrdersByVendors(listOf(target))
+fun BatchesStore.componentsByComposition(target: Ref.Persisted): List<ComponentRow> =
+    componentsByCompositions(listOf(target))
+fun BatchesStore.componentsBySource(target: Ref.Persisted): List<ComponentRow> =
+    componentsBySources(listOf(target))
+fun BatchesStore.peptideBatchsByPeptide(target: Ref.Persisted): List<PeptideBatchRow> =
+    peptideBatchsByPeptides(listOf(target))
+fun BatchesStore.peptideBatchsByOrigin(target: Ref.Persisted): List<PeptideBatchRow> =
+    peptideBatchsByOrigins(listOf(target))
+fun BatchesStore.depletionNoticesByBatch(target: Ref.Persisted): List<DepletionNoticeRow> =
+    depletionNoticesByBatchs(listOf(target))
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class BatchesStoreQuestions(model: Model) {
@@ -155,16 +186,16 @@ open class BatchesStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun peptide(key: StoreKey): PeptideRow? = backend.fetchByKey("Peptide", key)?.toPeptideRow()
-    override fun bacteriaStrain(key: StoreKey): BacteriaStrainRow? = backend.fetchByKey("BacteriaStrain", key)?.toBacteriaStrainRow()
-    override fun fermenterRun(key: StoreKey): FermenterRunRow? = backend.fetchByKey("FermenterRun", key)?.toFermenterRunRow()
-    override fun vendor(key: StoreKey): VendorRow? = backend.fetchByKey("Vendor", key)?.toVendorRow()
-    override fun fermentation(key: StoreKey): FermentationRow? = backend.fetchByKey("Fermentation", key)?.toFermentationRow()
-    override fun externalOrder(key: StoreKey): ExternalOrderRow? = backend.fetchByKey("ExternalOrder", key)?.toExternalOrderRow()
-    override fun composition(key: StoreKey): CompositionRow? = backend.fetchByKey("Composition", key)?.toCompositionRow()
-    override fun component(key: StoreKey): ComponentRow? = backend.fetchByKey("Component", key)?.toComponentRow()
-    override fun peptideBatch(key: StoreKey): PeptideBatchRow? = backend.fetchByKey("PeptideBatch", key)?.toPeptideBatchRow()
-    override fun depletionNotice(key: StoreKey): DepletionNoticeRow? = backend.fetchByKey("DepletionNotice", key)?.toDepletionNoticeRow()
+    override fun peptides(keys: List<StoreKey>): List<PeptideRow> = backend.fetchByKeys("Peptide", keys).map { it.toPeptideRow() }
+    override fun bacteriaStrains(keys: List<StoreKey>): List<BacteriaStrainRow> = backend.fetchByKeys("BacteriaStrain", keys).map { it.toBacteriaStrainRow() }
+    override fun fermenterRuns(keys: List<StoreKey>): List<FermenterRunRow> = backend.fetchByKeys("FermenterRun", keys).map { it.toFermenterRunRow() }
+    override fun vendors(keys: List<StoreKey>): List<VendorRow> = backend.fetchByKeys("Vendor", keys).map { it.toVendorRow() }
+    override fun fermentations(keys: List<StoreKey>): List<FermentationRow> = backend.fetchByKeys("Fermentation", keys).map { it.toFermentationRow() }
+    override fun externalOrders(keys: List<StoreKey>): List<ExternalOrderRow> = backend.fetchByKeys("ExternalOrder", keys).map { it.toExternalOrderRow() }
+    override fun compositions(keys: List<StoreKey>): List<CompositionRow> = backend.fetchByKeys("Composition", keys).map { it.toCompositionRow() }
+    override fun components(keys: List<StoreKey>): List<ComponentRow> = backend.fetchByKeys("Component", keys).map { it.toComponentRow() }
+    override fun peptideBatchs(keys: List<StoreKey>): List<PeptideBatchRow> = backend.fetchByKeys("PeptideBatch", keys).map { it.toPeptideBatchRow() }
+    override fun depletionNotices(keys: List<StoreKey>): List<DepletionNoticeRow> = backend.fetchByKeys("DepletionNotice", keys).map { it.toDepletionNoticeRow() }
 
     override fun allPeptides(): List<PeptideRow> = backend.fetchAll("Peptide").map { it.toPeptideRow() }
     override fun allBacteriaStrains(): List<BacteriaStrainRow> = backend.fetchAll("BacteriaStrain").map { it.toBacteriaStrainRow() }
@@ -177,22 +208,22 @@ open class BatchesStoreOverGeneric(
     override fun allPeptideBatchs(): List<PeptideBatchRow> = backend.fetchAll("PeptideBatch").map { it.toPeptideBatchRow() }
     override fun allDepletionNotices(): List<DepletionNoticeRow> = backend.fetchAll("DepletionNotice").map { it.toDepletionNoticeRow() }
 
-    override fun fermentationsByStrain(target: Ref.Persisted): List<FermentationRow> =
-        backend.fetchReferencing("Fermentation", "strain", target).map { it.toFermentationRow() }
-    override fun fermentationsByRun(target: Ref.Persisted): List<FermentationRow> =
-        backend.fetchReferencing("Fermentation", "run", target).map { it.toFermentationRow() }
-    override fun externalOrdersByVendor(target: Ref.Persisted): List<ExternalOrderRow> =
-        backend.fetchReferencing("ExternalOrder", "vendor", target).map { it.toExternalOrderRow() }
-    override fun componentsByComposition(target: Ref.Persisted): List<ComponentRow> =
-        backend.fetchReferencing("Component", "composition", target).map { it.toComponentRow() }
-    override fun componentsBySource(target: Ref.Persisted): List<ComponentRow> =
-        backend.fetchReferencing("Component", "source", target).map { it.toComponentRow() }
-    override fun peptideBatchsByPeptide(target: Ref.Persisted): List<PeptideBatchRow> =
-        backend.fetchReferencing("PeptideBatch", "peptide", target).map { it.toPeptideBatchRow() }
-    override fun peptideBatchsByOrigin(target: Ref.Persisted): List<PeptideBatchRow> =
-        backend.fetchReferencing("PeptideBatch", "origin", target).map { it.toPeptideBatchRow() }
-    override fun depletionNoticesByBatch(target: Ref.Persisted): List<DepletionNoticeRow> =
-        backend.fetchReferencing("DepletionNotice", "batch", target).map { it.toDepletionNoticeRow() }
+    override fun fermentationsByStrains(targets: List<Ref.Persisted>): List<FermentationRow> =
+        backend.fetchReferencingAny("Fermentation", "strain", targets).map { it.toFermentationRow() }
+    override fun fermentationsByRuns(targets: List<Ref.Persisted>): List<FermentationRow> =
+        backend.fetchReferencingAny("Fermentation", "run", targets).map { it.toFermentationRow() }
+    override fun externalOrdersByVendors(targets: List<Ref.Persisted>): List<ExternalOrderRow> =
+        backend.fetchReferencingAny("ExternalOrder", "vendor", targets).map { it.toExternalOrderRow() }
+    override fun componentsByCompositions(targets: List<Ref.Persisted>): List<ComponentRow> =
+        backend.fetchReferencingAny("Component", "composition", targets).map { it.toComponentRow() }
+    override fun componentsBySources(targets: List<Ref.Persisted>): List<ComponentRow> =
+        backend.fetchReferencingAny("Component", "source", targets).map { it.toComponentRow() }
+    override fun peptideBatchsByPeptides(targets: List<Ref.Persisted>): List<PeptideBatchRow> =
+        backend.fetchReferencingAny("PeptideBatch", "peptide", targets).map { it.toPeptideBatchRow() }
+    override fun peptideBatchsByOrigins(targets: List<Ref.Persisted>): List<PeptideBatchRow> =
+        backend.fetchReferencingAny("PeptideBatch", "origin", targets).map { it.toPeptideBatchRow() }
+    override fun depletionNoticesByBatchs(targets: List<Ref.Persisted>): List<DepletionNoticeRow> =
+        backend.fetchReferencingAny("DepletionNotice", "batch", targets).map { it.toDepletionNoticeRow() }
 
     override fun never1Candidates(): List<ComponentRow> =
         backend.fetchCandidates("Component", questions.never1Candidates.instantiate(listOf()))
@@ -212,18 +243,18 @@ class BatchesStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Peptide" -> store.peptide(key)?.toRow()
-        "BacteriaStrain" -> store.bacteriaStrain(key)?.toRow()
-        "FermenterRun" -> store.fermenterRun(key)?.toRow()
-        "Vendor" -> store.vendor(key)?.toRow()
-        "Fermentation" -> store.fermentation(key)?.toRow()
-        "ExternalOrder" -> store.externalOrder(key)?.toRow()
-        "Composition" -> store.composition(key)?.toRow()
-        "Component" -> store.component(key)?.toRow()
-        "PeptideBatch" -> store.peptideBatch(key)?.toRow()
-        "DepletionNotice" -> store.depletionNotice(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Peptide" -> store.peptides(keys).map { it.toRow() }
+        "BacteriaStrain" -> store.bacteriaStrains(keys).map { it.toRow() }
+        "FermenterRun" -> store.fermenterRuns(keys).map { it.toRow() }
+        "Vendor" -> store.vendors(keys).map { it.toRow() }
+        "Fermentation" -> store.fermentations(keys).map { it.toRow() }
+        "ExternalOrder" -> store.externalOrders(keys).map { it.toRow() }
+        "Composition" -> store.compositions(keys).map { it.toRow() }
+        "Component" -> store.components(keys).map { it.toRow() }
+        "PeptideBatch" -> store.peptideBatchs(keys).map { it.toRow() }
+        "DepletionNotice" -> store.depletionNotices(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -240,15 +271,15 @@ class BatchesStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "Fermentation" && field == "strain" -> store.fermentationsByStrain(target).map { it.toRow() }
-        shape == "Fermentation" && field == "run" -> store.fermentationsByRun(target).map { it.toRow() }
-        shape == "ExternalOrder" && field == "vendor" -> store.externalOrdersByVendor(target).map { it.toRow() }
-        shape == "Component" && field == "composition" -> store.componentsByComposition(target).map { it.toRow() }
-        shape == "Component" && field == "source" -> store.componentsBySource(target).map { it.toRow() }
-        shape == "PeptideBatch" && field == "peptide" -> store.peptideBatchsByPeptide(target).map { it.toRow() }
-        shape == "PeptideBatch" && field == "origin" -> store.peptideBatchsByOrigin(target).map { it.toRow() }
-        shape == "DepletionNotice" && field == "batch" -> store.depletionNoticesByBatch(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "Fermentation" && field == "strain" -> store.fermentationsByStrains(targets).map { it.toRow() }
+        shape == "Fermentation" && field == "run" -> store.fermentationsByRuns(targets).map { it.toRow() }
+        shape == "ExternalOrder" && field == "vendor" -> store.externalOrdersByVendors(targets).map { it.toRow() }
+        shape == "Component" && field == "composition" -> store.componentsByCompositions(targets).map { it.toRow() }
+        shape == "Component" && field == "source" -> store.componentsBySources(targets).map { it.toRow() }
+        shape == "PeptideBatch" && field == "peptide" -> store.peptideBatchsByPeptides(targets).map { it.toRow() }
+        shape == "PeptideBatch" && field == "origin" -> store.peptideBatchsByOrigins(targets).map { it.toRow() }
+        shape == "DepletionNotice" && field == "batch" -> store.depletionNoticesByBatchs(targets).map { it.toRow() }
         else -> emptyList()
     }
 

@@ -48,11 +48,11 @@ Each probe commits one `Drug` and one `Interaction`, makes one outside change wi
 | P2 | `strength` set to the text `strong` | 0, no error | "a text in an integer column is read as zero, with no error" |
 | P3 | `name` set to NULL | absent, no error; `drugName` also absent | "a required field emptied is read as absent, with no error" |
 | P4 | `Interaction.drug` set to NULL | absent, no error | "a required reference emptied is read as absent, with no error" |
-| P5 | the `Drug` row removed, then `Interaction.drug` read | absent, no error | "a reference to a removed row is read as absent, with no error" |
-| P6 | the `Drug` row removed, then `Interaction.drugName` read | `VelleRuntimeError`: "'.' through an absent value (validator narrowing gap)" | "a member derived through a removed row fails naming neither the record nor the field" |
+| P5 | the `Drug` row removed, then `Interaction.drug` read | the reference to the `Drug`, no error (absent before OQ153 D4 was built on 2026-11-20) | "a reference to a removed row is still read as a reference, with no error" |
+| P6 | the `Drug` row removed, then `Interaction.drugName` read | `VelleRuntimeError`: "missing instance 5", where 5 is a number private to the runtime (before OQ153 D4 was built: "'.' through an absent value (validator narrowing gap)") | "a member derived through a removed row fails naming the runtime's private number for it" |
 | P7 | the `Drug` row removed, then the `Drug` read by its own reference | `IllegalArgumentException`: "no instance 13", where 13 is a number private to the runtime | "a removed row read by its own reference fails naming the runtime's private number for it" |
 
-Five of the seven say nothing. The two that fail name neither the shape, the store key, nor the field. P2 is specific to SQLite, whose columns accept a value of any type; PostgreSQL refuses that write.
+Five of the seven say nothing. The two that fail name neither the shape nor the store key, and P6 does not name the field. P2 is specific to SQLite, whose columns accept a value of any type; PostgreSQL refuses that write.
 
 ## 2. What to decide
 

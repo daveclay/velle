@@ -45,25 +45,37 @@ interface ShippingStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun order(key: StoreKey): OrderRow?
-    fun cancellation(key: StoreKey): CancellationRow?
-    fun shipment(key: StoreKey): ShipmentRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun orders(keys: List<StoreKey>): List<OrderRow>
+    fun cancellations(keys: List<StoreKey>): List<CancellationRow>
+    fun shipments(keys: List<StoreKey>): List<ShipmentRow>
 
     // ── scan floor: all rows of a shape ──
     fun allOrders(): List<OrderRow>
     fun allCancellations(): List<CancellationRow>
     fun allShipments(): List<ShipmentRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun cancellationsByOrder(target: Ref.Persisted): List<CancellationRow>
-    fun shipmentsByOrder(target: Ref.Persisted): List<ShipmentRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun cancellationsByOrders(targets: List<Ref.Persisted>): List<CancellationRow>
+    fun shipmentsByOrders(targets: List<Ref.Persisted>): List<ShipmentRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves never #1 — `Shipment where order is CancelledOrder`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never1Candidates(): List<ShipmentRow>
 }
+
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun ShippingStore.order(key: StoreKey): OrderRow? = orders(listOf(key)).firstOrNull()
+fun ShippingStore.cancellation(key: StoreKey): CancellationRow? = cancellations(listOf(key)).firstOrNull()
+fun ShippingStore.shipment(key: StoreKey): ShipmentRow? = shipments(listOf(key)).firstOrNull()
+fun ShippingStore.cancellationsByOrder(target: Ref.Persisted): List<CancellationRow> =
+    cancellationsByOrders(listOf(target))
+fun ShippingStore.shipmentsByOrder(target: Ref.Persisted): List<ShipmentRow> =
+    shipmentsByOrders(listOf(target))
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class ShippingStoreQuestions(model: Model) {
@@ -82,18 +94,18 @@ open class ShippingStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun order(key: StoreKey): OrderRow? = backend.fetchByKey("Order", key)?.toOrderRow()
-    override fun cancellation(key: StoreKey): CancellationRow? = backend.fetchByKey("Cancellation", key)?.toCancellationRow()
-    override fun shipment(key: StoreKey): ShipmentRow? = backend.fetchByKey("Shipment", key)?.toShipmentRow()
+    override fun orders(keys: List<StoreKey>): List<OrderRow> = backend.fetchByKeys("Order", keys).map { it.toOrderRow() }
+    override fun cancellations(keys: List<StoreKey>): List<CancellationRow> = backend.fetchByKeys("Cancellation", keys).map { it.toCancellationRow() }
+    override fun shipments(keys: List<StoreKey>): List<ShipmentRow> = backend.fetchByKeys("Shipment", keys).map { it.toShipmentRow() }
 
     override fun allOrders(): List<OrderRow> = backend.fetchAll("Order").map { it.toOrderRow() }
     override fun allCancellations(): List<CancellationRow> = backend.fetchAll("Cancellation").map { it.toCancellationRow() }
     override fun allShipments(): List<ShipmentRow> = backend.fetchAll("Shipment").map { it.toShipmentRow() }
 
-    override fun cancellationsByOrder(target: Ref.Persisted): List<CancellationRow> =
-        backend.fetchReferencing("Cancellation", "order", target).map { it.toCancellationRow() }
-    override fun shipmentsByOrder(target: Ref.Persisted): List<ShipmentRow> =
-        backend.fetchReferencing("Shipment", "order", target).map { it.toShipmentRow() }
+    override fun cancellationsByOrders(targets: List<Ref.Persisted>): List<CancellationRow> =
+        backend.fetchReferencingAny("Cancellation", "order", targets).map { it.toCancellationRow() }
+    override fun shipmentsByOrders(targets: List<Ref.Persisted>): List<ShipmentRow> =
+        backend.fetchReferencingAny("Shipment", "order", targets).map { it.toShipmentRow() }
 
     override fun never1Candidates(): List<ShipmentRow> =
         backend.fetchCandidates("Shipment", questions.never1Candidates.instantiate(listOf()))
@@ -109,11 +121,11 @@ class ShippingStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Order" -> store.order(key)?.toRow()
-        "Cancellation" -> store.cancellation(key)?.toRow()
-        "Shipment" -> store.shipment(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Order" -> store.orders(keys).map { it.toRow() }
+        "Cancellation" -> store.cancellations(keys).map { it.toRow() }
+        "Shipment" -> store.shipments(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -123,9 +135,9 @@ class ShippingStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "Cancellation" && field == "order" -> store.cancellationsByOrder(target).map { it.toRow() }
-        shape == "Shipment" && field == "order" -> store.shipmentsByOrder(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "Cancellation" && field == "order" -> store.cancellationsByOrders(targets).map { it.toRow() }
+        shape == "Shipment" && field == "order" -> store.shipmentsByOrders(targets).map { it.toRow() }
         else -> emptyList()
     }
 

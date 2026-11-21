@@ -78,14 +78,16 @@ interface GalleryStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun member(key: StoreKey): MemberRow?
-    fun source(key: StoreKey): SourceRow?
-    fun post(key: StoreKey): PostRow?
-    fun photo(key: StoreKey): PhotoRow?
-    fun comment(key: StoreKey): CommentRow?
-    fun popularityNotice(key: StoreKey): PopularityNoticeRow?
-    fun commentNotice(key: StoreKey): CommentNoticeRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun members(keys: List<StoreKey>): List<MemberRow>
+    fun sources(keys: List<StoreKey>): List<SourceRow>
+    fun posts(keys: List<StoreKey>): List<PostRow>
+    fun photos(keys: List<StoreKey>): List<PhotoRow>
+    fun comments(keys: List<StoreKey>): List<CommentRow>
+    fun popularityNotices(keys: List<StoreKey>): List<PopularityNoticeRow>
+    fun commentNotices(keys: List<StoreKey>): List<CommentNoticeRow>
 
     // ── scan floor: all rows of a shape ──
     fun allMembers(): List<MemberRow>
@@ -96,16 +98,16 @@ interface GalleryStore {
     fun allPopularityNotices(): List<PopularityNoticeRow>
     fun allCommentNotices(): List<CommentNoticeRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun postsByAuthor(target: Ref.Persisted): List<PostRow>
-    fun postsBySource(target: Ref.Persisted): List<PostRow>
-    fun photosByAuthor(target: Ref.Persisted): List<PhotoRow>
-    fun photosBySource(target: Ref.Persisted): List<PhotoRow>
-    fun commentsByTarget(target: Ref.Persisted): List<CommentRow>
-    fun commentsByAuthor(target: Ref.Persisted): List<CommentRow>
-    fun popularityNoticesByContent(target: Ref.Persisted): List<PopularityNoticeRow>
-    fun commentNoticesByRecipient(target: Ref.Persisted): List<CommentNoticeRow>
-    fun commentNoticesByComment(target: Ref.Persisted): List<CommentNoticeRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun postsByAuthors(targets: List<Ref.Persisted>): List<PostRow>
+    fun postsBySources(targets: List<Ref.Persisted>): List<PostRow>
+    fun photosByAuthors(targets: List<Ref.Persisted>): List<PhotoRow>
+    fun photosBySources(targets: List<Ref.Persisted>): List<PhotoRow>
+    fun commentsByTargets(targets: List<Ref.Persisted>): List<CommentRow>
+    fun commentsByAuthors(targets: List<Ref.Persisted>): List<CommentRow>
+    fun popularityNoticesByContents(targets: List<Ref.Persisted>): List<PopularityNoticeRow>
+    fun commentNoticesByRecipients(targets: List<Ref.Persisted>): List<CommentNoticeRow>
+    fun commentNoticesByComments(targets: List<Ref.Persisted>): List<CommentNoticeRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement LongPost — `LongPost`.
@@ -115,6 +117,34 @@ interface GalleryStore {
      *  Superset contract: any superset of the matching rows is correct. */
     fun captionedCandidates(): List<PhotoRow>
 }
+
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun GalleryStore.member(key: StoreKey): MemberRow? = members(listOf(key)).firstOrNull()
+fun GalleryStore.source(key: StoreKey): SourceRow? = sources(listOf(key)).firstOrNull()
+fun GalleryStore.post(key: StoreKey): PostRow? = posts(listOf(key)).firstOrNull()
+fun GalleryStore.photo(key: StoreKey): PhotoRow? = photos(listOf(key)).firstOrNull()
+fun GalleryStore.comment(key: StoreKey): CommentRow? = comments(listOf(key)).firstOrNull()
+fun GalleryStore.popularityNotice(key: StoreKey): PopularityNoticeRow? = popularityNotices(listOf(key)).firstOrNull()
+fun GalleryStore.commentNotice(key: StoreKey): CommentNoticeRow? = commentNotices(listOf(key)).firstOrNull()
+fun GalleryStore.postsByAuthor(target: Ref.Persisted): List<PostRow> =
+    postsByAuthors(listOf(target))
+fun GalleryStore.postsBySource(target: Ref.Persisted): List<PostRow> =
+    postsBySources(listOf(target))
+fun GalleryStore.photosByAuthor(target: Ref.Persisted): List<PhotoRow> =
+    photosByAuthors(listOf(target))
+fun GalleryStore.photosBySource(target: Ref.Persisted): List<PhotoRow> =
+    photosBySources(listOf(target))
+fun GalleryStore.commentsByTarget(target: Ref.Persisted): List<CommentRow> =
+    commentsByTargets(listOf(target))
+fun GalleryStore.commentsByAuthor(target: Ref.Persisted): List<CommentRow> =
+    commentsByAuthors(listOf(target))
+fun GalleryStore.popularityNoticesByContent(target: Ref.Persisted): List<PopularityNoticeRow> =
+    popularityNoticesByContents(listOf(target))
+fun GalleryStore.commentNoticesByRecipient(target: Ref.Persisted): List<CommentNoticeRow> =
+    commentNoticesByRecipients(listOf(target))
+fun GalleryStore.commentNoticesByComment(target: Ref.Persisted): List<CommentNoticeRow> =
+    commentNoticesByComments(listOf(target))
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class GalleryStoreQuestions(model: Model) {
@@ -134,13 +164,13 @@ open class GalleryStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun member(key: StoreKey): MemberRow? = backend.fetchByKey("Member", key)?.toMemberRow()
-    override fun source(key: StoreKey): SourceRow? = backend.fetchByKey("Source", key)?.toSourceRow()
-    override fun post(key: StoreKey): PostRow? = backend.fetchByKey("Post", key)?.toPostRow()
-    override fun photo(key: StoreKey): PhotoRow? = backend.fetchByKey("Photo", key)?.toPhotoRow()
-    override fun comment(key: StoreKey): CommentRow? = backend.fetchByKey("Comment", key)?.toCommentRow()
-    override fun popularityNotice(key: StoreKey): PopularityNoticeRow? = backend.fetchByKey("PopularityNotice", key)?.toPopularityNoticeRow()
-    override fun commentNotice(key: StoreKey): CommentNoticeRow? = backend.fetchByKey("CommentNotice", key)?.toCommentNoticeRow()
+    override fun members(keys: List<StoreKey>): List<MemberRow> = backend.fetchByKeys("Member", keys).map { it.toMemberRow() }
+    override fun sources(keys: List<StoreKey>): List<SourceRow> = backend.fetchByKeys("Source", keys).map { it.toSourceRow() }
+    override fun posts(keys: List<StoreKey>): List<PostRow> = backend.fetchByKeys("Post", keys).map { it.toPostRow() }
+    override fun photos(keys: List<StoreKey>): List<PhotoRow> = backend.fetchByKeys("Photo", keys).map { it.toPhotoRow() }
+    override fun comments(keys: List<StoreKey>): List<CommentRow> = backend.fetchByKeys("Comment", keys).map { it.toCommentRow() }
+    override fun popularityNotices(keys: List<StoreKey>): List<PopularityNoticeRow> = backend.fetchByKeys("PopularityNotice", keys).map { it.toPopularityNoticeRow() }
+    override fun commentNotices(keys: List<StoreKey>): List<CommentNoticeRow> = backend.fetchByKeys("CommentNotice", keys).map { it.toCommentNoticeRow() }
 
     override fun allMembers(): List<MemberRow> = backend.fetchAll("Member").map { it.toMemberRow() }
     override fun allSources(): List<SourceRow> = backend.fetchAll("Source").map { it.toSourceRow() }
@@ -150,24 +180,24 @@ open class GalleryStoreOverGeneric(
     override fun allPopularityNotices(): List<PopularityNoticeRow> = backend.fetchAll("PopularityNotice").map { it.toPopularityNoticeRow() }
     override fun allCommentNotices(): List<CommentNoticeRow> = backend.fetchAll("CommentNotice").map { it.toCommentNoticeRow() }
 
-    override fun postsByAuthor(target: Ref.Persisted): List<PostRow> =
-        backend.fetchReferencing("Post", "author", target).map { it.toPostRow() }
-    override fun postsBySource(target: Ref.Persisted): List<PostRow> =
-        backend.fetchReferencing("Post", "source", target).map { it.toPostRow() }
-    override fun photosByAuthor(target: Ref.Persisted): List<PhotoRow> =
-        backend.fetchReferencing("Photo", "author", target).map { it.toPhotoRow() }
-    override fun photosBySource(target: Ref.Persisted): List<PhotoRow> =
-        backend.fetchReferencing("Photo", "source", target).map { it.toPhotoRow() }
-    override fun commentsByTarget(target: Ref.Persisted): List<CommentRow> =
-        backend.fetchReferencing("Comment", "target", target).map { it.toCommentRow() }
-    override fun commentsByAuthor(target: Ref.Persisted): List<CommentRow> =
-        backend.fetchReferencing("Comment", "author", target).map { it.toCommentRow() }
-    override fun popularityNoticesByContent(target: Ref.Persisted): List<PopularityNoticeRow> =
-        backend.fetchReferencing("PopularityNotice", "content", target).map { it.toPopularityNoticeRow() }
-    override fun commentNoticesByRecipient(target: Ref.Persisted): List<CommentNoticeRow> =
-        backend.fetchReferencing("CommentNotice", "recipient", target).map { it.toCommentNoticeRow() }
-    override fun commentNoticesByComment(target: Ref.Persisted): List<CommentNoticeRow> =
-        backend.fetchReferencing("CommentNotice", "comment", target).map { it.toCommentNoticeRow() }
+    override fun postsByAuthors(targets: List<Ref.Persisted>): List<PostRow> =
+        backend.fetchReferencingAny("Post", "author", targets).map { it.toPostRow() }
+    override fun postsBySources(targets: List<Ref.Persisted>): List<PostRow> =
+        backend.fetchReferencingAny("Post", "source", targets).map { it.toPostRow() }
+    override fun photosByAuthors(targets: List<Ref.Persisted>): List<PhotoRow> =
+        backend.fetchReferencingAny("Photo", "author", targets).map { it.toPhotoRow() }
+    override fun photosBySources(targets: List<Ref.Persisted>): List<PhotoRow> =
+        backend.fetchReferencingAny("Photo", "source", targets).map { it.toPhotoRow() }
+    override fun commentsByTargets(targets: List<Ref.Persisted>): List<CommentRow> =
+        backend.fetchReferencingAny("Comment", "target", targets).map { it.toCommentRow() }
+    override fun commentsByAuthors(targets: List<Ref.Persisted>): List<CommentRow> =
+        backend.fetchReferencingAny("Comment", "author", targets).map { it.toCommentRow() }
+    override fun popularityNoticesByContents(targets: List<Ref.Persisted>): List<PopularityNoticeRow> =
+        backend.fetchReferencingAny("PopularityNotice", "content", targets).map { it.toPopularityNoticeRow() }
+    override fun commentNoticesByRecipients(targets: List<Ref.Persisted>): List<CommentNoticeRow> =
+        backend.fetchReferencingAny("CommentNotice", "recipient", targets).map { it.toCommentNoticeRow() }
+    override fun commentNoticesByComments(targets: List<Ref.Persisted>): List<CommentNoticeRow> =
+        backend.fetchReferencingAny("CommentNotice", "comment", targets).map { it.toCommentNoticeRow() }
 
     override fun longPostCandidates(): List<PostRow> =
         backend.fetchCandidates("Post", questions.longPostCandidates.instantiate(listOf()))
@@ -187,15 +217,15 @@ class GalleryStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Member" -> store.member(key)?.toRow()
-        "Source" -> store.source(key)?.toRow()
-        "Post" -> store.post(key)?.toRow()
-        "Photo" -> store.photo(key)?.toRow()
-        "Comment" -> store.comment(key)?.toRow()
-        "PopularityNotice" -> store.popularityNotice(key)?.toRow()
-        "CommentNotice" -> store.commentNotice(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Member" -> store.members(keys).map { it.toRow() }
+        "Source" -> store.sources(keys).map { it.toRow() }
+        "Post" -> store.posts(keys).map { it.toRow() }
+        "Photo" -> store.photos(keys).map { it.toRow() }
+        "Comment" -> store.comments(keys).map { it.toRow() }
+        "PopularityNotice" -> store.popularityNotices(keys).map { it.toRow() }
+        "CommentNotice" -> store.commentNotices(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -209,16 +239,16 @@ class GalleryStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "Post" && field == "author" -> store.postsByAuthor(target).map { it.toRow() }
-        shape == "Post" && field == "source" -> store.postsBySource(target).map { it.toRow() }
-        shape == "Photo" && field == "author" -> store.photosByAuthor(target).map { it.toRow() }
-        shape == "Photo" && field == "source" -> store.photosBySource(target).map { it.toRow() }
-        shape == "Comment" && field == "target" -> store.commentsByTarget(target).map { it.toRow() }
-        shape == "Comment" && field == "author" -> store.commentsByAuthor(target).map { it.toRow() }
-        shape == "PopularityNotice" && field == "content" -> store.popularityNoticesByContent(target).map { it.toRow() }
-        shape == "CommentNotice" && field == "recipient" -> store.commentNoticesByRecipient(target).map { it.toRow() }
-        shape == "CommentNotice" && field == "comment" -> store.commentNoticesByComment(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "Post" && field == "author" -> store.postsByAuthors(targets).map { it.toRow() }
+        shape == "Post" && field == "source" -> store.postsBySources(targets).map { it.toRow() }
+        shape == "Photo" && field == "author" -> store.photosByAuthors(targets).map { it.toRow() }
+        shape == "Photo" && field == "source" -> store.photosBySources(targets).map { it.toRow() }
+        shape == "Comment" && field == "target" -> store.commentsByTargets(targets).map { it.toRow() }
+        shape == "Comment" && field == "author" -> store.commentsByAuthors(targets).map { it.toRow() }
+        shape == "PopularityNotice" && field == "content" -> store.popularityNoticesByContents(targets).map { it.toRow() }
+        shape == "CommentNotice" && field == "recipient" -> store.commentNoticesByRecipients(targets).map { it.toRow() }
+        shape == "CommentNotice" && field == "comment" -> store.commentNoticesByComments(targets).map { it.toRow() }
         else -> emptyList()
     }
 

@@ -55,18 +55,20 @@ interface EnrollmentStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun advisor(key: StoreKey): AdvisorRow?
-    fun course(key: StoreKey): CourseRow?
-    fun student(key: StoreKey): StudentRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun advisors(keys: List<StoreKey>): List<AdvisorRow>
+    fun courses(keys: List<StoreKey>): List<CourseRow>
+    fun students(keys: List<StoreKey>): List<StudentRow>
 
     // ── scan floor: all rows of a shape ──
     fun allAdvisors(): List<AdvisorRow>
     fun allCourses(): List<CourseRow>
     fun allStudents(): List<StudentRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun studentsByAdvisor(target: Ref.Persisted): List<StudentRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun studentsByAdvisors(targets: List<Ref.Persisted>): List<StudentRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement ShortCourse — `ShortCourse`.
@@ -79,6 +81,14 @@ interface EnrollmentStore {
      *  Superset contract: any superset of the matching rows is correct. */
     fun never1Candidates(): List<CourseRow>
 }
+
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun EnrollmentStore.advisor(key: StoreKey): AdvisorRow? = advisors(listOf(key)).firstOrNull()
+fun EnrollmentStore.course(key: StoreKey): CourseRow? = courses(listOf(key)).firstOrNull()
+fun EnrollmentStore.student(key: StoreKey): StudentRow? = students(listOf(key)).firstOrNull()
+fun EnrollmentStore.studentsByAdvisor(target: Ref.Persisted): List<StudentRow> =
+    studentsByAdvisors(listOf(target))
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class EnrollmentStoreQuestions(model: Model) {
@@ -99,16 +109,16 @@ open class EnrollmentStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun advisor(key: StoreKey): AdvisorRow? = backend.fetchByKey("Advisor", key)?.toAdvisorRow()
-    override fun course(key: StoreKey): CourseRow? = backend.fetchByKey("Course", key)?.toCourseRow()
-    override fun student(key: StoreKey): StudentRow? = backend.fetchByKey("Student", key)?.toStudentRow()
+    override fun advisors(keys: List<StoreKey>): List<AdvisorRow> = backend.fetchByKeys("Advisor", keys).map { it.toAdvisorRow() }
+    override fun courses(keys: List<StoreKey>): List<CourseRow> = backend.fetchByKeys("Course", keys).map { it.toCourseRow() }
+    override fun students(keys: List<StoreKey>): List<StudentRow> = backend.fetchByKeys("Student", keys).map { it.toStudentRow() }
 
     override fun allAdvisors(): List<AdvisorRow> = backend.fetchAll("Advisor").map { it.toAdvisorRow() }
     override fun allCourses(): List<CourseRow> = backend.fetchAll("Course").map { it.toCourseRow() }
     override fun allStudents(): List<StudentRow> = backend.fetchAll("Student").map { it.toStudentRow() }
 
-    override fun studentsByAdvisor(target: Ref.Persisted): List<StudentRow> =
-        backend.fetchReferencing("Student", "advisor", target).map { it.toStudentRow() }
+    override fun studentsByAdvisors(targets: List<Ref.Persisted>): List<StudentRow> =
+        backend.fetchReferencingAny("Student", "advisor", targets).map { it.toStudentRow() }
 
     override fun shortCourseCandidates(): List<CourseRow> =
         backend.fetchCandidates("Course", questions.shortCourseCandidates.instantiate(listOf()))
@@ -132,11 +142,11 @@ class EnrollmentStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Advisor" -> store.advisor(key)?.toRow()
-        "Course" -> store.course(key)?.toRow()
-        "Student" -> store.student(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Advisor" -> store.advisors(keys).map { it.toRow() }
+        "Course" -> store.courses(keys).map { it.toRow() }
+        "Student" -> store.students(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -146,8 +156,8 @@ class EnrollmentStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "Student" && field == "advisor" -> store.studentsByAdvisor(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "Student" && field == "advisor" -> store.studentsByAdvisors(targets).map { it.toRow() }
         else -> emptyList()
     }
 

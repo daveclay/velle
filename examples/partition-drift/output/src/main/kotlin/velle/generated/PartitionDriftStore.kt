@@ -97,17 +97,19 @@ interface PartitionDriftStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun note(key: StoreKey): NoteRow?
-    fun lockNote(key: StoreKey): LockNoteRow?
-    fun unlockNote(key: StoreKey): UnlockNoteRow?
-    fun renameText(key: StoreKey): RenameTextRow?
-    fun bareEdit(key: StoreKey): BareEditRow?
-    fun bareEditRefusal(key: StoreKey): BareEditRefusalRow?
-    fun safeEdit(key: StoreKey): SafeEditRow?
-    fun editApplication(key: StoreKey): EditApplicationRow?
-    fun editRefusal(key: StoreKey): EditRefusalRow?
-    fun transientEditRefusal(key: StoreKey): TransientEditRefusalRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun notes(keys: List<StoreKey>): List<NoteRow>
+    fun lockNotes(keys: List<StoreKey>): List<LockNoteRow>
+    fun unlockNotes(keys: List<StoreKey>): List<UnlockNoteRow>
+    fun renameTexts(keys: List<StoreKey>): List<RenameTextRow>
+    fun bareEdits(keys: List<StoreKey>): List<BareEditRow>
+    fun bareEditRefusals(keys: List<StoreKey>): List<BareEditRefusalRow>
+    fun safeEdits(keys: List<StoreKey>): List<SafeEditRow>
+    fun editApplications(keys: List<StoreKey>): List<EditApplicationRow>
+    fun editRefusals(keys: List<StoreKey>): List<EditRefusalRow>
+    fun transientEditRefusals(keys: List<StoreKey>): List<TransientEditRefusalRow>
 
     // ── scan floor: all rows of a shape ──
     fun allNotes(): List<NoteRow>
@@ -121,16 +123,16 @@ interface PartitionDriftStore {
     fun allEditRefusals(): List<EditRefusalRow>
     fun allTransientEditRefusals(): List<TransientEditRefusalRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun lockNotesByNote(target: Ref.Persisted): List<LockNoteRow>
-    fun unlockNotesByNote(target: Ref.Persisted): List<UnlockNoteRow>
-    fun renameTextsByNote(target: Ref.Persisted): List<RenameTextRow>
-    fun bareEditsByNote(target: Ref.Persisted): List<BareEditRow>
-    fun bareEditRefusalsByEdit(target: Ref.Persisted): List<BareEditRefusalRow>
-    fun safeEditsByNote(target: Ref.Persisted): List<SafeEditRow>
-    fun editApplicationsByEdit(target: Ref.Persisted): List<EditApplicationRow>
-    fun editRefusalsByEdit(target: Ref.Persisted): List<EditRefusalRow>
-    fun transientEditRefusalsByNote(target: Ref.Persisted): List<TransientEditRefusalRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun lockNotesByNotes(targets: List<Ref.Persisted>): List<LockNoteRow>
+    fun unlockNotesByNotes(targets: List<Ref.Persisted>): List<UnlockNoteRow>
+    fun renameTextsByNotes(targets: List<Ref.Persisted>): List<RenameTextRow>
+    fun bareEditsByNotes(targets: List<Ref.Persisted>): List<BareEditRow>
+    fun bareEditRefusalsByEdits(targets: List<Ref.Persisted>): List<BareEditRefusalRow>
+    fun safeEditsByNotes(targets: List<Ref.Persisted>): List<SafeEditRow>
+    fun editApplicationsByEdits(targets: List<Ref.Persisted>): List<EditApplicationRow>
+    fun editRefusalsByEdits(targets: List<Ref.Persisted>): List<EditRefusalRow>
+    fun transientEditRefusalsByNotes(targets: List<Ref.Persisted>): List<TransientEditRefusalRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement LockedNote — `LockedNote`.
@@ -152,6 +154,37 @@ interface PartitionDriftStore {
      *  Superset contract: any superset of the matching rows is correct. */
     fun refusedSafeEditCandidates(): List<SafeEditRow>
 }
+
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun PartitionDriftStore.note(key: StoreKey): NoteRow? = notes(listOf(key)).firstOrNull()
+fun PartitionDriftStore.lockNote(key: StoreKey): LockNoteRow? = lockNotes(listOf(key)).firstOrNull()
+fun PartitionDriftStore.unlockNote(key: StoreKey): UnlockNoteRow? = unlockNotes(listOf(key)).firstOrNull()
+fun PartitionDriftStore.renameText(key: StoreKey): RenameTextRow? = renameTexts(listOf(key)).firstOrNull()
+fun PartitionDriftStore.bareEdit(key: StoreKey): BareEditRow? = bareEdits(listOf(key)).firstOrNull()
+fun PartitionDriftStore.bareEditRefusal(key: StoreKey): BareEditRefusalRow? = bareEditRefusals(listOf(key)).firstOrNull()
+fun PartitionDriftStore.safeEdit(key: StoreKey): SafeEditRow? = safeEdits(listOf(key)).firstOrNull()
+fun PartitionDriftStore.editApplication(key: StoreKey): EditApplicationRow? = editApplications(listOf(key)).firstOrNull()
+fun PartitionDriftStore.editRefusal(key: StoreKey): EditRefusalRow? = editRefusals(listOf(key)).firstOrNull()
+fun PartitionDriftStore.transientEditRefusal(key: StoreKey): TransientEditRefusalRow? = transientEditRefusals(listOf(key)).firstOrNull()
+fun PartitionDriftStore.lockNotesByNote(target: Ref.Persisted): List<LockNoteRow> =
+    lockNotesByNotes(listOf(target))
+fun PartitionDriftStore.unlockNotesByNote(target: Ref.Persisted): List<UnlockNoteRow> =
+    unlockNotesByNotes(listOf(target))
+fun PartitionDriftStore.renameTextsByNote(target: Ref.Persisted): List<RenameTextRow> =
+    renameTextsByNotes(listOf(target))
+fun PartitionDriftStore.bareEditsByNote(target: Ref.Persisted): List<BareEditRow> =
+    bareEditsByNotes(listOf(target))
+fun PartitionDriftStore.bareEditRefusalsByEdit(target: Ref.Persisted): List<BareEditRefusalRow> =
+    bareEditRefusalsByEdits(listOf(target))
+fun PartitionDriftStore.safeEditsByNote(target: Ref.Persisted): List<SafeEditRow> =
+    safeEditsByNotes(listOf(target))
+fun PartitionDriftStore.editApplicationsByEdit(target: Ref.Persisted): List<EditApplicationRow> =
+    editApplicationsByEdits(listOf(target))
+fun PartitionDriftStore.editRefusalsByEdit(target: Ref.Persisted): List<EditRefusalRow> =
+    editRefusalsByEdits(listOf(target))
+fun PartitionDriftStore.transientEditRefusalsByNote(target: Ref.Persisted): List<TransientEditRefusalRow> =
+    transientEditRefusalsByNotes(listOf(target))
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class PartitionDriftStoreQuestions(model: Model) {
@@ -175,16 +208,16 @@ open class PartitionDriftStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun note(key: StoreKey): NoteRow? = backend.fetchByKey("Note", key)?.toNoteRow()
-    override fun lockNote(key: StoreKey): LockNoteRow? = backend.fetchByKey("LockNote", key)?.toLockNoteRow()
-    override fun unlockNote(key: StoreKey): UnlockNoteRow? = backend.fetchByKey("UnlockNote", key)?.toUnlockNoteRow()
-    override fun renameText(key: StoreKey): RenameTextRow? = backend.fetchByKey("RenameText", key)?.toRenameTextRow()
-    override fun bareEdit(key: StoreKey): BareEditRow? = backend.fetchByKey("BareEdit", key)?.toBareEditRow()
-    override fun bareEditRefusal(key: StoreKey): BareEditRefusalRow? = backend.fetchByKey("BareEditRefusal", key)?.toBareEditRefusalRow()
-    override fun safeEdit(key: StoreKey): SafeEditRow? = backend.fetchByKey("SafeEdit", key)?.toSafeEditRow()
-    override fun editApplication(key: StoreKey): EditApplicationRow? = backend.fetchByKey("EditApplication", key)?.toEditApplicationRow()
-    override fun editRefusal(key: StoreKey): EditRefusalRow? = backend.fetchByKey("EditRefusal", key)?.toEditRefusalRow()
-    override fun transientEditRefusal(key: StoreKey): TransientEditRefusalRow? = backend.fetchByKey("TransientEditRefusal", key)?.toTransientEditRefusalRow()
+    override fun notes(keys: List<StoreKey>): List<NoteRow> = backend.fetchByKeys("Note", keys).map { it.toNoteRow() }
+    override fun lockNotes(keys: List<StoreKey>): List<LockNoteRow> = backend.fetchByKeys("LockNote", keys).map { it.toLockNoteRow() }
+    override fun unlockNotes(keys: List<StoreKey>): List<UnlockNoteRow> = backend.fetchByKeys("UnlockNote", keys).map { it.toUnlockNoteRow() }
+    override fun renameTexts(keys: List<StoreKey>): List<RenameTextRow> = backend.fetchByKeys("RenameText", keys).map { it.toRenameTextRow() }
+    override fun bareEdits(keys: List<StoreKey>): List<BareEditRow> = backend.fetchByKeys("BareEdit", keys).map { it.toBareEditRow() }
+    override fun bareEditRefusals(keys: List<StoreKey>): List<BareEditRefusalRow> = backend.fetchByKeys("BareEditRefusal", keys).map { it.toBareEditRefusalRow() }
+    override fun safeEdits(keys: List<StoreKey>): List<SafeEditRow> = backend.fetchByKeys("SafeEdit", keys).map { it.toSafeEditRow() }
+    override fun editApplications(keys: List<StoreKey>): List<EditApplicationRow> = backend.fetchByKeys("EditApplication", keys).map { it.toEditApplicationRow() }
+    override fun editRefusals(keys: List<StoreKey>): List<EditRefusalRow> = backend.fetchByKeys("EditRefusal", keys).map { it.toEditRefusalRow() }
+    override fun transientEditRefusals(keys: List<StoreKey>): List<TransientEditRefusalRow> = backend.fetchByKeys("TransientEditRefusal", keys).map { it.toTransientEditRefusalRow() }
 
     override fun allNotes(): List<NoteRow> = backend.fetchAll("Note").map { it.toNoteRow() }
     override fun allLockNotes(): List<LockNoteRow> = backend.fetchAll("LockNote").map { it.toLockNoteRow() }
@@ -197,24 +230,24 @@ open class PartitionDriftStoreOverGeneric(
     override fun allEditRefusals(): List<EditRefusalRow> = backend.fetchAll("EditRefusal").map { it.toEditRefusalRow() }
     override fun allTransientEditRefusals(): List<TransientEditRefusalRow> = backend.fetchAll("TransientEditRefusal").map { it.toTransientEditRefusalRow() }
 
-    override fun lockNotesByNote(target: Ref.Persisted): List<LockNoteRow> =
-        backend.fetchReferencing("LockNote", "note", target).map { it.toLockNoteRow() }
-    override fun unlockNotesByNote(target: Ref.Persisted): List<UnlockNoteRow> =
-        backend.fetchReferencing("UnlockNote", "note", target).map { it.toUnlockNoteRow() }
-    override fun renameTextsByNote(target: Ref.Persisted): List<RenameTextRow> =
-        backend.fetchReferencing("RenameText", "note", target).map { it.toRenameTextRow() }
-    override fun bareEditsByNote(target: Ref.Persisted): List<BareEditRow> =
-        backend.fetchReferencing("BareEdit", "note", target).map { it.toBareEditRow() }
-    override fun bareEditRefusalsByEdit(target: Ref.Persisted): List<BareEditRefusalRow> =
-        backend.fetchReferencing("BareEditRefusal", "edit", target).map { it.toBareEditRefusalRow() }
-    override fun safeEditsByNote(target: Ref.Persisted): List<SafeEditRow> =
-        backend.fetchReferencing("SafeEdit", "note", target).map { it.toSafeEditRow() }
-    override fun editApplicationsByEdit(target: Ref.Persisted): List<EditApplicationRow> =
-        backend.fetchReferencing("EditApplication", "edit", target).map { it.toEditApplicationRow() }
-    override fun editRefusalsByEdit(target: Ref.Persisted): List<EditRefusalRow> =
-        backend.fetchReferencing("EditRefusal", "edit", target).map { it.toEditRefusalRow() }
-    override fun transientEditRefusalsByNote(target: Ref.Persisted): List<TransientEditRefusalRow> =
-        backend.fetchReferencing("TransientEditRefusal", "note", target).map { it.toTransientEditRefusalRow() }
+    override fun lockNotesByNotes(targets: List<Ref.Persisted>): List<LockNoteRow> =
+        backend.fetchReferencingAny("LockNote", "note", targets).map { it.toLockNoteRow() }
+    override fun unlockNotesByNotes(targets: List<Ref.Persisted>): List<UnlockNoteRow> =
+        backend.fetchReferencingAny("UnlockNote", "note", targets).map { it.toUnlockNoteRow() }
+    override fun renameTextsByNotes(targets: List<Ref.Persisted>): List<RenameTextRow> =
+        backend.fetchReferencingAny("RenameText", "note", targets).map { it.toRenameTextRow() }
+    override fun bareEditsByNotes(targets: List<Ref.Persisted>): List<BareEditRow> =
+        backend.fetchReferencingAny("BareEdit", "note", targets).map { it.toBareEditRow() }
+    override fun bareEditRefusalsByEdits(targets: List<Ref.Persisted>): List<BareEditRefusalRow> =
+        backend.fetchReferencingAny("BareEditRefusal", "edit", targets).map { it.toBareEditRefusalRow() }
+    override fun safeEditsByNotes(targets: List<Ref.Persisted>): List<SafeEditRow> =
+        backend.fetchReferencingAny("SafeEdit", "note", targets).map { it.toSafeEditRow() }
+    override fun editApplicationsByEdits(targets: List<Ref.Persisted>): List<EditApplicationRow> =
+        backend.fetchReferencingAny("EditApplication", "edit", targets).map { it.toEditApplicationRow() }
+    override fun editRefusalsByEdits(targets: List<Ref.Persisted>): List<EditRefusalRow> =
+        backend.fetchReferencingAny("EditRefusal", "edit", targets).map { it.toEditRefusalRow() }
+    override fun transientEditRefusalsByNotes(targets: List<Ref.Persisted>): List<TransientEditRefusalRow> =
+        backend.fetchReferencingAny("TransientEditRefusal", "note", targets).map { it.toTransientEditRefusalRow() }
 
     override fun lockedNoteCandidates(): List<NoteRow> =
         backend.fetchCandidates("Note", questions.lockedNoteCandidates.instantiate(listOf()))
@@ -250,18 +283,18 @@ class PartitionDriftStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Note" -> store.note(key)?.toRow()
-        "LockNote" -> store.lockNote(key)?.toRow()
-        "UnlockNote" -> store.unlockNote(key)?.toRow()
-        "RenameText" -> store.renameText(key)?.toRow()
-        "BareEdit" -> store.bareEdit(key)?.toRow()
-        "BareEditRefusal" -> store.bareEditRefusal(key)?.toRow()
-        "SafeEdit" -> store.safeEdit(key)?.toRow()
-        "EditApplication" -> store.editApplication(key)?.toRow()
-        "EditRefusal" -> store.editRefusal(key)?.toRow()
-        "TransientEditRefusal" -> store.transientEditRefusal(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Note" -> store.notes(keys).map { it.toRow() }
+        "LockNote" -> store.lockNotes(keys).map { it.toRow() }
+        "UnlockNote" -> store.unlockNotes(keys).map { it.toRow() }
+        "RenameText" -> store.renameTexts(keys).map { it.toRow() }
+        "BareEdit" -> store.bareEdits(keys).map { it.toRow() }
+        "BareEditRefusal" -> store.bareEditRefusals(keys).map { it.toRow() }
+        "SafeEdit" -> store.safeEdits(keys).map { it.toRow() }
+        "EditApplication" -> store.editApplications(keys).map { it.toRow() }
+        "EditRefusal" -> store.editRefusals(keys).map { it.toRow() }
+        "TransientEditRefusal" -> store.transientEditRefusals(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -278,16 +311,16 @@ class PartitionDriftStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "LockNote" && field == "note" -> store.lockNotesByNote(target).map { it.toRow() }
-        shape == "UnlockNote" && field == "note" -> store.unlockNotesByNote(target).map { it.toRow() }
-        shape == "RenameText" && field == "note" -> store.renameTextsByNote(target).map { it.toRow() }
-        shape == "BareEdit" && field == "note" -> store.bareEditsByNote(target).map { it.toRow() }
-        shape == "BareEditRefusal" && field == "edit" -> store.bareEditRefusalsByEdit(target).map { it.toRow() }
-        shape == "SafeEdit" && field == "note" -> store.safeEditsByNote(target).map { it.toRow() }
-        shape == "EditApplication" && field == "edit" -> store.editApplicationsByEdit(target).map { it.toRow() }
-        shape == "EditRefusal" && field == "edit" -> store.editRefusalsByEdit(target).map { it.toRow() }
-        shape == "TransientEditRefusal" && field == "note" -> store.transientEditRefusalsByNote(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "LockNote" && field == "note" -> store.lockNotesByNotes(targets).map { it.toRow() }
+        shape == "UnlockNote" && field == "note" -> store.unlockNotesByNotes(targets).map { it.toRow() }
+        shape == "RenameText" && field == "note" -> store.renameTextsByNotes(targets).map { it.toRow() }
+        shape == "BareEdit" && field == "note" -> store.bareEditsByNotes(targets).map { it.toRow() }
+        shape == "BareEditRefusal" && field == "edit" -> store.bareEditRefusalsByEdits(targets).map { it.toRow() }
+        shape == "SafeEdit" && field == "note" -> store.safeEditsByNotes(targets).map { it.toRow() }
+        shape == "EditApplication" && field == "edit" -> store.editApplicationsByEdits(targets).map { it.toRow() }
+        shape == "EditRefusal" && field == "edit" -> store.editRefusalsByEdits(targets).map { it.toRow() }
+        shape == "TransientEditRefusal" && field == "note" -> store.transientEditRefusalsByNotes(targets).map { it.toRow() }
         else -> emptyList()
     }
 

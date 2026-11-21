@@ -94,16 +94,18 @@ interface ModerationStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun seller(key: StoreKey): SellerRow?
-    fun listing(key: StoreKey): ListingRow?
-    fun publicationNotice(key: StoreKey): PublicationNoticeRow?
-    fun sellerNotice(key: StoreKey): SellerNoticeRow?
-    fun draftClosure(key: StoreKey): DraftClosureRow?
-    fun listingReport(key: StoreKey): ListingReportRow?
-    fun reporterNotice(key: StoreKey): ReporterNoticeRow?
-    fun discardRecord(key: StoreKey): DiscardRecordRow?
-    fun discardRefusal(key: StoreKey): DiscardRefusalRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun sellers(keys: List<StoreKey>): List<SellerRow>
+    fun listings(keys: List<StoreKey>): List<ListingRow>
+    fun publicationNotices(keys: List<StoreKey>): List<PublicationNoticeRow>
+    fun sellerNotices(keys: List<StoreKey>): List<SellerNoticeRow>
+    fun draftClosures(keys: List<StoreKey>): List<DraftClosureRow>
+    fun listingReports(keys: List<StoreKey>): List<ListingReportRow>
+    fun reporterNotices(keys: List<StoreKey>): List<ReporterNoticeRow>
+    fun discardRecords(keys: List<StoreKey>): List<DiscardRecordRow>
+    fun discardRefusals(keys: List<StoreKey>): List<DiscardRefusalRow>
 
     // ── scan floor: all rows of a shape ──
     fun allSellers(): List<SellerRow>
@@ -116,11 +118,11 @@ interface ModerationStore {
     fun allDiscardRecords(): List<DiscardRecordRow>
     fun allDiscardRefusals(): List<DiscardRefusalRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun listingsBySeller(target: Ref.Persisted): List<ListingRow>
-    fun sellerNoticesBySeller(target: Ref.Persisted): List<SellerNoticeRow>
-    fun listingReportsByListing(target: Ref.Persisted): List<ListingReportRow>
-    fun reporterNoticesByReport(target: Ref.Persisted): List<ReporterNoticeRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun listingsBySellers(targets: List<Ref.Persisted>): List<ListingRow>
+    fun sellerNoticesBySellers(targets: List<Ref.Persisted>): List<SellerNoticeRow>
+    fun listingReportsByListings(targets: List<Ref.Persisted>): List<ListingReportRow>
+    fun reporterNoticesByReports(targets: List<Ref.Persisted>): List<ReporterNoticeRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement Draft; rule NoteDiscard; rule SweepOrphanedDrafts — `Draft`.
@@ -136,6 +138,26 @@ interface ModerationStore {
      *  Superset contract: any superset of the matching rows is correct. */
     fun never1Candidates(): List<ListingRow>
 }
+
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun ModerationStore.seller(key: StoreKey): SellerRow? = sellers(listOf(key)).firstOrNull()
+fun ModerationStore.listing(key: StoreKey): ListingRow? = listings(listOf(key)).firstOrNull()
+fun ModerationStore.publicationNotice(key: StoreKey): PublicationNoticeRow? = publicationNotices(listOf(key)).firstOrNull()
+fun ModerationStore.sellerNotice(key: StoreKey): SellerNoticeRow? = sellerNotices(listOf(key)).firstOrNull()
+fun ModerationStore.draftClosure(key: StoreKey): DraftClosureRow? = draftClosures(listOf(key)).firstOrNull()
+fun ModerationStore.listingReport(key: StoreKey): ListingReportRow? = listingReports(listOf(key)).firstOrNull()
+fun ModerationStore.reporterNotice(key: StoreKey): ReporterNoticeRow? = reporterNotices(listOf(key)).firstOrNull()
+fun ModerationStore.discardRecord(key: StoreKey): DiscardRecordRow? = discardRecords(listOf(key)).firstOrNull()
+fun ModerationStore.discardRefusal(key: StoreKey): DiscardRefusalRow? = discardRefusals(listOf(key)).firstOrNull()
+fun ModerationStore.listingsBySeller(target: Ref.Persisted): List<ListingRow> =
+    listingsBySellers(listOf(target))
+fun ModerationStore.sellerNoticesBySeller(target: Ref.Persisted): List<SellerNoticeRow> =
+    sellerNoticesBySellers(listOf(target))
+fun ModerationStore.listingReportsByListing(target: Ref.Persisted): List<ListingReportRow> =
+    listingReportsByListings(listOf(target))
+fun ModerationStore.reporterNoticesByReport(target: Ref.Persisted): List<ReporterNoticeRow> =
+    reporterNoticesByReports(listOf(target))
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class ModerationStoreQuestions(model: Model) {
@@ -157,15 +179,15 @@ open class ModerationStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun seller(key: StoreKey): SellerRow? = backend.fetchByKey("Seller", key)?.toSellerRow()
-    override fun listing(key: StoreKey): ListingRow? = backend.fetchByKey("Listing", key)?.toListingRow()
-    override fun publicationNotice(key: StoreKey): PublicationNoticeRow? = backend.fetchByKey("PublicationNotice", key)?.toPublicationNoticeRow()
-    override fun sellerNotice(key: StoreKey): SellerNoticeRow? = backend.fetchByKey("SellerNotice", key)?.toSellerNoticeRow()
-    override fun draftClosure(key: StoreKey): DraftClosureRow? = backend.fetchByKey("DraftClosure", key)?.toDraftClosureRow()
-    override fun listingReport(key: StoreKey): ListingReportRow? = backend.fetchByKey("ListingReport", key)?.toListingReportRow()
-    override fun reporterNotice(key: StoreKey): ReporterNoticeRow? = backend.fetchByKey("ReporterNotice", key)?.toReporterNoticeRow()
-    override fun discardRecord(key: StoreKey): DiscardRecordRow? = backend.fetchByKey("DiscardRecord", key)?.toDiscardRecordRow()
-    override fun discardRefusal(key: StoreKey): DiscardRefusalRow? = backend.fetchByKey("DiscardRefusal", key)?.toDiscardRefusalRow()
+    override fun sellers(keys: List<StoreKey>): List<SellerRow> = backend.fetchByKeys("Seller", keys).map { it.toSellerRow() }
+    override fun listings(keys: List<StoreKey>): List<ListingRow> = backend.fetchByKeys("Listing", keys).map { it.toListingRow() }
+    override fun publicationNotices(keys: List<StoreKey>): List<PublicationNoticeRow> = backend.fetchByKeys("PublicationNotice", keys).map { it.toPublicationNoticeRow() }
+    override fun sellerNotices(keys: List<StoreKey>): List<SellerNoticeRow> = backend.fetchByKeys("SellerNotice", keys).map { it.toSellerNoticeRow() }
+    override fun draftClosures(keys: List<StoreKey>): List<DraftClosureRow> = backend.fetchByKeys("DraftClosure", keys).map { it.toDraftClosureRow() }
+    override fun listingReports(keys: List<StoreKey>): List<ListingReportRow> = backend.fetchByKeys("ListingReport", keys).map { it.toListingReportRow() }
+    override fun reporterNotices(keys: List<StoreKey>): List<ReporterNoticeRow> = backend.fetchByKeys("ReporterNotice", keys).map { it.toReporterNoticeRow() }
+    override fun discardRecords(keys: List<StoreKey>): List<DiscardRecordRow> = backend.fetchByKeys("DiscardRecord", keys).map { it.toDiscardRecordRow() }
+    override fun discardRefusals(keys: List<StoreKey>): List<DiscardRefusalRow> = backend.fetchByKeys("DiscardRefusal", keys).map { it.toDiscardRefusalRow() }
 
     override fun allSellers(): List<SellerRow> = backend.fetchAll("Seller").map { it.toSellerRow() }
     override fun allListings(): List<ListingRow> = backend.fetchAll("Listing").map { it.toListingRow() }
@@ -177,14 +199,14 @@ open class ModerationStoreOverGeneric(
     override fun allDiscardRecords(): List<DiscardRecordRow> = backend.fetchAll("DiscardRecord").map { it.toDiscardRecordRow() }
     override fun allDiscardRefusals(): List<DiscardRefusalRow> = backend.fetchAll("DiscardRefusal").map { it.toDiscardRefusalRow() }
 
-    override fun listingsBySeller(target: Ref.Persisted): List<ListingRow> =
-        backend.fetchReferencing("Listing", "seller", target).map { it.toListingRow() }
-    override fun sellerNoticesBySeller(target: Ref.Persisted): List<SellerNoticeRow> =
-        backend.fetchReferencing("SellerNotice", "seller", target).map { it.toSellerNoticeRow() }
-    override fun listingReportsByListing(target: Ref.Persisted): List<ListingReportRow> =
-        backend.fetchReferencing("ListingReport", "listing", target).map { it.toListingReportRow() }
-    override fun reporterNoticesByReport(target: Ref.Persisted): List<ReporterNoticeRow> =
-        backend.fetchReferencing("ReporterNotice", "report", target).map { it.toReporterNoticeRow() }
+    override fun listingsBySellers(targets: List<Ref.Persisted>): List<ListingRow> =
+        backend.fetchReferencingAny("Listing", "seller", targets).map { it.toListingRow() }
+    override fun sellerNoticesBySellers(targets: List<Ref.Persisted>): List<SellerNoticeRow> =
+        backend.fetchReferencingAny("SellerNotice", "seller", targets).map { it.toSellerNoticeRow() }
+    override fun listingReportsByListings(targets: List<Ref.Persisted>): List<ListingReportRow> =
+        backend.fetchReferencingAny("ListingReport", "listing", targets).map { it.toListingReportRow() }
+    override fun reporterNoticesByReports(targets: List<Ref.Persisted>): List<ReporterNoticeRow> =
+        backend.fetchReferencingAny("ReporterNotice", "report", targets).map { it.toReporterNoticeRow() }
 
     override fun draftCandidates(): List<ListingRow> =
         backend.fetchCandidates("Listing", questions.draftCandidates.instantiate(listOf()))
@@ -212,17 +234,17 @@ class ModerationStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Seller" -> store.seller(key)?.toRow()
-        "Listing" -> store.listing(key)?.toRow()
-        "PublicationNotice" -> store.publicationNotice(key)?.toRow()
-        "SellerNotice" -> store.sellerNotice(key)?.toRow()
-        "DraftClosure" -> store.draftClosure(key)?.toRow()
-        "ListingReport" -> store.listingReport(key)?.toRow()
-        "ReporterNotice" -> store.reporterNotice(key)?.toRow()
-        "DiscardRecord" -> store.discardRecord(key)?.toRow()
-        "DiscardRefusal" -> store.discardRefusal(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Seller" -> store.sellers(keys).map { it.toRow() }
+        "Listing" -> store.listings(keys).map { it.toRow() }
+        "PublicationNotice" -> store.publicationNotices(keys).map { it.toRow() }
+        "SellerNotice" -> store.sellerNotices(keys).map { it.toRow() }
+        "DraftClosure" -> store.draftClosures(keys).map { it.toRow() }
+        "ListingReport" -> store.listingReports(keys).map { it.toRow() }
+        "ReporterNotice" -> store.reporterNotices(keys).map { it.toRow() }
+        "DiscardRecord" -> store.discardRecords(keys).map { it.toRow() }
+        "DiscardRefusal" -> store.discardRefusals(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -238,11 +260,11 @@ class ModerationStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "Listing" && field == "seller" -> store.listingsBySeller(target).map { it.toRow() }
-        shape == "SellerNotice" && field == "seller" -> store.sellerNoticesBySeller(target).map { it.toRow() }
-        shape == "ListingReport" && field == "listing" -> store.listingReportsByListing(target).map { it.toRow() }
-        shape == "ReporterNotice" && field == "report" -> store.reporterNoticesByReport(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "Listing" && field == "seller" -> store.listingsBySellers(targets).map { it.toRow() }
+        shape == "SellerNotice" && field == "seller" -> store.sellerNoticesBySellers(targets).map { it.toRow() }
+        shape == "ListingReport" && field == "listing" -> store.listingReportsByListings(targets).map { it.toRow() }
+        shape == "ReporterNotice" && field == "report" -> store.reporterNoticesByReports(targets).map { it.toRow() }
         else -> emptyList()
     }
 

@@ -469,9 +469,6 @@ open class SqlStore(
 
     private fun keyLong(key: StoreKey): Long = key.value as Long
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? =
-        select(shape, """WHERE id = ?""") { it.setLong(1, keyLong(key)) }.singleOrNull()
-
     /** Several rows by key: one statement for the rows, however many keys. */
     override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> =
         keys.distinct().chunked(keysPerStatement).flatMap { some ->
@@ -483,19 +480,9 @@ open class SqlStore(
     /** The scan read, in key order: creation order, since keys are never reused. */
     override fun fetchAll(shape: String): List<Row> = select(shape, "")
 
-    /** The join read. A union-typed field matches on key *and* concrete shape:
-     *  Post#1 and Photo#1 are different rows behind the same key. */
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> {
-        val col = columnsOf(shape).first { it.name == field }
-        return if (col.union)
-            select(shape, """WHERE "$field" = ? AND "${shapeColumn(field)}" = ?""") {
-                it.setLong(1, keyLong(target.key)); it.setString(2, target.shape)
-            }
-        else
-            select(shape, """WHERE "$field" = ?""") { it.setLong(1, keyLong(target.key)) }
-    }
-
-    /** The join read for several targets in one statement; a union-typed field matches each target shape with its own keys. */
+    /** The join read, one statement however many targets. A union-typed field matches on key
+     *  *and* concrete shape, each target shape with its own keys: Post#1 and Photo#1 are
+     *  different rows behind the same key. */
     override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> {
         val union = columnsOf(shape).first { it.name == field }.union
         return targets.distinct().chunked(keysPerStatement).flatMap { some ->

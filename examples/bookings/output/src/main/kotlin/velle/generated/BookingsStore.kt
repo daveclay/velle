@@ -54,11 +54,13 @@ interface BookingsStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun booking(key: StoreKey): BookingRow?
-    fun cancellation(key: StoreKey): CancellationRow?
-    fun waitlist(key: StoreKey): WaitlistRow?
-    fun notice(key: StoreKey): NoticeRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun bookings(keys: List<StoreKey>): List<BookingRow>
+    fun cancellations(keys: List<StoreKey>): List<CancellationRow>
+    fun waitlists(keys: List<StoreKey>): List<WaitlistRow>
+    fun notices(keys: List<StoreKey>): List<NoticeRow>
 
     // ── scan floor: all rows of a shape ──
     fun allBookings(): List<BookingRow>
@@ -66,9 +68,9 @@ interface BookingsStore {
     fun allWaitlists(): List<WaitlistRow>
     fun allNotices(): List<NoticeRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun cancellationsByBooking(target: Ref.Persisted): List<CancellationRow>
-    fun noticesByEntry(target: Ref.Persisted): List<NoticeRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun cancellationsByBookings(targets: List<Ref.Persisted>): List<CancellationRow>
+    fun noticesByEntrys(targets: List<Ref.Persisted>): List<NoticeRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement StandingBooking — `StandingBooking`.
@@ -81,6 +83,17 @@ interface BookingsStore {
      *  Superset contract: any superset of the matching rows is correct. */
     fun never1Candidates(): List<BookingRow>
 }
+
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun BookingsStore.booking(key: StoreKey): BookingRow? = bookings(listOf(key)).firstOrNull()
+fun BookingsStore.cancellation(key: StoreKey): CancellationRow? = cancellations(listOf(key)).firstOrNull()
+fun BookingsStore.waitlist(key: StoreKey): WaitlistRow? = waitlists(listOf(key)).firstOrNull()
+fun BookingsStore.notice(key: StoreKey): NoticeRow? = notices(listOf(key)).firstOrNull()
+fun BookingsStore.cancellationsByBooking(target: Ref.Persisted): List<CancellationRow> =
+    cancellationsByBookings(listOf(target))
+fun BookingsStore.noticesByEntry(target: Ref.Persisted): List<NoticeRow> =
+    noticesByEntrys(listOf(target))
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class BookingsStoreQuestions(model: Model) {
@@ -101,20 +114,20 @@ open class BookingsStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun booking(key: StoreKey): BookingRow? = backend.fetchByKey("Booking", key)?.toBookingRow()
-    override fun cancellation(key: StoreKey): CancellationRow? = backend.fetchByKey("Cancellation", key)?.toCancellationRow()
-    override fun waitlist(key: StoreKey): WaitlistRow? = backend.fetchByKey("Waitlist", key)?.toWaitlistRow()
-    override fun notice(key: StoreKey): NoticeRow? = backend.fetchByKey("Notice", key)?.toNoticeRow()
+    override fun bookings(keys: List<StoreKey>): List<BookingRow> = backend.fetchByKeys("Booking", keys).map { it.toBookingRow() }
+    override fun cancellations(keys: List<StoreKey>): List<CancellationRow> = backend.fetchByKeys("Cancellation", keys).map { it.toCancellationRow() }
+    override fun waitlists(keys: List<StoreKey>): List<WaitlistRow> = backend.fetchByKeys("Waitlist", keys).map { it.toWaitlistRow() }
+    override fun notices(keys: List<StoreKey>): List<NoticeRow> = backend.fetchByKeys("Notice", keys).map { it.toNoticeRow() }
 
     override fun allBookings(): List<BookingRow> = backend.fetchAll("Booking").map { it.toBookingRow() }
     override fun allCancellations(): List<CancellationRow> = backend.fetchAll("Cancellation").map { it.toCancellationRow() }
     override fun allWaitlists(): List<WaitlistRow> = backend.fetchAll("Waitlist").map { it.toWaitlistRow() }
     override fun allNotices(): List<NoticeRow> = backend.fetchAll("Notice").map { it.toNoticeRow() }
 
-    override fun cancellationsByBooking(target: Ref.Persisted): List<CancellationRow> =
-        backend.fetchReferencing("Cancellation", "booking", target).map { it.toCancellationRow() }
-    override fun noticesByEntry(target: Ref.Persisted): List<NoticeRow> =
-        backend.fetchReferencing("Notice", "entry", target).map { it.toNoticeRow() }
+    override fun cancellationsByBookings(targets: List<Ref.Persisted>): List<CancellationRow> =
+        backend.fetchReferencingAny("Cancellation", "booking", targets).map { it.toCancellationRow() }
+    override fun noticesByEntrys(targets: List<Ref.Persisted>): List<NoticeRow> =
+        backend.fetchReferencingAny("Notice", "entry", targets).map { it.toNoticeRow() }
 
     override fun standingBookingCandidates(): List<BookingRow> =
         backend.fetchCandidates("Booking", questions.standingBookingCandidates.instantiate(listOf()))
@@ -138,12 +151,12 @@ class BookingsStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Booking" -> store.booking(key)?.toRow()
-        "Cancellation" -> store.cancellation(key)?.toRow()
-        "Waitlist" -> store.waitlist(key)?.toRow()
-        "Notice" -> store.notice(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Booking" -> store.bookings(keys).map { it.toRow() }
+        "Cancellation" -> store.cancellations(keys).map { it.toRow() }
+        "Waitlist" -> store.waitlists(keys).map { it.toRow() }
+        "Notice" -> store.notices(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -154,9 +167,9 @@ class BookingsStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "Cancellation" && field == "booking" -> store.cancellationsByBooking(target).map { it.toRow() }
-        shape == "Notice" && field == "entry" -> store.noticesByEntry(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "Cancellation" && field == "booking" -> store.cancellationsByBookings(targets).map { it.toRow() }
+        shape == "Notice" && field == "entry" -> store.noticesByEntrys(targets).map { it.toRow() }
         else -> emptyList()
     }
 

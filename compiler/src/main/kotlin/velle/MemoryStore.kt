@@ -67,13 +67,7 @@ class MemoryStore(private val model: Model) : StateResolver, CommitCallback, Tic
         latestTickBySchedule[schedule] = moment
     }
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = reading { rows[shape]?.get(key) }
-
     override fun fetchAll(shape: String): List<Row> = reading { rows[shape]?.values?.toList().orEmpty() }
-
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = reading {
-        rows[shape]?.values?.filter { it.fields[field] == target }.orEmpty()
-    }
 
     override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = reading {
         val rowsOfShape = rows[shape] ?: return@reading emptyList()

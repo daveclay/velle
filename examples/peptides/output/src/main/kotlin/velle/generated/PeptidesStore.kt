@@ -394,52 +394,54 @@ interface PeptidesStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun crop(key: StoreKey): CropRow?
-    fun pathogen(key: StoreKey): PathogenRow?
-    fun peptide(key: StoreKey): PeptideRow?
-    fun assayProtocol(key: StoreKey): AssayProtocolRow?
-    fun labExperiment(key: StoreKey): LabExperimentRow?
-    fun assay(key: StoreKey): AssayRow?
-    fun assayReading(key: StoreKey): AssayReadingRow?
-    fun labHit(key: StoreKey): LabHitRow?
-    fun labHitRetraction(key: StoreKey): LabHitRetractionRow?
-    fun greenhouse(key: StoreKey): GreenhouseRow?
-    fun climateReading(key: StoreKey): ClimateReadingRow?
-    fun greenhouseProtocol(key: StoreKey): GreenhouseProtocolRow?
-    fun greenhouseTrial(key: StoreKey): GreenhouseTrialRow?
-    fun greenhouseRefusal(key: StoreKey): GreenhouseRefusalRow?
-    fun greenhousePlot(key: StoreKey): GreenhousePlotRow?
-    fun treatment(key: StoreKey): TreatmentRow?
-    fun plotObservation(key: StoreKey): PlotObservationRow?
-    fun greenhouseResult(key: StoreKey): GreenhouseResultRow?
-    fun observationCorrection(key: StoreKey): ObservationCorrectionRow?
-    fun correctionRefusal(key: StoreKey): CorrectionRefusalRow?
-    fun voidRecord(key: StoreKey): VoidRecordRow?
-    fun voidRefusal(key: StoreKey): VoidRefusalRow?
-    fun moveRefusal(key: StoreKey): MoveRefusalRow?
-    fun climateExcursion(key: StoreKey): ClimateExcursionRow?
-    fun excursionEnd(key: StoreKey): ExcursionEndRow?
-    fun sensorAlert(key: StoreKey): SensorAlertRow?
-    fun fieldSite(key: StoreKey): FieldSiteRow?
-    fun permit(key: StoreKey): PermitRow?
-    fun weatherObservation(key: StoreKey): WeatherObservationRow?
-    fun fieldProtocol(key: StoreKey): FieldProtocolRow?
-    fun fieldTrial(key: StoreKey): FieldTrialRow?
-    fun fieldRefusal(key: StoreKey): FieldRefusalRow?
-    fun planting(key: StoreKey): PlantingRow?
-    fun fieldPlot(key: StoreKey): FieldPlotRow?
-    fun treatmentApplication(key: StoreKey): TreatmentApplicationRow?
-    fun reapplicationNotice(key: StoreKey): ReapplicationNoticeRow?
-    fun scouting(key: StoreKey): ScoutingRow?
-    fun harvest(key: StoreKey): HarvestRow?
-    fun phytotoxicityReport(key: StoreKey): PhytotoxicityReportRow?
-    fun haltNotice(key: StoreKey): HaltNoticeRow?
-    fun collectionTask(key: StoreKey): CollectionTaskRow?
-    fun taskReminder(key: StoreKey): TaskReminderRow?
-    fun rescheduleRefusal(key: StoreKey): RescheduleRefusalRow?
-    fun taskCancellation(key: StoreKey): TaskCancellationRow?
-    fun cancelRefusal(key: StoreKey): CancelRefusalRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun crops(keys: List<StoreKey>): List<CropRow>
+    fun pathogens(keys: List<StoreKey>): List<PathogenRow>
+    fun peptides(keys: List<StoreKey>): List<PeptideRow>
+    fun assayProtocols(keys: List<StoreKey>): List<AssayProtocolRow>
+    fun labExperiments(keys: List<StoreKey>): List<LabExperimentRow>
+    fun assays(keys: List<StoreKey>): List<AssayRow>
+    fun assayReadings(keys: List<StoreKey>): List<AssayReadingRow>
+    fun labHits(keys: List<StoreKey>): List<LabHitRow>
+    fun labHitRetractions(keys: List<StoreKey>): List<LabHitRetractionRow>
+    fun greenhouses(keys: List<StoreKey>): List<GreenhouseRow>
+    fun climateReadings(keys: List<StoreKey>): List<ClimateReadingRow>
+    fun greenhouseProtocols(keys: List<StoreKey>): List<GreenhouseProtocolRow>
+    fun greenhouseTrials(keys: List<StoreKey>): List<GreenhouseTrialRow>
+    fun greenhouseRefusals(keys: List<StoreKey>): List<GreenhouseRefusalRow>
+    fun greenhousePlots(keys: List<StoreKey>): List<GreenhousePlotRow>
+    fun treatments(keys: List<StoreKey>): List<TreatmentRow>
+    fun plotObservations(keys: List<StoreKey>): List<PlotObservationRow>
+    fun greenhouseResults(keys: List<StoreKey>): List<GreenhouseResultRow>
+    fun observationCorrections(keys: List<StoreKey>): List<ObservationCorrectionRow>
+    fun correctionRefusals(keys: List<StoreKey>): List<CorrectionRefusalRow>
+    fun voidRecords(keys: List<StoreKey>): List<VoidRecordRow>
+    fun voidRefusals(keys: List<StoreKey>): List<VoidRefusalRow>
+    fun moveRefusals(keys: List<StoreKey>): List<MoveRefusalRow>
+    fun climateExcursions(keys: List<StoreKey>): List<ClimateExcursionRow>
+    fun excursionEnds(keys: List<StoreKey>): List<ExcursionEndRow>
+    fun sensorAlerts(keys: List<StoreKey>): List<SensorAlertRow>
+    fun fieldSites(keys: List<StoreKey>): List<FieldSiteRow>
+    fun permits(keys: List<StoreKey>): List<PermitRow>
+    fun weatherObservations(keys: List<StoreKey>): List<WeatherObservationRow>
+    fun fieldProtocols(keys: List<StoreKey>): List<FieldProtocolRow>
+    fun fieldTrials(keys: List<StoreKey>): List<FieldTrialRow>
+    fun fieldRefusals(keys: List<StoreKey>): List<FieldRefusalRow>
+    fun plantings(keys: List<StoreKey>): List<PlantingRow>
+    fun fieldPlots(keys: List<StoreKey>): List<FieldPlotRow>
+    fun treatmentApplications(keys: List<StoreKey>): List<TreatmentApplicationRow>
+    fun reapplicationNotices(keys: List<StoreKey>): List<ReapplicationNoticeRow>
+    fun scoutings(keys: List<StoreKey>): List<ScoutingRow>
+    fun harvests(keys: List<StoreKey>): List<HarvestRow>
+    fun phytotoxicityReports(keys: List<StoreKey>): List<PhytotoxicityReportRow>
+    fun haltNotices(keys: List<StoreKey>): List<HaltNoticeRow>
+    fun collectionTasks(keys: List<StoreKey>): List<CollectionTaskRow>
+    fun taskReminders(keys: List<StoreKey>): List<TaskReminderRow>
+    fun rescheduleRefusals(keys: List<StoreKey>): List<RescheduleRefusalRow>
+    fun taskCancellations(keys: List<StoreKey>): List<TaskCancellationRow>
+    fun cancelRefusals(keys: List<StoreKey>): List<CancelRefusalRow>
 
     // ── scan floor: all rows of a shape ──
     fun allCrops(): List<CropRow>
@@ -488,51 +490,51 @@ interface PeptidesStore {
     fun allTaskCancellations(): List<TaskCancellationRow>
     fun allCancelRefusals(): List<CancelRefusalRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun pathogensByHost(target: Ref.Persisted): List<PathogenRow>
-    fun labExperimentsByPeptide(target: Ref.Persisted): List<LabExperimentRow>
-    fun labExperimentsByPathogen(target: Ref.Persisted): List<LabExperimentRow>
-    fun labExperimentsByProtocol(target: Ref.Persisted): List<LabExperimentRow>
-    fun assaysByExperiment(target: Ref.Persisted): List<AssayRow>
-    fun assayReadingsByAssay(target: Ref.Persisted): List<AssayReadingRow>
-    fun labHitsByExperiment(target: Ref.Persisted): List<LabHitRow>
-    fun labHitRetractionsByExperiment(target: Ref.Persisted): List<LabHitRetractionRow>
-    fun climateReadingsByGreenhouse(target: Ref.Persisted): List<ClimateReadingRow>
-    fun greenhouseTrialsByPeptide(target: Ref.Persisted): List<GreenhouseTrialRow>
-    fun greenhouseTrialsByPathogen(target: Ref.Persisted): List<GreenhouseTrialRow>
-    fun greenhouseTrialsByGreenhouse(target: Ref.Persisted): List<GreenhouseTrialRow>
-    fun greenhouseTrialsByProtocol(target: Ref.Persisted): List<GreenhouseTrialRow>
-    fun greenhousePlotsByTrial(target: Ref.Persisted): List<GreenhousePlotRow>
-    fun treatmentsByTrial(target: Ref.Persisted): List<TreatmentRow>
-    fun plotObservationsByPlot(target: Ref.Persisted): List<PlotObservationRow>
-    fun greenhouseResultsByTrial(target: Ref.Persisted): List<GreenhouseResultRow>
-    fun observationCorrectionsByObservation(target: Ref.Persisted): List<ObservationCorrectionRow>
-    fun correctionRefusalsByObservation(target: Ref.Persisted): List<CorrectionRefusalRow>
-    fun voidRefusalsByObservation(target: Ref.Persisted): List<VoidRefusalRow>
-    fun moveRefusalsByPlot(target: Ref.Persisted): List<MoveRefusalRow>
-    fun climateExcursionsByGreenhouse(target: Ref.Persisted): List<ClimateExcursionRow>
-    fun excursionEndsByExcursion(target: Ref.Persisted): List<ExcursionEndRow>
-    fun sensorAlertsByGreenhouse(target: Ref.Persisted): List<SensorAlertRow>
-    fun permitsBySite(target: Ref.Persisted): List<PermitRow>
-    fun permitsByCrop(target: Ref.Persisted): List<PermitRow>
-    fun weatherObservationsBySite(target: Ref.Persisted): List<WeatherObservationRow>
-    fun fieldTrialsByPeptide(target: Ref.Persisted): List<FieldTrialRow>
-    fun fieldTrialsByPathogen(target: Ref.Persisted): List<FieldTrialRow>
-    fun fieldTrialsByCrop(target: Ref.Persisted): List<FieldTrialRow>
-    fun fieldTrialsBySite(target: Ref.Persisted): List<FieldTrialRow>
-    fun fieldTrialsByProtocol(target: Ref.Persisted): List<FieldTrialRow>
-    fun plantingsByTrial(target: Ref.Persisted): List<PlantingRow>
-    fun fieldPlotsByTrial(target: Ref.Persisted): List<FieldPlotRow>
-    fun treatmentApplicationsByTrial(target: Ref.Persisted): List<TreatmentApplicationRow>
-    fun reapplicationNoticesByApplication(target: Ref.Persisted): List<ReapplicationNoticeRow>
-    fun scoutingsByPlot(target: Ref.Persisted): List<ScoutingRow>
-    fun harvestsByPlot(target: Ref.Persisted): List<HarvestRow>
-    fun phytotoxicityReportsByPlot(target: Ref.Persisted): List<PhytotoxicityReportRow>
-    fun haltNoticesByTrial(target: Ref.Persisted): List<HaltNoticeRow>
-    fun collectionTasksByTrial(target: Ref.Persisted): List<CollectionTaskRow>
-    fun taskRemindersByTask(target: Ref.Persisted): List<TaskReminderRow>
-    fun rescheduleRefusalsByTask(target: Ref.Persisted): List<RescheduleRefusalRow>
-    fun cancelRefusalsByTask(target: Ref.Persisted): List<CancelRefusalRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun pathogensByHosts(targets: List<Ref.Persisted>): List<PathogenRow>
+    fun labExperimentsByPeptides(targets: List<Ref.Persisted>): List<LabExperimentRow>
+    fun labExperimentsByPathogens(targets: List<Ref.Persisted>): List<LabExperimentRow>
+    fun labExperimentsByProtocols(targets: List<Ref.Persisted>): List<LabExperimentRow>
+    fun assaysByExperiments(targets: List<Ref.Persisted>): List<AssayRow>
+    fun assayReadingsByAssays(targets: List<Ref.Persisted>): List<AssayReadingRow>
+    fun labHitsByExperiments(targets: List<Ref.Persisted>): List<LabHitRow>
+    fun labHitRetractionsByExperiments(targets: List<Ref.Persisted>): List<LabHitRetractionRow>
+    fun climateReadingsByGreenhouses(targets: List<Ref.Persisted>): List<ClimateReadingRow>
+    fun greenhouseTrialsByPeptides(targets: List<Ref.Persisted>): List<GreenhouseTrialRow>
+    fun greenhouseTrialsByPathogens(targets: List<Ref.Persisted>): List<GreenhouseTrialRow>
+    fun greenhouseTrialsByGreenhouses(targets: List<Ref.Persisted>): List<GreenhouseTrialRow>
+    fun greenhouseTrialsByProtocols(targets: List<Ref.Persisted>): List<GreenhouseTrialRow>
+    fun greenhousePlotsByTrials(targets: List<Ref.Persisted>): List<GreenhousePlotRow>
+    fun treatmentsByTrials(targets: List<Ref.Persisted>): List<TreatmentRow>
+    fun plotObservationsByPlots(targets: List<Ref.Persisted>): List<PlotObservationRow>
+    fun greenhouseResultsByTrials(targets: List<Ref.Persisted>): List<GreenhouseResultRow>
+    fun observationCorrectionsByObservations(targets: List<Ref.Persisted>): List<ObservationCorrectionRow>
+    fun correctionRefusalsByObservations(targets: List<Ref.Persisted>): List<CorrectionRefusalRow>
+    fun voidRefusalsByObservations(targets: List<Ref.Persisted>): List<VoidRefusalRow>
+    fun moveRefusalsByPlots(targets: List<Ref.Persisted>): List<MoveRefusalRow>
+    fun climateExcursionsByGreenhouses(targets: List<Ref.Persisted>): List<ClimateExcursionRow>
+    fun excursionEndsByExcursions(targets: List<Ref.Persisted>): List<ExcursionEndRow>
+    fun sensorAlertsByGreenhouses(targets: List<Ref.Persisted>): List<SensorAlertRow>
+    fun permitsBySites(targets: List<Ref.Persisted>): List<PermitRow>
+    fun permitsByCrops(targets: List<Ref.Persisted>): List<PermitRow>
+    fun weatherObservationsBySites(targets: List<Ref.Persisted>): List<WeatherObservationRow>
+    fun fieldTrialsByPeptides(targets: List<Ref.Persisted>): List<FieldTrialRow>
+    fun fieldTrialsByPathogens(targets: List<Ref.Persisted>): List<FieldTrialRow>
+    fun fieldTrialsByCrops(targets: List<Ref.Persisted>): List<FieldTrialRow>
+    fun fieldTrialsBySites(targets: List<Ref.Persisted>): List<FieldTrialRow>
+    fun fieldTrialsByProtocols(targets: List<Ref.Persisted>): List<FieldTrialRow>
+    fun plantingsByTrials(targets: List<Ref.Persisted>): List<PlantingRow>
+    fun fieldPlotsByTrials(targets: List<Ref.Persisted>): List<FieldPlotRow>
+    fun treatmentApplicationsByTrials(targets: List<Ref.Persisted>): List<TreatmentApplicationRow>
+    fun reapplicationNoticesByApplications(targets: List<Ref.Persisted>): List<ReapplicationNoticeRow>
+    fun scoutingsByPlots(targets: List<Ref.Persisted>): List<ScoutingRow>
+    fun harvestsByPlots(targets: List<Ref.Persisted>): List<HarvestRow>
+    fun phytotoxicityReportsByPlots(targets: List<Ref.Persisted>): List<PhytotoxicityReportRow>
+    fun haltNoticesByTrials(targets: List<Ref.Persisted>): List<HaltNoticeRow>
+    fun collectionTasksByTrials(targets: List<Ref.Persisted>): List<CollectionTaskRow>
+    fun taskRemindersByTasks(targets: List<Ref.Persisted>): List<TaskReminderRow>
+    fun rescheduleRefusalsByTasks(targets: List<Ref.Persisted>): List<RescheduleRefusalRow>
+    fun cancelRefusalsByTasks(targets: List<Ref.Persisted>): List<CancelRefusalRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement TreatedTrial; refinement ObservedToEnd; refinement CompleteTrial; refinement EffectiveTrial; refinement CompromisedTrial — `TreatedTrial`.
@@ -624,6 +626,142 @@ interface PeptidesStore {
     fun never14Candidates(): List<CollectionTaskRow>
 }
 
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun PeptidesStore.crop(key: StoreKey): CropRow? = crops(listOf(key)).firstOrNull()
+fun PeptidesStore.pathogen(key: StoreKey): PathogenRow? = pathogens(listOf(key)).firstOrNull()
+fun PeptidesStore.peptide(key: StoreKey): PeptideRow? = peptides(listOf(key)).firstOrNull()
+fun PeptidesStore.assayProtocol(key: StoreKey): AssayProtocolRow? = assayProtocols(listOf(key)).firstOrNull()
+fun PeptidesStore.labExperiment(key: StoreKey): LabExperimentRow? = labExperiments(listOf(key)).firstOrNull()
+fun PeptidesStore.assay(key: StoreKey): AssayRow? = assays(listOf(key)).firstOrNull()
+fun PeptidesStore.assayReading(key: StoreKey): AssayReadingRow? = assayReadings(listOf(key)).firstOrNull()
+fun PeptidesStore.labHit(key: StoreKey): LabHitRow? = labHits(listOf(key)).firstOrNull()
+fun PeptidesStore.labHitRetraction(key: StoreKey): LabHitRetractionRow? = labHitRetractions(listOf(key)).firstOrNull()
+fun PeptidesStore.greenhouse(key: StoreKey): GreenhouseRow? = greenhouses(listOf(key)).firstOrNull()
+fun PeptidesStore.climateReading(key: StoreKey): ClimateReadingRow? = climateReadings(listOf(key)).firstOrNull()
+fun PeptidesStore.greenhouseProtocol(key: StoreKey): GreenhouseProtocolRow? = greenhouseProtocols(listOf(key)).firstOrNull()
+fun PeptidesStore.greenhouseTrial(key: StoreKey): GreenhouseTrialRow? = greenhouseTrials(listOf(key)).firstOrNull()
+fun PeptidesStore.greenhouseRefusal(key: StoreKey): GreenhouseRefusalRow? = greenhouseRefusals(listOf(key)).firstOrNull()
+fun PeptidesStore.greenhousePlot(key: StoreKey): GreenhousePlotRow? = greenhousePlots(listOf(key)).firstOrNull()
+fun PeptidesStore.treatment(key: StoreKey): TreatmentRow? = treatments(listOf(key)).firstOrNull()
+fun PeptidesStore.plotObservation(key: StoreKey): PlotObservationRow? = plotObservations(listOf(key)).firstOrNull()
+fun PeptidesStore.greenhouseResult(key: StoreKey): GreenhouseResultRow? = greenhouseResults(listOf(key)).firstOrNull()
+fun PeptidesStore.observationCorrection(key: StoreKey): ObservationCorrectionRow? = observationCorrections(listOf(key)).firstOrNull()
+fun PeptidesStore.correctionRefusal(key: StoreKey): CorrectionRefusalRow? = correctionRefusals(listOf(key)).firstOrNull()
+fun PeptidesStore.voidRecord(key: StoreKey): VoidRecordRow? = voidRecords(listOf(key)).firstOrNull()
+fun PeptidesStore.voidRefusal(key: StoreKey): VoidRefusalRow? = voidRefusals(listOf(key)).firstOrNull()
+fun PeptidesStore.moveRefusal(key: StoreKey): MoveRefusalRow? = moveRefusals(listOf(key)).firstOrNull()
+fun PeptidesStore.climateExcursion(key: StoreKey): ClimateExcursionRow? = climateExcursions(listOf(key)).firstOrNull()
+fun PeptidesStore.excursionEnd(key: StoreKey): ExcursionEndRow? = excursionEnds(listOf(key)).firstOrNull()
+fun PeptidesStore.sensorAlert(key: StoreKey): SensorAlertRow? = sensorAlerts(listOf(key)).firstOrNull()
+fun PeptidesStore.fieldSite(key: StoreKey): FieldSiteRow? = fieldSites(listOf(key)).firstOrNull()
+fun PeptidesStore.permit(key: StoreKey): PermitRow? = permits(listOf(key)).firstOrNull()
+fun PeptidesStore.weatherObservation(key: StoreKey): WeatherObservationRow? = weatherObservations(listOf(key)).firstOrNull()
+fun PeptidesStore.fieldProtocol(key: StoreKey): FieldProtocolRow? = fieldProtocols(listOf(key)).firstOrNull()
+fun PeptidesStore.fieldTrial(key: StoreKey): FieldTrialRow? = fieldTrials(listOf(key)).firstOrNull()
+fun PeptidesStore.fieldRefusal(key: StoreKey): FieldRefusalRow? = fieldRefusals(listOf(key)).firstOrNull()
+fun PeptidesStore.planting(key: StoreKey): PlantingRow? = plantings(listOf(key)).firstOrNull()
+fun PeptidesStore.fieldPlot(key: StoreKey): FieldPlotRow? = fieldPlots(listOf(key)).firstOrNull()
+fun PeptidesStore.treatmentApplication(key: StoreKey): TreatmentApplicationRow? = treatmentApplications(listOf(key)).firstOrNull()
+fun PeptidesStore.reapplicationNotice(key: StoreKey): ReapplicationNoticeRow? = reapplicationNotices(listOf(key)).firstOrNull()
+fun PeptidesStore.scouting(key: StoreKey): ScoutingRow? = scoutings(listOf(key)).firstOrNull()
+fun PeptidesStore.harvest(key: StoreKey): HarvestRow? = harvests(listOf(key)).firstOrNull()
+fun PeptidesStore.phytotoxicityReport(key: StoreKey): PhytotoxicityReportRow? = phytotoxicityReports(listOf(key)).firstOrNull()
+fun PeptidesStore.haltNotice(key: StoreKey): HaltNoticeRow? = haltNotices(listOf(key)).firstOrNull()
+fun PeptidesStore.collectionTask(key: StoreKey): CollectionTaskRow? = collectionTasks(listOf(key)).firstOrNull()
+fun PeptidesStore.taskReminder(key: StoreKey): TaskReminderRow? = taskReminders(listOf(key)).firstOrNull()
+fun PeptidesStore.rescheduleRefusal(key: StoreKey): RescheduleRefusalRow? = rescheduleRefusals(listOf(key)).firstOrNull()
+fun PeptidesStore.taskCancellation(key: StoreKey): TaskCancellationRow? = taskCancellations(listOf(key)).firstOrNull()
+fun PeptidesStore.cancelRefusal(key: StoreKey): CancelRefusalRow? = cancelRefusals(listOf(key)).firstOrNull()
+fun PeptidesStore.pathogensByHost(target: Ref.Persisted): List<PathogenRow> =
+    pathogensByHosts(listOf(target))
+fun PeptidesStore.labExperimentsByPeptide(target: Ref.Persisted): List<LabExperimentRow> =
+    labExperimentsByPeptides(listOf(target))
+fun PeptidesStore.labExperimentsByPathogen(target: Ref.Persisted): List<LabExperimentRow> =
+    labExperimentsByPathogens(listOf(target))
+fun PeptidesStore.labExperimentsByProtocol(target: Ref.Persisted): List<LabExperimentRow> =
+    labExperimentsByProtocols(listOf(target))
+fun PeptidesStore.assaysByExperiment(target: Ref.Persisted): List<AssayRow> =
+    assaysByExperiments(listOf(target))
+fun PeptidesStore.assayReadingsByAssay(target: Ref.Persisted): List<AssayReadingRow> =
+    assayReadingsByAssays(listOf(target))
+fun PeptidesStore.labHitsByExperiment(target: Ref.Persisted): List<LabHitRow> =
+    labHitsByExperiments(listOf(target))
+fun PeptidesStore.labHitRetractionsByExperiment(target: Ref.Persisted): List<LabHitRetractionRow> =
+    labHitRetractionsByExperiments(listOf(target))
+fun PeptidesStore.climateReadingsByGreenhouse(target: Ref.Persisted): List<ClimateReadingRow> =
+    climateReadingsByGreenhouses(listOf(target))
+fun PeptidesStore.greenhouseTrialsByPeptide(target: Ref.Persisted): List<GreenhouseTrialRow> =
+    greenhouseTrialsByPeptides(listOf(target))
+fun PeptidesStore.greenhouseTrialsByPathogen(target: Ref.Persisted): List<GreenhouseTrialRow> =
+    greenhouseTrialsByPathogens(listOf(target))
+fun PeptidesStore.greenhouseTrialsByGreenhouse(target: Ref.Persisted): List<GreenhouseTrialRow> =
+    greenhouseTrialsByGreenhouses(listOf(target))
+fun PeptidesStore.greenhouseTrialsByProtocol(target: Ref.Persisted): List<GreenhouseTrialRow> =
+    greenhouseTrialsByProtocols(listOf(target))
+fun PeptidesStore.greenhousePlotsByTrial(target: Ref.Persisted): List<GreenhousePlotRow> =
+    greenhousePlotsByTrials(listOf(target))
+fun PeptidesStore.treatmentsByTrial(target: Ref.Persisted): List<TreatmentRow> =
+    treatmentsByTrials(listOf(target))
+fun PeptidesStore.plotObservationsByPlot(target: Ref.Persisted): List<PlotObservationRow> =
+    plotObservationsByPlots(listOf(target))
+fun PeptidesStore.greenhouseResultsByTrial(target: Ref.Persisted): List<GreenhouseResultRow> =
+    greenhouseResultsByTrials(listOf(target))
+fun PeptidesStore.observationCorrectionsByObservation(target: Ref.Persisted): List<ObservationCorrectionRow> =
+    observationCorrectionsByObservations(listOf(target))
+fun PeptidesStore.correctionRefusalsByObservation(target: Ref.Persisted): List<CorrectionRefusalRow> =
+    correctionRefusalsByObservations(listOf(target))
+fun PeptidesStore.voidRefusalsByObservation(target: Ref.Persisted): List<VoidRefusalRow> =
+    voidRefusalsByObservations(listOf(target))
+fun PeptidesStore.moveRefusalsByPlot(target: Ref.Persisted): List<MoveRefusalRow> =
+    moveRefusalsByPlots(listOf(target))
+fun PeptidesStore.climateExcursionsByGreenhouse(target: Ref.Persisted): List<ClimateExcursionRow> =
+    climateExcursionsByGreenhouses(listOf(target))
+fun PeptidesStore.excursionEndsByExcursion(target: Ref.Persisted): List<ExcursionEndRow> =
+    excursionEndsByExcursions(listOf(target))
+fun PeptidesStore.sensorAlertsByGreenhouse(target: Ref.Persisted): List<SensorAlertRow> =
+    sensorAlertsByGreenhouses(listOf(target))
+fun PeptidesStore.permitsBySite(target: Ref.Persisted): List<PermitRow> =
+    permitsBySites(listOf(target))
+fun PeptidesStore.permitsByCrop(target: Ref.Persisted): List<PermitRow> =
+    permitsByCrops(listOf(target))
+fun PeptidesStore.weatherObservationsBySite(target: Ref.Persisted): List<WeatherObservationRow> =
+    weatherObservationsBySites(listOf(target))
+fun PeptidesStore.fieldTrialsByPeptide(target: Ref.Persisted): List<FieldTrialRow> =
+    fieldTrialsByPeptides(listOf(target))
+fun PeptidesStore.fieldTrialsByPathogen(target: Ref.Persisted): List<FieldTrialRow> =
+    fieldTrialsByPathogens(listOf(target))
+fun PeptidesStore.fieldTrialsByCrop(target: Ref.Persisted): List<FieldTrialRow> =
+    fieldTrialsByCrops(listOf(target))
+fun PeptidesStore.fieldTrialsBySite(target: Ref.Persisted): List<FieldTrialRow> =
+    fieldTrialsBySites(listOf(target))
+fun PeptidesStore.fieldTrialsByProtocol(target: Ref.Persisted): List<FieldTrialRow> =
+    fieldTrialsByProtocols(listOf(target))
+fun PeptidesStore.plantingsByTrial(target: Ref.Persisted): List<PlantingRow> =
+    plantingsByTrials(listOf(target))
+fun PeptidesStore.fieldPlotsByTrial(target: Ref.Persisted): List<FieldPlotRow> =
+    fieldPlotsByTrials(listOf(target))
+fun PeptidesStore.treatmentApplicationsByTrial(target: Ref.Persisted): List<TreatmentApplicationRow> =
+    treatmentApplicationsByTrials(listOf(target))
+fun PeptidesStore.reapplicationNoticesByApplication(target: Ref.Persisted): List<ReapplicationNoticeRow> =
+    reapplicationNoticesByApplications(listOf(target))
+fun PeptidesStore.scoutingsByPlot(target: Ref.Persisted): List<ScoutingRow> =
+    scoutingsByPlots(listOf(target))
+fun PeptidesStore.harvestsByPlot(target: Ref.Persisted): List<HarvestRow> =
+    harvestsByPlots(listOf(target))
+fun PeptidesStore.phytotoxicityReportsByPlot(target: Ref.Persisted): List<PhytotoxicityReportRow> =
+    phytotoxicityReportsByPlots(listOf(target))
+fun PeptidesStore.haltNoticesByTrial(target: Ref.Persisted): List<HaltNoticeRow> =
+    haltNoticesByTrials(listOf(target))
+fun PeptidesStore.collectionTasksByTrial(target: Ref.Persisted): List<CollectionTaskRow> =
+    collectionTasksByTrials(listOf(target))
+fun PeptidesStore.taskRemindersByTask(target: Ref.Persisted): List<TaskReminderRow> =
+    taskRemindersByTasks(listOf(target))
+fun PeptidesStore.rescheduleRefusalsByTask(target: Ref.Persisted): List<RescheduleRefusalRow> =
+    rescheduleRefusalsByTasks(listOf(target))
+fun PeptidesStore.cancelRefusalsByTask(target: Ref.Persisted): List<CancelRefusalRow> =
+    cancelRefusalsByTasks(listOf(target))
+
 /** The candidate questions as recognizable templates (QTemplate). */
 class PeptidesStoreQuestions(model: Model) {
     val treatedTrialCandidates = QTemplate.of(model, "GreenhouseTrial", RefName("TreatedTrial"))
@@ -669,51 +807,51 @@ open class PeptidesStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun crop(key: StoreKey): CropRow? = backend.fetchByKey("Crop", key)?.toCropRow()
-    override fun pathogen(key: StoreKey): PathogenRow? = backend.fetchByKey("Pathogen", key)?.toPathogenRow()
-    override fun peptide(key: StoreKey): PeptideRow? = backend.fetchByKey("Peptide", key)?.toPeptideRow()
-    override fun assayProtocol(key: StoreKey): AssayProtocolRow? = backend.fetchByKey("AssayProtocol", key)?.toAssayProtocolRow()
-    override fun labExperiment(key: StoreKey): LabExperimentRow? = backend.fetchByKey("LabExperiment", key)?.toLabExperimentRow()
-    override fun assay(key: StoreKey): AssayRow? = backend.fetchByKey("Assay", key)?.toAssayRow()
-    override fun assayReading(key: StoreKey): AssayReadingRow? = backend.fetchByKey("AssayReading", key)?.toAssayReadingRow()
-    override fun labHit(key: StoreKey): LabHitRow? = backend.fetchByKey("LabHit", key)?.toLabHitRow()
-    override fun labHitRetraction(key: StoreKey): LabHitRetractionRow? = backend.fetchByKey("LabHitRetraction", key)?.toLabHitRetractionRow()
-    override fun greenhouse(key: StoreKey): GreenhouseRow? = backend.fetchByKey("Greenhouse", key)?.toGreenhouseRow()
-    override fun climateReading(key: StoreKey): ClimateReadingRow? = backend.fetchByKey("ClimateReading", key)?.toClimateReadingRow()
-    override fun greenhouseProtocol(key: StoreKey): GreenhouseProtocolRow? = backend.fetchByKey("GreenhouseProtocol", key)?.toGreenhouseProtocolRow()
-    override fun greenhouseTrial(key: StoreKey): GreenhouseTrialRow? = backend.fetchByKey("GreenhouseTrial", key)?.toGreenhouseTrialRow()
-    override fun greenhouseRefusal(key: StoreKey): GreenhouseRefusalRow? = backend.fetchByKey("GreenhouseRefusal", key)?.toGreenhouseRefusalRow()
-    override fun greenhousePlot(key: StoreKey): GreenhousePlotRow? = backend.fetchByKey("GreenhousePlot", key)?.toGreenhousePlotRow()
-    override fun treatment(key: StoreKey): TreatmentRow? = backend.fetchByKey("Treatment", key)?.toTreatmentRow()
-    override fun plotObservation(key: StoreKey): PlotObservationRow? = backend.fetchByKey("PlotObservation", key)?.toPlotObservationRow()
-    override fun greenhouseResult(key: StoreKey): GreenhouseResultRow? = backend.fetchByKey("GreenhouseResult", key)?.toGreenhouseResultRow()
-    override fun observationCorrection(key: StoreKey): ObservationCorrectionRow? = backend.fetchByKey("ObservationCorrection", key)?.toObservationCorrectionRow()
-    override fun correctionRefusal(key: StoreKey): CorrectionRefusalRow? = backend.fetchByKey("CorrectionRefusal", key)?.toCorrectionRefusalRow()
-    override fun voidRecord(key: StoreKey): VoidRecordRow? = backend.fetchByKey("VoidRecord", key)?.toVoidRecordRow()
-    override fun voidRefusal(key: StoreKey): VoidRefusalRow? = backend.fetchByKey("VoidRefusal", key)?.toVoidRefusalRow()
-    override fun moveRefusal(key: StoreKey): MoveRefusalRow? = backend.fetchByKey("MoveRefusal", key)?.toMoveRefusalRow()
-    override fun climateExcursion(key: StoreKey): ClimateExcursionRow? = backend.fetchByKey("ClimateExcursion", key)?.toClimateExcursionRow()
-    override fun excursionEnd(key: StoreKey): ExcursionEndRow? = backend.fetchByKey("ExcursionEnd", key)?.toExcursionEndRow()
-    override fun sensorAlert(key: StoreKey): SensorAlertRow? = backend.fetchByKey("SensorAlert", key)?.toSensorAlertRow()
-    override fun fieldSite(key: StoreKey): FieldSiteRow? = backend.fetchByKey("FieldSite", key)?.toFieldSiteRow()
-    override fun permit(key: StoreKey): PermitRow? = backend.fetchByKey("Permit", key)?.toPermitRow()
-    override fun weatherObservation(key: StoreKey): WeatherObservationRow? = backend.fetchByKey("WeatherObservation", key)?.toWeatherObservationRow()
-    override fun fieldProtocol(key: StoreKey): FieldProtocolRow? = backend.fetchByKey("FieldProtocol", key)?.toFieldProtocolRow()
-    override fun fieldTrial(key: StoreKey): FieldTrialRow? = backend.fetchByKey("FieldTrial", key)?.toFieldTrialRow()
-    override fun fieldRefusal(key: StoreKey): FieldRefusalRow? = backend.fetchByKey("FieldRefusal", key)?.toFieldRefusalRow()
-    override fun planting(key: StoreKey): PlantingRow? = backend.fetchByKey("Planting", key)?.toPlantingRow()
-    override fun fieldPlot(key: StoreKey): FieldPlotRow? = backend.fetchByKey("FieldPlot", key)?.toFieldPlotRow()
-    override fun treatmentApplication(key: StoreKey): TreatmentApplicationRow? = backend.fetchByKey("TreatmentApplication", key)?.toTreatmentApplicationRow()
-    override fun reapplicationNotice(key: StoreKey): ReapplicationNoticeRow? = backend.fetchByKey("ReapplicationNotice", key)?.toReapplicationNoticeRow()
-    override fun scouting(key: StoreKey): ScoutingRow? = backend.fetchByKey("Scouting", key)?.toScoutingRow()
-    override fun harvest(key: StoreKey): HarvestRow? = backend.fetchByKey("Harvest", key)?.toHarvestRow()
-    override fun phytotoxicityReport(key: StoreKey): PhytotoxicityReportRow? = backend.fetchByKey("PhytotoxicityReport", key)?.toPhytotoxicityReportRow()
-    override fun haltNotice(key: StoreKey): HaltNoticeRow? = backend.fetchByKey("HaltNotice", key)?.toHaltNoticeRow()
-    override fun collectionTask(key: StoreKey): CollectionTaskRow? = backend.fetchByKey("CollectionTask", key)?.toCollectionTaskRow()
-    override fun taskReminder(key: StoreKey): TaskReminderRow? = backend.fetchByKey("TaskReminder", key)?.toTaskReminderRow()
-    override fun rescheduleRefusal(key: StoreKey): RescheduleRefusalRow? = backend.fetchByKey("RescheduleRefusal", key)?.toRescheduleRefusalRow()
-    override fun taskCancellation(key: StoreKey): TaskCancellationRow? = backend.fetchByKey("TaskCancellation", key)?.toTaskCancellationRow()
-    override fun cancelRefusal(key: StoreKey): CancelRefusalRow? = backend.fetchByKey("CancelRefusal", key)?.toCancelRefusalRow()
+    override fun crops(keys: List<StoreKey>): List<CropRow> = backend.fetchByKeys("Crop", keys).map { it.toCropRow() }
+    override fun pathogens(keys: List<StoreKey>): List<PathogenRow> = backend.fetchByKeys("Pathogen", keys).map { it.toPathogenRow() }
+    override fun peptides(keys: List<StoreKey>): List<PeptideRow> = backend.fetchByKeys("Peptide", keys).map { it.toPeptideRow() }
+    override fun assayProtocols(keys: List<StoreKey>): List<AssayProtocolRow> = backend.fetchByKeys("AssayProtocol", keys).map { it.toAssayProtocolRow() }
+    override fun labExperiments(keys: List<StoreKey>): List<LabExperimentRow> = backend.fetchByKeys("LabExperiment", keys).map { it.toLabExperimentRow() }
+    override fun assays(keys: List<StoreKey>): List<AssayRow> = backend.fetchByKeys("Assay", keys).map { it.toAssayRow() }
+    override fun assayReadings(keys: List<StoreKey>): List<AssayReadingRow> = backend.fetchByKeys("AssayReading", keys).map { it.toAssayReadingRow() }
+    override fun labHits(keys: List<StoreKey>): List<LabHitRow> = backend.fetchByKeys("LabHit", keys).map { it.toLabHitRow() }
+    override fun labHitRetractions(keys: List<StoreKey>): List<LabHitRetractionRow> = backend.fetchByKeys("LabHitRetraction", keys).map { it.toLabHitRetractionRow() }
+    override fun greenhouses(keys: List<StoreKey>): List<GreenhouseRow> = backend.fetchByKeys("Greenhouse", keys).map { it.toGreenhouseRow() }
+    override fun climateReadings(keys: List<StoreKey>): List<ClimateReadingRow> = backend.fetchByKeys("ClimateReading", keys).map { it.toClimateReadingRow() }
+    override fun greenhouseProtocols(keys: List<StoreKey>): List<GreenhouseProtocolRow> = backend.fetchByKeys("GreenhouseProtocol", keys).map { it.toGreenhouseProtocolRow() }
+    override fun greenhouseTrials(keys: List<StoreKey>): List<GreenhouseTrialRow> = backend.fetchByKeys("GreenhouseTrial", keys).map { it.toGreenhouseTrialRow() }
+    override fun greenhouseRefusals(keys: List<StoreKey>): List<GreenhouseRefusalRow> = backend.fetchByKeys("GreenhouseRefusal", keys).map { it.toGreenhouseRefusalRow() }
+    override fun greenhousePlots(keys: List<StoreKey>): List<GreenhousePlotRow> = backend.fetchByKeys("GreenhousePlot", keys).map { it.toGreenhousePlotRow() }
+    override fun treatments(keys: List<StoreKey>): List<TreatmentRow> = backend.fetchByKeys("Treatment", keys).map { it.toTreatmentRow() }
+    override fun plotObservations(keys: List<StoreKey>): List<PlotObservationRow> = backend.fetchByKeys("PlotObservation", keys).map { it.toPlotObservationRow() }
+    override fun greenhouseResults(keys: List<StoreKey>): List<GreenhouseResultRow> = backend.fetchByKeys("GreenhouseResult", keys).map { it.toGreenhouseResultRow() }
+    override fun observationCorrections(keys: List<StoreKey>): List<ObservationCorrectionRow> = backend.fetchByKeys("ObservationCorrection", keys).map { it.toObservationCorrectionRow() }
+    override fun correctionRefusals(keys: List<StoreKey>): List<CorrectionRefusalRow> = backend.fetchByKeys("CorrectionRefusal", keys).map { it.toCorrectionRefusalRow() }
+    override fun voidRecords(keys: List<StoreKey>): List<VoidRecordRow> = backend.fetchByKeys("VoidRecord", keys).map { it.toVoidRecordRow() }
+    override fun voidRefusals(keys: List<StoreKey>): List<VoidRefusalRow> = backend.fetchByKeys("VoidRefusal", keys).map { it.toVoidRefusalRow() }
+    override fun moveRefusals(keys: List<StoreKey>): List<MoveRefusalRow> = backend.fetchByKeys("MoveRefusal", keys).map { it.toMoveRefusalRow() }
+    override fun climateExcursions(keys: List<StoreKey>): List<ClimateExcursionRow> = backend.fetchByKeys("ClimateExcursion", keys).map { it.toClimateExcursionRow() }
+    override fun excursionEnds(keys: List<StoreKey>): List<ExcursionEndRow> = backend.fetchByKeys("ExcursionEnd", keys).map { it.toExcursionEndRow() }
+    override fun sensorAlerts(keys: List<StoreKey>): List<SensorAlertRow> = backend.fetchByKeys("SensorAlert", keys).map { it.toSensorAlertRow() }
+    override fun fieldSites(keys: List<StoreKey>): List<FieldSiteRow> = backend.fetchByKeys("FieldSite", keys).map { it.toFieldSiteRow() }
+    override fun permits(keys: List<StoreKey>): List<PermitRow> = backend.fetchByKeys("Permit", keys).map { it.toPermitRow() }
+    override fun weatherObservations(keys: List<StoreKey>): List<WeatherObservationRow> = backend.fetchByKeys("WeatherObservation", keys).map { it.toWeatherObservationRow() }
+    override fun fieldProtocols(keys: List<StoreKey>): List<FieldProtocolRow> = backend.fetchByKeys("FieldProtocol", keys).map { it.toFieldProtocolRow() }
+    override fun fieldTrials(keys: List<StoreKey>): List<FieldTrialRow> = backend.fetchByKeys("FieldTrial", keys).map { it.toFieldTrialRow() }
+    override fun fieldRefusals(keys: List<StoreKey>): List<FieldRefusalRow> = backend.fetchByKeys("FieldRefusal", keys).map { it.toFieldRefusalRow() }
+    override fun plantings(keys: List<StoreKey>): List<PlantingRow> = backend.fetchByKeys("Planting", keys).map { it.toPlantingRow() }
+    override fun fieldPlots(keys: List<StoreKey>): List<FieldPlotRow> = backend.fetchByKeys("FieldPlot", keys).map { it.toFieldPlotRow() }
+    override fun treatmentApplications(keys: List<StoreKey>): List<TreatmentApplicationRow> = backend.fetchByKeys("TreatmentApplication", keys).map { it.toTreatmentApplicationRow() }
+    override fun reapplicationNotices(keys: List<StoreKey>): List<ReapplicationNoticeRow> = backend.fetchByKeys("ReapplicationNotice", keys).map { it.toReapplicationNoticeRow() }
+    override fun scoutings(keys: List<StoreKey>): List<ScoutingRow> = backend.fetchByKeys("Scouting", keys).map { it.toScoutingRow() }
+    override fun harvests(keys: List<StoreKey>): List<HarvestRow> = backend.fetchByKeys("Harvest", keys).map { it.toHarvestRow() }
+    override fun phytotoxicityReports(keys: List<StoreKey>): List<PhytotoxicityReportRow> = backend.fetchByKeys("PhytotoxicityReport", keys).map { it.toPhytotoxicityReportRow() }
+    override fun haltNotices(keys: List<StoreKey>): List<HaltNoticeRow> = backend.fetchByKeys("HaltNotice", keys).map { it.toHaltNoticeRow() }
+    override fun collectionTasks(keys: List<StoreKey>): List<CollectionTaskRow> = backend.fetchByKeys("CollectionTask", keys).map { it.toCollectionTaskRow() }
+    override fun taskReminders(keys: List<StoreKey>): List<TaskReminderRow> = backend.fetchByKeys("TaskReminder", keys).map { it.toTaskReminderRow() }
+    override fun rescheduleRefusals(keys: List<StoreKey>): List<RescheduleRefusalRow> = backend.fetchByKeys("RescheduleRefusal", keys).map { it.toRescheduleRefusalRow() }
+    override fun taskCancellations(keys: List<StoreKey>): List<TaskCancellationRow> = backend.fetchByKeys("TaskCancellation", keys).map { it.toTaskCancellationRow() }
+    override fun cancelRefusals(keys: List<StoreKey>): List<CancelRefusalRow> = backend.fetchByKeys("CancelRefusal", keys).map { it.toCancelRefusalRow() }
 
     override fun allCrops(): List<CropRow> = backend.fetchAll("Crop").map { it.toCropRow() }
     override fun allPathogens(): List<PathogenRow> = backend.fetchAll("Pathogen").map { it.toPathogenRow() }
@@ -761,94 +899,94 @@ open class PeptidesStoreOverGeneric(
     override fun allTaskCancellations(): List<TaskCancellationRow> = backend.fetchAll("TaskCancellation").map { it.toTaskCancellationRow() }
     override fun allCancelRefusals(): List<CancelRefusalRow> = backend.fetchAll("CancelRefusal").map { it.toCancelRefusalRow() }
 
-    override fun pathogensByHost(target: Ref.Persisted): List<PathogenRow> =
-        backend.fetchReferencing("Pathogen", "host", target).map { it.toPathogenRow() }
-    override fun labExperimentsByPeptide(target: Ref.Persisted): List<LabExperimentRow> =
-        backend.fetchReferencing("LabExperiment", "peptide", target).map { it.toLabExperimentRow() }
-    override fun labExperimentsByPathogen(target: Ref.Persisted): List<LabExperimentRow> =
-        backend.fetchReferencing("LabExperiment", "pathogen", target).map { it.toLabExperimentRow() }
-    override fun labExperimentsByProtocol(target: Ref.Persisted): List<LabExperimentRow> =
-        backend.fetchReferencing("LabExperiment", "protocol", target).map { it.toLabExperimentRow() }
-    override fun assaysByExperiment(target: Ref.Persisted): List<AssayRow> =
-        backend.fetchReferencing("Assay", "experiment", target).map { it.toAssayRow() }
-    override fun assayReadingsByAssay(target: Ref.Persisted): List<AssayReadingRow> =
-        backend.fetchReferencing("AssayReading", "assay", target).map { it.toAssayReadingRow() }
-    override fun labHitsByExperiment(target: Ref.Persisted): List<LabHitRow> =
-        backend.fetchReferencing("LabHit", "experiment", target).map { it.toLabHitRow() }
-    override fun labHitRetractionsByExperiment(target: Ref.Persisted): List<LabHitRetractionRow> =
-        backend.fetchReferencing("LabHitRetraction", "experiment", target).map { it.toLabHitRetractionRow() }
-    override fun climateReadingsByGreenhouse(target: Ref.Persisted): List<ClimateReadingRow> =
-        backend.fetchReferencing("ClimateReading", "greenhouse", target).map { it.toClimateReadingRow() }
-    override fun greenhouseTrialsByPeptide(target: Ref.Persisted): List<GreenhouseTrialRow> =
-        backend.fetchReferencing("GreenhouseTrial", "peptide", target).map { it.toGreenhouseTrialRow() }
-    override fun greenhouseTrialsByPathogen(target: Ref.Persisted): List<GreenhouseTrialRow> =
-        backend.fetchReferencing("GreenhouseTrial", "pathogen", target).map { it.toGreenhouseTrialRow() }
-    override fun greenhouseTrialsByGreenhouse(target: Ref.Persisted): List<GreenhouseTrialRow> =
-        backend.fetchReferencing("GreenhouseTrial", "greenhouse", target).map { it.toGreenhouseTrialRow() }
-    override fun greenhouseTrialsByProtocol(target: Ref.Persisted): List<GreenhouseTrialRow> =
-        backend.fetchReferencing("GreenhouseTrial", "protocol", target).map { it.toGreenhouseTrialRow() }
-    override fun greenhousePlotsByTrial(target: Ref.Persisted): List<GreenhousePlotRow> =
-        backend.fetchReferencing("GreenhousePlot", "trial", target).map { it.toGreenhousePlotRow() }
-    override fun treatmentsByTrial(target: Ref.Persisted): List<TreatmentRow> =
-        backend.fetchReferencing("Treatment", "trial", target).map { it.toTreatmentRow() }
-    override fun plotObservationsByPlot(target: Ref.Persisted): List<PlotObservationRow> =
-        backend.fetchReferencing("PlotObservation", "plot", target).map { it.toPlotObservationRow() }
-    override fun greenhouseResultsByTrial(target: Ref.Persisted): List<GreenhouseResultRow> =
-        backend.fetchReferencing("GreenhouseResult", "trial", target).map { it.toGreenhouseResultRow() }
-    override fun observationCorrectionsByObservation(target: Ref.Persisted): List<ObservationCorrectionRow> =
-        backend.fetchReferencing("ObservationCorrection", "observation", target).map { it.toObservationCorrectionRow() }
-    override fun correctionRefusalsByObservation(target: Ref.Persisted): List<CorrectionRefusalRow> =
-        backend.fetchReferencing("CorrectionRefusal", "observation", target).map { it.toCorrectionRefusalRow() }
-    override fun voidRefusalsByObservation(target: Ref.Persisted): List<VoidRefusalRow> =
-        backend.fetchReferencing("VoidRefusal", "observation", target).map { it.toVoidRefusalRow() }
-    override fun moveRefusalsByPlot(target: Ref.Persisted): List<MoveRefusalRow> =
-        backend.fetchReferencing("MoveRefusal", "plot", target).map { it.toMoveRefusalRow() }
-    override fun climateExcursionsByGreenhouse(target: Ref.Persisted): List<ClimateExcursionRow> =
-        backend.fetchReferencing("ClimateExcursion", "greenhouse", target).map { it.toClimateExcursionRow() }
-    override fun excursionEndsByExcursion(target: Ref.Persisted): List<ExcursionEndRow> =
-        backend.fetchReferencing("ExcursionEnd", "excursion", target).map { it.toExcursionEndRow() }
-    override fun sensorAlertsByGreenhouse(target: Ref.Persisted): List<SensorAlertRow> =
-        backend.fetchReferencing("SensorAlert", "greenhouse", target).map { it.toSensorAlertRow() }
-    override fun permitsBySite(target: Ref.Persisted): List<PermitRow> =
-        backend.fetchReferencing("Permit", "site", target).map { it.toPermitRow() }
-    override fun permitsByCrop(target: Ref.Persisted): List<PermitRow> =
-        backend.fetchReferencing("Permit", "crop", target).map { it.toPermitRow() }
-    override fun weatherObservationsBySite(target: Ref.Persisted): List<WeatherObservationRow> =
-        backend.fetchReferencing("WeatherObservation", "site", target).map { it.toWeatherObservationRow() }
-    override fun fieldTrialsByPeptide(target: Ref.Persisted): List<FieldTrialRow> =
-        backend.fetchReferencing("FieldTrial", "peptide", target).map { it.toFieldTrialRow() }
-    override fun fieldTrialsByPathogen(target: Ref.Persisted): List<FieldTrialRow> =
-        backend.fetchReferencing("FieldTrial", "pathogen", target).map { it.toFieldTrialRow() }
-    override fun fieldTrialsByCrop(target: Ref.Persisted): List<FieldTrialRow> =
-        backend.fetchReferencing("FieldTrial", "crop", target).map { it.toFieldTrialRow() }
-    override fun fieldTrialsBySite(target: Ref.Persisted): List<FieldTrialRow> =
-        backend.fetchReferencing("FieldTrial", "site", target).map { it.toFieldTrialRow() }
-    override fun fieldTrialsByProtocol(target: Ref.Persisted): List<FieldTrialRow> =
-        backend.fetchReferencing("FieldTrial", "protocol", target).map { it.toFieldTrialRow() }
-    override fun plantingsByTrial(target: Ref.Persisted): List<PlantingRow> =
-        backend.fetchReferencing("Planting", "trial", target).map { it.toPlantingRow() }
-    override fun fieldPlotsByTrial(target: Ref.Persisted): List<FieldPlotRow> =
-        backend.fetchReferencing("FieldPlot", "trial", target).map { it.toFieldPlotRow() }
-    override fun treatmentApplicationsByTrial(target: Ref.Persisted): List<TreatmentApplicationRow> =
-        backend.fetchReferencing("TreatmentApplication", "trial", target).map { it.toTreatmentApplicationRow() }
-    override fun reapplicationNoticesByApplication(target: Ref.Persisted): List<ReapplicationNoticeRow> =
-        backend.fetchReferencing("ReapplicationNotice", "application", target).map { it.toReapplicationNoticeRow() }
-    override fun scoutingsByPlot(target: Ref.Persisted): List<ScoutingRow> =
-        backend.fetchReferencing("Scouting", "plot", target).map { it.toScoutingRow() }
-    override fun harvestsByPlot(target: Ref.Persisted): List<HarvestRow> =
-        backend.fetchReferencing("Harvest", "plot", target).map { it.toHarvestRow() }
-    override fun phytotoxicityReportsByPlot(target: Ref.Persisted): List<PhytotoxicityReportRow> =
-        backend.fetchReferencing("PhytotoxicityReport", "plot", target).map { it.toPhytotoxicityReportRow() }
-    override fun haltNoticesByTrial(target: Ref.Persisted): List<HaltNoticeRow> =
-        backend.fetchReferencing("HaltNotice", "trial", target).map { it.toHaltNoticeRow() }
-    override fun collectionTasksByTrial(target: Ref.Persisted): List<CollectionTaskRow> =
-        backend.fetchReferencing("CollectionTask", "trial", target).map { it.toCollectionTaskRow() }
-    override fun taskRemindersByTask(target: Ref.Persisted): List<TaskReminderRow> =
-        backend.fetchReferencing("TaskReminder", "task", target).map { it.toTaskReminderRow() }
-    override fun rescheduleRefusalsByTask(target: Ref.Persisted): List<RescheduleRefusalRow> =
-        backend.fetchReferencing("RescheduleRefusal", "task", target).map { it.toRescheduleRefusalRow() }
-    override fun cancelRefusalsByTask(target: Ref.Persisted): List<CancelRefusalRow> =
-        backend.fetchReferencing("CancelRefusal", "task", target).map { it.toCancelRefusalRow() }
+    override fun pathogensByHosts(targets: List<Ref.Persisted>): List<PathogenRow> =
+        backend.fetchReferencingAny("Pathogen", "host", targets).map { it.toPathogenRow() }
+    override fun labExperimentsByPeptides(targets: List<Ref.Persisted>): List<LabExperimentRow> =
+        backend.fetchReferencingAny("LabExperiment", "peptide", targets).map { it.toLabExperimentRow() }
+    override fun labExperimentsByPathogens(targets: List<Ref.Persisted>): List<LabExperimentRow> =
+        backend.fetchReferencingAny("LabExperiment", "pathogen", targets).map { it.toLabExperimentRow() }
+    override fun labExperimentsByProtocols(targets: List<Ref.Persisted>): List<LabExperimentRow> =
+        backend.fetchReferencingAny("LabExperiment", "protocol", targets).map { it.toLabExperimentRow() }
+    override fun assaysByExperiments(targets: List<Ref.Persisted>): List<AssayRow> =
+        backend.fetchReferencingAny("Assay", "experiment", targets).map { it.toAssayRow() }
+    override fun assayReadingsByAssays(targets: List<Ref.Persisted>): List<AssayReadingRow> =
+        backend.fetchReferencingAny("AssayReading", "assay", targets).map { it.toAssayReadingRow() }
+    override fun labHitsByExperiments(targets: List<Ref.Persisted>): List<LabHitRow> =
+        backend.fetchReferencingAny("LabHit", "experiment", targets).map { it.toLabHitRow() }
+    override fun labHitRetractionsByExperiments(targets: List<Ref.Persisted>): List<LabHitRetractionRow> =
+        backend.fetchReferencingAny("LabHitRetraction", "experiment", targets).map { it.toLabHitRetractionRow() }
+    override fun climateReadingsByGreenhouses(targets: List<Ref.Persisted>): List<ClimateReadingRow> =
+        backend.fetchReferencingAny("ClimateReading", "greenhouse", targets).map { it.toClimateReadingRow() }
+    override fun greenhouseTrialsByPeptides(targets: List<Ref.Persisted>): List<GreenhouseTrialRow> =
+        backend.fetchReferencingAny("GreenhouseTrial", "peptide", targets).map { it.toGreenhouseTrialRow() }
+    override fun greenhouseTrialsByPathogens(targets: List<Ref.Persisted>): List<GreenhouseTrialRow> =
+        backend.fetchReferencingAny("GreenhouseTrial", "pathogen", targets).map { it.toGreenhouseTrialRow() }
+    override fun greenhouseTrialsByGreenhouses(targets: List<Ref.Persisted>): List<GreenhouseTrialRow> =
+        backend.fetchReferencingAny("GreenhouseTrial", "greenhouse", targets).map { it.toGreenhouseTrialRow() }
+    override fun greenhouseTrialsByProtocols(targets: List<Ref.Persisted>): List<GreenhouseTrialRow> =
+        backend.fetchReferencingAny("GreenhouseTrial", "protocol", targets).map { it.toGreenhouseTrialRow() }
+    override fun greenhousePlotsByTrials(targets: List<Ref.Persisted>): List<GreenhousePlotRow> =
+        backend.fetchReferencingAny("GreenhousePlot", "trial", targets).map { it.toGreenhousePlotRow() }
+    override fun treatmentsByTrials(targets: List<Ref.Persisted>): List<TreatmentRow> =
+        backend.fetchReferencingAny("Treatment", "trial", targets).map { it.toTreatmentRow() }
+    override fun plotObservationsByPlots(targets: List<Ref.Persisted>): List<PlotObservationRow> =
+        backend.fetchReferencingAny("PlotObservation", "plot", targets).map { it.toPlotObservationRow() }
+    override fun greenhouseResultsByTrials(targets: List<Ref.Persisted>): List<GreenhouseResultRow> =
+        backend.fetchReferencingAny("GreenhouseResult", "trial", targets).map { it.toGreenhouseResultRow() }
+    override fun observationCorrectionsByObservations(targets: List<Ref.Persisted>): List<ObservationCorrectionRow> =
+        backend.fetchReferencingAny("ObservationCorrection", "observation", targets).map { it.toObservationCorrectionRow() }
+    override fun correctionRefusalsByObservations(targets: List<Ref.Persisted>): List<CorrectionRefusalRow> =
+        backend.fetchReferencingAny("CorrectionRefusal", "observation", targets).map { it.toCorrectionRefusalRow() }
+    override fun voidRefusalsByObservations(targets: List<Ref.Persisted>): List<VoidRefusalRow> =
+        backend.fetchReferencingAny("VoidRefusal", "observation", targets).map { it.toVoidRefusalRow() }
+    override fun moveRefusalsByPlots(targets: List<Ref.Persisted>): List<MoveRefusalRow> =
+        backend.fetchReferencingAny("MoveRefusal", "plot", targets).map { it.toMoveRefusalRow() }
+    override fun climateExcursionsByGreenhouses(targets: List<Ref.Persisted>): List<ClimateExcursionRow> =
+        backend.fetchReferencingAny("ClimateExcursion", "greenhouse", targets).map { it.toClimateExcursionRow() }
+    override fun excursionEndsByExcursions(targets: List<Ref.Persisted>): List<ExcursionEndRow> =
+        backend.fetchReferencingAny("ExcursionEnd", "excursion", targets).map { it.toExcursionEndRow() }
+    override fun sensorAlertsByGreenhouses(targets: List<Ref.Persisted>): List<SensorAlertRow> =
+        backend.fetchReferencingAny("SensorAlert", "greenhouse", targets).map { it.toSensorAlertRow() }
+    override fun permitsBySites(targets: List<Ref.Persisted>): List<PermitRow> =
+        backend.fetchReferencingAny("Permit", "site", targets).map { it.toPermitRow() }
+    override fun permitsByCrops(targets: List<Ref.Persisted>): List<PermitRow> =
+        backend.fetchReferencingAny("Permit", "crop", targets).map { it.toPermitRow() }
+    override fun weatherObservationsBySites(targets: List<Ref.Persisted>): List<WeatherObservationRow> =
+        backend.fetchReferencingAny("WeatherObservation", "site", targets).map { it.toWeatherObservationRow() }
+    override fun fieldTrialsByPeptides(targets: List<Ref.Persisted>): List<FieldTrialRow> =
+        backend.fetchReferencingAny("FieldTrial", "peptide", targets).map { it.toFieldTrialRow() }
+    override fun fieldTrialsByPathogens(targets: List<Ref.Persisted>): List<FieldTrialRow> =
+        backend.fetchReferencingAny("FieldTrial", "pathogen", targets).map { it.toFieldTrialRow() }
+    override fun fieldTrialsByCrops(targets: List<Ref.Persisted>): List<FieldTrialRow> =
+        backend.fetchReferencingAny("FieldTrial", "crop", targets).map { it.toFieldTrialRow() }
+    override fun fieldTrialsBySites(targets: List<Ref.Persisted>): List<FieldTrialRow> =
+        backend.fetchReferencingAny("FieldTrial", "site", targets).map { it.toFieldTrialRow() }
+    override fun fieldTrialsByProtocols(targets: List<Ref.Persisted>): List<FieldTrialRow> =
+        backend.fetchReferencingAny("FieldTrial", "protocol", targets).map { it.toFieldTrialRow() }
+    override fun plantingsByTrials(targets: List<Ref.Persisted>): List<PlantingRow> =
+        backend.fetchReferencingAny("Planting", "trial", targets).map { it.toPlantingRow() }
+    override fun fieldPlotsByTrials(targets: List<Ref.Persisted>): List<FieldPlotRow> =
+        backend.fetchReferencingAny("FieldPlot", "trial", targets).map { it.toFieldPlotRow() }
+    override fun treatmentApplicationsByTrials(targets: List<Ref.Persisted>): List<TreatmentApplicationRow> =
+        backend.fetchReferencingAny("TreatmentApplication", "trial", targets).map { it.toTreatmentApplicationRow() }
+    override fun reapplicationNoticesByApplications(targets: List<Ref.Persisted>): List<ReapplicationNoticeRow> =
+        backend.fetchReferencingAny("ReapplicationNotice", "application", targets).map { it.toReapplicationNoticeRow() }
+    override fun scoutingsByPlots(targets: List<Ref.Persisted>): List<ScoutingRow> =
+        backend.fetchReferencingAny("Scouting", "plot", targets).map { it.toScoutingRow() }
+    override fun harvestsByPlots(targets: List<Ref.Persisted>): List<HarvestRow> =
+        backend.fetchReferencingAny("Harvest", "plot", targets).map { it.toHarvestRow() }
+    override fun phytotoxicityReportsByPlots(targets: List<Ref.Persisted>): List<PhytotoxicityReportRow> =
+        backend.fetchReferencingAny("PhytotoxicityReport", "plot", targets).map { it.toPhytotoxicityReportRow() }
+    override fun haltNoticesByTrials(targets: List<Ref.Persisted>): List<HaltNoticeRow> =
+        backend.fetchReferencingAny("HaltNotice", "trial", targets).map { it.toHaltNoticeRow() }
+    override fun collectionTasksByTrials(targets: List<Ref.Persisted>): List<CollectionTaskRow> =
+        backend.fetchReferencingAny("CollectionTask", "trial", targets).map { it.toCollectionTaskRow() }
+    override fun taskRemindersByTasks(targets: List<Ref.Persisted>): List<TaskReminderRow> =
+        backend.fetchReferencingAny("TaskReminder", "task", targets).map { it.toTaskReminderRow() }
+    override fun rescheduleRefusalsByTasks(targets: List<Ref.Persisted>): List<RescheduleRefusalRow> =
+        backend.fetchReferencingAny("RescheduleRefusal", "task", targets).map { it.toRescheduleRefusalRow() }
+    override fun cancelRefusalsByTasks(targets: List<Ref.Persisted>): List<CancelRefusalRow> =
+        backend.fetchReferencingAny("CancelRefusal", "task", targets).map { it.toCancelRefusalRow() }
 
     override fun treatedTrialCandidates(): List<GreenhouseTrialRow> =
         backend.fetchCandidates("GreenhouseTrial", questions.treatedTrialCandidates.instantiate(listOf()))
@@ -976,53 +1114,53 @@ class PeptidesStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Crop" -> store.crop(key)?.toRow()
-        "Pathogen" -> store.pathogen(key)?.toRow()
-        "Peptide" -> store.peptide(key)?.toRow()
-        "AssayProtocol" -> store.assayProtocol(key)?.toRow()
-        "LabExperiment" -> store.labExperiment(key)?.toRow()
-        "Assay" -> store.assay(key)?.toRow()
-        "AssayReading" -> store.assayReading(key)?.toRow()
-        "LabHit" -> store.labHit(key)?.toRow()
-        "LabHitRetraction" -> store.labHitRetraction(key)?.toRow()
-        "Greenhouse" -> store.greenhouse(key)?.toRow()
-        "ClimateReading" -> store.climateReading(key)?.toRow()
-        "GreenhouseProtocol" -> store.greenhouseProtocol(key)?.toRow()
-        "GreenhouseTrial" -> store.greenhouseTrial(key)?.toRow()
-        "GreenhouseRefusal" -> store.greenhouseRefusal(key)?.toRow()
-        "GreenhousePlot" -> store.greenhousePlot(key)?.toRow()
-        "Treatment" -> store.treatment(key)?.toRow()
-        "PlotObservation" -> store.plotObservation(key)?.toRow()
-        "GreenhouseResult" -> store.greenhouseResult(key)?.toRow()
-        "ObservationCorrection" -> store.observationCorrection(key)?.toRow()
-        "CorrectionRefusal" -> store.correctionRefusal(key)?.toRow()
-        "VoidRecord" -> store.voidRecord(key)?.toRow()
-        "VoidRefusal" -> store.voidRefusal(key)?.toRow()
-        "MoveRefusal" -> store.moveRefusal(key)?.toRow()
-        "ClimateExcursion" -> store.climateExcursion(key)?.toRow()
-        "ExcursionEnd" -> store.excursionEnd(key)?.toRow()
-        "SensorAlert" -> store.sensorAlert(key)?.toRow()
-        "FieldSite" -> store.fieldSite(key)?.toRow()
-        "Permit" -> store.permit(key)?.toRow()
-        "WeatherObservation" -> store.weatherObservation(key)?.toRow()
-        "FieldProtocol" -> store.fieldProtocol(key)?.toRow()
-        "FieldTrial" -> store.fieldTrial(key)?.toRow()
-        "FieldRefusal" -> store.fieldRefusal(key)?.toRow()
-        "Planting" -> store.planting(key)?.toRow()
-        "FieldPlot" -> store.fieldPlot(key)?.toRow()
-        "TreatmentApplication" -> store.treatmentApplication(key)?.toRow()
-        "ReapplicationNotice" -> store.reapplicationNotice(key)?.toRow()
-        "Scouting" -> store.scouting(key)?.toRow()
-        "Harvest" -> store.harvest(key)?.toRow()
-        "PhytotoxicityReport" -> store.phytotoxicityReport(key)?.toRow()
-        "HaltNotice" -> store.haltNotice(key)?.toRow()
-        "CollectionTask" -> store.collectionTask(key)?.toRow()
-        "TaskReminder" -> store.taskReminder(key)?.toRow()
-        "RescheduleRefusal" -> store.rescheduleRefusal(key)?.toRow()
-        "TaskCancellation" -> store.taskCancellation(key)?.toRow()
-        "CancelRefusal" -> store.cancelRefusal(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Crop" -> store.crops(keys).map { it.toRow() }
+        "Pathogen" -> store.pathogens(keys).map { it.toRow() }
+        "Peptide" -> store.peptides(keys).map { it.toRow() }
+        "AssayProtocol" -> store.assayProtocols(keys).map { it.toRow() }
+        "LabExperiment" -> store.labExperiments(keys).map { it.toRow() }
+        "Assay" -> store.assays(keys).map { it.toRow() }
+        "AssayReading" -> store.assayReadings(keys).map { it.toRow() }
+        "LabHit" -> store.labHits(keys).map { it.toRow() }
+        "LabHitRetraction" -> store.labHitRetractions(keys).map { it.toRow() }
+        "Greenhouse" -> store.greenhouses(keys).map { it.toRow() }
+        "ClimateReading" -> store.climateReadings(keys).map { it.toRow() }
+        "GreenhouseProtocol" -> store.greenhouseProtocols(keys).map { it.toRow() }
+        "GreenhouseTrial" -> store.greenhouseTrials(keys).map { it.toRow() }
+        "GreenhouseRefusal" -> store.greenhouseRefusals(keys).map { it.toRow() }
+        "GreenhousePlot" -> store.greenhousePlots(keys).map { it.toRow() }
+        "Treatment" -> store.treatments(keys).map { it.toRow() }
+        "PlotObservation" -> store.plotObservations(keys).map { it.toRow() }
+        "GreenhouseResult" -> store.greenhouseResults(keys).map { it.toRow() }
+        "ObservationCorrection" -> store.observationCorrections(keys).map { it.toRow() }
+        "CorrectionRefusal" -> store.correctionRefusals(keys).map { it.toRow() }
+        "VoidRecord" -> store.voidRecords(keys).map { it.toRow() }
+        "VoidRefusal" -> store.voidRefusals(keys).map { it.toRow() }
+        "MoveRefusal" -> store.moveRefusals(keys).map { it.toRow() }
+        "ClimateExcursion" -> store.climateExcursions(keys).map { it.toRow() }
+        "ExcursionEnd" -> store.excursionEnds(keys).map { it.toRow() }
+        "SensorAlert" -> store.sensorAlerts(keys).map { it.toRow() }
+        "FieldSite" -> store.fieldSites(keys).map { it.toRow() }
+        "Permit" -> store.permits(keys).map { it.toRow() }
+        "WeatherObservation" -> store.weatherObservations(keys).map { it.toRow() }
+        "FieldProtocol" -> store.fieldProtocols(keys).map { it.toRow() }
+        "FieldTrial" -> store.fieldTrials(keys).map { it.toRow() }
+        "FieldRefusal" -> store.fieldRefusals(keys).map { it.toRow() }
+        "Planting" -> store.plantings(keys).map { it.toRow() }
+        "FieldPlot" -> store.fieldPlots(keys).map { it.toRow() }
+        "TreatmentApplication" -> store.treatmentApplications(keys).map { it.toRow() }
+        "ReapplicationNotice" -> store.reapplicationNotices(keys).map { it.toRow() }
+        "Scouting" -> store.scoutings(keys).map { it.toRow() }
+        "Harvest" -> store.harvests(keys).map { it.toRow() }
+        "PhytotoxicityReport" -> store.phytotoxicityReports(keys).map { it.toRow() }
+        "HaltNotice" -> store.haltNotices(keys).map { it.toRow() }
+        "CollectionTask" -> store.collectionTasks(keys).map { it.toRow() }
+        "TaskReminder" -> store.taskReminders(keys).map { it.toRow() }
+        "RescheduleRefusal" -> store.rescheduleRefusals(keys).map { it.toRow() }
+        "TaskCancellation" -> store.taskCancellations(keys).map { it.toRow() }
+        "CancelRefusal" -> store.cancelRefusals(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -1074,51 +1212,51 @@ class PeptidesStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "Pathogen" && field == "host" -> store.pathogensByHost(target).map { it.toRow() }
-        shape == "LabExperiment" && field == "peptide" -> store.labExperimentsByPeptide(target).map { it.toRow() }
-        shape == "LabExperiment" && field == "pathogen" -> store.labExperimentsByPathogen(target).map { it.toRow() }
-        shape == "LabExperiment" && field == "protocol" -> store.labExperimentsByProtocol(target).map { it.toRow() }
-        shape == "Assay" && field == "experiment" -> store.assaysByExperiment(target).map { it.toRow() }
-        shape == "AssayReading" && field == "assay" -> store.assayReadingsByAssay(target).map { it.toRow() }
-        shape == "LabHit" && field == "experiment" -> store.labHitsByExperiment(target).map { it.toRow() }
-        shape == "LabHitRetraction" && field == "experiment" -> store.labHitRetractionsByExperiment(target).map { it.toRow() }
-        shape == "ClimateReading" && field == "greenhouse" -> store.climateReadingsByGreenhouse(target).map { it.toRow() }
-        shape == "GreenhouseTrial" && field == "peptide" -> store.greenhouseTrialsByPeptide(target).map { it.toRow() }
-        shape == "GreenhouseTrial" && field == "pathogen" -> store.greenhouseTrialsByPathogen(target).map { it.toRow() }
-        shape == "GreenhouseTrial" && field == "greenhouse" -> store.greenhouseTrialsByGreenhouse(target).map { it.toRow() }
-        shape == "GreenhouseTrial" && field == "protocol" -> store.greenhouseTrialsByProtocol(target).map { it.toRow() }
-        shape == "GreenhousePlot" && field == "trial" -> store.greenhousePlotsByTrial(target).map { it.toRow() }
-        shape == "Treatment" && field == "trial" -> store.treatmentsByTrial(target).map { it.toRow() }
-        shape == "PlotObservation" && field == "plot" -> store.plotObservationsByPlot(target).map { it.toRow() }
-        shape == "GreenhouseResult" && field == "trial" -> store.greenhouseResultsByTrial(target).map { it.toRow() }
-        shape == "ObservationCorrection" && field == "observation" -> store.observationCorrectionsByObservation(target).map { it.toRow() }
-        shape == "CorrectionRefusal" && field == "observation" -> store.correctionRefusalsByObservation(target).map { it.toRow() }
-        shape == "VoidRefusal" && field == "observation" -> store.voidRefusalsByObservation(target).map { it.toRow() }
-        shape == "MoveRefusal" && field == "plot" -> store.moveRefusalsByPlot(target).map { it.toRow() }
-        shape == "ClimateExcursion" && field == "greenhouse" -> store.climateExcursionsByGreenhouse(target).map { it.toRow() }
-        shape == "ExcursionEnd" && field == "excursion" -> store.excursionEndsByExcursion(target).map { it.toRow() }
-        shape == "SensorAlert" && field == "greenhouse" -> store.sensorAlertsByGreenhouse(target).map { it.toRow() }
-        shape == "Permit" && field == "site" -> store.permitsBySite(target).map { it.toRow() }
-        shape == "Permit" && field == "crop" -> store.permitsByCrop(target).map { it.toRow() }
-        shape == "WeatherObservation" && field == "site" -> store.weatherObservationsBySite(target).map { it.toRow() }
-        shape == "FieldTrial" && field == "peptide" -> store.fieldTrialsByPeptide(target).map { it.toRow() }
-        shape == "FieldTrial" && field == "pathogen" -> store.fieldTrialsByPathogen(target).map { it.toRow() }
-        shape == "FieldTrial" && field == "crop" -> store.fieldTrialsByCrop(target).map { it.toRow() }
-        shape == "FieldTrial" && field == "site" -> store.fieldTrialsBySite(target).map { it.toRow() }
-        shape == "FieldTrial" && field == "protocol" -> store.fieldTrialsByProtocol(target).map { it.toRow() }
-        shape == "Planting" && field == "trial" -> store.plantingsByTrial(target).map { it.toRow() }
-        shape == "FieldPlot" && field == "trial" -> store.fieldPlotsByTrial(target).map { it.toRow() }
-        shape == "TreatmentApplication" && field == "trial" -> store.treatmentApplicationsByTrial(target).map { it.toRow() }
-        shape == "ReapplicationNotice" && field == "application" -> store.reapplicationNoticesByApplication(target).map { it.toRow() }
-        shape == "Scouting" && field == "plot" -> store.scoutingsByPlot(target).map { it.toRow() }
-        shape == "Harvest" && field == "plot" -> store.harvestsByPlot(target).map { it.toRow() }
-        shape == "PhytotoxicityReport" && field == "plot" -> store.phytotoxicityReportsByPlot(target).map { it.toRow() }
-        shape == "HaltNotice" && field == "trial" -> store.haltNoticesByTrial(target).map { it.toRow() }
-        shape == "CollectionTask" && field == "trial" -> store.collectionTasksByTrial(target).map { it.toRow() }
-        shape == "TaskReminder" && field == "task" -> store.taskRemindersByTask(target).map { it.toRow() }
-        shape == "RescheduleRefusal" && field == "task" -> store.rescheduleRefusalsByTask(target).map { it.toRow() }
-        shape == "CancelRefusal" && field == "task" -> store.cancelRefusalsByTask(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "Pathogen" && field == "host" -> store.pathogensByHosts(targets).map { it.toRow() }
+        shape == "LabExperiment" && field == "peptide" -> store.labExperimentsByPeptides(targets).map { it.toRow() }
+        shape == "LabExperiment" && field == "pathogen" -> store.labExperimentsByPathogens(targets).map { it.toRow() }
+        shape == "LabExperiment" && field == "protocol" -> store.labExperimentsByProtocols(targets).map { it.toRow() }
+        shape == "Assay" && field == "experiment" -> store.assaysByExperiments(targets).map { it.toRow() }
+        shape == "AssayReading" && field == "assay" -> store.assayReadingsByAssays(targets).map { it.toRow() }
+        shape == "LabHit" && field == "experiment" -> store.labHitsByExperiments(targets).map { it.toRow() }
+        shape == "LabHitRetraction" && field == "experiment" -> store.labHitRetractionsByExperiments(targets).map { it.toRow() }
+        shape == "ClimateReading" && field == "greenhouse" -> store.climateReadingsByGreenhouses(targets).map { it.toRow() }
+        shape == "GreenhouseTrial" && field == "peptide" -> store.greenhouseTrialsByPeptides(targets).map { it.toRow() }
+        shape == "GreenhouseTrial" && field == "pathogen" -> store.greenhouseTrialsByPathogens(targets).map { it.toRow() }
+        shape == "GreenhouseTrial" && field == "greenhouse" -> store.greenhouseTrialsByGreenhouses(targets).map { it.toRow() }
+        shape == "GreenhouseTrial" && field == "protocol" -> store.greenhouseTrialsByProtocols(targets).map { it.toRow() }
+        shape == "GreenhousePlot" && field == "trial" -> store.greenhousePlotsByTrials(targets).map { it.toRow() }
+        shape == "Treatment" && field == "trial" -> store.treatmentsByTrials(targets).map { it.toRow() }
+        shape == "PlotObservation" && field == "plot" -> store.plotObservationsByPlots(targets).map { it.toRow() }
+        shape == "GreenhouseResult" && field == "trial" -> store.greenhouseResultsByTrials(targets).map { it.toRow() }
+        shape == "ObservationCorrection" && field == "observation" -> store.observationCorrectionsByObservations(targets).map { it.toRow() }
+        shape == "CorrectionRefusal" && field == "observation" -> store.correctionRefusalsByObservations(targets).map { it.toRow() }
+        shape == "VoidRefusal" && field == "observation" -> store.voidRefusalsByObservations(targets).map { it.toRow() }
+        shape == "MoveRefusal" && field == "plot" -> store.moveRefusalsByPlots(targets).map { it.toRow() }
+        shape == "ClimateExcursion" && field == "greenhouse" -> store.climateExcursionsByGreenhouses(targets).map { it.toRow() }
+        shape == "ExcursionEnd" && field == "excursion" -> store.excursionEndsByExcursions(targets).map { it.toRow() }
+        shape == "SensorAlert" && field == "greenhouse" -> store.sensorAlertsByGreenhouses(targets).map { it.toRow() }
+        shape == "Permit" && field == "site" -> store.permitsBySites(targets).map { it.toRow() }
+        shape == "Permit" && field == "crop" -> store.permitsByCrops(targets).map { it.toRow() }
+        shape == "WeatherObservation" && field == "site" -> store.weatherObservationsBySites(targets).map { it.toRow() }
+        shape == "FieldTrial" && field == "peptide" -> store.fieldTrialsByPeptides(targets).map { it.toRow() }
+        shape == "FieldTrial" && field == "pathogen" -> store.fieldTrialsByPathogens(targets).map { it.toRow() }
+        shape == "FieldTrial" && field == "crop" -> store.fieldTrialsByCrops(targets).map { it.toRow() }
+        shape == "FieldTrial" && field == "site" -> store.fieldTrialsBySites(targets).map { it.toRow() }
+        shape == "FieldTrial" && field == "protocol" -> store.fieldTrialsByProtocols(targets).map { it.toRow() }
+        shape == "Planting" && field == "trial" -> store.plantingsByTrials(targets).map { it.toRow() }
+        shape == "FieldPlot" && field == "trial" -> store.fieldPlotsByTrials(targets).map { it.toRow() }
+        shape == "TreatmentApplication" && field == "trial" -> store.treatmentApplicationsByTrials(targets).map { it.toRow() }
+        shape == "ReapplicationNotice" && field == "application" -> store.reapplicationNoticesByApplications(targets).map { it.toRow() }
+        shape == "Scouting" && field == "plot" -> store.scoutingsByPlots(targets).map { it.toRow() }
+        shape == "Harvest" && field == "plot" -> store.harvestsByPlots(targets).map { it.toRow() }
+        shape == "PhytotoxicityReport" && field == "plot" -> store.phytotoxicityReportsByPlots(targets).map { it.toRow() }
+        shape == "HaltNotice" && field == "trial" -> store.haltNoticesByTrials(targets).map { it.toRow() }
+        shape == "CollectionTask" && field == "trial" -> store.collectionTasksByTrials(targets).map { it.toRow() }
+        shape == "TaskReminder" && field == "task" -> store.taskRemindersByTasks(targets).map { it.toRow() }
+        shape == "RescheduleRefusal" && field == "task" -> store.rescheduleRefusalsByTasks(targets).map { it.toRow() }
+        shape == "CancelRefusal" && field == "task" -> store.cancelRefusalsByTasks(targets).map { it.toRow() }
         else -> emptyList()
     }
 

@@ -79,15 +79,17 @@ interface LoyaltyStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun member(key: StoreKey): MemberRow?
-    fun duesPayment(key: StoreKey): DuesPaymentRow?
-    fun purchase(key: StoreKey): PurchaseRow?
-    fun thankYouNote(key: StoreKey): ThankYouNoteRow?
-    fun enrollment(key: StoreKey): EnrollmentRow?
-    fun safetyWaiver(key: StoreKey): SafetyWaiverRow?
-    fun orientationRecord(key: StoreKey): OrientationRecordRow?
-    fun keycard(key: StoreKey): KeycardRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun members(keys: List<StoreKey>): List<MemberRow>
+    fun duesPayments(keys: List<StoreKey>): List<DuesPaymentRow>
+    fun purchases(keys: List<StoreKey>): List<PurchaseRow>
+    fun thankYouNotes(keys: List<StoreKey>): List<ThankYouNoteRow>
+    fun enrollments(keys: List<StoreKey>): List<EnrollmentRow>
+    fun safetyWaivers(keys: List<StoreKey>): List<SafetyWaiverRow>
+    fun orientationRecords(keys: List<StoreKey>): List<OrientationRecordRow>
+    fun keycards(keys: List<StoreKey>): List<KeycardRow>
 
     // ── scan floor: all rows of a shape ──
     fun allMembers(): List<MemberRow>
@@ -99,15 +101,15 @@ interface LoyaltyStore {
     fun allOrientationRecords(): List<OrientationRecordRow>
     fun allKeycards(): List<KeycardRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun membersByReferrer(target: Ref.Persisted): List<MemberRow>
-    fun duesPaymentsByMember(target: Ref.Persisted): List<DuesPaymentRow>
-    fun purchasesByMember(target: Ref.Persisted): List<PurchaseRow>
-    fun thankYouNotesByPurchase(target: Ref.Persisted): List<ThankYouNoteRow>
-    fun enrollmentsByMember(target: Ref.Persisted): List<EnrollmentRow>
-    fun safetyWaiversByMember(target: Ref.Persisted): List<SafetyWaiverRow>
-    fun orientationRecordsByMember(target: Ref.Persisted): List<OrientationRecordRow>
-    fun keycardsByMember(target: Ref.Persisted): List<KeycardRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun membersByReferrers(targets: List<Ref.Persisted>): List<MemberRow>
+    fun duesPaymentsByMembers(targets: List<Ref.Persisted>): List<DuesPaymentRow>
+    fun purchasesByMembers(targets: List<Ref.Persisted>): List<PurchaseRow>
+    fun thankYouNotesByPurchases(targets: List<Ref.Persisted>): List<ThankYouNoteRow>
+    fun enrollmentsByMembers(targets: List<Ref.Persisted>): List<EnrollmentRow>
+    fun safetyWaiversByMembers(targets: List<Ref.Persisted>): List<SafetyWaiverRow>
+    fun orientationRecordsByMembers(targets: List<Ref.Persisted>): List<OrientationRecordRow>
+    fun keycardsByMembers(targets: List<Ref.Persisted>): List<KeycardRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement QualifiedPurchase; rule PromoteReferrer — `QualifiedPurchase`.
@@ -129,6 +131,33 @@ interface LoyaltyStore {
      *  Superset contract: any superset of the matching rows is correct. */
     fun never2Candidates(): List<PurchaseRow>
 }
+
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun LoyaltyStore.member(key: StoreKey): MemberRow? = members(listOf(key)).firstOrNull()
+fun LoyaltyStore.duesPayment(key: StoreKey): DuesPaymentRow? = duesPayments(listOf(key)).firstOrNull()
+fun LoyaltyStore.purchase(key: StoreKey): PurchaseRow? = purchases(listOf(key)).firstOrNull()
+fun LoyaltyStore.thankYouNote(key: StoreKey): ThankYouNoteRow? = thankYouNotes(listOf(key)).firstOrNull()
+fun LoyaltyStore.enrollment(key: StoreKey): EnrollmentRow? = enrollments(listOf(key)).firstOrNull()
+fun LoyaltyStore.safetyWaiver(key: StoreKey): SafetyWaiverRow? = safetyWaivers(listOf(key)).firstOrNull()
+fun LoyaltyStore.orientationRecord(key: StoreKey): OrientationRecordRow? = orientationRecords(listOf(key)).firstOrNull()
+fun LoyaltyStore.keycard(key: StoreKey): KeycardRow? = keycards(listOf(key)).firstOrNull()
+fun LoyaltyStore.membersByReferrer(target: Ref.Persisted): List<MemberRow> =
+    membersByReferrers(listOf(target))
+fun LoyaltyStore.duesPaymentsByMember(target: Ref.Persisted): List<DuesPaymentRow> =
+    duesPaymentsByMembers(listOf(target))
+fun LoyaltyStore.purchasesByMember(target: Ref.Persisted): List<PurchaseRow> =
+    purchasesByMembers(listOf(target))
+fun LoyaltyStore.thankYouNotesByPurchase(target: Ref.Persisted): List<ThankYouNoteRow> =
+    thankYouNotesByPurchases(listOf(target))
+fun LoyaltyStore.enrollmentsByMember(target: Ref.Persisted): List<EnrollmentRow> =
+    enrollmentsByMembers(listOf(target))
+fun LoyaltyStore.safetyWaiversByMember(target: Ref.Persisted): List<SafetyWaiverRow> =
+    safetyWaiversByMembers(listOf(target))
+fun LoyaltyStore.orientationRecordsByMember(target: Ref.Persisted): List<OrientationRecordRow> =
+    orientationRecordsByMembers(listOf(target))
+fun LoyaltyStore.keycardsByMember(target: Ref.Persisted): List<KeycardRow> =
+    keycardsByMembers(listOf(target))
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class LoyaltyStoreQuestions(model: Model) {
@@ -152,14 +181,14 @@ open class LoyaltyStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun member(key: StoreKey): MemberRow? = backend.fetchByKey("Member", key)?.toMemberRow()
-    override fun duesPayment(key: StoreKey): DuesPaymentRow? = backend.fetchByKey("DuesPayment", key)?.toDuesPaymentRow()
-    override fun purchase(key: StoreKey): PurchaseRow? = backend.fetchByKey("Purchase", key)?.toPurchaseRow()
-    override fun thankYouNote(key: StoreKey): ThankYouNoteRow? = backend.fetchByKey("ThankYouNote", key)?.toThankYouNoteRow()
-    override fun enrollment(key: StoreKey): EnrollmentRow? = backend.fetchByKey("Enrollment", key)?.toEnrollmentRow()
-    override fun safetyWaiver(key: StoreKey): SafetyWaiverRow? = backend.fetchByKey("SafetyWaiver", key)?.toSafetyWaiverRow()
-    override fun orientationRecord(key: StoreKey): OrientationRecordRow? = backend.fetchByKey("OrientationRecord", key)?.toOrientationRecordRow()
-    override fun keycard(key: StoreKey): KeycardRow? = backend.fetchByKey("Keycard", key)?.toKeycardRow()
+    override fun members(keys: List<StoreKey>): List<MemberRow> = backend.fetchByKeys("Member", keys).map { it.toMemberRow() }
+    override fun duesPayments(keys: List<StoreKey>): List<DuesPaymentRow> = backend.fetchByKeys("DuesPayment", keys).map { it.toDuesPaymentRow() }
+    override fun purchases(keys: List<StoreKey>): List<PurchaseRow> = backend.fetchByKeys("Purchase", keys).map { it.toPurchaseRow() }
+    override fun thankYouNotes(keys: List<StoreKey>): List<ThankYouNoteRow> = backend.fetchByKeys("ThankYouNote", keys).map { it.toThankYouNoteRow() }
+    override fun enrollments(keys: List<StoreKey>): List<EnrollmentRow> = backend.fetchByKeys("Enrollment", keys).map { it.toEnrollmentRow() }
+    override fun safetyWaivers(keys: List<StoreKey>): List<SafetyWaiverRow> = backend.fetchByKeys("SafetyWaiver", keys).map { it.toSafetyWaiverRow() }
+    override fun orientationRecords(keys: List<StoreKey>): List<OrientationRecordRow> = backend.fetchByKeys("OrientationRecord", keys).map { it.toOrientationRecordRow() }
+    override fun keycards(keys: List<StoreKey>): List<KeycardRow> = backend.fetchByKeys("Keycard", keys).map { it.toKeycardRow() }
 
     override fun allMembers(): List<MemberRow> = backend.fetchAll("Member").map { it.toMemberRow() }
     override fun allDuesPayments(): List<DuesPaymentRow> = backend.fetchAll("DuesPayment").map { it.toDuesPaymentRow() }
@@ -170,22 +199,22 @@ open class LoyaltyStoreOverGeneric(
     override fun allOrientationRecords(): List<OrientationRecordRow> = backend.fetchAll("OrientationRecord").map { it.toOrientationRecordRow() }
     override fun allKeycards(): List<KeycardRow> = backend.fetchAll("Keycard").map { it.toKeycardRow() }
 
-    override fun membersByReferrer(target: Ref.Persisted): List<MemberRow> =
-        backend.fetchReferencing("Member", "referrer", target).map { it.toMemberRow() }
-    override fun duesPaymentsByMember(target: Ref.Persisted): List<DuesPaymentRow> =
-        backend.fetchReferencing("DuesPayment", "member", target).map { it.toDuesPaymentRow() }
-    override fun purchasesByMember(target: Ref.Persisted): List<PurchaseRow> =
-        backend.fetchReferencing("Purchase", "member", target).map { it.toPurchaseRow() }
-    override fun thankYouNotesByPurchase(target: Ref.Persisted): List<ThankYouNoteRow> =
-        backend.fetchReferencing("ThankYouNote", "purchase", target).map { it.toThankYouNoteRow() }
-    override fun enrollmentsByMember(target: Ref.Persisted): List<EnrollmentRow> =
-        backend.fetchReferencing("Enrollment", "member", target).map { it.toEnrollmentRow() }
-    override fun safetyWaiversByMember(target: Ref.Persisted): List<SafetyWaiverRow> =
-        backend.fetchReferencing("SafetyWaiver", "member", target).map { it.toSafetyWaiverRow() }
-    override fun orientationRecordsByMember(target: Ref.Persisted): List<OrientationRecordRow> =
-        backend.fetchReferencing("OrientationRecord", "member", target).map { it.toOrientationRecordRow() }
-    override fun keycardsByMember(target: Ref.Persisted): List<KeycardRow> =
-        backend.fetchReferencing("Keycard", "member", target).map { it.toKeycardRow() }
+    override fun membersByReferrers(targets: List<Ref.Persisted>): List<MemberRow> =
+        backend.fetchReferencingAny("Member", "referrer", targets).map { it.toMemberRow() }
+    override fun duesPaymentsByMembers(targets: List<Ref.Persisted>): List<DuesPaymentRow> =
+        backend.fetchReferencingAny("DuesPayment", "member", targets).map { it.toDuesPaymentRow() }
+    override fun purchasesByMembers(targets: List<Ref.Persisted>): List<PurchaseRow> =
+        backend.fetchReferencingAny("Purchase", "member", targets).map { it.toPurchaseRow() }
+    override fun thankYouNotesByPurchases(targets: List<Ref.Persisted>): List<ThankYouNoteRow> =
+        backend.fetchReferencingAny("ThankYouNote", "purchase", targets).map { it.toThankYouNoteRow() }
+    override fun enrollmentsByMembers(targets: List<Ref.Persisted>): List<EnrollmentRow> =
+        backend.fetchReferencingAny("Enrollment", "member", targets).map { it.toEnrollmentRow() }
+    override fun safetyWaiversByMembers(targets: List<Ref.Persisted>): List<SafetyWaiverRow> =
+        backend.fetchReferencingAny("SafetyWaiver", "member", targets).map { it.toSafetyWaiverRow() }
+    override fun orientationRecordsByMembers(targets: List<Ref.Persisted>): List<OrientationRecordRow> =
+        backend.fetchReferencingAny("OrientationRecord", "member", targets).map { it.toOrientationRecordRow() }
+    override fun keycardsByMembers(targets: List<Ref.Persisted>): List<KeycardRow> =
+        backend.fetchReferencingAny("Keycard", "member", targets).map { it.toKeycardRow() }
 
     override fun qualifiedPurchaseCandidates(): List<PurchaseRow> =
         backend.fetchCandidates("Purchase", questions.qualifiedPurchaseCandidates.instantiate(listOf()))
@@ -221,16 +250,16 @@ class LoyaltyStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Member" -> store.member(key)?.toRow()
-        "DuesPayment" -> store.duesPayment(key)?.toRow()
-        "Purchase" -> store.purchase(key)?.toRow()
-        "ThankYouNote" -> store.thankYouNote(key)?.toRow()
-        "Enrollment" -> store.enrollment(key)?.toRow()
-        "SafetyWaiver" -> store.safetyWaiver(key)?.toRow()
-        "OrientationRecord" -> store.orientationRecord(key)?.toRow()
-        "Keycard" -> store.keycard(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Member" -> store.members(keys).map { it.toRow() }
+        "DuesPayment" -> store.duesPayments(keys).map { it.toRow() }
+        "Purchase" -> store.purchases(keys).map { it.toRow() }
+        "ThankYouNote" -> store.thankYouNotes(keys).map { it.toRow() }
+        "Enrollment" -> store.enrollments(keys).map { it.toRow() }
+        "SafetyWaiver" -> store.safetyWaivers(keys).map { it.toRow() }
+        "OrientationRecord" -> store.orientationRecords(keys).map { it.toRow() }
+        "Keycard" -> store.keycards(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -245,15 +274,15 @@ class LoyaltyStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "Member" && field == "referrer" -> store.membersByReferrer(target).map { it.toRow() }
-        shape == "DuesPayment" && field == "member" -> store.duesPaymentsByMember(target).map { it.toRow() }
-        shape == "Purchase" && field == "member" -> store.purchasesByMember(target).map { it.toRow() }
-        shape == "ThankYouNote" && field == "purchase" -> store.thankYouNotesByPurchase(target).map { it.toRow() }
-        shape == "Enrollment" && field == "member" -> store.enrollmentsByMember(target).map { it.toRow() }
-        shape == "SafetyWaiver" && field == "member" -> store.safetyWaiversByMember(target).map { it.toRow() }
-        shape == "OrientationRecord" && field == "member" -> store.orientationRecordsByMember(target).map { it.toRow() }
-        shape == "Keycard" && field == "member" -> store.keycardsByMember(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "Member" && field == "referrer" -> store.membersByReferrers(targets).map { it.toRow() }
+        shape == "DuesPayment" && field == "member" -> store.duesPaymentsByMembers(targets).map { it.toRow() }
+        shape == "Purchase" && field == "member" -> store.purchasesByMembers(targets).map { it.toRow() }
+        shape == "ThankYouNote" && field == "purchase" -> store.thankYouNotesByPurchases(targets).map { it.toRow() }
+        shape == "Enrollment" && field == "member" -> store.enrollmentsByMembers(targets).map { it.toRow() }
+        shape == "SafetyWaiver" && field == "member" -> store.safetyWaiversByMembers(targets).map { it.toRow() }
+        shape == "OrientationRecord" && field == "member" -> store.orientationRecordsByMembers(targets).map { it.toRow() }
+        shape == "Keycard" && field == "member" -> store.keycardsByMembers(targets).map { it.toRow() }
         else -> emptyList()
     }
 

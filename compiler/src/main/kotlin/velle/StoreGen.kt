@@ -191,15 +191,17 @@ object StoreGen {
             line("     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */")
             line("    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None")
             line()
-            line("    // ── keyed reads ──")
-            shapes.forEach { line("    fun ${decap(it)}(key: StoreKey): ${it}Row?") }
+            line("    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──")
+            line("    // One record is asked for as a list of one, through the extension functions below the")
+            line("    // interface, so each read has one method to implement and one answer.")
+            shapes.forEach { line("    fun ${decap(plural(it))}(keys: List<StoreKey>): List<${it}Row>") }
             line()
             line("    // ── scan floor: all rows of a shape ──")
             shapes.forEach { line("    fun all${plural(it)}(): List<${it}Row>") }
             line()
-            line("    // ── join reads: rows referencing a target through a to-one field ──")
+            line("    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──")
             joins.forEach {
-                line("    fun ${decap(it.shape)}sBy${cap(it.field)}(target: Ref.Persisted): List<${it.shape}Row>")
+                line("    fun ${decap(it.shape)}sBy${plural(cap(it.field))}(targets: List<Ref.Persisted>): List<${it.shape}Row>")
             }
             if (questions.isNotEmpty()) {
                 line()
@@ -219,6 +221,16 @@ object StoreGen {
                 }
             }
             line("}")
+            line()
+            line("// ── one record: the reads above asked for a list of one. Extension functions, which no")
+            line("//    store can override, so a store never holds two answers to one read ──")
+            shapes.forEach {
+                line("fun ${name}Store.${decap(it)}(key: StoreKey): ${it}Row? = ${decap(plural(it))}(listOf(key)).firstOrNull()")
+            }
+            joins.forEach {
+                line("fun ${name}Store.${decap(it.shape)}sBy${cap(it.field)}(target: Ref.Persisted): List<${it.shape}Row> =")
+                line("    ${decap(it.shape)}sBy${plural(cap(it.field))}(listOf(target))")
+            }
             line()
         }
 
@@ -247,7 +259,7 @@ object StoreGen {
             line("    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)")
             line()
             shapes.forEach {
-                line("    override fun ${decap(it)}(key: StoreKey): ${it}Row? = backend.fetchByKey(\"$it\", key)?.to${it}Row()")
+                line("    override fun ${decap(plural(it))}(keys: List<StoreKey>): List<${it}Row> = backend.fetchByKeys(\"$it\", keys).map { it.to${it}Row() }")
             }
             line()
             shapes.forEach {
@@ -255,8 +267,8 @@ object StoreGen {
             }
             line()
             joins.forEach {
-                line("    override fun ${decap(it.shape)}sBy${cap(it.field)}(target: Ref.Persisted): List<${it.shape}Row> =")
-                line("        backend.fetchReferencing(\"${it.shape}\", \"${it.field}\", target).map { it.to${it.shape}Row() }")
+                line("    override fun ${decap(it.shape)}sBy${plural(cap(it.field))}(targets: List<Ref.Persisted>): List<${it.shape}Row> =")
+                line("        backend.fetchReferencingAny(\"${it.shape}\", \"${it.field}\", targets).map { it.to${it.shape}Row() }")
             }
             for (q in questions) {
                 val ps = params(q)
@@ -284,9 +296,9 @@ object StoreGen {
             line()
             line("    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)")
             line()
-            line("    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {")
-            shapes.forEach { line("        \"$it\" -> store.${decap(it)}(key)?.toRow()") }
-            line("        else -> null")
+            line("    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {")
+            shapes.forEach { line("        \"$it\" -> store.${decap(plural(it))}(keys).map { it.toRow() }") }
+            line("        else -> emptyList()")
             line("    }")
             line()
             line("    override fun fetchAll(shape: String): List<Row> = when (shape) {")
@@ -294,9 +306,9 @@ object StoreGen {
             line("        else -> emptyList()")
             line("    }")
             line()
-            line("    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {")
+            line("    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {")
             joins.forEach {
-                line("        shape == \"${it.shape}\" && field == \"${it.field}\" -> store.${decap(it.shape)}sBy${cap(it.field)}(target).map { it.toRow() }")
+                line("        shape == \"${it.shape}\" && field == \"${it.field}\" -> store.${decap(it.shape)}sBy${plural(cap(it.field))}(targets).map { it.toRow() }")
             }
             line("        else -> emptyList()")
             line("    }")

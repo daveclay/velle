@@ -184,26 +184,28 @@ interface MembershipStore {
      *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
-    // ── keyed reads ──
-    fun plan(key: StoreKey): PlanRow?
-    fun member(key: StoreKey): MemberRow?
-    fun welcomeNote(key: StoreKey): WelcomeNoteRow?
-    fun emailChange(key: StoreKey): EmailChangeRow?
-    fun visit(key: StoreKey): VisitRow?
-    fun analyticsPing(key: StoreKey): AnalyticsPingRow?
-    fun deposit(key: StoreKey): DepositRow?
-    fun charge(key: StoreKey): ChargeRow?
-    fun chargeApplication(key: StoreKey): ChargeApplicationRow?
-    fun delinquencyFlag(key: StoreKey): DelinquencyFlagRow?
-    fun delinquencyResolution(key: StoreKey): DelinquencyResolutionRow?
-    fun auditEntry(key: StoreKey): AuditEntryRow?
-    fun accountReview(key: StoreKey): AccountReviewRow?
-    fun agent(key: StoreKey): AgentRow?
-    fun ticket(key: StoreKey): TicketRow?
-    fun ticketClosure(key: StoreKey): TicketClosureRow?
-    fun reopenTicket(key: StoreKey): ReopenTicketRow?
-    fun reopenNotice(key: StoreKey): ReopenNoticeRow?
-    fun escalation(key: StoreKey): EscalationRow?
+    // ── keyed reads: the rows whose key is among `keys`, a key with no row left out ──
+    // One record is asked for as a list of one, through the extension functions below the
+    // interface, so each read has one method to implement and one answer.
+    fun plans(keys: List<StoreKey>): List<PlanRow>
+    fun members(keys: List<StoreKey>): List<MemberRow>
+    fun welcomeNotes(keys: List<StoreKey>): List<WelcomeNoteRow>
+    fun emailChanges(keys: List<StoreKey>): List<EmailChangeRow>
+    fun visits(keys: List<StoreKey>): List<VisitRow>
+    fun analyticsPings(keys: List<StoreKey>): List<AnalyticsPingRow>
+    fun deposits(keys: List<StoreKey>): List<DepositRow>
+    fun charges(keys: List<StoreKey>): List<ChargeRow>
+    fun chargeApplications(keys: List<StoreKey>): List<ChargeApplicationRow>
+    fun delinquencyFlags(keys: List<StoreKey>): List<DelinquencyFlagRow>
+    fun delinquencyResolutions(keys: List<StoreKey>): List<DelinquencyResolutionRow>
+    fun auditEntrys(keys: List<StoreKey>): List<AuditEntryRow>
+    fun accountReviews(keys: List<StoreKey>): List<AccountReviewRow>
+    fun agents(keys: List<StoreKey>): List<AgentRow>
+    fun tickets(keys: List<StoreKey>): List<TicketRow>
+    fun ticketClosures(keys: List<StoreKey>): List<TicketClosureRow>
+    fun reopenTickets(keys: List<StoreKey>): List<ReopenTicketRow>
+    fun reopenNotices(keys: List<StoreKey>): List<ReopenNoticeRow>
+    fun escalations(keys: List<StoreKey>): List<EscalationRow>
 
     // ── scan floor: all rows of a shape ──
     fun allPlans(): List<PlanRow>
@@ -226,29 +228,29 @@ interface MembershipStore {
     fun allReopenNotices(): List<ReopenNoticeRow>
     fun allEscalations(): List<EscalationRow>
 
-    // ── join reads: rows referencing a target through a to-one field ──
-    fun membersByPlan(target: Ref.Persisted): List<MemberRow>
-    fun membersByReferredBy(target: Ref.Persisted): List<MemberRow>
-    fun welcomeNotesByMember(target: Ref.Persisted): List<WelcomeNoteRow>
-    fun emailChangesByMember(target: Ref.Persisted): List<EmailChangeRow>
-    fun visitsByMember(target: Ref.Persisted): List<VisitRow>
-    fun analyticsPingsByVisit(target: Ref.Persisted): List<AnalyticsPingRow>
-    fun depositsByMember(target: Ref.Persisted): List<DepositRow>
-    fun chargesByMember(target: Ref.Persisted): List<ChargeRow>
-    fun chargeApplicationsByCharge(target: Ref.Persisted): List<ChargeApplicationRow>
-    fun delinquencyFlagsByMember(target: Ref.Persisted): List<DelinquencyFlagRow>
-    fun delinquencyResolutionsByFlag(target: Ref.Persisted): List<DelinquencyResolutionRow>
-    fun auditEntrysByMember(target: Ref.Persisted): List<AuditEntryRow>
-    fun auditEntrysByReview(target: Ref.Persisted): List<AuditEntryRow>
-    fun accountReviewsByMember(target: Ref.Persisted): List<AccountReviewRow>
-    fun ticketsByMember(target: Ref.Persisted): List<TicketRow>
-    fun ticketsByAssignee(target: Ref.Persisted): List<TicketRow>
-    fun ticketClosuresByTicket(target: Ref.Persisted): List<TicketClosureRow>
-    fun ticketClosuresByClosedBy(target: Ref.Persisted): List<TicketClosureRow>
-    fun reopenTicketsByTicket(target: Ref.Persisted): List<ReopenTicketRow>
-    fun reopenNoticesByTicket(target: Ref.Persisted): List<ReopenNoticeRow>
-    fun reopenNoticesByReassignTo(target: Ref.Persisted): List<ReopenNoticeRow>
-    fun escalationsByTicket(target: Ref.Persisted): List<EscalationRow>
+    // ── join reads: rows referencing any of `targets` through a to-one field, each row once ──
+    fun membersByPlans(targets: List<Ref.Persisted>): List<MemberRow>
+    fun membersByReferredBys(targets: List<Ref.Persisted>): List<MemberRow>
+    fun welcomeNotesByMembers(targets: List<Ref.Persisted>): List<WelcomeNoteRow>
+    fun emailChangesByMembers(targets: List<Ref.Persisted>): List<EmailChangeRow>
+    fun visitsByMembers(targets: List<Ref.Persisted>): List<VisitRow>
+    fun analyticsPingsByVisits(targets: List<Ref.Persisted>): List<AnalyticsPingRow>
+    fun depositsByMembers(targets: List<Ref.Persisted>): List<DepositRow>
+    fun chargesByMembers(targets: List<Ref.Persisted>): List<ChargeRow>
+    fun chargeApplicationsByCharges(targets: List<Ref.Persisted>): List<ChargeApplicationRow>
+    fun delinquencyFlagsByMembers(targets: List<Ref.Persisted>): List<DelinquencyFlagRow>
+    fun delinquencyResolutionsByFlags(targets: List<Ref.Persisted>): List<DelinquencyResolutionRow>
+    fun auditEntrysByMembers(targets: List<Ref.Persisted>): List<AuditEntryRow>
+    fun auditEntrysByReviews(targets: List<Ref.Persisted>): List<AuditEntryRow>
+    fun accountReviewsByMembers(targets: List<Ref.Persisted>): List<AccountReviewRow>
+    fun ticketsByMembers(targets: List<Ref.Persisted>): List<TicketRow>
+    fun ticketsByAssignees(targets: List<Ref.Persisted>): List<TicketRow>
+    fun ticketClosuresByTickets(targets: List<Ref.Persisted>): List<TicketClosureRow>
+    fun ticketClosuresByClosedBys(targets: List<Ref.Persisted>): List<TicketClosureRow>
+    fun reopenTicketsByTickets(targets: List<Ref.Persisted>): List<ReopenTicketRow>
+    fun reopenNoticesByTickets(targets: List<Ref.Persisted>): List<ReopenNoticeRow>
+    fun reopenNoticesByReassignTos(targets: List<Ref.Persisted>): List<ReopenNoticeRow>
+    fun escalationsByTickets(targets: List<Ref.Persisted>): List<EscalationRow>
 
     // ── candidate reads: one per condition with a testable part ──
     /** Serves refinement UnappliedDeposit — `UnappliedDeposit`.
@@ -310,6 +312,72 @@ interface MembershipStore {
     fun closedTicketCapture(instance: Ref.Persisted): ClosedTicketCapture?
 }
 
+// ── one record: the reads above asked for a list of one. Extension functions, which no
+//    store can override, so a store never holds two answers to one read ──
+fun MembershipStore.plan(key: StoreKey): PlanRow? = plans(listOf(key)).firstOrNull()
+fun MembershipStore.member(key: StoreKey): MemberRow? = members(listOf(key)).firstOrNull()
+fun MembershipStore.welcomeNote(key: StoreKey): WelcomeNoteRow? = welcomeNotes(listOf(key)).firstOrNull()
+fun MembershipStore.emailChange(key: StoreKey): EmailChangeRow? = emailChanges(listOf(key)).firstOrNull()
+fun MembershipStore.visit(key: StoreKey): VisitRow? = visits(listOf(key)).firstOrNull()
+fun MembershipStore.analyticsPing(key: StoreKey): AnalyticsPingRow? = analyticsPings(listOf(key)).firstOrNull()
+fun MembershipStore.deposit(key: StoreKey): DepositRow? = deposits(listOf(key)).firstOrNull()
+fun MembershipStore.charge(key: StoreKey): ChargeRow? = charges(listOf(key)).firstOrNull()
+fun MembershipStore.chargeApplication(key: StoreKey): ChargeApplicationRow? = chargeApplications(listOf(key)).firstOrNull()
+fun MembershipStore.delinquencyFlag(key: StoreKey): DelinquencyFlagRow? = delinquencyFlags(listOf(key)).firstOrNull()
+fun MembershipStore.delinquencyResolution(key: StoreKey): DelinquencyResolutionRow? = delinquencyResolutions(listOf(key)).firstOrNull()
+fun MembershipStore.auditEntry(key: StoreKey): AuditEntryRow? = auditEntrys(listOf(key)).firstOrNull()
+fun MembershipStore.accountReview(key: StoreKey): AccountReviewRow? = accountReviews(listOf(key)).firstOrNull()
+fun MembershipStore.agent(key: StoreKey): AgentRow? = agents(listOf(key)).firstOrNull()
+fun MembershipStore.ticket(key: StoreKey): TicketRow? = tickets(listOf(key)).firstOrNull()
+fun MembershipStore.ticketClosure(key: StoreKey): TicketClosureRow? = ticketClosures(listOf(key)).firstOrNull()
+fun MembershipStore.reopenTicket(key: StoreKey): ReopenTicketRow? = reopenTickets(listOf(key)).firstOrNull()
+fun MembershipStore.reopenNotice(key: StoreKey): ReopenNoticeRow? = reopenNotices(listOf(key)).firstOrNull()
+fun MembershipStore.escalation(key: StoreKey): EscalationRow? = escalations(listOf(key)).firstOrNull()
+fun MembershipStore.membersByPlan(target: Ref.Persisted): List<MemberRow> =
+    membersByPlans(listOf(target))
+fun MembershipStore.membersByReferredBy(target: Ref.Persisted): List<MemberRow> =
+    membersByReferredBys(listOf(target))
+fun MembershipStore.welcomeNotesByMember(target: Ref.Persisted): List<WelcomeNoteRow> =
+    welcomeNotesByMembers(listOf(target))
+fun MembershipStore.emailChangesByMember(target: Ref.Persisted): List<EmailChangeRow> =
+    emailChangesByMembers(listOf(target))
+fun MembershipStore.visitsByMember(target: Ref.Persisted): List<VisitRow> =
+    visitsByMembers(listOf(target))
+fun MembershipStore.analyticsPingsByVisit(target: Ref.Persisted): List<AnalyticsPingRow> =
+    analyticsPingsByVisits(listOf(target))
+fun MembershipStore.depositsByMember(target: Ref.Persisted): List<DepositRow> =
+    depositsByMembers(listOf(target))
+fun MembershipStore.chargesByMember(target: Ref.Persisted): List<ChargeRow> =
+    chargesByMembers(listOf(target))
+fun MembershipStore.chargeApplicationsByCharge(target: Ref.Persisted): List<ChargeApplicationRow> =
+    chargeApplicationsByCharges(listOf(target))
+fun MembershipStore.delinquencyFlagsByMember(target: Ref.Persisted): List<DelinquencyFlagRow> =
+    delinquencyFlagsByMembers(listOf(target))
+fun MembershipStore.delinquencyResolutionsByFlag(target: Ref.Persisted): List<DelinquencyResolutionRow> =
+    delinquencyResolutionsByFlags(listOf(target))
+fun MembershipStore.auditEntrysByMember(target: Ref.Persisted): List<AuditEntryRow> =
+    auditEntrysByMembers(listOf(target))
+fun MembershipStore.auditEntrysByReview(target: Ref.Persisted): List<AuditEntryRow> =
+    auditEntrysByReviews(listOf(target))
+fun MembershipStore.accountReviewsByMember(target: Ref.Persisted): List<AccountReviewRow> =
+    accountReviewsByMembers(listOf(target))
+fun MembershipStore.ticketsByMember(target: Ref.Persisted): List<TicketRow> =
+    ticketsByMembers(listOf(target))
+fun MembershipStore.ticketsByAssignee(target: Ref.Persisted): List<TicketRow> =
+    ticketsByAssignees(listOf(target))
+fun MembershipStore.ticketClosuresByTicket(target: Ref.Persisted): List<TicketClosureRow> =
+    ticketClosuresByTickets(listOf(target))
+fun MembershipStore.ticketClosuresByClosedBy(target: Ref.Persisted): List<TicketClosureRow> =
+    ticketClosuresByClosedBys(listOf(target))
+fun MembershipStore.reopenTicketsByTicket(target: Ref.Persisted): List<ReopenTicketRow> =
+    reopenTicketsByTickets(listOf(target))
+fun MembershipStore.reopenNoticesByTicket(target: Ref.Persisted): List<ReopenNoticeRow> =
+    reopenNoticesByTickets(listOf(target))
+fun MembershipStore.reopenNoticesByReassignTo(target: Ref.Persisted): List<ReopenNoticeRow> =
+    reopenNoticesByReassignTos(listOf(target))
+fun MembershipStore.escalationsByTicket(target: Ref.Persisted): List<EscalationRow> =
+    escalationsByTickets(listOf(target))
+
 /** The candidate questions as recognizable templates (QTemplate). */
 class MembershipStoreQuestions(model: Model) {
     val unappliedDepositCandidates = QTemplate.of(model, "Deposit", RefName("UnappliedDeposit"))
@@ -344,25 +412,25 @@ open class MembershipStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
-    override fun plan(key: StoreKey): PlanRow? = backend.fetchByKey("Plan", key)?.toPlanRow()
-    override fun member(key: StoreKey): MemberRow? = backend.fetchByKey("Member", key)?.toMemberRow()
-    override fun welcomeNote(key: StoreKey): WelcomeNoteRow? = backend.fetchByKey("WelcomeNote", key)?.toWelcomeNoteRow()
-    override fun emailChange(key: StoreKey): EmailChangeRow? = backend.fetchByKey("EmailChange", key)?.toEmailChangeRow()
-    override fun visit(key: StoreKey): VisitRow? = backend.fetchByKey("Visit", key)?.toVisitRow()
-    override fun analyticsPing(key: StoreKey): AnalyticsPingRow? = backend.fetchByKey("AnalyticsPing", key)?.toAnalyticsPingRow()
-    override fun deposit(key: StoreKey): DepositRow? = backend.fetchByKey("Deposit", key)?.toDepositRow()
-    override fun charge(key: StoreKey): ChargeRow? = backend.fetchByKey("Charge", key)?.toChargeRow()
-    override fun chargeApplication(key: StoreKey): ChargeApplicationRow? = backend.fetchByKey("ChargeApplication", key)?.toChargeApplicationRow()
-    override fun delinquencyFlag(key: StoreKey): DelinquencyFlagRow? = backend.fetchByKey("DelinquencyFlag", key)?.toDelinquencyFlagRow()
-    override fun delinquencyResolution(key: StoreKey): DelinquencyResolutionRow? = backend.fetchByKey("DelinquencyResolution", key)?.toDelinquencyResolutionRow()
-    override fun auditEntry(key: StoreKey): AuditEntryRow? = backend.fetchByKey("AuditEntry", key)?.toAuditEntryRow()
-    override fun accountReview(key: StoreKey): AccountReviewRow? = backend.fetchByKey("AccountReview", key)?.toAccountReviewRow()
-    override fun agent(key: StoreKey): AgentRow? = backend.fetchByKey("Agent", key)?.toAgentRow()
-    override fun ticket(key: StoreKey): TicketRow? = backend.fetchByKey("Ticket", key)?.toTicketRow()
-    override fun ticketClosure(key: StoreKey): TicketClosureRow? = backend.fetchByKey("TicketClosure", key)?.toTicketClosureRow()
-    override fun reopenTicket(key: StoreKey): ReopenTicketRow? = backend.fetchByKey("ReopenTicket", key)?.toReopenTicketRow()
-    override fun reopenNotice(key: StoreKey): ReopenNoticeRow? = backend.fetchByKey("ReopenNotice", key)?.toReopenNoticeRow()
-    override fun escalation(key: StoreKey): EscalationRow? = backend.fetchByKey("Escalation", key)?.toEscalationRow()
+    override fun plans(keys: List<StoreKey>): List<PlanRow> = backend.fetchByKeys("Plan", keys).map { it.toPlanRow() }
+    override fun members(keys: List<StoreKey>): List<MemberRow> = backend.fetchByKeys("Member", keys).map { it.toMemberRow() }
+    override fun welcomeNotes(keys: List<StoreKey>): List<WelcomeNoteRow> = backend.fetchByKeys("WelcomeNote", keys).map { it.toWelcomeNoteRow() }
+    override fun emailChanges(keys: List<StoreKey>): List<EmailChangeRow> = backend.fetchByKeys("EmailChange", keys).map { it.toEmailChangeRow() }
+    override fun visits(keys: List<StoreKey>): List<VisitRow> = backend.fetchByKeys("Visit", keys).map { it.toVisitRow() }
+    override fun analyticsPings(keys: List<StoreKey>): List<AnalyticsPingRow> = backend.fetchByKeys("AnalyticsPing", keys).map { it.toAnalyticsPingRow() }
+    override fun deposits(keys: List<StoreKey>): List<DepositRow> = backend.fetchByKeys("Deposit", keys).map { it.toDepositRow() }
+    override fun charges(keys: List<StoreKey>): List<ChargeRow> = backend.fetchByKeys("Charge", keys).map { it.toChargeRow() }
+    override fun chargeApplications(keys: List<StoreKey>): List<ChargeApplicationRow> = backend.fetchByKeys("ChargeApplication", keys).map { it.toChargeApplicationRow() }
+    override fun delinquencyFlags(keys: List<StoreKey>): List<DelinquencyFlagRow> = backend.fetchByKeys("DelinquencyFlag", keys).map { it.toDelinquencyFlagRow() }
+    override fun delinquencyResolutions(keys: List<StoreKey>): List<DelinquencyResolutionRow> = backend.fetchByKeys("DelinquencyResolution", keys).map { it.toDelinquencyResolutionRow() }
+    override fun auditEntrys(keys: List<StoreKey>): List<AuditEntryRow> = backend.fetchByKeys("AuditEntry", keys).map { it.toAuditEntryRow() }
+    override fun accountReviews(keys: List<StoreKey>): List<AccountReviewRow> = backend.fetchByKeys("AccountReview", keys).map { it.toAccountReviewRow() }
+    override fun agents(keys: List<StoreKey>): List<AgentRow> = backend.fetchByKeys("Agent", keys).map { it.toAgentRow() }
+    override fun tickets(keys: List<StoreKey>): List<TicketRow> = backend.fetchByKeys("Ticket", keys).map { it.toTicketRow() }
+    override fun ticketClosures(keys: List<StoreKey>): List<TicketClosureRow> = backend.fetchByKeys("TicketClosure", keys).map { it.toTicketClosureRow() }
+    override fun reopenTickets(keys: List<StoreKey>): List<ReopenTicketRow> = backend.fetchByKeys("ReopenTicket", keys).map { it.toReopenTicketRow() }
+    override fun reopenNotices(keys: List<StoreKey>): List<ReopenNoticeRow> = backend.fetchByKeys("ReopenNotice", keys).map { it.toReopenNoticeRow() }
+    override fun escalations(keys: List<StoreKey>): List<EscalationRow> = backend.fetchByKeys("Escalation", keys).map { it.toEscalationRow() }
 
     override fun allPlans(): List<PlanRow> = backend.fetchAll("Plan").map { it.toPlanRow() }
     override fun allMembers(): List<MemberRow> = backend.fetchAll("Member").map { it.toMemberRow() }
@@ -384,50 +452,50 @@ open class MembershipStoreOverGeneric(
     override fun allReopenNotices(): List<ReopenNoticeRow> = backend.fetchAll("ReopenNotice").map { it.toReopenNoticeRow() }
     override fun allEscalations(): List<EscalationRow> = backend.fetchAll("Escalation").map { it.toEscalationRow() }
 
-    override fun membersByPlan(target: Ref.Persisted): List<MemberRow> =
-        backend.fetchReferencing("Member", "plan", target).map { it.toMemberRow() }
-    override fun membersByReferredBy(target: Ref.Persisted): List<MemberRow> =
-        backend.fetchReferencing("Member", "referredBy", target).map { it.toMemberRow() }
-    override fun welcomeNotesByMember(target: Ref.Persisted): List<WelcomeNoteRow> =
-        backend.fetchReferencing("WelcomeNote", "member", target).map { it.toWelcomeNoteRow() }
-    override fun emailChangesByMember(target: Ref.Persisted): List<EmailChangeRow> =
-        backend.fetchReferencing("EmailChange", "member", target).map { it.toEmailChangeRow() }
-    override fun visitsByMember(target: Ref.Persisted): List<VisitRow> =
-        backend.fetchReferencing("Visit", "member", target).map { it.toVisitRow() }
-    override fun analyticsPingsByVisit(target: Ref.Persisted): List<AnalyticsPingRow> =
-        backend.fetchReferencing("AnalyticsPing", "visit", target).map { it.toAnalyticsPingRow() }
-    override fun depositsByMember(target: Ref.Persisted): List<DepositRow> =
-        backend.fetchReferencing("Deposit", "member", target).map { it.toDepositRow() }
-    override fun chargesByMember(target: Ref.Persisted): List<ChargeRow> =
-        backend.fetchReferencing("Charge", "member", target).map { it.toChargeRow() }
-    override fun chargeApplicationsByCharge(target: Ref.Persisted): List<ChargeApplicationRow> =
-        backend.fetchReferencing("ChargeApplication", "charge", target).map { it.toChargeApplicationRow() }
-    override fun delinquencyFlagsByMember(target: Ref.Persisted): List<DelinquencyFlagRow> =
-        backend.fetchReferencing("DelinquencyFlag", "member", target).map { it.toDelinquencyFlagRow() }
-    override fun delinquencyResolutionsByFlag(target: Ref.Persisted): List<DelinquencyResolutionRow> =
-        backend.fetchReferencing("DelinquencyResolution", "flag", target).map { it.toDelinquencyResolutionRow() }
-    override fun auditEntrysByMember(target: Ref.Persisted): List<AuditEntryRow> =
-        backend.fetchReferencing("AuditEntry", "member", target).map { it.toAuditEntryRow() }
-    override fun auditEntrysByReview(target: Ref.Persisted): List<AuditEntryRow> =
-        backend.fetchReferencing("AuditEntry", "review", target).map { it.toAuditEntryRow() }
-    override fun accountReviewsByMember(target: Ref.Persisted): List<AccountReviewRow> =
-        backend.fetchReferencing("AccountReview", "member", target).map { it.toAccountReviewRow() }
-    override fun ticketsByMember(target: Ref.Persisted): List<TicketRow> =
-        backend.fetchReferencing("Ticket", "member", target).map { it.toTicketRow() }
-    override fun ticketsByAssignee(target: Ref.Persisted): List<TicketRow> =
-        backend.fetchReferencing("Ticket", "assignee", target).map { it.toTicketRow() }
-    override fun ticketClosuresByTicket(target: Ref.Persisted): List<TicketClosureRow> =
-        backend.fetchReferencing("TicketClosure", "ticket", target).map { it.toTicketClosureRow() }
-    override fun ticketClosuresByClosedBy(target: Ref.Persisted): List<TicketClosureRow> =
-        backend.fetchReferencing("TicketClosure", "closedBy", target).map { it.toTicketClosureRow() }
-    override fun reopenTicketsByTicket(target: Ref.Persisted): List<ReopenTicketRow> =
-        backend.fetchReferencing("ReopenTicket", "ticket", target).map { it.toReopenTicketRow() }
-    override fun reopenNoticesByTicket(target: Ref.Persisted): List<ReopenNoticeRow> =
-        backend.fetchReferencing("ReopenNotice", "ticket", target).map { it.toReopenNoticeRow() }
-    override fun reopenNoticesByReassignTo(target: Ref.Persisted): List<ReopenNoticeRow> =
-        backend.fetchReferencing("ReopenNotice", "reassignTo", target).map { it.toReopenNoticeRow() }
-    override fun escalationsByTicket(target: Ref.Persisted): List<EscalationRow> =
-        backend.fetchReferencing("Escalation", "ticket", target).map { it.toEscalationRow() }
+    override fun membersByPlans(targets: List<Ref.Persisted>): List<MemberRow> =
+        backend.fetchReferencingAny("Member", "plan", targets).map { it.toMemberRow() }
+    override fun membersByReferredBys(targets: List<Ref.Persisted>): List<MemberRow> =
+        backend.fetchReferencingAny("Member", "referredBy", targets).map { it.toMemberRow() }
+    override fun welcomeNotesByMembers(targets: List<Ref.Persisted>): List<WelcomeNoteRow> =
+        backend.fetchReferencingAny("WelcomeNote", "member", targets).map { it.toWelcomeNoteRow() }
+    override fun emailChangesByMembers(targets: List<Ref.Persisted>): List<EmailChangeRow> =
+        backend.fetchReferencingAny("EmailChange", "member", targets).map { it.toEmailChangeRow() }
+    override fun visitsByMembers(targets: List<Ref.Persisted>): List<VisitRow> =
+        backend.fetchReferencingAny("Visit", "member", targets).map { it.toVisitRow() }
+    override fun analyticsPingsByVisits(targets: List<Ref.Persisted>): List<AnalyticsPingRow> =
+        backend.fetchReferencingAny("AnalyticsPing", "visit", targets).map { it.toAnalyticsPingRow() }
+    override fun depositsByMembers(targets: List<Ref.Persisted>): List<DepositRow> =
+        backend.fetchReferencingAny("Deposit", "member", targets).map { it.toDepositRow() }
+    override fun chargesByMembers(targets: List<Ref.Persisted>): List<ChargeRow> =
+        backend.fetchReferencingAny("Charge", "member", targets).map { it.toChargeRow() }
+    override fun chargeApplicationsByCharges(targets: List<Ref.Persisted>): List<ChargeApplicationRow> =
+        backend.fetchReferencingAny("ChargeApplication", "charge", targets).map { it.toChargeApplicationRow() }
+    override fun delinquencyFlagsByMembers(targets: List<Ref.Persisted>): List<DelinquencyFlagRow> =
+        backend.fetchReferencingAny("DelinquencyFlag", "member", targets).map { it.toDelinquencyFlagRow() }
+    override fun delinquencyResolutionsByFlags(targets: List<Ref.Persisted>): List<DelinquencyResolutionRow> =
+        backend.fetchReferencingAny("DelinquencyResolution", "flag", targets).map { it.toDelinquencyResolutionRow() }
+    override fun auditEntrysByMembers(targets: List<Ref.Persisted>): List<AuditEntryRow> =
+        backend.fetchReferencingAny("AuditEntry", "member", targets).map { it.toAuditEntryRow() }
+    override fun auditEntrysByReviews(targets: List<Ref.Persisted>): List<AuditEntryRow> =
+        backend.fetchReferencingAny("AuditEntry", "review", targets).map { it.toAuditEntryRow() }
+    override fun accountReviewsByMembers(targets: List<Ref.Persisted>): List<AccountReviewRow> =
+        backend.fetchReferencingAny("AccountReview", "member", targets).map { it.toAccountReviewRow() }
+    override fun ticketsByMembers(targets: List<Ref.Persisted>): List<TicketRow> =
+        backend.fetchReferencingAny("Ticket", "member", targets).map { it.toTicketRow() }
+    override fun ticketsByAssignees(targets: List<Ref.Persisted>): List<TicketRow> =
+        backend.fetchReferencingAny("Ticket", "assignee", targets).map { it.toTicketRow() }
+    override fun ticketClosuresByTickets(targets: List<Ref.Persisted>): List<TicketClosureRow> =
+        backend.fetchReferencingAny("TicketClosure", "ticket", targets).map { it.toTicketClosureRow() }
+    override fun ticketClosuresByClosedBys(targets: List<Ref.Persisted>): List<TicketClosureRow> =
+        backend.fetchReferencingAny("TicketClosure", "closedBy", targets).map { it.toTicketClosureRow() }
+    override fun reopenTicketsByTickets(targets: List<Ref.Persisted>): List<ReopenTicketRow> =
+        backend.fetchReferencingAny("ReopenTicket", "ticket", targets).map { it.toReopenTicketRow() }
+    override fun reopenNoticesByTickets(targets: List<Ref.Persisted>): List<ReopenNoticeRow> =
+        backend.fetchReferencingAny("ReopenNotice", "ticket", targets).map { it.toReopenNoticeRow() }
+    override fun reopenNoticesByReassignTos(targets: List<Ref.Persisted>): List<ReopenNoticeRow> =
+        backend.fetchReferencingAny("ReopenNotice", "reassignTo", targets).map { it.toReopenNoticeRow() }
+    override fun escalationsByTickets(targets: List<Ref.Persisted>): List<EscalationRow> =
+        backend.fetchReferencingAny("Escalation", "ticket", targets).map { it.toEscalationRow() }
 
     override fun unappliedDepositCandidates(): List<DepositRow> =
         backend.fetchCandidates("Deposit", questions.unappliedDepositCandidates.instantiate(listOf()))
@@ -514,27 +582,27 @@ class MembershipStoreResolver(
 
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
-    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
-        "Plan" -> store.plan(key)?.toRow()
-        "Member" -> store.member(key)?.toRow()
-        "WelcomeNote" -> store.welcomeNote(key)?.toRow()
-        "EmailChange" -> store.emailChange(key)?.toRow()
-        "Visit" -> store.visit(key)?.toRow()
-        "AnalyticsPing" -> store.analyticsPing(key)?.toRow()
-        "Deposit" -> store.deposit(key)?.toRow()
-        "Charge" -> store.charge(key)?.toRow()
-        "ChargeApplication" -> store.chargeApplication(key)?.toRow()
-        "DelinquencyFlag" -> store.delinquencyFlag(key)?.toRow()
-        "DelinquencyResolution" -> store.delinquencyResolution(key)?.toRow()
-        "AuditEntry" -> store.auditEntry(key)?.toRow()
-        "AccountReview" -> store.accountReview(key)?.toRow()
-        "Agent" -> store.agent(key)?.toRow()
-        "Ticket" -> store.ticket(key)?.toRow()
-        "TicketClosure" -> store.ticketClosure(key)?.toRow()
-        "ReopenTicket" -> store.reopenTicket(key)?.toRow()
-        "ReopenNotice" -> store.reopenNotice(key)?.toRow()
-        "Escalation" -> store.escalation(key)?.toRow()
-        else -> null
+    override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> = when (shape) {
+        "Plan" -> store.plans(keys).map { it.toRow() }
+        "Member" -> store.members(keys).map { it.toRow() }
+        "WelcomeNote" -> store.welcomeNotes(keys).map { it.toRow() }
+        "EmailChange" -> store.emailChanges(keys).map { it.toRow() }
+        "Visit" -> store.visits(keys).map { it.toRow() }
+        "AnalyticsPing" -> store.analyticsPings(keys).map { it.toRow() }
+        "Deposit" -> store.deposits(keys).map { it.toRow() }
+        "Charge" -> store.charges(keys).map { it.toRow() }
+        "ChargeApplication" -> store.chargeApplications(keys).map { it.toRow() }
+        "DelinquencyFlag" -> store.delinquencyFlags(keys).map { it.toRow() }
+        "DelinquencyResolution" -> store.delinquencyResolutions(keys).map { it.toRow() }
+        "AuditEntry" -> store.auditEntrys(keys).map { it.toRow() }
+        "AccountReview" -> store.accountReviews(keys).map { it.toRow() }
+        "Agent" -> store.agents(keys).map { it.toRow() }
+        "Ticket" -> store.tickets(keys).map { it.toRow() }
+        "TicketClosure" -> store.ticketClosures(keys).map { it.toRow() }
+        "ReopenTicket" -> store.reopenTickets(keys).map { it.toRow() }
+        "ReopenNotice" -> store.reopenNotices(keys).map { it.toRow() }
+        "Escalation" -> store.escalations(keys).map { it.toRow() }
+        else -> emptyList()
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
@@ -560,29 +628,29 @@ class MembershipStoreResolver(
         else -> emptyList()
     }
 
-    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
-        shape == "Member" && field == "plan" -> store.membersByPlan(target).map { it.toRow() }
-        shape == "Member" && field == "referredBy" -> store.membersByReferredBy(target).map { it.toRow() }
-        shape == "WelcomeNote" && field == "member" -> store.welcomeNotesByMember(target).map { it.toRow() }
-        shape == "EmailChange" && field == "member" -> store.emailChangesByMember(target).map { it.toRow() }
-        shape == "Visit" && field == "member" -> store.visitsByMember(target).map { it.toRow() }
-        shape == "AnalyticsPing" && field == "visit" -> store.analyticsPingsByVisit(target).map { it.toRow() }
-        shape == "Deposit" && field == "member" -> store.depositsByMember(target).map { it.toRow() }
-        shape == "Charge" && field == "member" -> store.chargesByMember(target).map { it.toRow() }
-        shape == "ChargeApplication" && field == "charge" -> store.chargeApplicationsByCharge(target).map { it.toRow() }
-        shape == "DelinquencyFlag" && field == "member" -> store.delinquencyFlagsByMember(target).map { it.toRow() }
-        shape == "DelinquencyResolution" && field == "flag" -> store.delinquencyResolutionsByFlag(target).map { it.toRow() }
-        shape == "AuditEntry" && field == "member" -> store.auditEntrysByMember(target).map { it.toRow() }
-        shape == "AuditEntry" && field == "review" -> store.auditEntrysByReview(target).map { it.toRow() }
-        shape == "AccountReview" && field == "member" -> store.accountReviewsByMember(target).map { it.toRow() }
-        shape == "Ticket" && field == "member" -> store.ticketsByMember(target).map { it.toRow() }
-        shape == "Ticket" && field == "assignee" -> store.ticketsByAssignee(target).map { it.toRow() }
-        shape == "TicketClosure" && field == "ticket" -> store.ticketClosuresByTicket(target).map { it.toRow() }
-        shape == "TicketClosure" && field == "closedBy" -> store.ticketClosuresByClosedBy(target).map { it.toRow() }
-        shape == "ReopenTicket" && field == "ticket" -> store.reopenTicketsByTicket(target).map { it.toRow() }
-        shape == "ReopenNotice" && field == "ticket" -> store.reopenNoticesByTicket(target).map { it.toRow() }
-        shape == "ReopenNotice" && field == "reassignTo" -> store.reopenNoticesByReassignTo(target).map { it.toRow() }
-        shape == "Escalation" && field == "ticket" -> store.escalationsByTicket(target).map { it.toRow() }
+    override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> = when {
+        shape == "Member" && field == "plan" -> store.membersByPlans(targets).map { it.toRow() }
+        shape == "Member" && field == "referredBy" -> store.membersByReferredBys(targets).map { it.toRow() }
+        shape == "WelcomeNote" && field == "member" -> store.welcomeNotesByMembers(targets).map { it.toRow() }
+        shape == "EmailChange" && field == "member" -> store.emailChangesByMembers(targets).map { it.toRow() }
+        shape == "Visit" && field == "member" -> store.visitsByMembers(targets).map { it.toRow() }
+        shape == "AnalyticsPing" && field == "visit" -> store.analyticsPingsByVisits(targets).map { it.toRow() }
+        shape == "Deposit" && field == "member" -> store.depositsByMembers(targets).map { it.toRow() }
+        shape == "Charge" && field == "member" -> store.chargesByMembers(targets).map { it.toRow() }
+        shape == "ChargeApplication" && field == "charge" -> store.chargeApplicationsByCharges(targets).map { it.toRow() }
+        shape == "DelinquencyFlag" && field == "member" -> store.delinquencyFlagsByMembers(targets).map { it.toRow() }
+        shape == "DelinquencyResolution" && field == "flag" -> store.delinquencyResolutionsByFlags(targets).map { it.toRow() }
+        shape == "AuditEntry" && field == "member" -> store.auditEntrysByMembers(targets).map { it.toRow() }
+        shape == "AuditEntry" && field == "review" -> store.auditEntrysByReviews(targets).map { it.toRow() }
+        shape == "AccountReview" && field == "member" -> store.accountReviewsByMembers(targets).map { it.toRow() }
+        shape == "Ticket" && field == "member" -> store.ticketsByMembers(targets).map { it.toRow() }
+        shape == "Ticket" && field == "assignee" -> store.ticketsByAssignees(targets).map { it.toRow() }
+        shape == "TicketClosure" && field == "ticket" -> store.ticketClosuresByTickets(targets).map { it.toRow() }
+        shape == "TicketClosure" && field == "closedBy" -> store.ticketClosuresByClosedBys(targets).map { it.toRow() }
+        shape == "ReopenTicket" && field == "ticket" -> store.reopenTicketsByTickets(targets).map { it.toRow() }
+        shape == "ReopenNotice" && field == "ticket" -> store.reopenNoticesByTickets(targets).map { it.toRow() }
+        shape == "ReopenNotice" && field == "reassignTo" -> store.reopenNoticesByReassignTos(targets).map { it.toRow() }
+        shape == "Escalation" && field == "ticket" -> store.escalationsByTickets(targets).map { it.toRow() }
         else -> emptyList()
     }
 

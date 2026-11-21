@@ -35,22 +35,14 @@ class WorkingSetTest {
                 override fun end(outcome: Outcome) { openUnits--; u.end(outcome) }
             }
         }
-        override fun fetchByKey(shape: String, key: StoreKey): Row? {
-            fetchedByKey.add(key)
-            return inner.fetchByKey(shape, key)
-        }
-        /** The keys of each several-keys fetch, one entry per call. */
+        /** The keys of each by-key fetch that asked for several records, one entry per call. A fetch that asked for one is in [fetchedByKey]. */
         val fetchedByKeys = mutableListOf<List<StoreKey>>()
         override fun fetchByKeys(shape: String, keys: List<StoreKey>): List<Row> {
-            fetchedByKeys.add(keys)
+            if (keys.size == 1) fetchedByKey.add(keys.single()) else fetchedByKeys.add(keys)
             return inner.fetchByKeys(shape, keys)
         }
         /** The targets of each fetch of the records pointing at one record or at several, one entry per call. */
         val fetchedReferencing = mutableListOf<List<Ref.Persisted>>()
-        override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> {
-            fetchedReferencing.add(listOf(target))
-            return inner.fetchReferencing(shape, field, target)
-        }
         override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> {
             fetchedReferencing.add(targets)
             return inner.fetchReferencingAny(shape, field, targets)
@@ -60,8 +52,8 @@ class WorkingSetTest {
             inner.onCommit(CommitSet(created = emptyList(), assigned = listOf(CommitSet.Assign(target, field, value))))
     }
 
-    private fun system(): Pair<VelleSystem, Counting> {
-        val model = Model(Parser.parse(spec))
+    private fun system(specText: String = spec): Pair<VelleSystem, Counting> {
+        val model = Model(Parser.parse(specText))
         check(model.diagnostics.isEmpty()) { model.diagnostics.toString() }
         val sys = VelleSystem(model)
         val store = Counting(MemoryStore(model))
@@ -155,6 +147,35 @@ class WorkingSetTest {
             assertEquals(listOf(listOf(customers[0].key, customers[1].key)), store.fetchedByKeys, "one fetch for the two customers named")
             assertEquals(0, store.fetchedByKey.size)
         }
+    }
+
+    @Test
+    fun `a reference to a record of a shape no rule deletes is read without fetching that record`() {
+        val (sys, store) = system()
+        val customers = threeCustomers(sys, store)
+        sys.scope {
+            val promotions = sys.instancesOf("Promote")
+            val customersNamed = promotions.map { promotion -> sys.refFor(sys.get(promotion, "customer") as Long) }
+            assertEquals(listOf(customers[0], customers[1], customers[0]), customersNamed)
+            assertEquals(0, store.fetchedByKey.size + store.fetchedByKeys.size, "no rule deletes a Customer, so none was fetched")
+        }
+    }
+
+    @Test
+    fun `a reference to a deleted record of a shape a rule deletes still reads as absent`() {
+        val (sys, _) = system(
+            """
+            act Note { body: text }
+            act Pin { note: one Note }
+            act Unpin { note: one Note }
+            rule ApplyUnpin when Unpin { delete note }
+            """.trimIndent()
+        )
+        val note = sys.scope { accepted(sys.commit("Note", mapOf("body" to "call back"))) }
+        val pin = sys.scope { accepted(sys.commit("Pin", mapOf("note" to sys.idOf(note)))) }
+        sys.scope { assertEquals(note, sys.refFor(sys.get(sys.idOf(pin), "note") as Long), "the note is there before it is deleted") }
+        sys.scope { accepted(sys.commit("Unpin", mapOf("note" to sys.idOf(note)))) }
+        sys.scope { assertEquals(null, sys.get(sys.idOf(pin), "note"), "the note was deleted, so the pin's reference reads as absent") }
     }
 
     @Test
