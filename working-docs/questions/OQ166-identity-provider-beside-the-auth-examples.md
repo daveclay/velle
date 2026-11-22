@@ -1,6 +1,6 @@
 # OQ166 — an example with authorization runs beside a real identity provider, and shows sign-in and the spec's rules working together
 
-**Status:** opened 2026-11-22 from Dave's request in chat. Investigated against HEAD the same day. D1 to D4 and D6 decided. D5 awaits Dave. Nothing built.
+**Status:** opened 2026-11-22 from Dave's request in chat. Investigated against HEAD the same day. D1 to D6 decided 2026-11-22. The build plan in §3 awaits Dave's look before building. Nothing built.
 
 **In plain terms:** the two examples whose specs say who may act and who may see do not sign anyone in. The caller types "I am Staff:1" into a box and is believed. Dave wants to start one of them and have a real sign-in service start with it, sign in as a real person, and see the spec's rules apply to that person.
 
@@ -150,7 +150,7 @@ Costs:
 
 **Decided:** yes, the vendors application signs the browser in itself and the console is not changed (Dave, 2026-11-22).
 
-### D5. The vendors application drops the `X-Velle-Actor` header
+### D5. The vendors application drops the `X-Velle-Actor` header · Decided 2026-11-22
 
 Once sign-in works, does the vendors application stop accepting `X-Velle-Actor` altogether?
 
@@ -169,7 +169,7 @@ Costs:
 - `examples/vendors/app/src/test/kotlin/velle/vendors/VendorsApplicationTest.kt`: signed-in principals in place of the header.
 - `examples/vendors/app/src/test/kotlin/velle/vendors/VendorsSignInTest.kt` (new): the four requests of D2 against a real Authentik container.
 
-**Decided:**
+**Decided:** yes, the vendors application drops the header (Dave, 2026-11-22).
 
 ### D6. A signed-in person is matched to their `Staff` record by email · Decided 2026-11-22
 
@@ -228,10 +228,37 @@ Costs of the identity provider's identifier:
 
 ## 3. The build
 
-Written when D1 to D6 are decided.
+The decided changes of D1, D2, D4, D5, and D6, in build order. D6's list replaces D3's. Nothing in `compiler/` changes. Step 1 comes first because steps 3 and 4 rest on what it finds: if the blueprint cannot fix the client's id and secret or the users' verified emails, this plan comes back to Dave before anything else is built.
+
+1. The identity provider, proven first:
+   - `examples/vendors/app/compose.yaml`: Authentik's server, worker, and PostgreSQL, on fixed host ports, with a health check so `bootRun` waits for it (D4).
+   - `examples/vendors/app/authentik/vendors.yaml` (new): the blueprint with users `grace` and `linus`, each with a password and a verified email, the OpenID Connect client with a fixed id and secret, and the application (D4, D6).
+   - Work items 1 and 2 below run against these two files.
+2. The spec:
+   - `examples/vendors/vendors.velle`: shape `Staff` gains `email: text unique` (D6).
+   - `examples/vendors/output/`: regenerated (D6).
+3. The application:
+   - `examples/vendors/app/build.gradle.kts`: Spring Security's OpenID Connect client and token-checking starters (D4).
+   - `examples/vendors/app/src/main/resources/application.yaml`: the provider's address, client id, and secret, marked as checked-in demo values (D4).
+   - `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsSecurity.kt` (new): every path requires sign-in; browser sign-in and token both accepted (D4).
+   - `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsActors.kt`: the fixtures seed `email`; the header resolver is removed; the new resolver reads the token's `email` claim, refuses it unless `email_verified` is true, and finds the `Staff` record by it (D5, D6).
+4. The tests:
+   - `examples/vendors/app/src/test/kotlin/velle/vendors/VendorsApplicationTest.kt`: signed-in principals through Spring Security's test support in place of the header; still no Docker (D5).
+   - `examples/vendors/app/src/test/kotlin/velle/vendors/VendorsSignInTest.kt` (new): the four requests of D2 against a real Authentik container, skipped when Docker is absent (D5).
+   - `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt` and `VendorsOverHttpTest.kt`: seed `email`; the header resolver stays (D5, D6).
+5. The documents:
+   - `README.md`: the vendors line says who to sign in as, with what password, and the two lines that fetch a token for `curl` (D4, D5).
+   - `wiki/Guides/Serving-a-system.md`, "Who is calling": shows the sign-in resolver beside the header one, citing `VendorsActors.kt` (D4).
+   - `examples/CLAUDE.md`: the layout paragraph says vendors signs in through an identity provider (D4).
+6. The settling commit: the full suite passes; `QUESTIONS.md` gains the settled row for OQ166 and a one-line OQ for pharmacy following vendors (D2); this file is deleted.
 
 ## 4. Work items
 
-- [ ] Confirm by running it that one Authentik blueprint file creates two users with passwords, an OpenID Connect client with a fixed id and secret, and the application; check the file in as `examples/vendors/app/authentik/vendors.yaml` (needs D1).
-- [ ] Confirm by a checked-in test which claims Authentik's token for a named user carries, `email`, `email_verified`, and `sub` among them, and what `sub` holds by default, and that a script can obtain one without a browser (needs D1).
-- [ ] Measure the first and the second `bootRun` with the identity provider in `compose.yaml` and write both times into D1's costs (needs D1).
+- [ ] Confirm by running it that one Authentik blueprint file creates two users with passwords and verified emails, an OpenID Connect client with a fixed id and secret, and the application; check the file in as `examples/vendors/app/authentik/vendors.yaml` (§3 step 1).
+- [ ] Confirm by a checked-in test which claims Authentik's token for a named user carries, `email`, `email_verified`, and `sub` among them, and what `sub` holds by default, and that a script can obtain one without a browser (§3 step 1).
+- [ ] Measure the first and the second `bootRun` with the identity provider in `compose.yaml` and write both times into the README's vendors line (§3 steps 1 and 5).
+- [ ] Add `email: text unique` to shape `Staff` in `examples/vendors/vendors.velle` and regenerate `examples/vendors/output/` (§3 step 2).
+- [ ] Add Spring Security, `VendorsSecurity.kt`, the provider's settings, and the email resolver to `examples/vendors/app`, removing the header resolver (§3 step 3).
+- [ ] Move `VendorsApplicationTest.kt` to signed-in principals, write `VendorsSignInTest.kt`, and seed `email` in `apis/spring`'s vendors tests (§3 step 4).
+- [ ] Update `README.md`, `wiki/Guides/Serving-a-system.md` "Who is calling", and `examples/CLAUDE.md` (§3 step 5).
+- [ ] Land the settling commit: suite green, settled row, pharmacy OQ line, this file deleted (§3 step 6).
