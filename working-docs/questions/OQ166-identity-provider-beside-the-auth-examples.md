@@ -1,6 +1,6 @@
 # OQ166 — an example with authorization runs beside a real identity provider, and shows sign-in and the spec's rules working together
 
-**Status:** opened 2026-11-22 from Dave's request in chat. Investigated against HEAD the same day. D1 to D5 decided 2026-11-22; D3 reversed the same day; D6 awaits Dave. The build plan in §3 is revised once D6 is decided. Nothing built.
+**Status:** opened 2026-11-22 from Dave's request in chat. Investigated against HEAD the same day. D1 to D6 decided 2026-11-22; D3 reversed the same day. The build plan in §3 awaits Dave's look before building. Nothing built.
 
 **In plain terms:** the two examples whose specs say who may act and who may see do not sign anyone in. The caller types "I am Staff:1" into a box and is believed. Dave wants to start one of them and have a real sign-in service start with it, sign in as a real person, and see the spec's rules apply to that person.
 
@@ -162,9 +162,9 @@ Costs of the identity provider's identifier:
 
 #### Proposed changes
 
-The list as decided: the person is matched by `sub`, and `Staff` also holds `email`. Where `sub` is stored is D6.
+The list as decided: the person is matched by `sub`, and `Staff` also holds `email`. D6 stores `sub` on `Staff` as `identityId`.
 
-- `examples/vendors/vendors.velle`: shape `Staff` gains `email: text unique`; `sub` is stored as D6 decides.
+- `examples/vendors/vendors.velle`: shape `Staff` gains `email: text unique` and, by D6, `identityId: text unique`.
 - `examples/vendors/output/`: regenerated.
 - `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsActors.kt`: the fixtures seed `email`; the resolver reads the token's `sub` claim and finds the `Staff` record it belongs to.
 - `examples/vendors/app/authentik/vendors.yaml`: users `grace` and `linus` carry the same two addresses, marked verified.
@@ -219,7 +219,7 @@ Costs:
 
 **Decided:** yes, the vendors application drops the header (Dave, 2026-11-22).
 
-### D6. The identity provider's identifier is seeded with each `Staff` record
+### D6. The identity provider's identifier is seeded with each `Staff` record · Decided 2026-11-22
 
 Is each staff member's `sub` written onto their `Staff` record when the record is seeded, rather than linked by an act the first time they sign in?
 
@@ -293,28 +293,28 @@ Either way the door in the second spelling is a gap in Velle: an act meant to be
 - `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt` and `VendorsOverHttpTest.kt`: seed `identityId`.
 - `working-docs/QUESTIONS.md`: a one-line OQ for the gap, an act only the application may commit.
 
-**Decided:**
+**Decided:** yes, each staff member's `sub` is written onto their `Staff` record when it is seeded (Dave, 2026-11-22). The gap is OQ167 in `working-docs/QUESTIONS.md`, opened the same day.
 
 ## 3. The build
 
-The decided changes of D1 to D5, in build order. The lines that store `sub` wait on D6 and are marked so. Nothing in `compiler/` changes. Step 1 comes first because steps 3 and 4 rest on what it finds: if the blueprint cannot fix the client's id and secret or the users' verified emails and identifiers, this plan comes back to Dave before anything else is built.
+The decided changes of D1 to D6, in build order. Nothing in `compiler/` changes. Step 1 comes first because steps 3 and 4 rest on what it finds: if the blueprint cannot fix the client's id and secret or the users' verified emails and `sub` values, this plan comes back to Dave before anything else is built.
 
 1. The identity provider, proven first:
    - `examples/vendors/app/compose.yaml`: Authentik's server, worker, and PostgreSQL, on fixed host ports, with a health check so `bootRun` waits for it (D4).
-   - `examples/vendors/app/authentik/vendors.yaml` (new): the blueprint with users `grace` and `linus`, each with a password, a verified email, and, if D6 seeds it, a fixed `sub`, the OpenID Connect client with a fixed id and secret, and the application (D3, D4, D6).
+   - `examples/vendors/app/authentik/vendors.yaml` (new): the blueprint with users `grace` and `linus`, each with a password, a verified email, and a fixed `sub`, the OpenID Connect client with a fixed id and secret, and the application (D3, D4, D6).
    - Work items 1 and 2 below run against these two files.
 2. The spec:
-   - `examples/vendors/vendors.velle`: shape `Staff` gains `email: text unique`, and `sub` is stored as D6 decides (D3, D6).
+   - `examples/vendors/vendors.velle`: shape `Staff` gains `email: text unique` and `identityId: text unique` (D3, D6).
    - `examples/vendors/output/`: regenerated (D3).
 3. The application:
    - `examples/vendors/app/build.gradle.kts`: Spring Security's OpenID Connect client and token-checking starters (D4).
    - `examples/vendors/app/src/main/resources/application.yaml`: the provider's address, client id, and secret, marked as checked-in demo values (D4).
    - `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsSecurity.kt` (new): every path requires sign-in; browser sign-in and token both accepted (D4).
-   - `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsActors.kt`: the fixtures seed `email`; the header resolver is removed; the new resolver reads the token's `sub` claim and finds the `Staff` record it belongs to, as D6 decides (D3, D5, D6).
+   - `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsActors.kt`: the fixtures seed `email` and `identityId`; the header resolver is removed; the new resolver reads the token's `sub` claim and finds the `Staff` record whose `identityId` equals it (D3, D5, D6).
 4. The tests:
    - `examples/vendors/app/src/test/kotlin/velle/vendors/VendorsApplicationTest.kt`: signed-in principals through Spring Security's test support in place of the header; still no Docker (D5).
    - `examples/vendors/app/src/test/kotlin/velle/vendors/VendorsSignInTest.kt` (new): the four requests of D2 against a real Authentik container, skipped when Docker is absent (D5).
-   - `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt` and `VendorsOverHttpTest.kt`: seed `email`, and `sub` if D6 seeds it; the header resolver stays (D3, D5, D6).
+   - `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt` and `VendorsOverHttpTest.kt`: seed `email` and `identityId`; the header resolver stays (D3, D5, D6).
 5. The documents:
    - `README.md`: the vendors line says who to sign in as, with what password, and the two lines that fetch a token for `curl` (D4, D5).
    - `wiki/Guides/Serving-a-system.md`, "Who is calling": shows the sign-in resolver beside the header one, citing `VendorsActors.kt` (D4).
@@ -323,11 +323,11 @@ The decided changes of D1 to D5, in build order. The lines that store `sub` wait
 
 ## 4. Work items
 
-- [ ] Confirm by running it that one Authentik blueprint file creates two users with passwords and verified emails, an OpenID Connect client with a fixed id and secret, and the application; check the file in as `examples/vendors/app/authentik/vendors.yaml` (§3 step 1).
+- [ ] Confirm by running it that one Authentik blueprint file creates two users with passwords, verified emails, and fixed `sub` values, an OpenID Connect client with a fixed id and secret, and the application; check the file in as `examples/vendors/app/authentik/vendors.yaml` (§3 step 1).
 - [ ] Confirm by a checked-in test which claims Authentik's token for a named user carries, `email`, `email_verified`, and `sub` among them, what `sub` holds by default, and whether a blueprint can fix a user's `sub` ahead of time (D6), and that a script can obtain one without a browser (§3 step 1).
 - [ ] Measure the first and the second `bootRun` with the identity provider in `compose.yaml` and write both times into the README's vendors line (§3 steps 1 and 5).
-- [ ] Add `email: text unique` to shape `Staff` in `examples/vendors/vendors.velle` with `sub` stored as D6 decides, and regenerate `examples/vendors/output/` (§3 step 2).
+- [ ] Add `email: text unique` and `identityId: text unique` to shape `Staff` in `examples/vendors/vendors.velle`, and regenerate `examples/vendors/output/` (§3 step 2).
 - [ ] Add Spring Security, `VendorsSecurity.kt`, the provider's settings, and the resolver by `sub` to `examples/vendors/app`, removing the header resolver (§3 step 3).
-- [ ] Move `VendorsApplicationTest.kt` to signed-in principals, write `VendorsSignInTest.kt`, and seed `email` in `apis/spring`'s vendors tests (§3 step 4).
+- [ ] Move `VendorsApplicationTest.kt` to signed-in principals, write `VendorsSignInTest.kt`, and seed `email` and `identityId` in `apis/spring`'s vendors tests (§3 step 4).
 - [ ] Update `README.md`, `wiki/Guides/Serving-a-system.md` "Who is calling", and `examples/CLAUDE.md` (§3 step 5).
 - [ ] Land the settling commit: suite green, settled row, pharmacy OQ line, this file deleted (§3 step 6).
