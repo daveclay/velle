@@ -1,6 +1,6 @@
 # OQ166 — an example with authorization runs beside a real identity provider, and shows sign-in and the spec's rules working together
 
-**Status:** opened 2026-11-22 from Dave's request in chat. Investigated against HEAD the same day. D1 decided. D2 to D5 await Dave. Nothing built.
+**Status:** opened 2026-11-22 from Dave's request in chat. Investigated against HEAD the same day. D1 and D2 decided. D3 to D5 await Dave. Nothing built.
 
 **In plain terms:** the two examples whose specs say who may act and who may see do not sign anyone in. The caller types "I am Staff:1" into a box and is believed. Dave wants to start one of them and have a real sign-in service start with it, sign in as a real person, and see the spec's rules apply to that person.
 
@@ -51,7 +51,7 @@ Costs:
 
 **Decided:** yes, the identity provider is Authentik (Dave, 2026-11-22).
 
-### D2. The vendors example gets it first, pharmacy afterwards
+### D2. The vendors example gets it first, pharmacy afterwards · Decided 2026-11-22
 
 Is the vendors example the one that runs beside the identity provider, with pharmacy following once vendors works?
 
@@ -67,7 +67,7 @@ Costs:
 - Until pharmacy follows, the two examples resolve the actor differently, one by sign-in and one by header.
 - Pharmacy has more staff (its `Roster.kt`) and each needs an account in the blueprint. That is why it is second.
 
-**Decided:**
+**Decided:** yes, vendors runs beside the identity provider first and pharmacy follows once vendors works (Dave, 2026-11-22).
 
 ### D3. A signed-in person is matched to a stored `Staff` record by a `login` field in the spec
 
