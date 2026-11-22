@@ -1,0 +1,11 @@
+-- A property that reads itself five steps away, `parent?.parent?.parent?.parent?.parent?.locationHolder`; the count of steps is a word.
+act Kind {
+    name: text unique
+    hasLocation: boolean
+    parent: one Kind?
+
+    locationHolder: one Kind? =
+        if hasLocation then this
+        else parent?.parent?.parent?.parent?.parent?.locationHolder
+}
+never (Kind where parent == this)

@@ -1040,6 +1040,24 @@ class ValidatorTest {
     }
 
     @Test
+    fun `V14 - a property reading itself five steps away counts the steps in a word`() {
+        val src = """
+            act Kind {
+                name: text unique
+                hasLocation: boolean
+                parent: one Kind?
+
+                locationHolder: one Kind? =
+                    if hasLocation then this
+                    else parent?.parent?.parent?.parent?.parent?.locationHolder
+            }
+            never (Kind where parent == this)
+        """.trimIndent()
+        val messages = diags(src).filter { diagnostic -> diagnostic.code == "V14" }.map { diagnostic -> diagnostic.message }
+        assertTrue(messages.any { message -> "reads itself five steps away" in message }, "got: $messages")
+    }
+
+    @Test
     fun `V14 - root through parent without the never fails closed`() {
         assertTrue(codes(rootParent).contains("V14"), "got: ${diags(rootParent)}")
     }

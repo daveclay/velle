@@ -32,9 +32,6 @@ internal sealed interface SelfReadProblem {
         val names = writers.joinToString(" and ") { writer -> "'$writer'" }
         return if (writers.size == 1) "rule $names assigns" else "rules $names assign"
     }
-
-    /** A count of steps: a word from two to four, digits beyond. */
-    fun stepCount(count: Int) = if (count in 2..4) numberWord(count) else count.toString()
 }
 
 internal object DirectRead : SelfReadProblem {
@@ -55,7 +52,7 @@ internal class DeepPath(val stepsBefore: List<String>, val firstStepHoldsOwnShap
     override fun message(shape: String, property: String): String {
         val firstStep = stepsBefore.first()
         val walk = if (firstStepHoldsOwnShape) walkFix(firstStep) else ""
-        return "${own(shape, property)} reads itself ${stepCount(stepsBefore.size)} steps away, " +
+        return "${own(shape, property)} reads itself ${numberWord(stepsBefore.size)} steps away, " +
             "through '${stepsBefore.joinToString(".")}'; the compiler can see the chain ends only when " +
             "the property reads itself one step away. Read '$firstStep.$property'$walk"
     }
