@@ -1,6 +1,6 @@
 # OQ166 — an example with authorization runs beside a real identity provider, and shows sign-in and the spec's rules working together
 
-**Status:** opened 2026-11-22 from Dave's request in chat. Investigated against HEAD the same day. D1 to D6 decided 2026-11-22. The build plan in §3 awaits Dave's look before building. Nothing built.
+**Status:** opened 2026-11-22 from Dave's request in chat. Investigated against HEAD the same day. D1 to D5 decided 2026-11-22; D3 reversed the same day; D6 merged into D3. D7 awaits Dave. The build plan in §3 is revised once D7 is decided. Nothing built.
 
 **In plain terms:** the two examples whose specs say who may act and who may see do not sign anyone in. The caller types "I am Staff:1" into a box and is believed. Dave wants to start one of them and have a real sign-in service start with it, sign in as a real person, and see the spec's rules apply to that person.
 
@@ -17,7 +17,7 @@ Words used in this file, each as professionals use it:
 - **Token**: that signed statement, a text the caller sends with each request.
 - **Claim**: one named value inside a token, such as the person's username.
 
-Decisions in this file: D1 which identity provider. D2 which example. D3 how a signed-in person becomes the spec's actor. D4 how the console signs in. D5 whether the header stays. D6 whether the field D3 adds holds the email or the identity provider's identifier.
+Decisions in this file: D1 which identity provider. D2 which example. D3 how a signed-in person becomes the spec's actor. D4 how the console signs in. D5 whether the header stays. D6 merged into D3. D7 how the identity provider's identifier comes to be stored.
 
 ## 1. What runs today
 
@@ -115,14 +115,62 @@ Costs:
 - The alternative that keeps the spec untouched is a table of username to staff key kept by the application outside Velle. It hides a business fact (who is which staff member) from the spec, so I do not recommend it.
 - The other alternative is OQ94: the actor is built from the token's claims and never stored, and the role comes from a group at the identity provider. That needs `transient shape`, which is not built, and it moves the role out of Velle. It stays its own question. This example would be the natural place to exercise it later.
 
+#### Which claim the field holds
+
+Does the field hold the person's email, with the resolver matching the token's `email` claim, or the identity provider's own identifier for the person, matching the token's `sub` claim?
+
+Two claims are on the table. Every OpenID Connect token carries `sub`, the identity provider's identifier for the account: unique within that provider and never given to another account. The `email` claim carries the person's email address, with `email_verified` saying whether the provider has confirmed it.
+
+Recommendation: email. A product owner says "each staff member has an email address" and means a business fact. Nobody says "each staff member has an Authentik subject identifier".
+
+`examples/vendors/vendors.velle` with each alternative:
+
+```velle
+-- recommended: email
+Role is one of "staff", "admin"   -- the compiler makes Role a text limited to these two values
+
+shape Staff {                      -- a stored shape; the actor of every `by` act is one of these records
+    name: text                     -- stored
+    email: text unique             -- stored; the compiler emits the prohibition that no two Staff share an email (Reference §21, "Keys")
+    role: Role                     -- stored; refinement Administrator below reads it
+}
+
+shape Administrator = Staff where role == "admin"   -- the role gate `by Administrator` checks the actor against this
+```
+
+```velle
+-- alternative: the identity provider's identifier
+shape Staff {                      -- a stored shape; the actor of every `by` act is one of these records
+    name: text                     -- stored
+    identityId: text unique        -- stored; no two Staff share one; holds the token's `sub` claim
+    role: Role                     -- stored
+}
+```
+
+Costs of email:
+
+- An email address can change at the identity provider. When it does, the person signs in and matches no `Staff` record (401, as above) until the record is changed to match. Vendors has no act that changes a `Staff` record today; its staff are seeded by `VendorsActors.kt`.
+- The resolver must accept only a token whose `email_verified` is true. Otherwise anyone able to set an unconfirmed address at the provider could claim Grace's.
+- Velle has no email type. The field is `text`, and the compiler proves nothing about it beyond its uniqueness.
+- The seeded staff and the blueprint's users must agree on two addresses, stated in two files. This is the same cost named above for usernames.
+
+Costs of the identity provider's identifier:
+
+- It never changes for the life of the account, so the match never breaks.
+- It is a value the provider generates, so the spec holds a fact about one provider instead of about the business. Replacing Authentik with another provider issues a new identifier for every person and every `Staff` record must be rewritten. It leans against "Velle captures the product-owner and engineer conversation as a pure business layer" (root `CLAUDE.md`).
+- The seeded staff must know each identifier before the provider has issued it. From my knowledge of Authentik, not checked here: its `sub` is by default a hash of its internal user number, and a setting on the client can make it the username, the email, or the user's UUID instead. Making it the email brings back email's costs.
+
 #### Proposed changes
 
-- `examples/vendors/vendors.velle`: shape `Staff` gains `login: text unique`.
-- `examples/vendors/output/`: regenerated.
-- `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsActors.kt`: the fixtures seed `login`; the resolver reads the authenticated principal's username and finds the `Staff` record by it.
-- `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt` and `VendorsOverHttpTest.kt`: seed the new field.
+The list as decided: the person is matched by `sub`, and `Staff` also holds `email`. Where `sub` is stored is D7.
 
-**Decided:** yes to a stored field on shape `Staff` that the resolver matches against a claim in the token, and no to the username: "seems like email would be more likely, or just some identity ID" (Dave, 2026-11-22). Which of the two is D6.
+- `examples/vendors/vendors.velle`: shape `Staff` gains `email: text unique`; `sub` is stored as D7 decides.
+- `examples/vendors/output/`: regenerated.
+- `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsActors.kt`: the fixtures seed `email`; the resolver reads the token's `sub` claim and finds the `Staff` record it belongs to.
+- `examples/vendors/app/authentik/vendors.yaml`: users `grace` and `linus` carry the same two addresses, marked verified.
+- `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt` and `VendorsOverHttpTest.kt`: seed `email`.
+
+**Decided:** yes to a stored field on shape `Staff` that the resolver matches against a claim in the token, and no to the username: "seems like email would be more likely, or just some identity ID" (Dave, 2026-11-22). On which claim, Dave answered "use `email`" (2026-11-22). Reversed 2026-11-22, after Google's practice of keying a user by `sub`, never by email: "use `sub` and add `email` as suggested". The person is matched by `sub`, and `Staff` also holds `email: text unique` as the business fact.
 
 ### D4. The application signs the browser in, and the console is not changed · Decided 2026-11-22
 
@@ -171,81 +219,106 @@ Costs:
 
 **Decided:** yes, the vendors application drops the header (Dave, 2026-11-22).
 
-### D6. A signed-in person is matched to their `Staff` record by email · Decided 2026-11-22
+### D6. Merged into D3 on 2026-11-22
 
-Does shape `Staff` gain `email: text unique`, with the resolver finding the `Staff` record whose `email` equals the token's `email` claim, rather than a field holding the identity provider's own identifier for the person?
+Which claim the field holds was the second half of D3's question. It is now D3's section "Which claim the field holds".
 
-Two claims are on the table. Every OpenID Connect token carries `sub`, the identity provider's identifier for the account: unique within that provider and never given to another account. The `email` claim carries the person's email address, with `email_verified` saying whether the provider has confirmed it.
+### D7. The identity provider's identifier is seeded with each `Staff` record
 
-Recommendation: email. A product owner says "each staff member has an email address" and means a business fact. Nobody says "each staff member has an Authentik subject identifier".
+Is each staff member's `sub` written onto their `Staff` record when the record is seeded, rather than linked by an act the first time they sign in?
 
-`examples/vendors/vendors.velle` with each alternative:
+D3 matches a person by `sub`. The identity provider issues `sub` when it creates the account, so something must put that value into the spec's state. Two ways.
+
+Recommendation: seeded. It needs nothing new in the spec beyond one field, and it opens no door. Its cost is that Authentik must let the blueprint fix each user's `sub` ahead of time, which is not confirmed (work item 2).
+
+`examples/vendors/vendors.velle`, seeded:
 
 ```velle
--- recommended: email
 Role is one of "staff", "admin"   -- the compiler makes Role a text limited to these two values
 
 shape Staff {                      -- a stored shape; the actor of every `by` act is one of these records
     name: text                     -- stored
     email: text unique             -- stored; the compiler emits the prohibition that no two Staff share an email (Reference §21, "Keys")
+    identityId: text unique        -- stored; no two Staff share one; holds the token's `sub`; the resolver finds the actor by it
     role: Role                     -- stored; refinement Administrator below reads it
 }
 
 shape Administrator = Staff where role == "admin"   -- the role gate `by Administrator` checks the actor against this
 ```
 
+`examples/vendors/vendors.velle`, linked at first sign-in:
+
 ```velle
--- alternative: the identity provider's identifier
 shape Staff {                      -- a stored shape; the actor of every `by` act is one of these records
     name: text                     -- stored
-    identityId: text unique        -- stored; no two Staff share one; holds the token's `sub` claim
+    email: text unique             -- stored; no two Staff share an email
     role: Role                     -- stored
+}
+
+transient act LinkSignIn {         -- no `by`: the person has no actor until the link exists; served to every caller
+    email: text                    -- the token's verified `email` claim
+    identityId: text               -- the token's `sub` claim
+}
+
+never (LinkSignIn where not exists (Staff where email == this.email))   -- refused at the door: no staff member has this email
+
+shape SignIn {                     -- a stored shape: this account at the identity provider is this staff member
+    staff: one Staff unique        -- stored reference; no staff member is linked twice
+    identityId: text unique        -- stored; no account is linked twice; the resolver finds the actor through it
+}
+
+rule RecordSignIn when LinkSignIn {   -- fires once, in the act's own commit
+    SignIn from { staff: (Staff where email == this.email), identityId: identityId }   -- the key on `email` makes the filter one record
 }
 ```
 
-Costs of email:
+The application commits `LinkSignIn` when a token with a verified email arrives whose `sub` no `SignIn` holds, then resolves the actor through the new `SignIn`.
 
-- An email address can change at the identity provider. When it does, the person signs in and matches no `Staff` record (401, D3's cost) until the record is changed to match. Vendors has no act that changes a `Staff` record today; its staff are seeded by `VendorsActors.kt`.
-- The resolver must accept only a token whose `email_verified` is true. Otherwise anyone able to set an unconfirmed address at the provider could claim Grace's.
-- Velle has no email type. The field is `text`, and the compiler proves nothing about it beyond its uniqueness.
-- The seeded staff and the blueprint's users must agree on two addresses, stated in two files. This is the same cost D3 named for usernames.
+Costs of seeding:
 
-Costs of the identity provider's identifier:
+- A staff member cannot be recorded before their account exists at the identity provider, because the seed needs the account's `sub`. With Google the value is known only from the organization's directory or after a first sign-in.
+- If Authentik cannot fix a user's `sub` in the blueprint, the fallback is its setting that makes `sub` the user's UUID or username, if the blueprint can fix those. That is the value D3 turned down, under another name.
+- Two files state each person's `sub`: the fixtures in `VendorsActors.kt` and the blueprint.
+- Changes nothing the spec proves: `identityId` is a field no rule reads, like `email`.
 
-- It never changes for the life of the account, so the match never breaks.
-- It is a value the provider generates, so the spec holds a fact about one provider instead of about the business. Replacing Authentik with another provider issues a new identifier for every person and every `Staff` record must be rewritten. It leans against "Velle captures the product-owner and engineer conversation as a pure business layer" (root `CLAUDE.md`).
-- The seeded staff must know each identifier before the provider has issued it. From my knowledge of Authentik, not checked here: its `sub` is by default a hash of its internal user number, and a setting on the client can make it the username, the email, or the user's UUID instead. Making it the email brings back email's costs.
+Costs of linking at first sign-in:
+
+- `LinkSignIn` has no `by`, because the person has no actor until the link exists. The starter serves every act to every caller (`wiki/Guides/Serving-a-system.md`, "Who is calling"). Anyone who can reach the port can commit `LinkSignIn` with Grace's email and their own `sub` before Grace first signs in, and is Grace from then on. Velle cannot say "only the application commits this act". Closing the door is application code in `VendorsSecurity.kt` refusing that act's REST path and GraphQL mutation, which the spec cannot see or prove.
+- It shows how onboarding really runs against a provider such as Google: an administrator records the staff member by email, and the account is tied on first sign-in.
+- A later change of email at the provider does not break the match, because the link holds `sub`.
+
+Either way the door in the second spelling is a gap in Velle: an act meant to be committed only by the application has no spelling.
 
 #### Proposed changes
 
-- Replaces D3's list. `examples/vendors/vendors.velle`: shape `Staff` gains `email: text unique`.
-- `examples/vendors/output/`: regenerated.
-- `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsActors.kt`: the fixtures seed `email`; the resolver reads the token's `email` claim, refuses it unless `email_verified` is true, and finds the `Staff` record by it.
-- `examples/vendors/app/authentik/vendors.yaml`: users `grace` and `linus` carry the same two addresses, marked verified.
-- `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt` and `VendorsOverHttpTest.kt`: seed the new field.
+- `examples/vendors/vendors.velle`: shape `Staff` gains `identityId: text unique` beside `email: text unique`.
+- `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsActors.kt`: the fixtures seed `identityId`; the resolver finds the `Staff` record whose `identityId` equals the token's `sub`.
+- `examples/vendors/app/authentik/vendors.yaml`: users `grace` and `linus` carry fixed identifiers matching the fixtures.
+- `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt` and `VendorsOverHttpTest.kt`: seed `identityId`.
+- `working-docs/QUESTIONS.md`: a one-line OQ for the gap, an act only the application may commit.
 
-**Decided:** yes, the field is `email` (Dave, 2026-11-22, answered under D3: "use `email`").
+**Decided:**
 
 ## 3. The build
 
-The decided changes of D1, D2, D4, D5, and D6, in build order. D6's list replaces D3's. Nothing in `compiler/` changes. Step 1 comes first because steps 3 and 4 rest on what it finds: if the blueprint cannot fix the client's id and secret or the users' verified emails, this plan comes back to Dave before anything else is built.
+The decided changes of D1 to D5, in build order. The lines that store `sub` wait on D7 and are marked so. Nothing in `compiler/` changes. Step 1 comes first because steps 3 and 4 rest on what it finds: if the blueprint cannot fix the client's id and secret or the users' verified emails and identifiers, this plan comes back to Dave before anything else is built.
 
 1. The identity provider, proven first:
    - `examples/vendors/app/compose.yaml`: Authentik's server, worker, and PostgreSQL, on fixed host ports, with a health check so `bootRun` waits for it (D4).
-   - `examples/vendors/app/authentik/vendors.yaml` (new): the blueprint with users `grace` and `linus`, each with a password and a verified email, the OpenID Connect client with a fixed id and secret, and the application (D4, D6).
+   - `examples/vendors/app/authentik/vendors.yaml` (new): the blueprint with users `grace` and `linus`, each with a password, a verified email, and, if D7 seeds it, a fixed `sub`, the OpenID Connect client with a fixed id and secret, and the application (D3, D4, D7).
    - Work items 1 and 2 below run against these two files.
 2. The spec:
-   - `examples/vendors/vendors.velle`: shape `Staff` gains `email: text unique` (D6).
-   - `examples/vendors/output/`: regenerated (D6).
+   - `examples/vendors/vendors.velle`: shape `Staff` gains `email: text unique`, and `sub` is stored as D7 decides (D3, D7).
+   - `examples/vendors/output/`: regenerated (D3).
 3. The application:
    - `examples/vendors/app/build.gradle.kts`: Spring Security's OpenID Connect client and token-checking starters (D4).
    - `examples/vendors/app/src/main/resources/application.yaml`: the provider's address, client id, and secret, marked as checked-in demo values (D4).
    - `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsSecurity.kt` (new): every path requires sign-in; browser sign-in and token both accepted (D4).
-   - `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsActors.kt`: the fixtures seed `email`; the header resolver is removed; the new resolver reads the token's `email` claim, refuses it unless `email_verified` is true, and finds the `Staff` record by it (D5, D6).
+   - `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsActors.kt`: the fixtures seed `email`; the header resolver is removed; the new resolver reads the token's `sub` claim and finds the `Staff` record it belongs to, as D7 decides (D3, D5, D7).
 4. The tests:
    - `examples/vendors/app/src/test/kotlin/velle/vendors/VendorsApplicationTest.kt`: signed-in principals through Spring Security's test support in place of the header; still no Docker (D5).
    - `examples/vendors/app/src/test/kotlin/velle/vendors/VendorsSignInTest.kt` (new): the four requests of D2 against a real Authentik container, skipped when Docker is absent (D5).
-   - `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt` and `VendorsOverHttpTest.kt`: seed `email`; the header resolver stays (D5, D6).
+   - `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt` and `VendorsOverHttpTest.kt`: seed `email`, and `sub` if D7 seeds it; the header resolver stays (D3, D5, D7).
 5. The documents:
    - `README.md`: the vendors line says who to sign in as, with what password, and the two lines that fetch a token for `curl` (D4, D5).
    - `wiki/Guides/Serving-a-system.md`, "Who is calling": shows the sign-in resolver beside the header one, citing `VendorsActors.kt` (D4).
@@ -255,10 +328,10 @@ The decided changes of D1, D2, D4, D5, and D6, in build order. D6's list replace
 ## 4. Work items
 
 - [ ] Confirm by running it that one Authentik blueprint file creates two users with passwords and verified emails, an OpenID Connect client with a fixed id and secret, and the application; check the file in as `examples/vendors/app/authentik/vendors.yaml` (§3 step 1).
-- [ ] Confirm by a checked-in test which claims Authentik's token for a named user carries, `email`, `email_verified`, and `sub` among them, and what `sub` holds by default, and that a script can obtain one without a browser (§3 step 1).
+- [ ] Confirm by a checked-in test which claims Authentik's token for a named user carries, `email`, `email_verified`, and `sub` among them, what `sub` holds by default, and whether a blueprint can fix a user's `sub` ahead of time (D7), and that a script can obtain one without a browser (§3 step 1).
 - [ ] Measure the first and the second `bootRun` with the identity provider in `compose.yaml` and write both times into the README's vendors line (§3 steps 1 and 5).
-- [ ] Add `email: text unique` to shape `Staff` in `examples/vendors/vendors.velle` and regenerate `examples/vendors/output/` (§3 step 2).
-- [ ] Add Spring Security, `VendorsSecurity.kt`, the provider's settings, and the email resolver to `examples/vendors/app`, removing the header resolver (§3 step 3).
+- [ ] Add `email: text unique` to shape `Staff` in `examples/vendors/vendors.velle` with `sub` stored as D7 decides, and regenerate `examples/vendors/output/` (§3 step 2).
+- [ ] Add Spring Security, `VendorsSecurity.kt`, the provider's settings, and the resolver by `sub` to `examples/vendors/app`, removing the header resolver (§3 step 3).
 - [ ] Move `VendorsApplicationTest.kt` to signed-in principals, write `VendorsSignInTest.kt`, and seed `email` in `apis/spring`'s vendors tests (§3 step 4).
 - [ ] Update `README.md`, `wiki/Guides/Serving-a-system.md` "Who is calling", and `examples/CLAUDE.md` (§3 step 5).
 - [ ] Land the settling commit: suite green, settled row, pharmacy OQ line, this file deleted (§3 step 6).
