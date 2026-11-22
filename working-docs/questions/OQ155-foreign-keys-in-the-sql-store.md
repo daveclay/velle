@@ -1,16 +1,16 @@
 # OQ155 — Whether the tables Velle creates declare foreign keys
 
-**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1, D3, and D4 await Dave, and D4 waits on OQ160. On 2026-11-21 Dave cleared his answers to D1 and D2, D2 moved to OQ160, and D4 was added. Nothing built, and four things are not yet checked (§4).
+**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1, D3, and D4 await Dave. On 2026-11-21 Dave cleared his answers to D1 and D2, D2 moved to OQ160, and D4 was added. OQ160 was settled and built on 2026-11-22, so D4 no longer waits on it. Nothing built, and four things are not yet checked (§4).
 
 **In plain terms:** When one record points at another, the database could be told so, and it would then refuse to remove a record that others still point at. Velle creates the tables and does not tell the database this today. The question is whether it should.
 
-**See:** `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `createSchema` (line 401), which writes the tables. `working-docs/QUESTIONS.md` OQ160, on whether a reference to a deleted record is emptied, which D4 waits on. `working-docs/QUESTIONS.md` OQ153, whose D4 stops checking that a referenced record exists. `working-docs/QUESTIONS.md` OQ154, on what Velle reports after a row is removed outside Velle. `working-docs/QUESTIONS.md` OQ27 and OQ28, which also change rows that already exist.
+**See:** `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `createSchema` (line 401), which writes the tables. `wiki/Guides/Store-API.md`, "What a store must do", "A deletion empties every reference to the record", which is what OQ160 settled and what D4 rests on. `working-docs/QUESTIONS.md` OQ153, whose D4 stops checking that a referenced record exists. `working-docs/QUESTIONS.md` OQ154, on what Velle reports after a row is removed outside Velle. `working-docs/QUESTIONS.md` OQ27 and OQ28, which also change rows that already exist.
 
 ---
 
 ## Roster
 
-- **D1**, **D3**, **D4**: the decisions, in §2. **D2** moved to OQ160, where it is D3.
+- **D1**, **D3**, **D4**: the decisions, in §2. **D2** moved to OQ160, where it was D3, decided yes and built.
 - **A foreign key**: a constraint declared on a column, shared among database engineers, saying its value must be the key of a row in another table. The database refuses a write that would break it.
 - **A union reference**: a field whose type is a shape declared as `A or B` (Reference §9). The store holds it as two columns, the key and the name of the shape.
 - **A junction table**: the table, shared among database engineers as a term, that holds a `many` field. It has one row per member, with the owner's key and the member's key.
@@ -52,7 +52,7 @@ In `examples/pharmacy/pharmacy.velle`, `Interaction` points at `Drug`, and no ru
 
 ### D2. Moved to OQ160
 
-Whether a reference to a deleted record is emptied is `working-docs/QUESTIONS.md` OQ160, D3, since 2026-11-21. What foreign key a reference to a shape some rule deletes declares is D4.
+Whether a reference to a deleted record is emptied was OQ160 D3 from 2026-11-21. Dave decided yes on 2026-11-22 and it is built: the store empties every stored reference to a deleted record in the same commit (`wiki/Guides/Store-API.md`, "What a store must do"; `SqlStore.delete` in `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`). What foreign key a reference to a shape some rule deletes declares is D4.
 
 ### D3. A database that already exists is not altered
 
@@ -69,7 +69,7 @@ Costs:
 
 If OQ160 decides that the store empties every reference to a record before removing it (`working-docs/QUESTIONS.md` OQ160, D3 and D4), should every reference to one shape declare the plain foreign key of D1, whether or not a rule deletes that shape?
 
-This decision waits on OQ160. If OQ160 leaves references in place, a foreign key on such a column would make the database refuse the rule's own delete, and the answer here is that nothing is declared, as today.
+This decision waited on OQ160 until 2026-11-22. OQ160 decided that the store empties every reference before it removes the row, with its own statements, and that is built (`SqlStore.delete`, `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`; `SqlStoreConformance`, "deleting a row removes its collections and captures and empties every reference at it"). So the condition this question opens with holds.
 
 In `examples/moderation/moderation.velle`, `Listing` has the field `seller: one Seller? initially required` and the rule `ApplyClose` deletes a `Seller`. With a yes here, the `Listing` table is created with:
 
@@ -104,4 +104,4 @@ Not written. Nothing is decided.
 - [ ] Check, with a test, whether one commit that creates two records pointing at each other, or a record and the record it points at, writes rows in an order an immediate foreign key accepts, or needs the constraint deferred to the end of the transaction.
 - [ ] Check, with a test, that SQLite enforces the constraint on the connections the store takes; SQLite ignores foreign keys unless each connection turns them on.
 - [ ] Check which other paths remove or re-key rows (OQ27 erasure, seeds, capture tables) and would meet the constraint.
-- [ ] Check, with a test, once OQ160 is built, that no statement is refused by a foreign key in a commit that deletes a record and also assigns a field of a record pointing at it.
+- [ ] Check, with a test, that no statement is refused by a foreign key in a commit that deletes a record and also assigns a field of a record pointing at it.

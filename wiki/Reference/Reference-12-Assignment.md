@@ -144,7 +144,7 @@ rule ApplyDiscard when (DiscardDraft where listing is Draft) {
 }
 ```
 
-- `seller: one Seller? initially required` means a listing must name a seller when created, but the field becomes absent if that seller is later deleted. Nothing writes the field; it goes absent on its own.
+- `seller: one Seller? initially required` means a listing must name a seller when created, but the field becomes absent if that seller is later deleted. No rule writes the field; it goes absent on its own.
 - `DiscardDraft` is a transient act: the request itself is not stored.
 - `DiscardRecord` is what the business keeps. It copies the title, because the listing will not exist to point at.
 - `ApplyDiscard` fires only for a draft. It creates the record from the listing's title, then deletes the listing, in one commit.

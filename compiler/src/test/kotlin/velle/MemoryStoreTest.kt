@@ -145,4 +145,45 @@ class MemoryStoreTest {
         reader.get(60, TimeUnit.SECONDS)
         pool.shutdown()
     }
+
+    private val pointedAtSpec = """
+        act Seller { name: text }
+        act Post { title: text }
+        act Photo { caption: text }
+        shape Content = Post or Photo
+        act Listing { title: text, seller: one Seller? initially required }
+        act Bookmark { label: text, target: one Content? }
+        act Shelf { label: text, sellers: many Seller }
+        transient act CloseAccount { seller: one Seller }
+        rule ApplyClose when CloseAccount { delete seller }
+        transient act RemovePost { post: one Post }
+        rule ApplyRemovePost when RemovePost { delete post }
+    """.trimIndent()
+
+    @Test
+    fun `deleting a record empties every stored reference at it`() {
+        val model = Model(Parser.parse(pointedAtSpec))
+        check(model.diagnostics.isEmpty()) { model.diagnostics.toString() }
+        val sys = VelleSystem(model)
+        val store = MemoryStore(model)
+        sys.connect(store, store, store)
+        sys.scope {
+            val ada = accepted(sys.commit("Seller", mapOf("name" to "Ada")))
+            val bea = accepted(sys.commit("Seller", mapOf("name" to "Bea")))
+            val post = accepted(sys.commit("Post", mapOf("title" to "Hello")))
+            val photo = accepted(sys.commit("Photo", mapOf("caption" to "Sunset")))
+            accepted(sys.commit("Listing", mapOf("title" to "Lamp", "seller" to sys.idOf(ada))))
+            accepted(sys.commit("Bookmark", mapOf("label" to "on the post", "target" to sys.idOf(post))))
+            accepted(sys.commit("Bookmark", mapOf("label" to "on the photo", "target" to sys.idOf(photo))))
+            accepted(sys.commit("Shelf", mapOf("label" to "all", "sellers" to listOf(sys.idOf(ada), sys.idOf(bea)))))
+
+            assertIs<CommitResult.Accepted>(sys.commit("CloseAccount", mapOf("seller" to sys.idOf(ada))))
+            assertIs<CommitResult.Accepted>(sys.commit("RemovePost", mapOf("post" to sys.idOf(post))))
+
+            assertEquals(null, store.fetchAll("Listing").single().fields["seller"], "a `one` field holds nothing")
+            val targetByLabel = store.fetchAll("Bookmark").associate { bookmark -> bookmark.fields["label"] to bookmark.fields["target"] }
+            assertEquals(mapOf<Any?, Any?>("on the post" to null, "on the photo" to photo), targetByLabel)
+            assertEquals(listOf<Any?>(bea), store.fetchAll("Shelf").single().fields["sellers"], "a `many` field loses the member")
+        }
+    }
 }

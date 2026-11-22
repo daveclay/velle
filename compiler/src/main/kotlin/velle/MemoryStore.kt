@@ -110,7 +110,24 @@ class MemoryStore(private val model: Model) : StateResolver, CommitCallback, Tic
         for (d in commit.deleted) {
             rows[d.target.shape]?.remove(d.target.key)
             captures.keys.removeIf { it.first == d.target }
+            emptyReferencesAt(d.target)
         }
         minted
     }
+
+    /** Empties every stored reference at [deleted] (Hydration.kt, [CommitSet.Deletion]): a `one` field holds nothing afterwards, a `many` field loses the member. */
+    private fun emptyReferencesAt(deleted: Ref.Persisted) {
+        for (rowsOfShape in rows.values) rowsOfShape.replaceAll { _, row -> rowWithoutReferencesAt(deleted, row) }
+        captures.replaceAll { _, remembered -> fieldsWithoutReferencesAt(deleted, remembered) }
+    }
+
+    private fun rowWithoutReferencesAt(deleted: Ref.Persisted, row: Row): Row {
+        val pointsAtDeleted = row.fields.values.any { value -> value == deleted || (value is List<*> && deleted in value) }
+        return if (pointsAtDeleted) row.copy(fields = fieldsWithoutReferencesAt(deleted, row.fields)) else row
+    }
+
+    private fun fieldsWithoutReferencesAt(deleted: Ref.Persisted, fields: Map<String, Any?>): Map<String, Any?> =
+        fields.filterValues { value -> value != deleted }.mapValues { (_, value) ->
+            if (value is List<*>) value.filter { member -> member != deleted } else value
+        }
 }

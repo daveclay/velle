@@ -232,12 +232,14 @@ data class CommitSet(
      *  is the store's realization choice — the statement is declarative.
      *  Apply deletions after [created]/[assigned]: a same-set write never
      *  targets a deleted row, but a surviving row may hold a reference at a
-     *  deleted one — such a reference reads as absent thereafter (the
-     *  absorbing reference, `? initially required`). That reading is only
-     *  sound while the dead key stays dead: a store must never reissue a
-     *  deleted row's key to a later row (SQLite: `AUTOINCREMENT`, not the
-     *  reusing default), or the dangling reference silently points at a
-     *  stranger. Capture memory keyed on the row goes with it. */
+     *  deleted one. The store empties every stored reference at the deleted
+     *  record in the same commit: a `one` field holds nothing afterwards, and
+     *  a `many` field loses the member. Only an optional field, one declared
+     *  `? initially required`, or a `many` field can be left pointing at it
+     *  (checks.md V24), so every such reference can be emptied. A store must
+     *  never reissue a deleted row's key to a later row (SQLite:
+     *  `AUTOINCREMENT`, not the reusing default): a key names one record for
+     *  good. Capture memory keyed on the row goes with it. */
     data class Deletion(val target: Ref.Persisted)
 }
 

@@ -38,7 +38,7 @@ import kotlin.test.assertTrue
  * references and their join reads; the pre-filter pushed down where the
  * dialect's column answers the comparison and left to the evaluator where it
  * does not, with the same answer either way; capture memory across processes
- * and its upsert on re-entry; deletion with the absorbing reference; E4 on an
+ * and its upsert on re-entry; deletion emptying every reference at the row; E4 on an
  * extension type's binding; and the unit of work: a connection per read or
  * envelope, returned at its end, a read's snapshot, a refusal writing nothing,
  * and, where the dialect serializes keys, two envelopes on one key taking turns.
@@ -640,10 +640,10 @@ abstract class SqlStoreConformance {
         assertEquals(2L, secondProcess.count("velle_tick"), "one moment per schedule, however many ticks")
     }
 
-    // ── deletion: the row and what hangs off it go, references at it read absent ──
+    // ── deletion: the row and what hangs off it go, and every reference at it is emptied ──
 
     @Test
-    fun `deleting a row removes its collections and captures and leaves references at it reading absent`() {
+    fun `deleting a row removes its collections and captures and empties every reference at it`() {
         val a = attach()
         val ada = a.customer("Ada", tier = 6, tags = listOf("vip"), notes = listOf("x"))
         accepted(a.sys.commit("Order", mapOf("customer" to a.id(ada), "total" to BigDecimal("5.00"))))
@@ -656,16 +656,151 @@ abstract class SqlStoreConformance {
         assertEquals(0L, a.count("Customer__tags"))
         assertEquals(0L, a.count("Customer__notes"))
         assertEquals(0L, a.count("capture_Flagged"))
-        assertEquals(key, (a.scalar("""SELECT customer FROM "Order"""") as Number).toLong(), "the surviving row still holds the dead key")
+        assertEquals(1L, a.count("Order"), "the order stays")
+        assertNull(a.scalar("""SELECT customer FROM "Order""""), "the surviving row's reference is emptied")
 
         val b = attach(a.ds)
         b.sys.scope {
             val o = b.sys.instancesOf("Order").single()
             assertNull(b.sys.get(o, "customer"), "a reference at a deleted row reads as absent")
         }
-        // a new customer never inherits the dead key
+        // a new customer never inherits the deleted row's key
         b.customer("Bea")
         assertTrue((b.scalar("""SELECT id FROM "Customer"""") as Number).toLong() > key)
+    }
+
+    protected val pointedAtSpec = """
+        act Seller { name: text }
+        act Post { title: text }
+        act Photo { caption: text }
+        shape Content = Post or Photo
+        act Listing {
+            title: text
+            seller: one Seller? initially required
+        }
+        act Bookmark {
+            label: text
+            target: one Content?
+        }
+        act Shelf {
+            label: text
+            sellers: many Seller
+            items: many Content
+        }
+
+        transient act CloseAccount { seller: one Seller }
+        rule ApplyClose when CloseAccount { delete seller }
+
+        transient act RemovePost { post: one Post }
+        rule ApplyRemovePost when RemovePost { delete post }
+
+        transient act CloseAndRetitle {
+            seller: one Seller
+            listing: one Listing
+            title: text
+        }
+        rule ApplyCloseAndRetitle when CloseAndRetitle {
+            listing.title = title
+            delete seller
+        }
+
+        transient act Retitle {
+            listing: one Listing
+            title: text
+        }
+        rule ApplyRetitle when Retitle { listing.title = title }
+    """.trimIndent()
+
+    @Test
+    fun `deleting a row empties a union reference at it and leaves one at another shape's row with the same key`() {
+        val a = attach(spec = pointedAtSpec)
+        val post = accepted(a.sys.commit("Post", mapOf("title" to "Hello")))!!
+        val photo = accepted(a.sys.commit("Photo", mapOf("caption" to "Sunset")))!!
+        assertEquals(post.key, photo.key, "the first Post and the first Photo share a key")
+        accepted(a.sys.commit("Bookmark", mapOf("label" to "on the post", "target" to a.id(post))))
+        accepted(a.sys.commit("Bookmark", mapOf("label" to "on the photo", "target" to a.id(photo))))
+
+        accepted(a.sys.commit("RemovePost", mapOf("post" to a.id(post))))
+        assertNull(a.scalar("""SELECT "target" FROM "Bookmark" WHERE label = 'on the post'"""), "the key column is emptied")
+        assertNull(a.scalar("""SELECT "target__shape" FROM "Bookmark" WHERE label = 'on the post'"""), "the shape column is emptied with it")
+        assertEquals(photo.key.value, (a.scalar("""SELECT "target" FROM "Bookmark" WHERE label = 'on the photo'""") as Number).toLong())
+        assertEquals("Photo", a.scalar("""SELECT "target__shape" FROM "Bookmark" WHERE label = 'on the photo'"""))
+    }
+
+    @Test
+    fun `deleting a row takes it out of every collection that held it`() {
+        val a = attach(spec = pointedAtSpec)
+        val ada = accepted(a.sys.commit("Seller", mapOf("name" to "Ada")))!!
+        val bea = accepted(a.sys.commit("Seller", mapOf("name" to "Bea")))!!
+        val post = accepted(a.sys.commit("Post", mapOf("title" to "Hello")))!!
+        val photo = accepted(a.sys.commit("Photo", mapOf("caption" to "Sunset")))!!
+        accepted(a.sys.commit("Shelf", mapOf(
+            "label" to "all",
+            "sellers" to listOf(a.id(ada), a.id(bea)),
+            "items" to listOf(a.id(post), a.id(photo)),
+        )))
+
+        accepted(a.sys.commit("CloseAccount", mapOf("seller" to a.id(ada))))
+        accepted(a.sys.commit("RemovePost", mapOf("post" to a.id(post))))
+        assertEquals(1L, a.count("Shelf__sellers"))
+        assertEquals(bea.key.value, (a.scalar("""SELECT target FROM "Shelf__sellers"""") as Number).toLong())
+        assertEquals(1L, a.count("Shelf__items"))
+        assertEquals("Photo", a.scalar("""SELECT target_shape FROM "Shelf__items""""), "the photo with the post's key stays")
+
+        val b = attach(a.ds, spec = pointedAtSpec)
+        b.sys.scope {
+            val shelf = b.sys.instancesOf("Shelf").single()
+            assertEquals(1, (b.sys.get(shelf, "sellers") as List<*>).size)
+            assertEquals(1, (b.sys.get(shelf, "items") as List<*>).size)
+        }
+    }
+
+    @Test
+    fun `a commit that deletes a row and assigns another field of a row pointing at it leaves the reference empty`() {
+        val a = attach(spec = pointedAtSpec)
+        val ada = accepted(a.sys.commit("Seller", mapOf("name" to "Ada")))!!
+        val lamp = accepted(a.sys.commit("Listing", mapOf("title" to "Lamp", "seller" to a.id(ada))))!!
+
+        accepted(a.sys.commit("CloseAndRetitle", mapOf("seller" to a.id(ada), "listing" to a.id(lamp), "title" to "Brass lamp")))
+        assertEquals("Brass lamp", a.scalar("""SELECT title FROM "Listing""""))
+        assertNull(a.scalar("""SELECT seller FROM "Listing""""))
+    }
+
+    @Test
+    fun `a later commit assigning another field of a row whose reference was emptied does not write the deleted row's key back`() {
+        val a = attach(spec = pointedAtSpec)
+        val ada = accepted(a.sys.commit("Seller", mapOf("name" to "Ada")))!!
+        val lamp = accepted(a.sys.commit("Listing", mapOf("title" to "Lamp", "seller" to a.id(ada))))!!
+        accepted(a.sys.commit("CloseAccount", mapOf("seller" to a.id(ada))))
+
+        accepted(a.sys.commit("Retitle", mapOf("listing" to a.id(lamp), "title" to "Brass lamp")))
+        assertEquals("Brass lamp", a.scalar("""SELECT title FROM "Listing""""))
+        assertNull(a.scalar("""SELECT seller FROM "Listing""""))
+    }
+
+    @Test
+    fun `deleting a row empties a reference a refinement remembered`() {
+        val escalationSpec = """
+            act Agent { name: text }
+            act Ticket {
+                subject: text
+                agent: one Agent? initially required
+                urgent: boolean
+            }
+            shape Escalated = Ticket where urgent {
+                captured escalatedWith: one Agent? = agent
+            }
+            transient act Dismiss { agent: one Agent }
+            rule ApplyDismiss when Dismiss { delete agent }
+        """.trimIndent()
+        val a = attach(spec = escalationSpec)
+        val ada = accepted(a.sys.commit("Agent", mapOf("name" to "Ada")))!!
+        accepted(a.sys.commit("Ticket", mapOf("subject" to "Outage", "agent" to a.id(ada), "urgent" to true)))
+        assertEquals(ada.key.value, (a.scalar("""SELECT "escalatedWith" FROM "capture_Escalated"""") as Number).toLong())
+
+        accepted(a.sys.commit("Dismiss", mapOf("agent" to a.id(ada))))
+        assertEquals(1L, a.count("capture_Escalated"), "the ticket is still escalated")
+        assertNull(a.scalar("""SELECT "escalatedWith" FROM "capture_Escalated""""))
     }
 
     // ── E4: an extension type's binding, checked at start-up through the dialect's column ──

@@ -59,9 +59,8 @@ interface SqlDialect {
     /**
      * DDL of a shape table's key column, after `id`: the database mints the key
      * at insert and `INSERT ... RETURNING id` reports it. A deleted row's key is
-     * never reused: a surviving row may still reference a deleted one (the
-     * absorbing reference, Reference §12), which the runtime reads as absent,
-     * and that reading is only sound while no new row can inherit the dead key.
+     * never reused: a key names one record for good, so nothing that still
+     * holds the key of a deleted row can come to name a later one.
      */
     val keyColumn: String
 

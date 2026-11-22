@@ -60,6 +60,9 @@ import java.sql.ResultSet
  *   refinement, one row per current membership, deleted on exit
  *   ([Model.captureSchemas] states exactly what must survive).
  * - Keys are minted by the database ([SqlDialect.keyColumn]) and never reused.
+ * - A deletion empties every stored reference at the deleted row before the row
+ *   goes: a to-one column is set to NULL, with its discriminator column, and the
+ *   row's junction rows as a member are removed.
  *
  * Connections: the store holds a `DataSource`, never a connection. Each unit of
  * work the runtime opens (Hydration.kt, [StateResolver.begin]) takes one
@@ -839,8 +842,8 @@ open class SqlStore(
      * key, and the assigned keys return in creation order. Creates arrive with
      * pending refs pointing backward, so inserting in list order always has
      * the referenced key already minted. Deletions go last, as the contract
-     * orders them: a surviving row's reference at a deleted one is left in
-     * place — the absorbing reference the runtime reads as absent.
+     * orders them, so a reference at a deleted row that the same commit wrote
+     * is emptied with every other ([delete]).
      */
     override fun onCommit(commit: CommitSet): List<StoreKey> {
         val unit = current.get()
@@ -971,16 +974,78 @@ open class SqlStore(
     }
 
     /**
-     * The row removal (Reference §12): the row, its own collections, and any
-     * capture memory keyed on it go; the key is never reused. References *at*
-     * the row from surviving rows stay as they are — the runtime reads them as
-     * absent (the absorbing reference). A store that preferred to null them
-     * out could: the model names every column and junction table that can
-     * point at this shape.
+     * One statement that empties the stored references at a deleted row, bound with the
+     * row's key and, where [namesShape], with the row's shape after it: a column or
+     * junction table typed with a union points at rows of several tables, and a key is
+     * only unique within one.
+     */
+    private data class EmptyingStatement(val sql: String, val namesShape: Boolean)
+
+    /** For each shape, the statements that empty every stored reference at one of its rows: one per column and junction table the model says can point at the shape. */
+    private val emptyingStatementsByShape: Map<String, List<EmptyingStatement>> by lazy {
+        persistedShapes.associateWith { deletedShape -> emptyingStatements(deletedShape) }
+    }
+
+    private fun emptyingStatements(deletedShape: String): List<EmptyingStatement> =
+        persistedShapes.flatMap { pointingShape -> columnEmptyings(pointingShape, deletedShape) + junctionEmptyings(pointingShape, deletedShape) } +
+            captureEmptyings(deletedShape)
+
+    private fun pointsAt(type: VType, deletedShape: String): Boolean {
+        val declaredShape = type.instanceShape() ?: return false
+        return deletedShape in model.basesOf(declaredShape)
+    }
+
+    /** A to-one column is set to NULL, and the discriminator column of a union-typed one with it. */
+    private fun columnEmptyings(pointingShape: String, deletedShape: String): List<EmptyingStatement> =
+        columnsOf(pointingShape).filter { column -> pointsAt(column.type, deletedShape) }.map { column ->
+            val keyColumn = "\"${column.name}\""
+            val discriminator = "\"${shapeColumn(column.name)}\""
+            if (column.union) EmptyingStatement(
+                """UPDATE "$pointingShape" SET $keyColumn = NULL, $discriminator = NULL WHERE $keyColumn = ? AND $discriminator = ?""",
+                namesShape = true,
+            )
+            else EmptyingStatement("""UPDATE "$pointingShape" SET $keyColumn = NULL WHERE $keyColumn = ?""", namesShape = false)
+        }
+
+    /** A member's row leaves the junction table, so the record leaves the collection. */
+    private fun junctionEmptyings(pointingShape: String, deletedShape: String): List<EmptyingStatement> =
+        collectionsOf(pointingShape).filter { collection -> pointsAt(collection.elem, deletedShape) }.map { collection ->
+            val table = junctionTable(pointingShape, collection.name)
+            if (collection.union) EmptyingStatement("""DELETE FROM "$table" WHERE target = ? AND target_shape = ?""", namesShape = true)
+            else EmptyingStatement("""DELETE FROM "$table" WHERE target = ?""", namesShape = false)
+        }
+
+    /** A remembered reference is set to NULL. A capture table has no discriminator column, so one typed with a union is left as it is. */
+    private fun captureEmptyings(deletedShape: String): List<EmptyingStatement> =
+        model.captureSchemas.flatMap { captureSchema ->
+            captureSchema.props
+                .filter { remembered -> pointsAt(remembered.type, deletedShape) && remembered.type.instanceShape()?.let { declaredShape -> isUnion(declaredShape) } == false }
+                .map { remembered ->
+                    EmptyingStatement(
+                        """UPDATE "${captureTable(captureSchema.refinement)}" SET "${remembered.name}" = NULL WHERE "${remembered.name}" = ?""",
+                        namesShape = false,
+                    )
+                }
+        }
+
+    private fun emptyReferences(conn: Connection, emptying: EmptyingStatement, deleted: Ref.Persisted) {
+        conn.prepareStatement(emptying.sql).use { statement ->
+            statement.setLong(1, keyLong(deleted.key))
+            if (emptying.namesShape) statement.setString(2, deleted.shape)
+            statement.executeUpdate()
+        }
+    }
+
+    /**
+     * The row removal (Reference §12). Every stored reference at the row is
+     * emptied first ([emptyingStatementsByShape]), so no surviving row is left
+     * holding the key of a row that is gone. Then the row, its own collections,
+     * and any capture memory keyed on it go. The key is never reused.
      */
     private fun delete(conn: Connection, d: CommitSet.Deletion) {
         val shape = d.target.shape
         val key = keyLong(d.target.key)
+        for (emptying in emptyingStatementsByShape.getValue(shape)) emptyReferences(conn, emptying, d.target)
         conn.prepareStatement("""DELETE FROM "$shape" WHERE id = ?""").use { ps ->
             ps.setLong(1, key); ps.executeUpdate()
         }
