@@ -6,7 +6,7 @@ import velle.ext.VelleType
 /**
  * Resolved-spec model: symbol tables, refinement→base resolution, member lookup
  * (including refinement properties and inferred inverse relationships), and the
- * read/write summaries the checks in Validator.kt consume.
+ * read/write summaries the validator's checks (`validation/`) consume.
  *
  * Inverse relationships (Reference §6): `LineItem.invoice: one Invoice` gives
  * `Invoice` a derived collection member named decapitalize(LineItem) + "s" =
