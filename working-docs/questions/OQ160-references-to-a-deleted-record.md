@@ -1,6 +1,6 @@
 # OQ160 — What happens to the records that point at a record when it is deleted
 
-**Status:** opened 2026-11-21, split out of OQ155 at Dave's direction: "Leaving a reference to a deleted record is not how systems work". On 2026-11-21 Dave set the frame the file now follows: the product owner and the engineer choose, per case, between refusing the delete and clearing the references. D1 is decided and built. D2 to D4 await Dave. Nothing of D2 to D4 is built, and two things are not yet checked (§4).
+**Status:** opened 2026-11-21, split out of OQ155 at Dave's direction: "Leaving a reference to a deleted record is not how systems work". On 2026-11-21 Dave set the frame the file now follows: the product owner and the engineer choose, per case, between refusing the delete and clearing the references. D1 is decided and built. D2 is decided and changes nothing. D3 and D4 await Dave. Nothing of D3 and D4 is built, and two things are not yet checked (§4).
 
 **In plain terms:** A user asks to delete a record that other records point at. The product owner and the engineer have two answers to choose from: the user may not delete it while anything points at it, or it is deleted and the pointers are cleared. Most of the time the product owner wants the first, and the user must be told why in the words of the business, not by an error from the database. Velle can say both. What is still open is what happens to the pointers that are cleared.
 
@@ -34,13 +34,13 @@ This is why the store contract forbids reusing a key (`wiki/Guides/Store-API.md`
 
 ## 2. What to decide
 
-The two answers are chosen per reference, by the product owner and the engineer. D1, which let the spec say "refuse the delete", is built. D2 asks whether a reference that is cleared must say so. D3 and D4 are about what the store holds after a reference is cleared.
+The two answers are chosen per reference, by the product owner and the engineer. D1, which let the spec say "refuse the delete", is built. D2, on whether a reference that is cleared must say so, is decided. D3 and D4 are about what the store holds after a reference is cleared.
 
 ### D1. Refusing the delete for a required reference · Decided 2026-11-21
 
 **Decided:** Dave, 2026-11-21: not by having the compiler read the wording of a `never`, and yes by a language structure. It is built as the `is held` test: Reference §6, "A required reference holds its target"; Reference §12, "Deleting a record that others point at"; `checks.md` V24.
 
-### D2. A plain optional reference and a `many` field are cleared without the spec saying so
+### D2. A plain optional reference and a `many` field are cleared without the spec saying so · Decided 2026-11-22
 
 When a rule deletes a record that a `?` reference or a `many` field points at, should the compiler go on accepting it with no statement from the author, as it does today?
 
@@ -77,6 +77,8 @@ Costs of yes:
 Costs of no:
 
 - A new spelling, not designed here, on every optional reference and `many` field that points at a shape a rule deletes. In `examples/moderation/moderation.velle` every reference is already `? initially required` or required, so that file would not change.
+
+**Decided:** Dave, 2026-11-22: yes. The compiler goes on accepting the delete with no statement from the author, and nothing changes.
 
 ### D3. When a rule deletes a record, every stored reference to it is emptied
 
@@ -192,7 +194,7 @@ Costs:
 
 ## 3. The build
 
-Not written. Nothing is decided.
+Not written. D3 and D4 are not decided. D1 is built and D2 changes nothing.
 
 ## 4. Work items
 
