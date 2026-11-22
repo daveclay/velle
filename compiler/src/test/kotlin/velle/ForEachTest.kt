@@ -293,6 +293,11 @@ class ForEachTest {
             diagnostics.toString())
     }
 
+    @Test
+    fun `a block over a walk reading a field its records have validates`() {
+        assertEquals(emptyList(), diags(introductionsOverWalkReading("name")))
+    }
+
     // ── what a block reads through its name ──────────────────────────────────
 
     /** A rule creating an introduction per element of [source], reading each friend's score, beside a sibling that resets the score. */

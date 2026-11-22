@@ -437,6 +437,10 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
      *  cross-base union (use [basesOf]) or an unresolvable name (F1). */
     fun baseOf(name: String): String? = if (name in sharedShapes) null else basesOf(name).singleOrNull()
 
+    /** Whether [name] is a shape or a refinement the spec declares. Unlike [basesOf], asking
+     *  about any other name reports nothing. */
+    fun namesShapeOrRefinement(name: String): Boolean = name in shapes || name in residuals || name in refinements
+
     fun baseOfExpr(expr: RefExpr): String? = basesOfExpr(expr).singleOrNull()
 
     /** A refinement whose members span more than one base shape. */
