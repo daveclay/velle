@@ -47,6 +47,66 @@ class DeleteValidatorTest {
         """.trimIndent())
     }
 
+    /** The messages of the V23 that refuses writing and deleting one record in one body. */
+    private fun assignAndDeleteMessages(source: String): List<String> =
+        Validator.validate(source).filter { diagnostic -> diagnostic.code == "V23" && "both assigns" in diagnostic.message }
+            .map { diagnostic -> diagnostic.message }
+
+    /** A nightly purge of stale tasks whose body is [body]. */
+    private fun stalePurge(body: String): String = """
+        act Seller { name: text }
+        act Task { name: text, done: boolean initially false, seller: one Seller }
+        shape StaleTask = Task where not done and name == "stale"
+        rule Purge when StaleTask on Daily {
+            $body
+            delete this
+        }
+    """.trimIndent()
+
+    @Test
+    fun `V23 - a body that deletes this and writes its field through this is refused`() {
+        assertEquals(listOf("rule 'Purge' both assigns 'this.name' and deletes 'this' in one commit, and a record " +
+            "cannot be changed and removed at once; drop the assignment, or keep the record (Reference §12)"),
+            assignAndDeleteMessages(stalePurge("this.name = \"gone\"")))
+    }
+
+    @Test
+    fun `V23 - a body that deletes this and writes its field by bare name is refused`() {
+        assertEquals(listOf("rule 'Purge' both assigns 'name' and deletes 'this' in one commit, and a record " +
+            "cannot be changed and removed at once; drop the assignment, or keep the record (Reference §12)"),
+            assignAndDeleteMessages(stalePurge("name = \"gone\"")))
+    }
+
+    @Test
+    fun `V23 - a body that deletes this and writes a field of the record it points at is not refused`() {
+        assertEquals(emptyList(), Validator.validate(stalePurge("this.seller.name = \"gone\"")))
+        assertEquals(emptyList(), Validator.validate(stalePurge("seller.name = \"gone\"")))
+    }
+
+    /** A transient request deleting one of two tasks, whose body is [body]. */
+    private fun dropRequest(body: String): String = """
+        act Seller { name: text }
+        act Task { name: text, done: boolean initially false, seller: one Seller }
+        transient act Drop { task: one Task, other: one Task }
+        rule ApplyDrop when Drop {
+            $body
+        }
+    """.trimIndent()
+
+    @Test
+    fun `V23 - a body that deletes a path and writes a field at the end of it is refused`() {
+        assertEquals(listOf("rule 'ApplyDrop' both assigns 'task.seller.name' and deletes 'task.seller' in one commit, " +
+            "and a record cannot be changed and removed at once; drop the assignment, or keep the record (Reference §12)"),
+            assignAndDeleteMessages(dropRequest("task.seller.name = \"gone\"\n    delete task.seller")))
+    }
+
+    @Test
+    fun `V23 - a body that deletes a path and writes another record is not refused`() {
+        assertEquals(emptyList(), Validator.validate(dropRequest("task.seller.name = \"gone\"\n    delete task")))
+        assertEquals(emptyList(), Validator.validate(dropRequest("other.name = \"gone\"\n    delete task")))
+        assertEquals(emptyList(), assignAndDeleteMessages(dropRequest("task.name = \"gone\"\n    delete task.seller")))
+    }
+
     @Test
     fun `a fan-out delete through a collection is refused`() {
         assertHas("V23", """
@@ -282,6 +342,34 @@ class DeleteValidatorTest {
             transient act Undo { retirement: one Retirement }
             rule ApplyUndo when Undo { delete retirement }
         """.trimIndent())
+    }
+
+    /** An open flag tested with a filter over retirements; [deleter] is appended. */
+    private fun flagsRetiredByFilter(deleter: String): String = """
+        act Account { owner: text }
+        shape Flag { account: one Account, note: text }
+        shape OpenFlag = Flag where not exists (Retirement where flag == this)
+        shape Retirement { flag: one Flag? initially required, note: text }
+        shape Flagged = Account where exists Flag for this
+        rule Report when Flagged {
+            Note from { body: (OpenFlag for this).note }
+        }
+        shape Note { body: text }
+    """.trimIndent() + deleter
+
+    @Test
+    fun `V12 - a deleter of the record a filter tests for breaks the at-most-one proof`() {
+        val src = flagsRetiredByFilter("\ntransient act Undo { retirement: one Retirement }\nrule ApplyUndo when Undo { delete retirement }")
+        assertEquals(listOf("rule 'Report' reads '(OpenFlag for ...)' as one record, but the compiler cannot see that a " +
+            "record is never a member of 'OpenFlag' twice: a rule deletes 'Retirement', so a record that left 'OpenFlag' " +
+            "because a 'Retirement' existed could join it again when that 'Retirement' is deleted; select one with " +
+            "'latest(OpenFlag where ... by ...)' or 'first(...)' instead"),
+            Validator.validate(src).filter { diagnostic -> diagnostic.code == "V12" }.map { diagnostic -> diagnostic.message })
+    }
+
+    @Test
+    fun `V12 - with no deleter the record a filter tests for keeps the at-most-one proof`() {
+        assertLacks("V12", flagsRetiredByFilter(""))
     }
 
     @Test

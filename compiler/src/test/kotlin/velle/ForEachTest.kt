@@ -255,6 +255,71 @@ class ForEachTest {
     }
 
     @Test
+    fun `V34 - a walk until names one record and is no collection`() {
+        val spec = """
+            act Kind {
+                name: text
+                parent: one Kind?
+                hasLocation: boolean
+            }
+            shape Tag { kind: one Kind, label: text }
+            rule TagHolders when Kind {
+                for each holder in walk parent until hasLocation { Tag from { kind: this, label: "held" } }
+            }
+        """.trimIndent()
+        assertEquals(listOf("rule 'TagHolders' — `for each holder in walk parent until hasLocation`: 'walk parent until " +
+            "hasLocation' is not a collection; name a `many` field, an inferred inverse, a filter `(Shape where ...)`, " +
+            "a shape, or a range `from 1 to n` (Reference §14)"),
+            diags(spec).filter { diagnostic -> diagnostic.code == "V34" }.map { diagnostic -> diagnostic.message })
+    }
+
+    /** A rule introducing each profile to everyone its friends reach, naming each by [friendField]. */
+    private fun introductionsOverWalkReading(friendField: String) = """
+        act Profile {
+            name: text
+            friends: many Profile
+        }
+        shape Introduction { profile: one Profile, friendName: text }
+        rule Introduce when Profile {
+            for each friend in walk friends { Introduction from { profile: this, friendName: friend.$friendField } }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `a walk is a collection, and its name is a record of the walked shape`() {
+        val diagnostics = diags(introductionsOverWalkReading("nickname"))
+        assertTrue(diagnostics.none { diagnostic -> diagnostic.code == "V34" }, diagnostics.toString())
+        assertTrue(diagnostics.any { diagnostic -> diagnostic.code == "F1" && diagnostic.message == "'nickname' is not a member of 'Profile'" },
+            diagnostics.toString())
+    }
+
+    // ── what a block reads through its name ──────────────────────────────────
+
+    /** A rule creating an introduction per element of [source], reading each friend's score, beside a sibling that resets the score. */
+    private fun introductionsBesideReset(source: String) = """
+        act Profile {
+            name: text
+            score: integer
+            friends: many Profile
+        }
+        shape Introduction { profile: one Profile, friendScore: integer }
+        rule Introduce when Profile {
+            for each friend in $source { Introduction from { profile: this, friendScore: friend.score } }
+        }
+        rule Reset when Profile { score = 0 }
+    """.trimIndent()
+
+    @Test
+    fun `V15 - a block's read through its name is a read of the element's shape, for every kind of source`() {
+        val expected = "'Reset' writes Profile.score, which sibling 'Introduce' reads in its body — outcome depends on " +
+            "unstated order; state the intent (OQ16)"
+        for (source in listOf("friends", "Profile", "(friends where score > 0)", "walk friends")) {
+            val messages = diags(introductionsBesideReset(source)).filter { diagnostic -> diagnostic.code == "V15" }.map { diagnostic -> diagnostic.message }
+            assertEquals(listOf(expected), messages, "source '$source'")
+        }
+    }
+
+    @Test
     fun `a number name has no members`() {
         val d = diags(BASE + "\nrule R when Design { for each i from 1 to n { Slot from { design: this, i: i.k } } }")
         assertTrue(d.any { it.code == "F1" && "is a value, not a record" in it.message }, d.toString())

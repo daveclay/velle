@@ -294,6 +294,47 @@ class ValidatorTest {
         assertTrue(codes(src).contains("F4"), "got: ${diags(src)}")
     }
 
+    /** A receipt with a stored, a timestamp, and a derived field, created by a rule supplying [extraField] as well. */
+    private fun receiptCreationSupplying(extraField: String): String = """
+        act Order {
+            total: decimal
+        }
+
+        shape Receipt {
+            order: one Order
+            amount: decimal
+            issuedAt: timestamp on create
+            doubled: decimal = amount * 2
+        }
+
+        rule SendReceipt when Order {
+            Receipt from { order: this, amount: total$extraField }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `F1 F3 - a creation supplying only stored fields validates`() {
+        assertEquals(emptyList(), diags(receiptCreationSupplying("")))
+    }
+
+    @Test
+    fun `F1 - a creation supplying a field the shape does not have`() {
+        assertEquals(listOf(Diagnostic("F1", "rule 'SendReceipt' — 'Receipt' has no field 'colour'")),
+            diags(receiptCreationSupplying(", colour: \"red\"")))
+    }
+
+    @Test
+    fun `F3 - a creation supplying a timestamp field`() {
+        assertEquals(listOf(Diagnostic("F3", "rule 'SendReceipt' supplies 'Receipt.issuedAt' — timestamp fields are commit metadata")),
+            diags(receiptCreationSupplying(", issuedAt: now")))
+    }
+
+    @Test
+    fun `F3 - a creation supplying a derived property`() {
+        assertEquals(listOf(Diagnostic("F3", "rule 'SendReceipt' supplies derived 'Receipt.doubled'")),
+            diags(receiptCreationSupplying(", doubled: 0")))
+    }
+
     @Test
     fun `F2 - the function list is closed`() {
         val src = """
@@ -715,6 +756,99 @@ class ValidatorTest {
         assertTrue(codes(src).contains("V12"), "got: ${diags(src)}")
     }
 
+    /** The episodes spec with the opening rule's guard written as [guard]. */
+    private fun episodesGuardedBy(guard: String): String =
+        episodes.replace("(Delinquent where not exists OpenDelinquencyFlag for this)", "(Delinquent where $guard)")
+
+    private val unguardedOpening = "rule 'OpenDelinquencyEpisode' creates a 'DelinquencyFlag' without checking " +
+        "that no 'OpenDelinquencyFlag' exists for it"
+
+    @Test
+    fun `V12 - a guard written as a filter comparing the correlating field with this is licensed`() {
+        assertEquals(emptyList(), diags(episodesGuardedBy("not exists (OpenDelinquencyFlag where account == this)")))
+        assertEquals(emptyList(), diags(episodesGuardedBy("not exists (OpenDelinquencyFlag where this == account)")))
+    }
+
+    @Test
+    fun `V12 - a filter guard that does not compare the correlating field with this leaves the creation unguarded`() {
+        val guardsThatCheckNothing = listOf(
+            "not exists (DelinquencyFlag where account == this)",          // the base, not the refinement read
+            "not exists (OpenDelinquencyFlag where account != this)",      // not an equality
+            "not exists (OpenDelinquencyFlag where flaggedOn is some)",    // not a comparison
+            "not exists (OpenDelinquencyFlag where account == account)",   // no 'this' on either side
+        )
+        for (guard in guardsThatCheckNothing) {
+            val messages = diags(episodesGuardedBy(guard)).filter { diagnostic -> diagnostic.code == "V12" }.map { diagnostic -> diagnostic.message }
+            assertTrue(messages.any { message -> unguardedOpening in message }, "guard '$guard' got: $messages")
+        }
+    }
+
+    @Test
+    fun `V12 - a rule condition joining the guard with and is licensed`() {
+        val guardedByName = episodes.replace("(Delinquent where not exists OpenDelinquencyFlag for this)", "(Delinquent and NoOpenFlag)") +
+            "\n\nshape NoOpenFlag = Account where not exists OpenDelinquencyFlag for this"
+        assertEquals(emptyList(), diags(guardedByName))
+    }
+
+    @Test
+    fun `V12 - a rule condition joining a shape with no guard leaves the creation unguarded`() {
+        val joinedWithBase = episodes.replace("(Delinquent where not exists OpenDelinquencyFlag for this)", "(Delinquent and Account)")
+        val messages = diags(joinedWithBase).filter { diagnostic -> diagnostic.code == "V12" }.map { diagnostic -> diagnostic.message }
+        assertTrue(messages.any { message -> unguardedOpening in message }, "got: ${diags(joinedWithBase)}")
+    }
+
+    /** The episodes spec with an open flag defined as two refinements joined by `and`. */
+    private val episodesWithDisputes = episodes.replace(
+        "shape OpenDelinquencyFlag = DelinquencyFlag where not exists DelinquencyResolution for this",
+        "shape OpenDelinquencyFlag = Unresolved and Undisputed",
+    ) + """
+
+
+        shape Dispute {
+            flag: one DelinquencyFlag
+        }
+
+        act DisputeRequest {
+            flag: one DelinquencyFlag
+        }
+
+        rule RecordDispute when DisputeRequest {
+            Dispute from { flag: flag }
+        }
+
+        shape Unresolved = DelinquencyFlag where not exists DelinquencyResolution for this
+        shape Undisputed = DelinquencyFlag where not exists Dispute for this
+    """.trimIndent()
+
+    @Test
+    fun `V12 - a refinement defined with and is proven from the conditions of both sides`() {
+        assertEquals(emptyList(), diags(episodesWithDisputes))
+    }
+
+    @Test
+    fun `V12 - a deleter of the record one side of an and tests for breaks the proof`() {
+        val src = episodesWithDisputes + """
+
+
+            transient act Withdraw {
+                dispute: one Dispute
+            }
+
+            rule ApplyWithdraw when Withdraw {
+                delete dispute
+            }
+        """.trimIndent()
+        val messages = diags(src).filter { diagnostic -> diagnostic.code == "V12" }.map { diagnostic -> diagnostic.message }
+        assertTrue(messages.any { message -> "a rule deletes 'Dispute'" in message }, "got: ${diags(src)}")
+    }
+
+    @Test
+    fun `V12 - a refinement defined with or is not proven`() {
+        val src = episodesWithDisputes.replace("= Unresolved and Undisputed", "= Unresolved or Undisputed")
+        val messages = diags(src).filter { diagnostic -> diagnostic.code == "V12" }.map { diagnostic -> diagnostic.message }
+        assertTrue(messages.any { message -> "'OpenDelinquencyFlag' is defined with 'or' or 'not'" in message }, "got: ${diags(src)}")
+    }
+
     // ── A4 (advisory): drift-exposed act partitions ──────────────────────────
 
     /** The bare rejection-as-data partition: an is-refinement atom, no anchor. */
@@ -1012,6 +1146,32 @@ class ValidatorTest {
                 "rule ApplyBalance when PartialReview {")
             .replace("rule ApplyLimit when AccountReview {", "rule ApplyLimit when FullReview {")
         assertEquals(emptyList(), diags(src).filter { it.code == "V15" }, "got: ${diags(src)}")
+    }
+
+    /** Two siblings on one order: one creates a ticket, the other renames the order a watched refinement of tickets reads. */
+    private fun stampedTicketsWhere(stampTest: String): String = """
+        act Order { reference: text }
+        shape Ticket { order: one Order }
+        shape Stamp { ticket: one Ticket }
+        shape StampedTicket = Ticket where $stampTest and order.reference != ""
+        shape Sighting { ticket: one Ticket }
+        rule OpenTicket when Order { Ticket from { order: this } }
+        rule Rename when Order { this.reference = "renamed" }
+        rule Watch when StampedTicket { Sighting from { ticket: this } }
+    """.trimIndent()
+
+    @Test
+    fun `V15 - a ticket created without a stamp cannot enter a refinement needing a stamp filtered on it`() {
+        assertEquals(emptyList(), diags(stampedTicketsWhere("exists (Stamp where ticket == this)")))
+    }
+
+    @Test
+    fun `V15 - a stamp filter that does not name the ticket lets a fresh ticket enter, so the siblings interfere`() {
+        val src = stampedTicketsWhere("exists (Stamp where ticket.order.reference == \"x\")")
+        val messages = diags(src).filter { diagnostic -> diagnostic.code == "V15" }.map { diagnostic -> diagnostic.message }
+        assertTrue(messages.any { message ->
+            message.startsWith("'OpenTicket' (creates 'Ticket') and sibling 'Rename' (Order.reference) each affect membership in 'StampedTicket'")
+        }, "got: ${diags(src)}")
     }
 
     // ── V1: the instance-aliasing discharge (a spent never) ──────────────────
