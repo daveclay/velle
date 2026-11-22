@@ -89,8 +89,9 @@ private fun Validator.deletedWitnessReason(exists: ExistsExpr, refinement: Strin
 }
 
 /** The shape of the records `exists W for ...` or `exists (<source> where ...)` tests for: a shape
- *  named bare, the records a path from [base] reaches (`this.retirements`, `retirements`), a
- *  `(W for ...)`, or a walk's. Null for any other source. */
+ *  named bare, the records a path from [base] reaches (`this.retirements`, `retirements`), or a
+ *  `(W for ...)`. Those are the only sources the parser accepts in an `exists` (`parseBinding`).
+ *  Null when a path does not resolve, which is refused with F1 elsewhere. */
 private fun Validator.witnessShape(exists: ExistsExpr, base: String): String? {
     if (exists.shape != null) return exists.shape
     return when (val source = exists.collection?.bindings?.firstOrNull()?.source) {
@@ -98,7 +99,6 @@ private fun Validator.witnessShape(exists: ExistsExpr, base: String): String? {
             if (source.segs.isEmpty() && model.namesShapeOrRefinement(source.root)) source.root
             else model.pathElementShape(source, base)
         is ShapeForSource -> source.shape
-        is WalkExpr -> model.walkTarget(source, base)
         else -> null
     }
 }
