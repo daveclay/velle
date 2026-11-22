@@ -26,10 +26,9 @@ Directory rules load on their own when files are touched:
    wiki page. Generated-Kotlin facts go in `wiki/Guides/Act-API.md` and
    `wiki/Guides/Read-API.md`, never in the Reference.
 4. **Examples.** A new feature gets an example that exercises it under
-   `examples/`, or an existing one grows. Survey examples under
-   `working-docs/examples/survey/` that showed the gap are rewritten to the
-   settled spelling and the survey README's line for each is updated; one
-   that no longer shows anything is deleted.
+   `examples/`, or an existing one grows. The survey examples under
+   `working-docs/examples/survey/` that showed the gap leave that folder
+   when the OQ settles (§4); list them now, with the home each one moves to.
 5. **Tests.** A test pins each new check, each new runtime behaviour, and
    each bug the OQ found. Run the full suite (§3).
 6. **Settle** (§4).
@@ -102,11 +101,44 @@ One commit, all of the following:
    comments, and KDoc. Pointers from other OQ files and from code go to the
    wiki page or the code. A wiki page never points into
    `working-docs/questions/`.
-4. `git rm` the OQ file. Never keep it for its reasoning; history is git.
-5. Commit message: `OQ<n> settled: <what Velle can now say>`.
+4. Every survey example of the OQ leaves `working-docs/examples/survey/`
+   (below), and its line leaves that folder's README.
+5. `git rm` the OQ file. Never keep it for its reasoning; history is git.
+6. Commit message: `OQ<n> settled: <what Velle can now say>`.
 
 A settled OQ whose build has not landed stays on disk until this commit.
 See the `oq` skill §5.
+
+### Moving the survey examples
+
+Nothing runs the survey folder: `check.sh` prints and asserts nothing. A
+survey file is evidence while its OQ is open. Once the OQ settles, what the
+file shows is pinned by the suite or the file is gone (Dave, 2026-11-22).
+Each file of the settled OQ goes one of these ways, by what the compiler
+does with it after the build:
+
+- **The validator refuses it.** `git mv` it to
+  `compiler/src/test/resources/diagnostics/<check>-<slug>.velle`, give it
+  the opening `--` lines saying what it spells, and regenerate
+  `wiki/Normative/diagnostics.md` (`compiler/CLAUDE.md`, "Diagnostics").
+  The catalogue holds one file per message. When a spec there already draws
+  the same message with only the names different, delete the survey file
+  instead. A file that draws several messages is split into one file per
+  message.
+- **The parser refuses it.** The catalogue reads validator messages only.
+  A compiler test asserts the syntax error's text, and the survey file is
+  deleted.
+- **It compiles.** This is the settled spelling, a workaround, or a guarded
+  form. Its spelling must stand in a system under `examples/` or in the
+  spec of a compiler test that asserts what it does. Add it there when it
+  does not, then delete the survey file. A workaround the settled spelling
+  replaced is deleted outright.
+- **It still shows a gap.** It belongs to the OQ that received that gap as
+  residue (item 2). The file stays, and its README line names that OQ.
+
+Test comments and KDoc that cite a moved or deleted survey file are
+repointed to its new home in the same commit. Code never cites
+`working-docs/`.
 
 ## 5. Before reporting done
 
@@ -116,4 +148,6 @@ See the `oq` skill §5.
   the language (`wiki/CLAUDE.md`).
 - No tag of the settled OQ left anywhere but the settled table and test or
   comment citations of it.
+- No survey example of the settled OQ left under
+  `working-docs/examples/survey/`, and no line for one in its README.
 - `QUESTIONS.md` still names the right next free tag.

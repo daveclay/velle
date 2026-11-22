@@ -16,7 +16,8 @@ real world, I care about gaps in velle." Findings go to
 Examples that probe a gap before it is settled live under
 `working-docs/examples/survey/`, one `.velle` file per spelling, named
 `<nn>-<topic>-<accepted|refused|workaround>.velle`, with a README line
-saying what each produces. They move or are deleted when the gap settles.
+saying what each produces. Nothing in the suite runs them. They move or are
+deleted in the commit that settles the gap (the `implement` skill, §4).
 
 ## Layout of a module
 
