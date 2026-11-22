@@ -10,8 +10,8 @@ class Givens(private val sys: VendorsSystem) : RequiredGivens {
     private fun accept(r: Commit<*, *>) { check(r is Commit.Accepted<*, *>) { "refused: $r" } }
 
     /** Fixtures: seeded outside the trust boundary, before any case counts records. */
-    private val ada: Staff = run { sys.system.seed("Staff", mapOf("name" to "Ada", "role" to "admin")); sys.staffs().last() }
-    private val sam: Staff = run { sys.system.seed("Staff", mapOf("name" to "Sam", "role" to "staff")); sys.staffs().last() }
+    private val ada: Staff = run { sys.system.seed("Staff", mapOf("name" to "Ada", "email" to "ada@vendors.example", "identityId" to "ada-id", "role" to "admin")); sys.staffs().last() }
+    private val sam: Staff = run { sys.system.seed("Staff", mapOf("name" to "Sam", "email" to "sam@vendors.example", "identityId" to "sam-id", "role" to "staff")); sys.staffs().last() }
     private val acme: Vendor = run { sys.system.seed("Vendor", mapOf("name" to "Acme")); sys.vendors().last() }
 
     private fun product(name: String, price: String, cost: String): Product {

@@ -225,8 +225,8 @@ class VelleApiTest {
     fun `an act declared by takes the actor, and a read is projected for the viewer`() {
         val sys = system(example("vendors"))
         val api = VelleApi(sys, clock)
-        val admin = sys.seed("Staff", mapOf("name" to "Grace", "role" to "admin"))
-        val staff = sys.seed("Staff", mapOf("name" to "Linus", "role" to "staff"))
+        val admin = sys.seed("Staff", mapOf("name" to "Grace", "email" to "grace@vendors.example", "identityId" to "grace-id", "role" to "admin"))
+        val staff = sys.seed("Staff", mapOf("name" to "Linus", "email" to "linus@vendors.example", "identityId" to "linus-id", "role" to "staff"))
         val vendor = sys.seed("Vendor", mapOf("name" to "Acme"))
         assertEquals(true, api.description["authorization"])
 
@@ -252,7 +252,7 @@ class VelleApiTest {
         val productKey = asAdmin["key"]!!
 
         // an unassigned staff member is shown nothing: the record resolves absent
-        val other = sys.seed("Staff", mapOf("name" to "Ken", "role" to "staff"))
+        val other = sys.seed("Staff", mapOf("name" to "Ken", "email" to "ken@vendors.example", "identityId" to "ken-id", "role" to "staff"))
         assertEquals(ApiException.Kind.NOT_FOUND, assertFailsWith<ApiException> { api.read("Product", productKey, other) }.kind)
         assertEquals(0, api.count("Product", null, other))
 

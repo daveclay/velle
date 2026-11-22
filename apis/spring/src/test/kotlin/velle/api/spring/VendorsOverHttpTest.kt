@@ -31,8 +31,8 @@ class VendorsOverHttpTest {
     @Autowired lateinit var json: ObjectMapper
 
     private fun seed(): Triple<Long, Long, Long> {
-        val admin = system.seed("Staff", mapOf("name" to "Grace", "role" to "admin"))
-        val staff = system.seed("Staff", mapOf("name" to "Linus", "role" to "staff"))
+        val admin = system.seed("Staff", mapOf("name" to "Grace", "email" to "grace@vendors.example", "identityId" to "grace-id", "role" to "admin"))
+        val staff = system.seed("Staff", mapOf("name" to "Linus", "email" to "linus@vendors.example", "identityId" to "linus-id", "role" to "staff"))
         val vendor = system.seed("Vendor", mapOf("name" to "Acme"))
         return Triple(admin.key.value as Long, staff.key.value as Long, vendor.key.value as Long)
     }

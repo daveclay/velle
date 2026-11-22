@@ -234,7 +234,36 @@ fun actors(): ActorResolver = ActorResolver { request ->
 }
 ```
 
-This one, from `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt`, reads a header; the pharmacy and vendors applications (`examples/pharmacy/app/src/main/kotlin/velle/pharmacy/PharmacyActors.kt`) do the same. An application behind Spring Security reads the authenticated principal instead and looks up the staff record. Velle never authenticates: the resolver is where the application's identity becomes a reference to a record on the books.
+This one, from `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt`, reads a header, and so does the pharmacy application (`examples/pharmacy/app/src/main/kotlin/velle/pharmacy/PharmacyActors.kt`). Anyone who can reach the port can name any staff member in it. It suits a test or a laptop.
+
+An application whose people sign in at an [identity provider](GLOSSARY#acts-and-the-trust-boundary) reads who signed in from Spring Security and finds the staff record that names them. The vendors application signs people in at Authentik through [OpenID Connect](GLOSSARY#acts-and-the-trust-boundary). Shape `Staff` in `examples/vendors/vendors.velle` holds the identifier the provider sends for each person, the token's `sub`:
+
+```
+shape Staff {
+    name: text
+    email: text unique
+    identityId: text unique
+    role: Role
+}
+```
+
+The resolver, from `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsActors.kt`:
+
+```kotlin
+@Bean
+fun actors(vendors: VendorsSystem): ActorResolver = ActorResolver { request ->
+    val signedInIdentityId = identityIdOfTheSignedInPerson(request) ?: return@ActorResolver null
+    val staffMember = vendors.read.staffByIdentityId(signedInIdentityId) ?: return@ActorResolver null
+    Ref.Persisted("Staff", staffMember.key)
+}
+```
+
+- `identityIdOfTheSignedInPerson` reads the `sub` from a browser's session or from a token in the `Authorization` header. `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsSecurity.kt` sets up both.
+- `staffByIdentityId` is generated because `identityId` is a [key](Reference-21-never#keys): at most one staff member holds a value.
+- A person the provider knows and no staff record names resolves to no actor, and is answered as nobody signed in.
+- The spec reads neither `email` nor `identityId`. What each staff member may do and see stays in the spec, in `by`, `requires`, and `visible to`.
+
+Velle never authenticates. The resolver is where the application's identity becomes a reference to a record on the books.
 
 - The resolver runs once per request, in a filter, before the REST controller or the GraphQL engine. Both read what it found.
 - An act declared `by` with no actor resolved is refused with 401. An act without `by` ignores the actor.
@@ -262,7 +291,7 @@ fun overdue(): List<Overdue> = api.scope {
 
 ## The console
 
-`/velle` serves one page that reads the model's description from `GET /api`, builds itself from it, and reads and commits everything else over GraphQL: every shape as a table with the query's `where` and order, ordered at first by the shape's first member the description marks `orderable`, every record as a page of its members with its references as links, every act as a form, every schedule as a page that says when it last ran, with a button that ticks it when ticks are exposed. A header the page sends with every request, kept in the browser, lets a developer act as someone, `X-Velle-Actor: Staff:1` with the resolver above. Nothing in the page is written per spec.
+`/velle` serves one page that reads the model's description from `GET /api`, builds itself from it, and reads and commits everything else over GraphQL: every shape as a table with the query's `where` and order, ordered at first by the shape's first member the description marks `orderable`, every record as a page of its members with its references as links, every act as a form, every schedule as a page that says when it last ran, with a button that ticks it when ticks are exposed. A header the page sends with every request, kept in the browser, lets a developer act as someone, `X-Velle-Actor: Staff:1` with the header resolver above. Behind a sign-in, as in the vendors application, the browser's session goes with every request instead and the header box does nothing. Nothing in the page is written per spec.
 
 An act's form takes each field as the act's GraphQL input takes it. A reference is the key of a record, or `Shape#key` when the field's type is a union. A field that may carry a new record takes a key, or the new record as JSON, `{"newAddress": {...}}`. An act's parts are typed as a JSON list.
 

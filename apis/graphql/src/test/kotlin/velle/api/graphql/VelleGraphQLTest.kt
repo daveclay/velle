@@ -171,8 +171,8 @@ class VelleGraphQLTest {
     @Test
     fun `the actor in the context commits and views`() {
         val e = engine("vendors")
-        val admin = e.sys.seed("Staff", mapOf("name" to "Grace", "role" to "admin"))
-        val staff = e.sys.seed("Staff", mapOf("name" to "Linus", "role" to "staff"))
+        val admin = e.sys.seed("Staff", mapOf("name" to "Grace", "email" to "grace@vendors.example", "identityId" to "grace-id", "role" to "admin"))
+        val staff = e.sys.seed("Staff", mapOf("name" to "Linus", "email" to "linus@vendors.example", "identityId" to "linus-id", "role" to "staff"))
         val vendor = e.sys.seed("Vendor", mapOf("name" to "Acme"))
 
         val anonymous = e.errors("""{ vendors(orderBy: ["name"]) { items { name } } }""")
@@ -337,8 +337,8 @@ class VelleGraphQLTest {
     @Test
     fun `a reference to a record the actor may not see reads as absent, not as a refusal`() {
         val e = engine("vendors")
-        val admin = e.sys.seed("Staff", mapOf("name" to "Grace", "role" to "admin"))
-        val staff = e.sys.seed("Staff", mapOf("name" to "Linus", "role" to "staff"))
+        val admin = e.sys.seed("Staff", mapOf("name" to "Grace", "email" to "grace@vendors.example", "identityId" to "grace-id", "role" to "admin"))
+        val staff = e.sys.seed("Staff", mapOf("name" to "Linus", "email" to "linus@vendors.example", "identityId" to "linus-id", "role" to "staff"))
         val globex = e.sys.seed("Vendor", mapOf("name" to "Globex"))
         e.run("""mutation(${'$'}v: ID!) { listProduct(input: {vendor: ${'$'}v, name: "Thin", price: 1, cost: 1}) { accepted } }""", mapOf("v" to globex.key.value), actor = admin)
         val query = """{ marginAlerts(orderBy: ["raisedOn"]) { items { product { name } } } }"""

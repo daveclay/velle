@@ -28,7 +28,11 @@ open class VendorsFlowTest {
 
     /** Staff and vendors are fixtures, seeded outside the trust boundary; products and assignments arrive through acts. */
     private class World(val sys: VendorsSystem) {
-        fun staff(name: String, role: String): Staff { sys.system.seed("Staff", mapOf("name" to name, "role" to role)); return sys.staffs().last() }
+        fun staff(name: String, role: String): Staff {
+            val login = name.lowercase()
+            sys.system.seed("Staff", mapOf("name" to name, "email" to "$login@vendors.example", "identityId" to "$login-id", "role" to role))
+            return sys.staffs().last()
+        }
         fun vendor(name: String): Vendor { sys.system.seed("Vendor", mapOf("name" to name)); return sys.vendors().last() }
         val ada = staff("Ada", "admin")
         val sam = staff("Sam", "staff")

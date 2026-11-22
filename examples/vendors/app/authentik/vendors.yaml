@@ -1,0 +1,85 @@
+# The vendors demo at the identity provider. compose.yaml mounts this folder into
+# Authentik, which reads the file at startup and creates or updates what it lists.
+# Demo values throughout, checked in on purpose: two people, the OpenID Connect
+# client the vendors application signs in through, and an app password each for
+# getting a token without a browser.
+#
+# Each person's `pk` is fixed, and the client's `sub_mode: user_id` sends it as
+# the token's `sub`. The vendors fixtures (VendorsActors.kt) seed the same value
+# as each Staff record's identityId. The two files must agree.
+version: 1
+metadata:
+  name: Velle vendors demo
+entries:
+  - model: authentik_core.user
+    identifiers:
+      pk: 1001
+    attrs:
+      username: grace
+      name: Grace Hopper
+      email: grace@vendors.example
+      password: vendors-demo
+      type: internal
+  - model: authentik_core.user
+    identifiers:
+      pk: 1002
+    attrs:
+      username: linus
+      name: Linus Pauling
+      email: linus@vendors.example
+      password: vendors-demo
+      type: internal
+
+  # An app password lets a script or a test ask for a token as the person with no
+  # browser (the client_credentials grant with username and password).
+  - model: authentik_core.token
+    identifiers:
+      identifier: grace-vendors-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, grace]]
+      intent: app_password
+      key: grace-app-password
+      expiring: false
+  - model: authentik_core.token
+    identifiers:
+      identifier: linus-vendors-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, linus]]
+      intent: app_password
+      key: linus-app-password
+      expiring: false
+
+  - model: authentik_providers_oauth2.oauth2provider
+    id: vendors-provider
+    identifiers:
+      name: vendors
+    attrs:
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      # signing out of the application signs out of Authentik too, so the next person can sign in
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-invalidation-flow]]
+      client_type: confidential
+      client_id: vendors
+      client_secret: vendors-demo-secret
+      sub_mode: user_id
+      grant_types:
+        - authorization_code   # the browser signs in
+        - refresh_token
+        - client_credentials   # a script or a test, with a person's app password
+      redirect_uris:
+        - matching_mode: strict
+          url: http://localhost:8096/login/oauth2/code/authentik
+          redirect_uri_type: authorization
+        - matching_mode: regex
+          url: http://localhost:8096/.*
+          redirect_uri_type: logout
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+  - model: authentik_core.application
+    identifiers:
+      slug: vendors
+    attrs:
+      name: Velle vendors
+      provider: !KeyOf vendors-provider

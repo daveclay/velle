@@ -60,6 +60,7 @@ Edit the documentation in `wiki/`, not on the wiki site: the publish workflow (`
 ./gradlew generate                                    # regenerate every example
 ./gradlew :examples:billing:app:bootRun               # the billing application over PostgreSQL (starts it in Docker); console at http://localhost:8090/velle
 ./gradlew :examples:pharmacy:app:bootRun              # the pharmacy, with ninety days of test data; console at http://localhost:8093/velle, act as Staff:1
+./gradlew :examples:vendors:app:bootRun               # the vendors catalogue beside Authentik; console at http://localhost:8096/velle, sign in as grace or linus
 ```
 
 Each example's application listens on its own port, so several run at once:
@@ -75,6 +76,13 @@ Each example's application listens on its own port, so several run at once:
 | moderation | 8087 | shipping | 8095 |
 | orders | 8088 | vendors | 8096 |
 
-The pharmacy and vendors specs declare who may act and who may see; their applications read the actor from an `X-Velle-Actor` header, which the console sends. `Staff:1` is the first administrator in both.
+The pharmacy and vendors specs declare who may act and who may see. The pharmacy application reads the actor from an `X-Velle-Actor` header, which the console sends; `Staff:1` is the first administrator.
+
+The vendors application signs people in at Authentik, an identity provider that `bootRun` starts beside the database (`examples/vendors/app/compose.yaml`). Opening the console sends the browser to Authentik's sign-in page. Sign in as `grace` (an administrator) or `linus` (staff assigned to Acme), password `vendors-demo`, and the spec decides what each may do and see. `/logout` signs out of both, so the next sign-in can be the other person. On 2026-11-22, with the images already pulled, the first `bootRun` took 55 seconds to answer, Authentik's first start included, and a second one 6 seconds while Authentik kept running. To call the API from a script, get a token for a person from Authentik with their app password, then send it:
+
+```bash
+token=$(curl -s http://localhost:9096/application/o/token/ -d grant_type=client_credentials -d client_id=vendors -d client_secret=vendors-demo-secret -d username=grace -d password=grace-app-password -d scope=openid | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+curl -H "Authorization: Bearer $token" 'http://localhost:8096/api/shapes/Product?orderBy=name'
+```
 
 The PostgreSQL tests, including the application's, run when Docker is available and are skipped otherwise.

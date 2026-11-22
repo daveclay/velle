@@ -32,10 +32,18 @@ visible to Staff
 -- Everyone who keeps the catalogue is staff; administrators also assign
 -- vendors and list products. Staff records are seeded by the engineer
 -- outside the trust boundary (fixtures, a migration): nothing here hires.
+-- Each staff member signs in at the company's identity provider, which knows
+-- them by an identifier of its own; the record holds it, so a signed-in
+-- person is the staff member whose identityId the sign-in carries.
+-- velle: the spec reads neither email nor identityId; the application's actor
+-- resolver finds the staff member by identityId, and `unique` makes that one
+-- record or none
 Role is one of "staff", "admin"
 
 shape Staff {
     name: text
+    email: text unique
+    identityId: text unique
     role: Role
 }
 

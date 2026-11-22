@@ -209,7 +209,7 @@ The same request as the GraphQL mutation `submitPayment(input: {invoice: "1", am
 - **Another transport**, a message queue or a command-line tool: depend on `apis/json`, hold one `VelleApi`, and map each incoming message onto one of its functions. The description tells the transport what exists. Map `ApiException.Kind` onto whatever the transport's errors are, and treat a refusal as a normal answer.
 - **Another store**: declare a `SqlStore` bean already connected, or any store, and connect it to the system yourself before declaring the `VelleSystem` bean. The starter sees the `SqlStore` bean and does not attach.
 - **Another schema**: declare a `GraphQlSource` bean. The REST endpoints and the actor filter are unaffected.
-- **Another identity**: the `ActorResolver` is the whole of it. Behind Spring Security it reads the principal and looks the staff record up through `api.refTo` or through the application's own typed read.
+- **Another identity**: the `ActorResolver` is the whole of it. Behind Spring Security it reads the principal and looks the staff record up through `api.refTo` or through the application's own typed read. `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsActors.kt` does this for people signed in at an identity provider ([Serving a system, "Who is calling"](Serving-a-system#who-is-calling)).
 - **No web at all**: `VelleApi` and `VelleGraphQL` run without Spring, which is how `apis/json/src/test/kotlin/velle/api/VelleApiTest.kt` and `apis/graphql/src/test/kotlin/velle/api/graphql/VelleGraphQLTest.kt` run them.
 
 ## What the starter checks at startup
