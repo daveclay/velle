@@ -126,6 +126,32 @@ class InInsideExistsTest {
         assertTrue("'options' is a collection of values, not of records" in diags.single(), diags.single())
     }
 
+    @Test
+    fun `an as name ends with its collection even when the collection is refused`() {
+        val strayRead = "stray = other.name"
+        val withoutCollection = Validator.validate(Parser.parse("""
+            act Field {
+                name: text
+                others: many Field
+                $strayRead
+            }
+        """.trimIndent())).map { diagnostic -> diagnostic.toString() }
+        val afterRefusedCollection = Validator.validate(Parser.parse("""
+            act Field {
+                name: text
+                options: many text
+                others: many Field
+                named = exists (others as other, options where name == "x")
+                $strayRead
+            }
+        """.trimIndent())).map { diagnostic -> diagnostic.toString() }
+        assertTrue(withoutCollection.isNotEmpty(), "'other' outside any collection names nothing")
+        assertTrue(afterRefusedCollection.any { diagnostic -> "'options' is a collection of values, not of records" in diagnostic },
+            afterRefusedCollection.toString())
+        assertTrue(afterRefusedCollection.containsAll(withoutCollection),
+            "expected $withoutCollection among $afterRefusedCollection")
+    }
+
     // ── a value filter reading a bare field of the enclosing record (Reference §10) ──
 
     private val bareFieldSpec = """

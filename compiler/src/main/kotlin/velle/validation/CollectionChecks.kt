@@ -42,8 +42,9 @@ internal fun Validator.checkCollection(
 ) {
     val introduced = IntroducedAliases()
     val read = CollectionRead(collection, sumField, orderBy)
-    val boundShape = elementShapeOfBindings(read, scope, introduced) ?: return
-    checkFilterAndSelectors(read, boundShape)
+    val boundShape = elementShapeOfBindings(read, scope, introduced)
+    if (boundShape != null) checkFilterAndSelectors(read, boundShape)
+    // the `as` names end with the collection, whether or not a binding was refused
     introduced.recordAliases.forEach { alias -> scopeByAlias.remove(alias) }
     introduced.valueAliases.forEach { alias -> scalarTypeByAlias.remove(alias) }
 }
