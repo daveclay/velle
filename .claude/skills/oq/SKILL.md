@@ -134,8 +134,11 @@ and any reversal with its date.>
   file's build section (§"The build") gathers the lists of every decided
   decision; it does not restate them in different words.
 
-Decisions are numbered once and never renumbered. A decision moved to another
-OQ keeps a one-line pointer in place.
+Decision numbers inside an OQ may be reused or renumbered; leave no pointer
+behind for a decision merged into another of the same file (Dave,
+2026-11-22: "I do not care if decision numbers are re-used in the OQ").
+Renumber every mention in the file in the same edit. A decision moved to
+another OQ keeps a one-line pointer in place.
 
 ## 2. Opening an OQ
 
