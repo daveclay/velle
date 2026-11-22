@@ -1,6 +1,6 @@
 # OQ166 — an example with authorization runs beside a real identity provider, and shows sign-in and the spec's rules working together
 
-**Status:** opened 2026-11-22 from Dave's request in chat. Investigated against HEAD the same day. D1 to D4 decided. D5 and D6 await Dave. Nothing built.
+**Status:** opened 2026-11-22 from Dave's request in chat. Investigated against HEAD the same day. D1 to D4 and D6 decided. D5 awaits Dave. Nothing built.
 
 **In plain terms:** the two examples whose specs say who may act and who may see do not sign anyone in. The caller types "I am Staff:1" into a box and is believed. Dave wants to start one of them and have a real sign-in service start with it, sign in as a real person, and see the spec's rules apply to that person.
 
@@ -171,7 +171,7 @@ Costs:
 
 **Decided:**
 
-### D6. A signed-in person is matched to their `Staff` record by email
+### D6. A signed-in person is matched to their `Staff` record by email · Decided 2026-11-22
 
 Does shape `Staff` gain `email: text unique`, with the resolver finding the `Staff` record whose `email` equals the token's `email` claim, rather than a field holding the identity provider's own identifier for the person?
 
@@ -224,7 +224,7 @@ Costs of the identity provider's identifier:
 - `examples/vendors/app/authentik/vendors.yaml`: users `grace` and `linus` carry the same two addresses, marked verified.
 - `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt` and `VendorsOverHttpTest.kt`: seed the new field.
 
-**Decided:**
+**Decided:** yes, the field is `email` (Dave, 2026-11-22, answered under D3: "use `email`").
 
 ## 3. The build
 
