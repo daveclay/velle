@@ -1,6 +1,6 @@
 # OQ166 — an example with authorization runs beside a real identity provider, and shows sign-in and the spec's rules working together
 
-**Status:** opened 2026-11-22 from Dave's request in chat. Investigated against HEAD the same day. D1 to D5 await Dave. Nothing built.
+**Status:** opened 2026-11-22 from Dave's request in chat. Investigated against HEAD the same day. D1 decided. D2 to D5 await Dave. Nothing built.
 
 **In plain terms:** the two examples whose specs say who may act and who may see do not sign anyone in. The caller types "I am Staff:1" into a box and is believed. Dave wants to start one of them and have a real sign-in service start with it, sign in as a real person, and see the spec's rules apply to that person.
 
@@ -37,7 +37,7 @@ What I read about Authentik on 2026-11-22, from its own documentation, not yet r
 
 ## 2. What to decide
 
-### D1. The identity provider is Authentik
+### D1. The identity provider is Authentik · Decided 2026-11-22
 
 Is the identity provider Authentik, the one you named?
 
@@ -49,7 +49,7 @@ Costs:
 - The alternative is Keycloak: one container, one checked-in JSON file for users and client, starts in well under a minute. This is from my knowledge of Keycloak, not checked here. It is lighter and less like what you named.
 - Either way the choice is the example application's. Nothing in `compiler/`, `apis/`, or the spec names a provider. Any provider that speaks OpenID Connect is swapped in by changing `compose.yaml` and three lines of `application.yaml`.
 
-**Decided:**
+**Decided:** yes, the identity provider is Authentik (Dave, 2026-11-22).
 
 ### D2. The vendors example gets it first, pharmacy afterwards
 
