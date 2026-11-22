@@ -1,6 +1,6 @@
 # OQ160 — What happens to the records that point at a record when it is deleted
 
-**Status:** opened 2026-11-21, split out of OQ155 at Dave's direction: "Leaving a reference to a deleted record is not how systems work". On 2026-11-21 Dave set the frame the file now follows: the product owner and the engineer choose, per case, between refusing the delete and clearing the references. D1 is decided and built. D2 is decided and changes nothing. D3 is decided and not built. D4 awaits Dave. Nothing of D3 and D4 is built, and two things are not yet checked (§4).
+**Status:** opened 2026-11-21, split out of OQ155 at Dave's direction: "Leaving a reference to a deleted record is not how systems work". On 2026-11-21 Dave set the frame the file now follows: the product owner and the engineer choose, per case, between refusing the delete and clearing the references. D1 is decided and built. D2 is decided and changes nothing. D3 and D4 are decided and not built. Every decision is answered. The build plan is §3 and awaits Dave's look before the build starts. Two things are not yet checked (§4).
 
 **In plain terms:** A user asks to delete a record that other records point at. The product owner and the engineer have two answers to choose from: the user may not delete it while anything points at it, or it is deleted and the pointers are cleared. Most of the time the product owner wants the first, and the user must be told why in the words of the business, not by an error from the database. Velle can say both. What is still open is what happens to the pointers that are cleared.
 
@@ -34,7 +34,7 @@ This is why the store contract forbids reusing a key (`wiki/Guides/Store-API.md`
 
 ## 2. What to decide
 
-The two answers are chosen per reference, by the product owner and the engineer. D1, which let the spec say "refuse the delete", is built. D2, on whether a reference that is cleared must say so, is decided. D3, on what the store holds after a reference is cleared, is decided. D4 is about who empties it.
+The two answers are chosen per reference, by the product owner and the engineer. D1, which let the spec say "refuse the delete", is built. D2, on whether a reference that is cleared must say so, is decided. D3, on what the store holds after a reference is cleared, is decided. D4, on who empties it, is decided.
 
 ### D1. Refusing the delete for a required reference · Decided 2026-11-21
 
@@ -158,7 +158,7 @@ Costs:
 
 **Decided:** Dave, 2026-11-22: yes. The store empties every stored reference to a deleted record in the same commit.
 
-### D4. The SQL store empties the references with its own statements
+### D4. The SQL store empties the references with its own statements · Decided 2026-11-22
 
 Given D3, should the SQL store run the emptying statements itself, before it removes the row, where the alternative is to declare a foreign key that tells the database to do the emptying?
 
@@ -194,11 +194,39 @@ Costs:
 
 - `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `delete`: before the row is removed, one statement per column and junction table the model says can point at the shape.
 
+**Decided:** Dave, 2026-11-22: yes. The SQL store runs the emptying statements itself, before it removes the row, and declares no foreign key for it.
+
 ## 3. The build
 
-Not written. D4 is not decided. D1 is built, D2 changes nothing, and D3 is decided and waits on D4 for who runs the statements.
+D1 is built and D2 changes nothing. The plan gathers the "Proposed changes" lists of D3 and D4, in build order.
+
+Code:
+
+1. `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `delete`: before the row is removed, one statement per column and junction table the model says can point at the shape (D4). A `one` field's column is set to empty, both columns of a union reference are set to empty, and a `many` field's member row is removed from its junction table (D3).
+2. `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, the comments on `delete`, on `onCommit`, and on `SqlDialect.keyColumn`: references to the deleted row are emptied (D3).
+3. `compiler/src/main/kotlin/velle/Hydration.kt`, the comment on `CommitSet.Deletion`: the store empties every reference to the deleted record (D3).
+
+Tests:
+
+4. `stores/sql/src/testFixtures/kotlin/velle/sql/SqlStoreConformance.kt`, "deleting a row removes its collections and captures and leaves references at it reading absent": rewritten to assert the pointing column is empty, with a union reference and a `many` field added (D3).
+5. The two checks of §4, each as a test in `SqlStoreConformance`.
+
+Wiki:
+
+6. `wiki/Guides/Store-API.md`, the store contract: a new line saying a deletion empties every reference to the record. The line "Keys are the store's and are never reused" keeps its rule and loses the sentence about a surviving reference to a deleted record (D3).
+7. `wiki/Normative/checks.md`, V24: "no write anywhere" becomes "no rule writes it; the store empties it" (D3).
+
+Settling:
+
+8. Regenerate the examples' output and run the suite.
+9. `working-docs/QUESTIONS.md`: the OQ160 line becomes a row at the top of the settled table, and the OQ155 line stops saying its D4 waits on OQ160. This file is deleted in the same commit.
 
 ## 4. Work items
 
 - [ ] Check, with a test, a commit that deletes a record and also assigns a field of a record pointing at it: that the pointing row ends with the reference empty.
 - [ ] Check, with a test, a later commit that assigns another field of a record whose reference was emptied: that the store does not write the dead key back.
+- [ ] Make `SqlStore.delete` empty every `one` column, union reference, and junction-table row that points at the deleted row, before it removes the row (§3 step 1).
+- [ ] Update the comments on `SqlStore.delete`, `onCommit`, `SqlDialect.keyColumn`, and `CommitSet.Deletion` (§3 steps 2 and 3).
+- [ ] Rewrite the `SqlStoreConformance` deletion test to assert the pointing column is empty, with a union reference and a `many` field (§3 step 4).
+- [ ] Update `wiki/Guides/Store-API.md` and `checks.md` V24 (§3 steps 6 and 7).
+- [ ] Regenerate the examples' output, run the suite, and land the settling commit (§3 steps 8 and 9).
