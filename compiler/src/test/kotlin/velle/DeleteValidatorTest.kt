@@ -344,11 +344,11 @@ class DeleteValidatorTest {
         """.trimIndent())
     }
 
-    /** An open flag tested with a filter over retirements; [deleter] is appended. */
-    private fun flagsRetiredByFilter(deleter: String): String = """
+    /** An open flag tested with a filter over retirements spelled [retirements]; [deleter] is appended. */
+    private fun flagsRetiredByFilter(deleter: String, retirements: String = "Retirement where flag == this"): String = """
         act Account { owner: text }
         shape Flag { account: one Account, note: text }
-        shape OpenFlag = Flag where not exists (Retirement where flag == this)
+        shape OpenFlag = Flag where not exists ($retirements)
         shape Retirement { flag: one Flag? initially required, note: text }
         shape Flagged = Account where exists Flag for this
         rule Report when Flagged {
@@ -370,6 +370,23 @@ class DeleteValidatorTest {
     @Test
     fun `V12 - with no deleter the record a filter tests for keeps the at-most-one proof`() {
         assertLacks("V12", flagsRetiredByFilter(""))
+    }
+
+    @Test
+    fun `V12 - a deleter of the records a filter reaches through a relationship breaks the at-most-one proof`() {
+        val deleter = "\ntransient act Undo { retirement: one Retirement }\nrule ApplyUndo when Undo { delete retirement }"
+        val expected = Validator.validate(flagsRetiredByFilter(deleter)).filter { diagnostic -> diagnostic.code == "V12" }
+        assertEquals(1, expected.size, expected.toString())
+        for (retirements in listOf("this.retirements", "retirements")) {
+            assertEquals(expected, Validator.validate(flagsRetiredByFilter(deleter, retirements)), "spelled '$retirements'")
+        }
+    }
+
+    @Test
+    fun `V12 - a filter over a relationship with no deleter keeps the proof and names no unknown shape`() {
+        for (retirements in listOf("this.retirements", "retirements")) {
+            assertEquals(emptyList(), Validator.validate(flagsRetiredByFilter("", retirements)), "spelled '$retirements'")
+        }
     }
 
     @Test

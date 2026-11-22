@@ -35,11 +35,13 @@ private fun comparesToThis(condition: Expr): Boolean = when {
 }
 
 /** The base of the shape an `exists` quantifies: its sugar shape, else its
- *  collection's first source when that is a bare shape name. */
+ *  collection's first source when that is a bare shape name. Any other source,
+ *  a relationship such as `stamps` included, is not read, so the fresh-instance
+ *  argument does not apply to it. */
 private fun Validator.existsTargetBase(exists: ExistsExpr): String? =
     exists.shape?.let { model.baseOf(it) } ?: collectionSourceBase(exists.collection)
 
 private fun Validator.collectionSourceBase(collection: CollectionExpr?): String? {
     val source = collection?.bindings?.firstOrNull()?.source as? PathExpr ?: return null
-    return if (source.segs.isEmpty()) model.baseOf(source.root) else null
+    return if (source.segs.isEmpty() && model.namesShapeOrRefinement(source.root)) model.baseOf(source.root) else null
 }

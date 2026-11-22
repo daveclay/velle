@@ -70,28 +70,37 @@ private fun Validator.antiMonotoneFailure(refinement: String, base: String): Str
 private fun Validator.reentryReason(conjunct: Expr, refinement: String, base: String): String? {
     val tested = (conjunct as? NotExpr)?.inner
     return when {
-        tested is ExistsExpr -> deletedWitnessReason(tested, refinement)
+        tested is ExistsExpr -> deletedWitnessReason(tested, refinement, base)
         tested is PathExpr && tested.segs.isEmpty() -> unlatchedFlagReason(tested.root, refinement, base)
         else -> "a condition of '$refinement' is not a 'not exists ...' or 'not <flag>' test, so a record " +
             "that leaves '$refinement' could join it again"
     }
 }
 
-/** `not exists W`: the reason it fails when a rule deletes W's base, else null. */
-private fun Validator.deletedWitnessReason(exists: ExistsExpr, refinement: String): String? {
+/** `not exists W`: the reason it fails when a rule deletes W's base, else null. [base] is the
+ *  shape whose records the refinement holds, where a path in the test starts. */
+private fun Validator.deletedWitnessReason(exists: ExistsExpr, refinement: String, base: String): String? {
     // 'not exists W' was anti-monotone because facts persisted; a
     // deleter of W makes re-entry by deletion possible (OQ37)
-    val witnessBase = witnessShape(exists)?.let { shape -> model.baseOf(shape) } ?: return null
+    val witnessBase = witnessShape(exists, base)?.let { shape -> model.baseOf(shape) } ?: return null
     if (witnessBase !in model.deletedShapes) return null
     return "a rule deletes '$witnessBase', so a record that left '$refinement' because a '$witnessBase' existed " +
         "could join it again when that '$witnessBase' is deleted"
 }
 
-/** The shape `exists W for ...` or `exists (W where ...)` tests for, when it is named bare. */
-private fun witnessShape(exists: ExistsExpr): String? {
+/** The shape of the records `exists W for ...` or `exists (<source> where ...)` tests for: a shape
+ *  named bare, the records a path from [base] reaches (`this.retirements`, `retirements`), a
+ *  `(W for ...)`, or a walk's. Null for any other source. */
+private fun Validator.witnessShape(exists: ExistsExpr, base: String): String? {
     if (exists.shape != null) return exists.shape
-    val source = exists.collection?.bindings?.firstOrNull()?.source as? PathExpr ?: return null
-    return source.root.takeIf { source.segs.isEmpty() }
+    return when (val source = exists.collection?.bindings?.firstOrNull()?.source) {
+        is PathExpr ->
+            if (source.segs.isEmpty() && model.namesShapeOrRefinement(source.root)) source.root
+            else model.pathElementShape(source, base)
+        is ShapeForSource -> source.shape
+        is WalkExpr -> model.walkTarget(source, base)
+        else -> null
+    }
 }
 
 /** `not flag`: the reason it fails when a rule sets [flag] on [base] to anything but true, else null. */

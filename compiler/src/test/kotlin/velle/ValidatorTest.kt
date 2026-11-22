@@ -1184,6 +1184,12 @@ class ValidatorTest {
     }
 
     @Test
+    fun `V15 - a stamp filter over the ticket's own stamps names no unknown shape`() {
+        val src = stampedTicketsWhere("exists (stamps where ticket == this)")
+        assertTrue(diags(src).none { diagnostic -> diagnostic.code == "F1" }, "got: ${diags(src)}")
+    }
+
+    @Test
     fun `V15 - a stamp filter that does not name the ticket lets a fresh ticket enter, so the siblings interfere`() {
         val src = stampedTicketsWhere("exists (Stamp where ticket.order.reference == \"x\")")
         val messages = diags(src).filter { diagnostic -> diagnostic.code == "V15" }.map { diagnostic -> diagnostic.message }
