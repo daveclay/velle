@@ -1,0 +1,239 @@
+# The pharmacy demo at the identity provider. compose.yaml mounts this folder into
+# Authentik, which reads the file at startup and creates or updates what it lists.
+# Demo values throughout, checked in on purpose: the eleven members of staff, the
+# OpenID Connect client the pharmacy application signs in through, and an app
+# password each for getting a token without a browser.
+#
+# Each person's `pk` is fixed, and the client's `sub_mode: user_id` sends it as
+# the token's `sub`. The pharmacy roster (Roster.kt) gives the same value as each
+# Staff record's identityId, and the seed hires them with it. The two files must
+# agree.
+version: 1
+metadata:
+  name: Velle pharmacy demo
+entries:
+  - model: authentik_core.user
+    identifiers:
+      pk: 1001
+    attrs:
+      username: margaret
+      name: Margaret Hale
+      email: margaret@pharmacy.example
+      password: pharmacy-demo
+      type: internal
+  - model: authentik_core.user
+    identifiers:
+      pk: 1002
+    attrs:
+      username: devon
+      name: Devon Okoro
+      email: devon@pharmacy.example
+      password: pharmacy-demo
+      type: internal
+  - model: authentik_core.user
+    identifiers:
+      pk: 1003
+    attrs:
+      username: priya
+      name: Priya Raman
+      email: priya@pharmacy.example
+      password: pharmacy-demo
+      type: internal
+  - model: authentik_core.user
+    identifiers:
+      pk: 1004
+    attrs:
+      username: luis
+      name: Luis Ortega
+      email: luis@pharmacy.example
+      password: pharmacy-demo
+      type: internal
+  - model: authentik_core.user
+    identifiers:
+      pk: 1005
+    attrs:
+      username: hannah
+      name: Hannah Weiss
+      email: hannah@pharmacy.example
+      password: pharmacy-demo
+      type: internal
+  - model: authentik_core.user
+    identifiers:
+      pk: 1006
+    attrs:
+      username: samuel
+      name: Samuel Adeyemi
+      email: samuel@pharmacy.example
+      password: pharmacy-demo
+      type: internal
+  - model: authentik_core.user
+    identifiers:
+      pk: 1007
+    attrs:
+      username: tom
+      name: Tom Brandt
+      email: tom@pharmacy.example
+      password: pharmacy-demo
+      type: internal
+  - model: authentik_core.user
+    identifiers:
+      pk: 1008
+    attrs:
+      username: aisha
+      name: Aisha Khan
+      email: aisha@pharmacy.example
+      password: pharmacy-demo
+      type: internal
+  - model: authentik_core.user
+    identifiers:
+      pk: 1009
+    attrs:
+      username: marco
+      name: Marco Russo
+      email: marco@pharmacy.example
+      password: pharmacy-demo
+      type: internal
+  - model: authentik_core.user
+    identifiers:
+      pk: 1010
+    attrs:
+      username: jade
+      name: Jade Nguyen
+      email: jade@pharmacy.example
+      password: pharmacy-demo
+      type: internal
+  - model: authentik_core.user
+    identifiers:
+      pk: 1011
+    attrs:
+      username: chen
+      name: Chen Wei
+      email: chen@pharmacy.example
+      password: pharmacy-demo
+      type: internal
+
+  # An app password lets a script or a test ask for a token as the person with no
+  # browser (the client_credentials grant with username and password).
+  - model: authentik_core.token
+    identifiers:
+      identifier: margaret-pharmacy-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, margaret]]
+      intent: app_password
+      key: margaret-app-password
+      expiring: false
+  - model: authentik_core.token
+    identifiers:
+      identifier: devon-pharmacy-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, devon]]
+      intent: app_password
+      key: devon-app-password
+      expiring: false
+  - model: authentik_core.token
+    identifiers:
+      identifier: priya-pharmacy-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, priya]]
+      intent: app_password
+      key: priya-app-password
+      expiring: false
+  - model: authentik_core.token
+    identifiers:
+      identifier: luis-pharmacy-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, luis]]
+      intent: app_password
+      key: luis-app-password
+      expiring: false
+  - model: authentik_core.token
+    identifiers:
+      identifier: hannah-pharmacy-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, hannah]]
+      intent: app_password
+      key: hannah-app-password
+      expiring: false
+  - model: authentik_core.token
+    identifiers:
+      identifier: samuel-pharmacy-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, samuel]]
+      intent: app_password
+      key: samuel-app-password
+      expiring: false
+  - model: authentik_core.token
+    identifiers:
+      identifier: tom-pharmacy-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, tom]]
+      intent: app_password
+      key: tom-app-password
+      expiring: false
+  - model: authentik_core.token
+    identifiers:
+      identifier: aisha-pharmacy-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, aisha]]
+      intent: app_password
+      key: aisha-app-password
+      expiring: false
+  - model: authentik_core.token
+    identifiers:
+      identifier: marco-pharmacy-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, marco]]
+      intent: app_password
+      key: marco-app-password
+      expiring: false
+  - model: authentik_core.token
+    identifiers:
+      identifier: jade-pharmacy-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, jade]]
+      intent: app_password
+      key: jade-app-password
+      expiring: false
+  - model: authentik_core.token
+    identifiers:
+      identifier: chen-pharmacy-app-password
+    attrs:
+      user: !Find [authentik_core.user, [username, chen]]
+      intent: app_password
+      key: chen-app-password
+      expiring: false
+
+  - model: authentik_providers_oauth2.oauth2provider
+    id: pharmacy-provider
+    identifiers:
+      name: pharmacy
+    attrs:
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      # signing out of the application signs out of Authentik too, so the next person can sign in
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-invalidation-flow]]
+      client_type: confidential
+      client_id: pharmacy
+      client_secret: pharmacy-demo-secret
+      sub_mode: user_id
+      grant_types:
+        - authorization_code   # the browser signs in
+        - refresh_token
+        - client_credentials   # a script or a test, with a person's app password
+      redirect_uris:
+        - matching_mode: strict
+          url: http://localhost:8093/login/oauth2/code/authentik
+          redirect_uri_type: authorization
+        - matching_mode: regex
+          url: http://localhost:8093/.*
+          redirect_uri_type: logout
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+  - model: authentik_core.application
+    identifiers:
+      slug: pharmacy
+    attrs:
+      name: Velle pharmacy
+      provider: !KeyOf pharmacy-provider

@@ -1,10 +1,14 @@
 # The pharmacy application. The DataSource is PostgreSQL: under `gradle bootRun`,
 # Spring Boot's Docker Compose support starts compose.yaml's database and fills
 # in the URL, user, and password; a deployment sets them under spring.datasource.
-# Every read and most acts need an actor: the console's "act as" field takes
-# `Staff:1`, the first administrator the seed puts on the books.
+# compose.yaml also starts Authentik, the identity provider people sign in at.
+# Every read and most acts need an actor: the staff member who signed in.
 server:
   port: 8093
+  servlet:
+    session:
+      cookie:
+        same-site: lax   # PharmacySecurity relies on it: no other site's POST carries the session
 
 spring:
   application:
@@ -13,7 +17,34 @@ spring:
     compose:
       file: compose.yaml
       lifecycle-management: start-only
+  security:
+    oauth2:
+      # Demo values, checked in on purpose: the client authentik/pharmacy.yaml creates.
+      # Every endpoint is named, so the application starts without asking the
+      # provider for its configuration; a deployment sets these for its own provider.
+      client:
+        registration:
+          authentik:
+            provider: authentik
+            client-id: pharmacy
+            client-secret: pharmacy-demo-secret
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope: openid, email, profile
+        provider:
+          authentik:
+            authorization-uri: ${velle.identity-provider}/application/o/authorize/
+            token-uri: ${velle.identity-provider}/application/o/token/
+            user-info-uri: ${velle.identity-provider}/application/o/userinfo/
+            jwk-set-uri: ${velle.identity-provider}/application/o/pharmacy/jwks/
+            user-name-attribute: sub
+      resourceserver:
+        jwt:
+          issuer-uri: ${velle.identity-provider}/application/o/pharmacy/
+          jwk-set-uri: ${velle.identity-provider}/application/o/pharmacy/jwks/
+          audiences: pharmacy
 velle:
+  identity-provider: http://localhost:9093   # Authentik, from compose.yaml
   api:
     path: /api
     ticks: true          # the console's schedule buttons; off in a deployment

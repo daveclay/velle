@@ -620,7 +620,7 @@ open class PharmacyFlowTest {
 
     @Test
     fun `admin - staff roles are a closed list, licences near lapsing are reminded weekly, and the monthly snapshot counts every controlled drug`() {
-        refusedRaw("HireStaff", mapOf("name" to "Jo", "role" to "janitor"), s.founder, "\"janitor\" is not one of \"pharmacist\", \"technician\", \"admin\"")
+        refusedRaw("HireStaff", mapOf("name" to "Jo", "email" to "jo@pharmacy.example", "identityId" to "jo", "role" to "janitor"), s.founder, "\"janitor\" is not one of \"pharmacist\", \"technician\", \"admin\"")
         val soon = s.pharmacist("Soon", licensedUntil = s.today.plusDays(20))
         val fine = s.pharmacist("Fine", licensedUntil = s.today.plusDays(200))
         refuse(sys.commit(NewLicenceRenewal(s.technician(), "RPH-X", s.today.plusDays(365)), s.founder))

@@ -8,7 +8,7 @@ import velle.generated.pharmacy.*
 
 /**
  * rule RecordHire when HireStaff {
- *     Staff from { name: name, role: role }
+ *     Staff from { name: name, email: email, identityId: identityId, role: role }
  * }
  *
  * shape LicenceExpiringSoon = LicensedPharmacist where not (exists (licenceRenewals where expiresOn >= (today + 30 days)))

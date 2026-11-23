@@ -31,12 +31,14 @@ Each `examples/<system>/` has:
   `compose.yaml` with `postgres:17`, its own port (the table is in
   `README.md`), schedules in `application.yaml`, and a smoke test over
   in-memory SQLite that needs no Docker. Pharmacy and vendors ship
-  bootstrap fixtures. Pharmacy resolves the actor from `X-Velle-Actor`;
-  its `PharmacySeed` walks ninety days of scripted activity through the
-  generated acts. Vendors signs people in at Authentik, which its
-  `compose.yaml` starts from the blueprint `app/authentik/vendors.yaml`,
-  and resolves the actor by the token's `sub`; its `VendorsSignInTest`
-  runs against a real Authentik and is skipped without Docker.
+  bootstrap fixtures; pharmacy's `PharmacySeed` walks ninety days of
+  scripted activity through the generated acts. Both sign people in at
+  Authentik, which each `compose.yaml` starts from a blueprint,
+  `app/authentik/<system>.yaml`, and resolve the actor as the Staff record
+  whose `identityId` is the token's `sub`. The blueprint's `pk` for each
+  person and the fixture's `identityId` must agree. `PharmacySignInTest`
+  and `VendorsSignInTest` run against a real Authentik and are skipped
+  without Docker.
 
 A new example is registered in `settings.gradle.kts` and in the root
 `generate` task in `build.gradle.kts`, and gets an `app/` module made from

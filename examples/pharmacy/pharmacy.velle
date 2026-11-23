@@ -65,20 +65,33 @@ visible to Staff
 -- velle: the actor (Reference §22, "The actor") — `by <Role>` in an act's
 -- header is the role gate, sugar for `requires actor to be <Role>`; the
 -- first administrator is seeded by the engineer, outside the trust boundary
+--
+-- Each staff member signs in at the pharmacy's identity provider, which knows
+-- them by an identifier of its own; the record holds it, so a signed-in
+-- person is the staff member whose identityId the sign-in carries. The
+-- administrator who hires someone records both their email and that
+-- identifier, and no two staff members share either.
+-- velle: the spec reads neither email nor identityId; the application's actor
+-- resolver finds the staff member by identityId, and `unique` makes that one
+-- record or none
 Role is one of "pharmacist", "technician", "admin"
 
 shape Staff {
     name: text
+    email: text unique
+    identityId: text unique
     role: Role
 }
 
 transient act HireStaff by Administrator {
     name: text
+    email: text
+    identityId: text
     role: Role
 }
 
 rule RecordHire when HireStaff {
-    Staff from { name: name, role: role }
+    Staff from { name: name, email: email, identityId: identityId, role: role }
 }
 
 shape Pharmacist = Staff where role == "pharmacist"

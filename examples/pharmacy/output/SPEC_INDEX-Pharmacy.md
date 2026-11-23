@@ -157,6 +157,9 @@ each case below is an executable test.
 ## CounsellingSpec.kt
 
 
+## StaffSpec.kt
+
+
 ## VerificationSpec.kt
 
 
@@ -178,7 +181,7 @@ each case below is an executable test.
 - requires #28: the role gate an act's `by` clause states
 - never #2: complex comparison subject
 - never #3: non-literal bound
-- unique #35: a key, unique (drug, effectiveOn): no bound to cross
+- unique #37: a key, unique (drug, effectiveOn): no bound to cross
 - requires #8: multi-conjunct predicate
 - never #10: shape is not an act
 - never #11: shape is not an act
@@ -196,5 +199,7 @@ each case below is an executable test.
 - requires #31: the role gate an act's `by` clause states
 - requires #32: the role gate an act's `by` clause states
 - requires #34: the role gate an act's `by` clause states
-- unique #36: a key, fill: one Fill unique: no bound to cross
-- unique #37: a key, fill: one Fill unique: no bound to cross
+- unique #35: a key, email: text unique: no bound to cross
+- unique #36: a key, identityId: text unique: no bound to cross
+- unique #38: a key, fill: one Fill unique: no bound to cross
+- unique #39: a key, fill: one Fill unique: no bound to cross

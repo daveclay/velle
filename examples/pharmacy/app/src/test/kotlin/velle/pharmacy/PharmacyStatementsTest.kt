@@ -8,6 +8,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
@@ -37,6 +38,7 @@ class PharmacyStatementsTest {
 
     @Autowired lateinit var mvc: MockMvc
     @Autowired lateinit var json: ObjectMapper
+    @Autowired lateinit var pharmacy: velle.generated.PharmacySystem
 
     companion object {
         /** The text of every statement prepared since the last `clear()`. */
@@ -66,6 +68,9 @@ class PharmacyStatementsTest {
             } as T
     }
 
+    /** The first administrator, signed in: a token whose `sub` is her identityId, through Spring Security's test support. */
+    private val margaret = jwt().jwt { token -> token.subject(Roster.founder.identityId) }
+
     @Suppress("UNCHECKED_CAST")
     private fun parse(body: String): Map<String, Any?> = json.readValue(body, Map::class.java) as Map<String, Any?>
 
@@ -77,7 +82,7 @@ class PharmacyStatementsTest {
     }
 
     private fun graphql(query: String): Map<String, Any?> = parse(mvc.post("/graphql") {
-        header("X-Velle-Actor", "Staff:1")
+        with(margaret)
         contentType = MediaType.APPLICATION_JSON
         content = json.writeValueAsString(mapOf("query" to query))
     }.andExpect { status { isOk() } }.andReturn().response.contentAsString)
@@ -94,10 +99,11 @@ class PharmacyStatementsTest {
         // a drug's stock, price, and prescriptions are members nobody asked for
         val unasked = statements.filter { statement -> listOf("StockLot", "PriceChange", "Prescription", "Fill", "PurchaseOrder").any { table -> "\"$table\"" in statement } }
         assertEquals(emptyList(), unasked.distinct())
-        // one request is one snapshot: the list and the actor, then the drugs the interactions name as
-        // drugA in one statement and their ingredients in another, and the same two for drugB. The
-        // drugs are fetched because following a reference checks that the caller may see its record
-        assertTrue(statements.size <= 6, "${statements.size} statements for ${items.size} interactions: ${statements.groupingBy { statement -> statement }.eachCount()}")
+        // one request is one snapshot: who is calling, found by the identity the sign-in carries, the
+        // list and the actor's record, then the drugs the interactions name as drugA in one statement
+        // and their ingredients in another, and the same two for drugB. The drugs are fetched because
+        // following a reference checks that the caller may see its record
+        assertTrue(statements.size <= 7, "${statements.size} statements for ${items.size} interactions: ${statements.groupingBy { statement -> statement }.eachCount()}")
     }
 
     /**
@@ -109,11 +115,31 @@ class PharmacyStatementsTest {
     fun `a list of whole drugs sends one statement per kind of related record, not one per drug`() {
         lateinit var body: String
         val statements = statementsOf {
-            body = mvc.get("/api/shapes/Drug") { header("X-Velle-Actor", "Staff:1") }.andExpect { status { isOk() } }.andReturn().response.contentAsString
+            body = mvc.get("/api/shapes/Drug") { with(margaret) }.andExpect { status { isOk() } }.andReturn().response.contentAsString
         }
         val drugs = (parse(body)["items"] as List<*>).size
         assertEquals(Roster.drugs.size, drugs)
         assertTrue(drugs > 20, "enough drugs that a statement per drug would show")
         assertTrue(statements.size <= 20, "${statements.size} statements for $drugs drugs: ${statements.map { statement -> statement.take(60) }}")
+    }
+
+    /**
+     * Who is calling costs one statement: PharmacyActors asks for the Staff record whose identityId
+     * is the token's `sub`, as a reference. The generated lookup by that key builds the whole record
+     * instead, and reads every record that names the staff member to fill its collections.
+     */
+    @Test
+    fun `finding who is calling reads only the staff table, where the generated lookup reads every collection on staff`() {
+        val resolving = statementsOf {
+            mvc.get("/api/shapes/Ingredient/count") { with(margaret) }.andExpect { status { isOk() } }
+        }
+        assertEquals(1, resolving.count { statement -> "\"identityId\"" in statement }, resolving.toString())
+        assertEquals(emptyList(), resolving.filter { statement -> listOf("\"Fill\"", "\"Verification\"", "\"LicenceRenewal\"").any { table -> table in statement } })
+
+        val generatedLookup = statementsOf {
+            pharmacy.system.scope { pharmacy.read.staffByIdentityId(Roster.founder.identityId) }
+        }
+        val collectionTables = listOf("Fill", "Verification", "LicenceRenewal", "LicenceReminder", "EntryVoid", "StockAdjustment", "CountConfirmation")
+        assertTrue(collectionTables.all { table -> generatedLookup.any { statement -> "\"$table\"" in statement } }, generatedLookup.toString())
     }
 }

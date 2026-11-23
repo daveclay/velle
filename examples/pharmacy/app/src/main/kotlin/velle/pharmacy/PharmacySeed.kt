@@ -73,6 +73,7 @@ class PharmacySeed(
             props.days, (System.nanoTime() - started) / 1_000_000_000, walk.timing(),
             pharmacy.patients().size, pharmacy.prescriptions().size, pharmacy.fills().size, pharmacy.claims().size, pharmacy.notices().size,
         )
+        log.info("Velle pharmacy: sign in as {} (an administrator) or any member of staff in Roster, password pharmacy-demo", Roster.founder.username)
     }
 }
 
@@ -224,13 +225,14 @@ internal class SeedWalk(private val sys: PharmacySystem, private val days: Int) 
 
     private fun loadRoster() {
         // the first administrator is a fixture row: hiring is gated on an administrator (Reference §22, "The actor")
-        sys.system.seed("Staff", mapOf("name" to Roster.FOUNDER, "role" to "admin"))
+        val margaret = Roster.founder
+        sys.system.seed("Staff", mapOf("name" to margaret.name, "email" to margaret.email, "identityId" to margaret.identityId, "role" to margaret.role))
         founder = sys.staffs().single()
-        staffNames[founder] = Roster.FOUNDER
+        staffNames[founder] = margaret.name
         admins += founder
 
         for (h in Roster.hires) {
-            ok(sys.commit(NewHireStaff(h.name, Role.of(h.role)), founder))
+            ok(sys.commit(NewHireStaff(h.name, h.email, h.identityId, Role.of(h.role)), founder))
             val s = sys.staffs().last()
             staffNames[s] = h.name
             when (h.role) {

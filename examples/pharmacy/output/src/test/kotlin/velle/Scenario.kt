@@ -41,13 +41,14 @@ class Scenario(val sys: PharmacySystem) {
      *  Administrator`), so the first one is seeded by the engineer outside the trust
      *  boundary — a fixture row, no act, no door, no rule (Reference §22, "The actor"). */
     val founder: Staff by lazy {
-        sys.system.seed("Staff", mapOf("name" to "Founder", "role" to "admin"))
+        sys.system.seed("Staff", mapOf("name" to "Founder", "email" to "founder@pharmacy.example", "identityId" to "founder", "role" to "admin"))
         sys.staffs().last()
     }
 
-    /** Everyone else is hired by the founder through the gated act. */
+    /** Everyone else is hired by the founder through the gated act, each with an email and an identity of their own: both are unique, and two hires may share a name. */
     fun staff(name: String, role: Role): Staff {
-        accept(sys.commit(NewHireStaff(name, role), founder)); return sys.staffs().last()
+        val identityId = key("staff")
+        accept(sys.commit(NewHireStaff(name, "$identityId@pharmacy.example", identityId, role), founder)); return sys.staffs().last()
     }
 
     /** A pharmacist whose licence runs until [licensedUntil], recorded by the founder. */

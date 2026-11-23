@@ -1,4 +1,8 @@
-# The database `gradle :examples:/Users/daveclay/code/velle/pharmacypp:bootRun` starts for the pharmacy application.
+# What `gradle :examples:pharmacy:app:bootRun` starts for the pharmacy application:
+# its database, and Authentik, the identity provider people sign in at.
+# Authentik is three services: its server (http://localhost:9093), its worker, and
+# its own PostgreSQL. The worker reads authentik/pharmacy.yaml at startup and
+# creates the staff's accounts and the client. Every secret here is a demo value.
 name: velle-pharmacy   # one Compose project per example, so several applications run at once
 services:
   postgres:
@@ -9,3 +13,46 @@ services:
       POSTGRES_PASSWORD: pharmacy
     ports:
       - "5432"
+
+  authentik-postgres:
+    image: postgres:17-alpine
+    labels:
+      # Spring Boot points the DataSource at `postgres` above, never at this one
+      org.springframework.boot.ignore: "true"
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: authentik
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d authentik -U authentik"]
+      interval: 2s
+      retries: 30
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2026.8.6
+    command: server   # bootRun waits for its health check before the application starts
+    environment: &authentik-environment
+      AUTHENTIK_SECRET_KEY: pharmacy-demo-secret-key-not-for-production-use
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgres
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
+      AUTHENTIK_DISABLE_UPDATE_CHECK: "true"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    depends_on:
+      authentik-postgres:
+        condition: service_healthy
+    ports:
+      - "9093:9000"
+    volumes:
+      - ./authentik:/blueprints/pharmacy:ro
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2026.8.6
+    command: worker
+    environment: *authentik-environment
+    depends_on:
+      authentik-postgres:
+        condition: service_healthy
+    volumes:
+      - ./authentik:/blueprints/pharmacy:ro

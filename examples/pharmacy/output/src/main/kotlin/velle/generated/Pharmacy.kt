@@ -15,7 +15,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun tickHourly() = system.tick("Hourly")
     fun tickMonthly() = system.tick("Monthly")
 
-    /** Queue: system-wide.
+    /** Queue keys: [email value], [identityId value] — plus system-wide width below.
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  System-wide over ConflictOverride — reads ConflictOverride.actor with no path back to any key (unexamined (A5)).
@@ -550,6 +550,10 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun staff(key: StoreKey): Staff = byKey("Staff", key)
         fun staff(key: Long): Staff = staff(StoreKey(key))
+        /** The Staff whose email this is, or null when none has it. */
+        fun staffByEmail(email: String): Staff? = byValues("Staff", StaffFields(), { materializeStaff(it) }) { (this.email eq email) }
+        /** The Staff whose identityId this is, or null when none has it. */
+        fun staffByIdentityId(identityId: String): Staff? = byValues("Staff", StaffFields(), { materializeStaff(it) }) { (this.identityId eq identityId) }
 
         val licenceRenewals: LicenceRenewalQuery get() = query("LicenceRenewal", LicenceRenewalFields()) { materializeLicenceRenewal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -1017,6 +1021,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeStaff(id: Long): Staff = Staff(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
+        email = system.get(id, "email") as String,
+        identityId = system.get(id, "identityId") as String,
         role = Role.of(system.get(id, "role") as String),
         licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { system.refFor(it as Long) },
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
@@ -1489,6 +1495,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializePharmacist(id: Long): Pharmacist = Pharmacist(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
+        email = system.get(id, "email") as String,
+        identityId = system.get(id, "identityId") as String,
         role = Role.of(system.get(id, "role") as String),
         licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { system.refFor(it as Long) },
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
@@ -1506,6 +1514,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeTechnician(id: Long): Technician = Technician(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
+        email = system.get(id, "email") as String,
+        identityId = system.get(id, "identityId") as String,
         role = Role.of(system.get(id, "role") as String),
         licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { system.refFor(it as Long) },
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
@@ -1523,6 +1533,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeAdministrator(id: Long): Administrator = Administrator(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
+        email = system.get(id, "email") as String,
+        identityId = system.get(id, "identityId") as String,
         role = Role.of(system.get(id, "role") as String),
         licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { system.refFor(it as Long) },
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
@@ -1540,6 +1552,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeLicensedPharmacist(id: Long): LicensedPharmacist = LicensedPharmacist(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
+        email = system.get(id, "email") as String,
+        identityId = system.get(id, "identityId") as String,
         role = Role.of(system.get(id, "role") as String),
         licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { system.refFor(it as Long) },
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
@@ -1557,6 +1571,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeLicenceExpiringSoon(id: Long): LicenceExpiringSoon = LicenceExpiringSoon(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
+        email = system.get(id, "email") as String,
+        identityId = system.get(id, "identityId") as String,
         role = Role.of(system.get(id, "role") as String),
         licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { system.refFor(it as Long) },
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
@@ -2961,20 +2977,33 @@ visible to Staff
 -- velle: the actor (Reference §22, "The actor") — `by <Role>` in an act's
 -- header is the role gate, sugar for `requires actor to be <Role>`; the
 -- first administrator is seeded by the engineer, outside the trust boundary
+--
+-- Each staff member signs in at the pharmacy's identity provider, which knows
+-- them by an identifier of its own; the record holds it, so a signed-in
+-- person is the staff member whose identityId the sign-in carries. The
+-- administrator who hires someone records both their email and that
+-- identifier, and no two staff members share either.
+-- velle: the spec reads neither email nor identityId; the application's actor
+-- resolver finds the staff member by identityId, and `unique` makes that one
+-- record or none
 Role is one of "pharmacist", "technician", "admin"
 
 shape Staff {
     name: text
+    email: text unique
+    identityId: text unique
     role: Role
 }
 
 transient act HireStaff by Administrator {
     name: text
+    email: text
+    identityId: text
     role: Role
 }
 
 rule RecordHire when HireStaff {
-    Staff from { name: name, role: role }
+    Staff from { name: name, email: email, identityId: identityId, role: role }
 }
 
 shape Pharmacist = Staff where role == "pharmacist"
@@ -4156,10 +4185,14 @@ enum class ClaimOutcome(val word: String) {
 // every stored field the committer supplies and nothing else ──
 data class NewHireStaff(
     val name: String,
+    val email: String,
+    val identityId: String,
     val role: Role,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
+        put("email", email)
+        put("identityId", identityId)
         put("role", role.word)
     }
     override fun register(reg: NewRegistry) {
@@ -4624,6 +4657,8 @@ data class NewPrescription(
 data class Staff(
     override val key: StoreKey,
     val name: String,
+    val email: String,
+    val identityId: String,
     val role: Role,
     val licenceRenewals: List<Ref<LicenceRenewal>>,
     val licenceReminders: List<Ref<LicenceReminder>>,
@@ -5335,6 +5370,8 @@ data class ControlledInventorySnapshot(
 data class Pharmacist(
     override val key: StoreKey,
     val name: String,
+    val email: String,
+    val identityId: String,
     val role: Role,
     val licenceRenewals: List<Ref<LicenceRenewal>>,
     val licenceReminders: List<Ref<LicenceReminder>>,
@@ -5360,6 +5397,8 @@ data class Pharmacist(
 data class Technician(
     override val key: StoreKey,
     val name: String,
+    val email: String,
+    val identityId: String,
     val role: Role,
     val licenceRenewals: List<Ref<LicenceRenewal>>,
     val licenceReminders: List<Ref<LicenceReminder>>,
@@ -5385,6 +5424,8 @@ data class Technician(
 data class Administrator(
     override val key: StoreKey,
     val name: String,
+    val email: String,
+    val identityId: String,
     val role: Role,
     val licenceRenewals: List<Ref<LicenceRenewal>>,
     val licenceReminders: List<Ref<LicenceReminder>>,
@@ -5410,6 +5451,8 @@ data class Administrator(
 data class LicensedPharmacist(
     override val key: StoreKey,
     val name: String,
+    val email: String,
+    val identityId: String,
     val role: Role,
     val licenceRenewals: List<Ref<LicenceRenewal>>,
     val licenceReminders: List<Ref<LicenceReminder>>,
@@ -5435,6 +5478,8 @@ data class LicensedPharmacist(
 data class LicenceExpiringSoon(
     override val key: StoreKey,
     val name: String,
+    val email: String,
+    val identityId: String,
     val role: Role,
     val licenceRenewals: List<Ref<LicenceRenewal>>,
     val licenceReminders: List<Ref<LicenceReminder>>,
@@ -6772,6 +6817,8 @@ data class StaleClaim(
 
 class StaffFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
+    val email: TextField get() = TextField(fieldPath + "email")
+    val identityId: TextField get() = TextField(fieldPath + "identityId")
     val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isPharmacist(): Expr = isA("Pharmacist")
     fun isTechnician(): Expr = isA("Technician")
@@ -7134,6 +7181,8 @@ class ControlledInventorySnapshotFields(path: List<String> = emptyList()) : Fiel
 
 class PharmacistFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
+    val email: TextField get() = TextField(fieldPath + "email")
+    val identityId: TextField get() = TextField(fieldPath + "identityId")
     val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isTechnician(): Expr = isA("Technician")
     fun isAdministrator(): Expr = isA("Administrator")
@@ -7143,6 +7192,8 @@ class PharmacistFields(path: List<String> = emptyList()) : Fields(path) {
 
 class TechnicianFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
+    val email: TextField get() = TextField(fieldPath + "email")
+    val identityId: TextField get() = TextField(fieldPath + "identityId")
     val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isPharmacist(): Expr = isA("Pharmacist")
     fun isAdministrator(): Expr = isA("Administrator")
@@ -7152,6 +7203,8 @@ class TechnicianFields(path: List<String> = emptyList()) : Fields(path) {
 
 class AdministratorFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
+    val email: TextField get() = TextField(fieldPath + "email")
+    val identityId: TextField get() = TextField(fieldPath + "identityId")
     val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isPharmacist(): Expr = isA("Pharmacist")
     fun isTechnician(): Expr = isA("Technician")
@@ -7161,6 +7214,8 @@ class AdministratorFields(path: List<String> = emptyList()) : Fields(path) {
 
 class LicensedPharmacistFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
+    val email: TextField get() = TextField(fieldPath + "email")
+    val identityId: TextField get() = TextField(fieldPath + "identityId")
     val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isPharmacist(): Expr = isA("Pharmacist")
     fun isTechnician(): Expr = isA("Technician")
@@ -7170,6 +7225,8 @@ class LicensedPharmacistFields(path: List<String> = emptyList()) : Fields(path) 
 
 class LicenceExpiringSoonFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
+    val email: TextField get() = TextField(fieldPath + "email")
+    val identityId: TextField get() = TextField(fieldPath + "identityId")
     val role: EnumField<Role> get() = EnumField<Role>(fieldPath + "role") { it.word }
     fun isPharmacist(): Expr = isA("Pharmacist")
     fun isTechnician(): Expr = isA("Technician")

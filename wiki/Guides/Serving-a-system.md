@@ -59,7 +59,7 @@ velle:
 
 Run it with `./gradlew :examples:billing:app:bootRun`. Spring Boot starts the PostgreSQL in `examples/billing/app/compose.yaml` and points the `DataSource` at it. The console is at `http://localhost:8090/velle`.
 
-Every other example has the same application beside its generated module, `examples/<system>/app/`, each on a port of its own. The pharmacy's, `examples/pharmacy/app/`, also loads ninety days of business into an empty database through the spec's own acts (`examples/pharmacy/app/src/main/kotlin/velle/pharmacy/PharmacySeed.kt`), walking the system's clock day by day and ticking each schedule on its day, so a developer opening its console at `http://localhost:8093/velle` finds prescriptions, fills, claims, and the records the sweeps left behind.
+Every other example has the same application beside its generated module, `examples/<system>/app/`, each on a port of its own. The pharmacy's, `examples/pharmacy/app/`, also loads ninety days of business into an empty database through the spec's own acts (`examples/pharmacy/app/src/main/kotlin/velle/pharmacy/PharmacySeed.kt`), walking the system's clock day by day and ticking each schedule on its day, so a developer who opens its console at `http://localhost:8093/velle` and signs in as a member of staff finds prescriptions, fills, claims, and the records the sweeps left behind.
 
 ## Your own cadence
 
@@ -234,9 +234,9 @@ fun actors(): ActorResolver = ActorResolver { request ->
 }
 ```
 
-This one, from `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt`, reads a header, and so does the pharmacy application (`examples/pharmacy/app/src/main/kotlin/velle/pharmacy/PharmacyActors.kt`). Anyone who can reach the port can name any staff member in it. It suits a test or a laptop.
+This one, from `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt`, reads a header. Anyone who can reach the port can name any staff member in it. It suits a test or a laptop.
 
-An application whose people sign in at an [identity provider](GLOSSARY#acts-and-the-trust-boundary) reads who signed in from Spring Security and finds the staff record that names them. The vendors application signs people in at Authentik through [OpenID Connect](GLOSSARY#acts-and-the-trust-boundary). Shape `Staff` in `examples/vendors/vendors.velle` holds the identifier the provider sends for each person, the token's `sub`:
+An application whose people sign in at an [identity provider](GLOSSARY#acts-and-the-trust-boundary) reads who signed in from Spring Security and finds the staff record that names them. The pharmacy and vendors applications sign people in at Authentik through [OpenID Connect](GLOSSARY#acts-and-the-trust-boundary). Shape `Staff` in `examples/vendors/vendors.velle` holds the identifier the provider sends for each person, the token's `sub`:
 
 ```
 shape Staff {
@@ -261,6 +261,7 @@ fun actors(vendors: VendorsSystem): ActorResolver = ActorResolver { request ->
 - `identityIdOfTheSignedInPerson` reads the `sub` from a browser's session or from a token in the `Authorization` header. `examples/vendors/app/src/main/kotlin/velle/vendors/VendorsSecurity.kt` sets up both.
 - `staffByIdentityId` is generated because `identityId` is a [key](Reference-21-never#keys): at most one staff member holds a value.
 - A person the provider knows and no staff record names resolves to no actor, and is answered as nobody signed in.
+- `staffByIdentityId` returns the whole staff record, with every collection on it filled. A staff member in `examples/pharmacy/pharmacy.velle` is named by every fill, verification, and licence renewal, so filling those collections reads several tables on every request. The pharmacy's resolver, `examples/pharmacy/app/src/main/kotlin/velle/pharmacy/PharmacyActors.kt`, asks for the reference alone: `pharmacy.system.query(Query(root = "Staff", where = StaffFields().identityId eq identityId))` returns the number the runtime knows the matching record by, and `pharmacy.system.refFor` turns that number into the reference.
 - The spec reads neither `email` nor `identityId`. What each staff member may do and see stays in the spec, in `by`, `requires`, and `visible to`.
 
 Velle never authenticates. The resolver is where the application's identity becomes a reference to a record on the books.
@@ -291,7 +292,7 @@ fun overdue(): List<Overdue> = api.scope {
 
 ## The console
 
-`/velle` serves one page that reads the model's description from `GET /api`, builds itself from it, and reads and commits everything else over GraphQL: every shape as a table with the query's `where` and order, ordered at first by the shape's first member the description marks `orderable`, every record as a page of its members with its references as links, every act as a form, every schedule as a page that says when it last ran, with a button that ticks it when ticks are exposed. A header the page sends with every request, kept in the browser, lets a developer act as someone, `X-Velle-Actor: Staff:1` with the header resolver above. Behind a sign-in, as in the vendors application, the browser's session goes with every request instead and the header box does nothing. Nothing in the page is written per spec.
+`/velle` serves one page that reads the model's description from `GET /api`, builds itself from it, and reads and commits everything else over GraphQL: every shape as a table with the query's `where` and order, ordered at first by the shape's first member the description marks `orderable`, every record as a page of its members with its references as links, every act as a form, every schedule as a page that says when it last ran, with a button that ticks it when ticks are exposed. A header the page sends with every request, kept in the browser, lets a developer act as someone, `X-Velle-Actor: Staff:1` with the header resolver above. Behind a sign-in, as in the pharmacy and vendors applications, the browser's session goes with every request instead and the header box does nothing. Nothing in the page is written per spec.
 
 An act's form takes each field as the act's GraphQL input takes it. A reference is the key of a record, or `Shape#key` when the field's type is a union. A field that may carry a new record takes a key, or the new record as JSON, `{"newAddress": {...}}`. An act's parts are typed as a JSON list.
 

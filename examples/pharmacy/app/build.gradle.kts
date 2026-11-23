@@ -20,12 +20,18 @@ dependencies {
     implementation(project(":apis:spring"))
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation(project(":examples:pharmacy:output"))
+    // people sign in at the identity provider: the browser through OpenID Connect,
+    // a script or a test with the provider's token in the Authorization header
+    implementation("org.springframework.boot:spring-boot-starter-security-oauth2-client")
+    implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
     runtimeOnly("org.postgresql:postgresql")
-    // `gradle bootRun` starts the PostgreSQL in compose.yaml and points the DataSource at it
+    // `gradle bootRun` starts the PostgreSQL and Authentik in compose.yaml and points the DataSource at the database
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
     testImplementation(kotlin("test"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-security-test")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
 }
 
 tasks.test {

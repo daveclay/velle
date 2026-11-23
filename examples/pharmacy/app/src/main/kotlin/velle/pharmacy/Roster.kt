@@ -12,22 +12,37 @@ internal object Roster {
 
     // ── staff ────────────────────────────────────────────────────────────────
 
-    /** The first administrator, seeded outside the trust boundary; everyone else is hired by her. */
-    const val FOUNDER = "Margaret Hale"
+    /**
+     * A member of staff and their account at the identity provider. [identityId] is
+     * the `pk` the blueprint (authentik/pharmacy.yaml) gives the same person, which
+     * the provider sends as the token's `sub`; the two files must agree.
+     */
+    class Hire(
+        val name: String,
+        /** what they type at the provider's sign-in page; their password there is `pharmacy-demo` */
+        val username: String,
+        val identityId: String,
+        val role: String,
+        /** days from the seed's first day; a pharmacist's licence expires then */
+        val licenceDays: Int? = null,
+    ) {
+        val email: String get() = "$username@pharmacy.example"
+    }
 
-    class Hire(val name: String, val role: String, /** days from the seed's first day; a pharmacist's licence expires then */ val licenceDays: Int? = null)
+    /** The first administrator, seeded outside the trust boundary; everyone else is hired by her. */
+    val founder = Hire("Margaret Hale", "margaret", "1001", "admin")
 
     val hires = listOf(
-        Hire("Devon Okoro", "admin"),
-        Hire("Priya Raman", "pharmacist", licenceDays = 70),      // renewed during the walk
-        Hire("Luis Ortega", "pharmacist", licenceDays = 110),     // within thirty days of lapsing as the ninety days end
-        Hire("Hannah Weiss", "pharmacist", licenceDays = 48),     // lapses during the walk and is not renewed: she stops verifying that day
-        Hire("Samuel Adeyemi", "pharmacist", licenceDays = 400),
-        Hire("Tom Brandt", "technician"),
-        Hire("Aisha Khan", "technician"),
-        Hire("Marco Russo", "technician"),
-        Hire("Jade Nguyen", "technician"),
-        Hire("Chen Wei", "technician"),
+        Hire("Devon Okoro", "devon", "1002", "admin"),
+        Hire("Priya Raman", "priya", "1003", "pharmacist", licenceDays = 70),      // renewed during the walk
+        Hire("Luis Ortega", "luis", "1004", "pharmacist", licenceDays = 110),     // within thirty days of lapsing as the ninety days end
+        Hire("Hannah Weiss", "hannah", "1005", "pharmacist", licenceDays = 48),   // lapses during the walk and is not renewed: she stops verifying that day
+        Hire("Samuel Adeyemi", "samuel", "1006", "pharmacist", licenceDays = 400),
+        Hire("Tom Brandt", "tom", "1007", "technician"),
+        Hire("Aisha Khan", "aisha", "1008", "technician"),
+        Hire("Marco Russo", "marco", "1009", "technician"),
+        Hire("Jade Nguyen", "jade", "1010", "technician"),
+        Hire("Chen Wei", "chen", "1011", "technician"),
     )
 
     // ── the formulary ────────────────────────────────────────────────────────

@@ -17,6 +17,8 @@ import java.time.LocalDate
 data class StaffRow(
     val key: StoreKey,
     val name: String,
+    val email: String,
+    val identityId: String,
     val role: Role,
 )
 
@@ -1644,11 +1646,15 @@ private fun List<QConst>.instant(i: Int): Instant = (this[i] as QConst.QDateTime
 fun Row.toStaffRow(): StaffRow = StaffRow(
     key = key,
     name = fields["name"] as String,
+    email = fields["email"] as String,
+    identityId = fields["identityId"] as String,
     role = Role.of(fields["role"] as String),
 )
 
 fun StaffRow.toRow(): Row = Row("Staff", key, buildMap {
     put("name", name)
+    put("email", email)
+    put("identityId", identityId)
     put("role", role.word)
 })
 
