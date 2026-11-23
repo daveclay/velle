@@ -7,3 +7,5 @@ working-docs/examples/*/out/
 # written by the ub-mode tools crapper, dryer, and mutator
 .metrics/
 target/
+# written by the Kotlin compiler: its session files and error logs
+.kotlin/
