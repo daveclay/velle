@@ -29,7 +29,7 @@ Each `examples/<system>/` has:
   modules that fails when the checked-in output is stale.
 - `app/`, a Spring Boot application over PostgreSQL: one bean, a
   `compose.yaml` with `postgres:17`, its own port (the table is in
-  `README.md`), schedules in `application.yaml`, and a smoke test over
+  `examples/README.md`), schedules in `application.yaml`, and a smoke test over
   in-memory SQLite that needs no Docker. Pharmacy and vendors ship
   bootstrap fixtures; pharmacy's `PharmacySeed` walks ninety days of
   scripted activity through the generated acts. Both sign people in at
