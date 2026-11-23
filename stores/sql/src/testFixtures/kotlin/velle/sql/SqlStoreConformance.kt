@@ -1,6 +1,7 @@
 package velle.sql
 
 import velle.CommitResult
+import velle.CommitSet
 import velle.Model
 import velle.Parser
 import velle.QArg
@@ -1030,6 +1031,21 @@ abstract class SqlStoreConformance {
         a.execute("""DROP TABLE "Customer__tags"""")
         assertFailsWith<Exception> { a.customer("Bea", tags = listOf("vip")) }
         assertEquals(1L, a.count("Customer"), "Bea's row went with the failed commit")
+    }
+
+    @Test
+    fun `a commit handed to the store with no write unit open is refused and writes nothing`() {
+        val a = attach()
+        val byHand = CommitSet(created = listOf(CommitSet.Creation("Post", mapOf("title" to "Hello"))), assigned = emptyList())
+        // the commit callback is the runtime's to call, inside the write unit it opened
+        assertFailsWith<IllegalStateException> { a.store.onCommit(byHand) }
+        val readUnit = a.store.begin(WorkKind.READ)
+        try {
+            assertFailsWith<IllegalStateException> { a.store.onCommit(byHand) }
+        } finally {
+            readUnit.end(Outcome.Committed)
+        }
+        assertEquals(0L, a.count("Post"))
     }
 
     @Test

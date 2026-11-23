@@ -910,10 +910,11 @@ open class SqlStore(
     // ── the commit callback: the transaction's mutation set, atomically ──────
 
     /**
-     * Runs inside the runtime's envelope: everything the transaction created,
-     * assigned, captured, or deleted lands in one database transaction, and a
-     * failure here rolls the whole Velle commit back (in-envelope failure,
-     * evaluation.md U2).
+     * Runs inside the runtime's envelope, on the write unit the runtime began:
+     * everything the transaction created, assigned, captured, or deleted lands
+     * in that unit's one database transaction, and a failure here rolls the
+     * whole Velle commit back (in-envelope failure, evaluation.md U2). The
+     * runtime is the only caller; a commit with no write unit open is refused.
      *
      * Identity is minted here (Hydration.kt, StoreKey): each created row gets its table's next
      * key, and the assigned keys return in creation order. Creates arrive with
@@ -923,28 +924,10 @@ open class SqlStore(
      * is emptied with every other ([delete]).
      */
     override fun onCommit(commit: CommitSet): List<StoreKey> {
-        val unit = current.get()
-        // inside the envelope's write unit the statements join its transaction, which
-        // the unit's end commits; outside one (a commit set applied by hand) they
-        // get a transaction of their own
-        if (unit != null) {
-            check(unit.kind == WorkKind.WRITE) { "a commit arrived inside a read unit of work" }
-            return write(unit.connection, commit)
-        }
-        return dataSource.connection.use { connection -> writeInOwnTransaction(connection, commit) }
-    }
-
-    private fun writeInOwnTransaction(connection: Connection, commit: CommitSet): List<StoreKey> {
-        dialect.prepare(connection)
-        dialect.beginWrite(connection)
-        try {
-            return write(connection, commit).also { connection.commit() }
-        } catch (error: Exception) {
-            connection.rollback()
-            throw error
-        } finally {
-            runCatching { connection.autoCommit = true }
-        }
+        // the statements join the write unit's transaction, which the unit's end commits
+        val unit = checkNotNull(current.get()) { "a commit arrived with no unit of work open: the runtime calls onCommit inside the write unit it began" }
+        check(unit.kind == WorkKind.WRITE) { "a commit arrived inside a read unit of work" }
+        return write(unit.connection, commit)
     }
 
     private fun write(connection: Connection, commit: CommitSet): List<StoreKey> {
