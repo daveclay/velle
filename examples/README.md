@@ -36,6 +36,8 @@ The pharmacy and vendors specs declare who may act and who may see. Both applica
 - Pharmacy (Authentik at http://localhost:9093): sign in as `margaret` (an administrator), or as any other member of staff by first name in lower case, such as `priya` (a pharmacist) or `tom` (a technician), password `pharmacy-demo`. The staff are listed in `examples/pharmacy/app/src/main/kotlin/velle/pharmacy/Roster.kt`.
 - Vendors (Authentik at http://localhost:9096): sign in as `grace` (an administrator) or `linus` (staff assigned to Acme), password `vendors-demo`.
 
+Authentik's own admin interface is at its root page, http://localhost:9093 for the pharmacy and http://localhost:9096 for vendors. Sign in there as `akadmin`, password `pharmacy-admin` or `vendors-admin`. That account manages Authentik itself and is not a member of staff in either spec.
+
 To call the API from a script, get a token for a person from Authentik with their app password, which is their user name followed by `-app-password`, then send it:
 
 ```bash

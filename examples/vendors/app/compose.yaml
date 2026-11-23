@@ -39,6 +39,11 @@ services:
       AUTHENTIK_POSTGRESQL__PASSWORD: authentik
       AUTHENTIK_DISABLE_UPDATE_CHECK: "true"
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      # Authentik's own administrator, akadmin, for its admin interface at
+      # http://localhost:9096. Authentik reads these when it first creates its database;
+      # without them, that page opens Authentik's first-time setup instead.
+      AUTHENTIK_BOOTSTRAP_PASSWORD: vendors-admin
+      AUTHENTIK_BOOTSTRAP_EMAIL: admin@vendors.example
     depends_on:
       authentik-postgres:
         condition: service_healthy
