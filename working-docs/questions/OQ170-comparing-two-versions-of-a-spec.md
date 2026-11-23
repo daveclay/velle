@@ -1,6 +1,6 @@
 # OQ170 — a tool that reads two versions of a spec and says what changed in Velle's words, not as changed lines of text
 
-**Status:** opened 2026-11-23 from Dave's note. Investigated against HEAD the same day. D1, D2, D4, and D6 decided. D3, D5, and D7 await Dave. Nothing built except the probe test.
+**Status:** opened 2026-11-23 from Dave's note. Investigated against HEAD the same day. D1, D2, D3, D4, and D6 decided. D5, D7, and D8 await Dave. Nothing built except the probe test.
 
 **In plain terms:** a review of a change to a spec today means reading changed lines of text and working out what they do to the business. The compiler already knows what a spec means, so it could read the old spec and the new one and say "a line item can now clear an overdue invoice" instead of "line 87 was deleted".
 
@@ -35,7 +35,7 @@ What the cases say:
 
 ## 2. What to decide
 
-Decisions: D1 whether the tool exists and its form. D2 whether it reports consequences. D3 what it says about a reworded condition. D4 what it says about a rename. D5 whether it speaks about stored records. D6 a build question, how the tool gets its facts. D7 whether the report is written wholly in the business's words, with no Velle in it.
+Decisions: D1 whether the tool exists and its form. D2 whether it reports consequences. D3 what it says about a reworded condition. D4 what it says about a rename. D5 whether it speaks about stored records. D6 a build question, how the tool gets its facts. D7 whether the report is written wholly in the business's words, with no Velle in it. D8 which rewrites of a condition the tool computes as meaning the same.
 
 The sample reports below are my wording, to show the kind of sentence. No wording is decided by any of D1 to D6. D7 asks about the wording.
 
@@ -133,7 +133,7 @@ Costs:
 
 **Decided:** yes, Dave, 2026-11-23. His reasoning: this is the whole point. The tool is not a text diff. It is Velle understanding the models that two specs describe, and explaining the changes to a product owner in terms of the business domain, not in terms of Velle and not in terms of text. What that reasoning asks of the report's wording is D7; it is not decided by this answer.
 
-### D3. A condition rewritten in other words is reported as changed, with the old and new condition shown, and the report does not claim it means the same
+### D3. A condition rewritten in other words is reported as changed, with the old and new condition shown, and the report does not claim it means the same · Decided 2026-11-23
 
 When a condition is rewritten and nothing the compiler derives from it changes, does the report show the old and new condition and say only that, without calling the change harmless?
 
@@ -159,6 +159,55 @@ Costs of the recommendation:
 #### Proposed changes
 
 - `Compare.kt` prints the old and new form of every changed condition through `Printer.kt`, and the sentence above when no derived fact changed.
+
+**Decided:** no, Dave, 2026-11-23. He took the alternative: whether two conditions mean the same is computed. His words: "for some operators that will work, but presumably not for extension functions". A rewrite the tool cannot compute is still reported as the recommendation says, old and new shown and no claim made. Which rewrites are computed is D8.
+
+### D8. Each operator states facts about itself, and the tool computes "means the same" by reasoning from those facts, never from a list of operator names
+
+Does each operator carry its own facts, such as "my two sides may be swapped", so that the tool works out whether two conditions mean the same from the facts of the operators in them?
+
+This is the build question D3's answer leaves. Rewritten 2026-11-23 after Dave asked whether Velle can understand the operators as objects and reason about what they mean. My first draft was a fixed list of rewrites keyed on operator names. That is a hard-coded branch per builtin, which `compiler/CLAUDE.md` rules out ("Every builtin goes through the extension interfaces"), and it left every extension type out.
+
+Recommendation: yes. An operator is already an object that states facts about itself. `compiler/src/main/kotlin/velle/ext/VelleType.kt`, class `Operator`, carries `foldStepsCommute` and `foldIdempotent`, which check V8 reads to accept a fold, and which are "checked on the type's samples (E2) and otherwise trusted". This decision adds facts of the same kind and one reader of them.
+
+The facts, and who states them:
+
+| Fact | Stated by | What the tool concludes |
+|---|---|---|
+| The two sides may be swapped: `a op b` equals `b op a` | Each `Operator`, builtin or extension, as a new member beside `foldStepsCommute`. True of `+` and `*` on decimals, and of `Money + Money` if `velle.finance` says so. False of `-` | `price * quantity` and `quantity * price` are the same |
+| Grouping does not matter: `(a op b) op c` equals `a op (b op c)` | Each `Operator`, a new member | `a + b + c` in any order and grouping is the same, together with the fact above |
+| An ordering is one comparator | Already stated: a type that implements `Ordered` (`compiler/src/main/kotlin/velle/ext/Capabilities.kt`, `Ordered.ordering`) | `total > 0` and `0 < total` are the same, for any ordered type |
+| Equality is one function | Already stated: `VelleType.equal` | `a == b` and `b == a` are the same |
+| A function gives the same answer for the same arguments | Already stated: `compiler/src/main/kotlin/velle/ext/VelleFunction.kt`, the interface comment | The same call on the same arguments is the same |
+| A function's arguments may be given in any order | Each function, a new member. True of `max` and `min` | `max(a, b)` and `max(b, a)` are the same |
+| `and`, `or`, `not` | The language. These are not operators of any type | The sides of `and` and of `or` may be swapped; `not not P` is `P`; `not (P and Q)` is `not P or not Q`. A condition writes nothing and is true or false, never unknown |
+| A refinement's name stands for its condition | The language | `invoice is PaidInvoice` and the condition of `PaidInvoice` written out are the same |
+
+So an extension function is not wholly closed, which softens what D3 presumed. Velle still cannot read what a function does. It can read what the function's author states about it.
+
+One conclusion the facts do not give, though an engineer would expect it: `not (due < today)` against `due >= today`. An absent operand satisfies no ordered comparison (`Evaluator.kt`, the `"<", "<=", ">", ">="` branch; Reference §10). With `due` absent the first is true and the second is false. The tool concludes they are the same only where the compiler proves both sides present (`PresenceFacts.kt`).
+
+Case E, `total > 0 and balance <= 0` against `balance <= 0 and 0 < total`, follows from the ordering fact and the `and` fact, and reports `No change.` Case D, `due < today` against `due <= today`, follows from no fact and is reported as changed.
+
+Costs:
+
+- A fact is a claim by whoever wrote the operator. Velle checks it on the type's samples, as check E2 does for the fold facts, and otherwise trusts it. A wrong fact makes the report call a real change "No change", which is the worst thing the report can do. The same trust already decides whether a fold is accepted.
+- The extension API grows. Each new fact defaults to "not stated", so an existing library such as `extensions/finance` keeps working and gets false alarms until it states its facts. A false alarm is a rewrite reported as changed that means the same. It is never a hidden change.
+- The facts are limited to those that give one agreed spelling of a condition: sort the sides, flatten the grouping, turn every comparison one way. Two conditions are the same when their agreed spellings are equal. Facts that relate two operators, such as `a * (b + c)` against `a * b + a * c`, have no such spelling and no end to the reasoning they need. They are left out, and such a rewrite is reported as changed.
+- Nothing is concluded from values. `balance > 0` against `balance >= 0.01` is the same for `Money` and different for a decimal. Reported as changed.
+- The compiler gains a notion it does not have today, two conditions being equal. `StateFlowGen.kt` (`complementary`) and `validation/RuleDisjointness.kt` prove two conditions cannot both hold by comparing their written form, and `StateFlowGen.signDelta` names `max` and `min` by hand (OQ116). All three could read the same facts. That is OQ53 and OQ116, and not proposed here.
+- It leans on two principles in the root `CLAUDE.md`: Velle codes to its own extension interfaces, and custom functions outrank custom types.
+
+#### Proposed changes
+
+- `compiler/src/main/kotlin/velle/ext/VelleType.kt`, class `Operator`: two new members, for swapped sides and for grouping, each defaulting to not stated.
+- `compiler/src/main/kotlin/velle/ext/VelleFunction.kt`: one new member, arguments in any order, defaulting to not stated.
+- `compiler/src/main/kotlin/velle/ext/builtin/BuiltinTypes.kt` and `BuiltinFunctions.kt`: the builtins state their facts through those members.
+- Check E2 in `wiki/Normative/checks.md` tests each new fact on the type's samples.
+- A new file under `compiler/src/main/kotlin/velle/` that writes a condition in its agreed spelling from the facts.
+- `Compare.kt` compares agreed spellings, and reports a declaration as changed only when they differ.
+- `wiki/Guides/Extension-types.md` and `wiki/Guides/Extension-functions.md`: the new members.
+- A test per fact, evaluating both spellings over records with present and absent values.
 
 ### D4. A declaration that disappears under one name and appears under another with the same body is reported as renamed · Decided 2026-11-23
 
@@ -269,7 +318,7 @@ Costs:
 
 ## 3. The build
 
-Waits on D3, D5, and D7.
+Waits on D5, D7, and D8.
 
 ## 4. Work items
 
