@@ -3,11 +3,15 @@ package velle.sql
 import velle.CommitResult
 import velle.Model
 import velle.Parser
+import velle.QArg
+import velle.QCall
+import velle.QConst
 import velle.QF
 import velle.Ref
 import velle.Row
 import velle.StateResolver
 import velle.StoreKey
+import velle.VType
 import velle.Validator
 import velle.VelleSystem
 import velle.finance.Money
@@ -574,6 +578,141 @@ abstract class SqlStoreConformance {
         val onPhotoAndOther = a.store.fetchReferencingAny("Comment", "target", listOf(photo, otherPost))
         assertEquals(listOf("nice", "again"), onPhotoAndOther.map { row -> row.fields["body"] }, "the comment on Post#1 is not one on Photo#1")
         assertEquals(1, statements.sent.size, statements.sent.toString())
+    }
+
+    // ── pre-filters the store is handed directly: another table, and a call under a text operator ──
+
+    /** One field of the rows the store hands back for [filter], in the store's order. */
+    private fun Attached.candidates(shape: String, filter: QF, field: String = "name"): List<Any?> =
+        store.fetchCandidates(shape, filter).map { row -> row.fields[field] }
+
+    @Test
+    fun `a pre-filter over the records pointing at a row, or over the record a row points at, narrows the scan`() {
+        val a = attach()
+        val ada = a.customer("Ada", tier = 3)
+        val bo = a.customer("Bo")
+        a.customer("Cy")
+        accepted(a.sys.commit("Order", mapOf("customer" to a.id(ada), "total" to BigDecimal("50.00"))))
+        accepted(a.sys.commit("Order", mapOf("customer" to a.id(ada), "total" to BigDecimal("5.00"))))
+        accepted(a.sys.commit("Order", mapOf("customer" to a.id(bo), "total" to BigDecimal("6.00"))))
+        val large = QF.Cmp("total", ">", QConst.QNum(BigDecimal("10")))
+        val huge = QF.Cmp("total", ">", QConst.QNum(BigDecimal("1000")))
+        // where the dialect's decimal column does not answer `>`, the inner comparison is left to the evaluator
+        val decimalAnswered = answers(StorageClass.DECIMAL, ">", a)
+        val withLargeOrder = if (decimalAnswered) listOf<Any?>("Ada") else listOf<Any?>("Ada", "Bo")
+        assertEquals(withLargeOrder, a.candidates("Customer", QF.Exists("Order", "customer", large)))
+        assertEquals(listOf<Any?>("Cy"), a.candidates("Customer", QF.Not(QF.Exists("Order", "customer", QF.True))))
+        assertEquals(listOf<Any?>("Ada", "Bo", "Cy"), a.candidates("Customer", QF.Exists("Order", null, large)), "no reference field: any order at all")
+        val withHugeOrderAnywhere = if (decimalAnswered) emptyList() else listOf<Any?>("Ada", "Bo", "Cy")
+        assertEquals(withHugeOrderAnywhere, a.candidates("Customer", QF.Exists("Order", null, huge)))
+        val gold = QF.Cmp("tier", ">=", QConst.QNum(BigDecimal(3)))
+        assertEquals(listOf<Any?>(BigDecimal("50.00"), BigDecimal("5.00")), a.candidates("Order", QF.RelPred("customer", "Customer", gold), "total"))
+        assertEquals(listOf<Any?>(BigDecimal("6.00")), a.candidates("Order", QF.Not(QF.RelPred("customer", "Customer", gold)), "total"))
+
+        val post = accepted(a.sys.commit("Post", mapOf("title" to "Hello")))!!
+        val photo = accepted(a.sys.commit("Photo", mapOf("caption" to "Sunset")))!!
+        val otherPost = accepted(a.sys.commit("Post", mapOf("title" to "Again")))!!
+        // Post#1 and Photo#1 share a key, and only the photo has a comment
+        assertEquals(post.key, photo.key)
+        accepted(a.sys.commit("Comment", mapOf("target" to a.id(photo), "body" to "nice")))
+        accepted(a.sys.commit("Comment", mapOf("target" to a.id(otherPost), "body" to "again")))
+        val commented = QF.Exists("Comment", "target", QF.True)
+        assertEquals(listOf<Any?>("Again"), a.candidates("Post", commented, "title"), "the comment on Photo#1 is not one on Post#1")
+        assertEquals(listOf<Any?>("Sunset"), a.candidates("Photo", commented, "caption"))
+        // a hop through a union-typed reference names no one table: every row comes back, under `not` too
+        val titled = QF.RelPred("target", "Content", QF.Cmp("title", "==", QConst.QText("Hello")))
+        assertEquals(listOf<Any?>("nice", "again"), a.candidates("Comment", titled, "body"))
+        assertEquals(listOf<Any?>("nice", "again"), a.candidates("Comment", QF.Not(titled), "body"))
+    }
+
+    @Test
+    fun `a text operator over a rendered call narrows the scan as it does over a column`() {
+        val a = attach(spec = functionSpec, functionBindings = listOf(TrimSql))
+        for (name in listOf(" ab", "bad ", "cab", "xyz", "50%")) a.thing(name, 1, null)
+        val trimmed = QCall("velle.trim", 0, mapOf("text" to QArg.Column("name", VType.Text)), VType.Text)
+        fun named(op: String, text: String): QF = QF.CallCmp(trimmed, op, QConst.QText(text))
+        assertEquals(listOf<Any?>(" ab"), a.candidates("Thing", named("starts with", "a")))
+        assertEquals(listOf<Any?>("bad "), a.candidates("Thing", named("ends with", "d")))
+        assertEquals(listOf<Any?>(" ab", "bad ", "cab"), a.candidates("Thing", named("contains", "a")))
+        assertEquals(listOf<Any?>("cab"), a.candidates("Thing", named("like", "c_b")))
+        assertEquals(listOf<Any?>("50%"), a.candidates("Thing", named("contains", "%")), "a wildcard in the constant is matched as itself")
+        assertEquals(listOf<Any?>("bad ", "cab", "xyz", "50%"), a.candidates("Thing", QF.Not(named("starts with", "a"))))
+        val everyName = listOf<Any?>(" ab", "bad ", "cab", "xyz", "50%")
+        val matching = if (a.store.dialect.regexMatch("x") != null) listOf<Any?>("cab") else everyName
+        assertEquals(matching, a.candidates("Thing", named("matches", "ca.")))
+        // a text operator against a constant that is not text is left to the evaluator
+        assertEquals(everyName, a.candidates("Thing", QF.CallCmp(trimmed, "contains", QConst.QNum(BigDecimal(1)))))
+    }
+
+    @Test
+    fun `a constant of each kind is compared as its column's type, and one that is no value of that type is left to the evaluator`() {
+        val a = attach()
+        val seen = Instant.parse("2026-01-10T12:34:56Z")
+        val ada = a.customer("Ada", active = false, since = LocalDate.of(2019, 3, 4), lastSeen = seen, window = Duration.ofDays(21),
+            opensAt = LocalTime.of(7, 45), avatar = byteArrayOf(1, 2))
+        val bea = a.customer("Bea")
+        accepted(a.sys.commit("Order", mapOf("customer" to a.id(ada), "total" to BigDecimal("1.00"))))
+        accepted(a.sys.commit("Order", mapOf("customer" to a.id(bea), "total" to BigDecimal("2.00"))))
+        val both = listOf<Any?>("Ada", "Bea")
+        /** Ada alone where the dialect's column answers `==`, every row where it does not. */
+        fun adaWhere(storage: StorageClass, field: String, constant: QConst) {
+            val expected = if (answers(storage, "==", a)) listOf<Any?>("Ada") else both
+            assertEquals(expected, a.candidates("Customer", QF.Cmp(field, "==", constant)), field)
+        }
+        val token = a.store.fetchAll("Customer").first().fields["token"] as UUID
+        adaWhere(StorageClass.BOOLEAN, "active", QConst.QBool(false))
+        adaWhere(StorageClass.DATE, "since", QConst.QDate(LocalDate.of(2019, 3, 4)))
+        adaWhere(StorageClass.DATETIME, "lastSeen", QConst.QDateTime(seen))
+        adaWhere(StorageClass.DURATION, "window", QConst.QDuration(Duration.ofDays(21)))
+        adaWhere(StorageClass.TIME, "opensAt", QConst.QTime(LocalTime.of(7, 45)))
+        adaWhere(StorageClass.BYTES, "avatar", QConst.QBytes(byteArrayOf(1, 2)))
+        adaWhere(StorageClass.UUID, "token", QConst.QUuid(token))
+        adaWhere(StorageClass.TEXT, "name", QConst.QText("Ada"))
+        // a reference column is compared by the record's key
+        val adasOrders = if (answers(StorageClass.INTEGER, "==", a)) listOf<Any?>(BigDecimal("1.00")) else listOf<Any?>(BigDecimal("1.00"), BigDecimal("2.00"))
+        assertEquals(adasOrders, a.candidates("Order", QF.Cmp("customer", "==", QConst.QRef(ada)), "total"))
+        // no integer equals 1.5, no integer is a text, and no such column: each is left to the evaluator
+        assertEquals(both, a.candidates("Customer", QF.Cmp("tier", "==", QConst.QNum(BigDecimal("1.5")))))
+        assertEquals(both, a.candidates("Customer", QF.Cmp("tier", "==", QConst.QText("one"))))
+        assertEquals(both, a.candidates("Customer", QF.Cmp("nickname", "==", QConst.QText("Ada"))))
+
+        val isAda = QF.Cmp("name", "==", QConst.QText("Ada"))
+        val textAnswered = answers(StorageClass.TEXT, "==", a)
+        assertEquals(if (textAnswered) listOf<Any?>("Ada") else both, a.candidates("Customer", QF.Or(isAda, QF.False)))
+        assertEquals(emptyList(), a.candidates("Customer", QF.And(isAda, QF.False)))
+        assertEquals(if (textAnswered) listOf<Any?>("Bea") else both, a.candidates("Customer", QF.And(QF.Not(isAda), QF.Not(QF.False))))
+    }
+
+    @Test
+    fun `a binding's expression of each kind is written out with its constants bound in order`() {
+        val two = listOf<Any>(2, 2L, BigDecimal(2), 2.0)
+        val doublings: List<(SqlExpr) -> SqlExpr> = two.map { literal -> { value: SqlExpr -> SqlExpr.Infix(value, "*", SqlExpr.Literal(literal)) } } + listOf(
+            { value -> SqlExpr.Raw("({0} + {0})", value) },
+            { value -> SqlExpr.Infix(SqlExpr.Cast(value, StorageClass.INTEGER), "*", SqlExpr.Literal(2)) },
+            { value -> SqlExpr.Call("ABS", SqlExpr.Infix(value, "*", SqlExpr.Literal(-2))) },
+        )
+        for (doubling in doublings) {
+            val b = things(listOf(DoubledAs(doubling)))
+            b.check("Big", setOf("A", "C"), answers(StorageClass.INTEGER, ">=", b), 4, shape = "Thing")
+            b.check("NotSix", setOf("B", "C", "D"), answers(StorageClass.INTEGER, "!=", b), 4, shape = "Thing")
+        }
+        val b = things(listOf(DoubledSql, IsEvenIsTrueSql, TrimOfJoinedSql))
+        b.check("Even", setOf("D"), pushed = true, total = 4, shape = "Thing")
+        val trimmed = QCall("velle.trim", 0, mapOf("text" to QArg.Column("name", VType.Text)), VType.Text)
+        assertEquals(listOf<Any?>("A"), b.candidates("Thing", QF.CallCmp(trimmed, "starts with", QConst.QText("A"))))
+
+        // a constant operand is bound as the type its signature read it as
+        val integer = VType.Num("integer")
+        val doubledThree = QCall("velle.sqltest.doubled", 0, mapOf("value" to QArg.Const(QConst.QNum(BigDecimal(3)), integer)), integer)
+        val everyThing = listOf<Any?>("A", "B", "C", "D")
+        val pushed = answers(StorageClass.INTEGER, ">=", b)
+        assertEquals(everyThing, b.candidates("Thing", QF.CallCmp(doubledThree, ">=", QConst.QNum(BigDecimal(6)))))
+        assertEquals(if (pushed) emptyList() else everyThing, b.candidates("Thing", QF.CallCmp(doubledThree, ">=", QConst.QNum(BigDecimal(7)))))
+        // a function with no binding in this store, and an operand that is no value of its type, are the evaluator's
+        val unbound = QCall("velle.sqltest.isEven", 0, mapOf("value" to QArg.Column("n", integer)), VType.Bool)
+        assertEquals(everyThing, things(listOf(DoubledSql)).candidates("Thing", QF.Pred(unbound)))
+        val doubledText = QCall("velle.sqltest.doubled", 0, mapOf("value" to QArg.Const(QConst.QText("three"), integer)), integer)
+        assertEquals(everyThing, b.candidates("Thing", QF.CallCmp(doubledText, ">=", QConst.QNum(BigDecimal(7)))))
     }
 
     // ── captures across processes, re-entry, retraction ──────────────────────

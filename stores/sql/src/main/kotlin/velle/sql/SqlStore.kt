@@ -1,9 +1,14 @@
 package velle.sql
 
 import velle.ActorProp
+import velle.AdmissionKey
+import velle.CaptureSchema
 import velle.CommitCallback
 import velle.CommitSet
+import velle.EnumType
+import velle.Member
 import velle.Model
+import velle.Outcome
 import velle.QArg
 import velle.QCall
 import velle.QConst
@@ -12,28 +17,29 @@ import velle.Ref
 import velle.Row
 import velle.RowRef
 import velle.StateResolver
-import velle.TickMemory
 import velle.StoreKey
 import velle.StoredProp
 import velle.TEXT_OPERATORS
+import velle.TickMemory
 import velle.TimestampProp
+import velle.UnitOfWork
 import velle.VType
 import velle.VelleSystem
+import velle.WorkKind
 import velle.canonicalAny
 import velle.equalAny
-import velle.EnumType
+import velle.ext.Signature
+import velle.ext.VelleFunction
 import velle.ext.VelleType
 import java.math.BigDecimal
-import velle.AdmissionKey
-import velle.Outcome
-import velle.UnitOfWork
-import velle.WorkKind
 import java.sql.Connection
+import java.sql.PreparedStatement
+import java.sql.ResultSet
+import java.sql.SQLException
+import java.sql.Statement
 import java.time.Duration
 import java.time.Instant
 import javax.sql.DataSource
-import java.sql.PreparedStatement
-import java.sql.ResultSet
 
 /**
  * A generic, model-driven store over any SQL database: the framework role in
@@ -101,9 +107,9 @@ open class SqlStore(
          * store, every part of the protocol.
          */
         fun attach(system: VelleSystem, dataSource: DataSource, dialect: SqlDialect, bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load()): SqlStore =
-            SqlStore(system.model, dataSource, dialect, bindings).also {
-                it.createSchema()
-                system.connect(it, it, it)
+            SqlStore(system.model, dataSource, dialect, bindings).also { store ->
+                store.createSchema()
+                system.connect(store, store, store)
             }
     }
 
@@ -117,18 +123,18 @@ open class SqlStore(
      * its queue-key locks through [SqlDialect.lock] in sorted order, and is
      * committed at the end when the envelope was, rolled back otherwise.
      */
-    private inner class SqlUnit(val conn: Connection, val kind: WorkKind) : UnitOfWork {
+    private inner class SqlUnit(val connection: Connection, val kind: WorkKind) : UnitOfWork {
         override fun serialize(keys: Set<AdmissionKey>) {
-            if (kind == WorkKind.WRITE && keys.isNotEmpty()) dialect.lock(conn, keys.sorted(), lockTimeout)
+            if (kind == WorkKind.WRITE && keys.isNotEmpty()) dialect.lock(connection, keys.sorted(), lockTimeout)
         }
 
         override fun end(outcome: Outcome) {
             try {
-                if (kind == WorkKind.WRITE && outcome is Outcome.Committed) conn.commit() else conn.rollback()
+                if (kind == WorkKind.WRITE && outcome is Outcome.Committed) connection.commit() else connection.rollback()
             } finally {
                 current.remove()
-                runCatching { conn.autoCommit = true }
-                conn.close()
+                runCatching { connection.autoCommit = true }
+                connection.close()
             }
         }
     }
@@ -138,15 +144,15 @@ open class SqlStore(
 
     override fun begin(kind: WorkKind): UnitOfWork {
         check(current.get() == null) { "a unit of work is already open on this thread" }
-        val conn = dataSource.connection
+        val connection = dataSource.connection
         try {
-            dialect.prepare(conn)
-            if (kind == WorkKind.READ) dialect.beginRead(conn) else dialect.beginWrite(conn)
-        } catch (e: Exception) {
-            runCatching { conn.close() }
-            throw e
+            dialect.prepare(connection)
+            if (kind == WorkKind.READ) dialect.beginRead(connection) else dialect.beginWrite(connection)
+        } catch (error: Exception) {
+            runCatching { connection.close() }
+            throw error
         }
-        return SqlUnit(conn, kind).also { current.set(it) }
+        return SqlUnit(connection, kind).also { unit -> current.set(unit) }
     }
 
     /**
@@ -156,14 +162,14 @@ open class SqlStore(
      * returned after it.
      */
     private fun <T> onConnection(body: (Connection) -> T): T {
-        current.get()?.let { return body(it.conn) }
-        return dataSource.connection.use { conn ->
-            dialect.prepare(conn)
-            body(conn)
+        current.get()?.let { unit -> return body(unit.connection) }
+        return dataSource.connection.use { connection ->
+            dialect.prepare(connection)
+            body(connection)
         }
     }
 
-    private val bindings: Map<String, SqlTypeBinding<*>> = bindings.associateBy { it.type }
+    private val bindings: Map<String, SqlTypeBinding<*>> = bindings.associateBy { binding -> binding.type }
 
     /** The binding that renders each function on this dialect: the one claiming the dialect, else the one claiming any. */
     private val renderings: Map<String, SqlFunctionBinding> = selectRenderings(functionBindings)
@@ -175,55 +181,68 @@ open class SqlStore(
 
     private fun selectRenderings(all: List<SqlFunctionBinding>): Map<String, SqlFunctionBinding> {
         val selected = HashMap<String, SqlFunctionBinding>()
-        for ((function, candidates) in all.groupBy { it.function }) {
+        for ((function, candidates) in all.groupBy { binding -> binding.function }) {
             val registered = model.registry.function(function)
                 ?: throw IllegalStateException("${dialect.name} store: ${candidates.first()::class.qualifiedName} is a binding for '$function', and no registered function has that name")
-            val claimingDialect = candidates.filter { it.dialects?.contains(dialect.name) == true }
-            val claimingAny = candidates.filter { it.dialects == null }
-            if (claimingDialect.size > 1) throw conflict(function, dialect.name, claimingDialect)
-            if (claimingAny.size > 1) throw conflict(function, "any SQL database", claimingAny)
-            val chosen = claimingDialect.firstOrNull() ?: claimingAny.firstOrNull() ?: continue
+            val chosen = chooseRendering(function, candidates) ?: continue
             checkOperandNames(registered, chosen)
             selected[function] = chosen
         }
         return selected
     }
 
+    /** The one of [candidates] claiming this dialect, else the one claiming any, else none; two claiming the same is refused. */
+    private fun chooseRendering(function: String, candidates: List<SqlFunctionBinding>): SqlFunctionBinding? {
+        val claimingDialect = candidates.filter { binding -> binding.dialects?.contains(dialect.name) == true }
+        val claimingAny = candidates.filter { binding -> binding.dialects == null }
+        if (claimingDialect.size > 1) throw conflict(function, dialect.name, claimingDialect)
+        if (claimingAny.size > 1) throw conflict(function, "any SQL database", claimingAny)
+        return claimingDialect.firstOrNull() ?: claimingAny.firstOrNull()
+    }
+
     private fun conflict(function: String, where: String, claiming: List<SqlFunctionBinding>) = IllegalStateException(
-        "${dialect.name} store: two bindings claim '$function' on $where, ${claiming.joinToString { it::class.qualifiedName ?: "?" }}; " +
+        "${dialect.name} store: two bindings claim '$function' on $where, ${claiming.joinToString { binding -> binding::class.qualifiedName ?: "?" }}; " +
             "the system's owner keeps one, by the classpath or the store's explicit list"
     )
 
     /** Every name a binding reads is a parameter of each signature of its function: checked here, not at query time. */
-    private fun checkOperandNames(registered: velle.ext.VelleFunction, binding: SqlFunctionBinding) {
+    private fun checkOperandNames(registered: VelleFunction, binding: SqlFunctionBinding) {
         for (signature in registered.signatures) {
-            val single = HashMap<String, SqlExpr>()
-            val many = HashMap<String, List<SqlExpr>>()
-            for (parameter in signature.parameters) {
-                if (parameter.variadic) many[parameter.name] = listOf(SqlExpr.Column("probe", VType.Unknown))
-                else single[parameter.name] = SqlExpr.Column("probe", VType.Unknown)
-            }
             try {
-                binding.render(SqlOperands(signature, single, many))
+                binding.render(probeOperands(signature))
             } catch (error: IllegalArgumentException) {
                 throw IllegalStateException("${dialect.name} store: ${binding::class.qualifiedName}, the binding for '${registered.qualifiedName}', ${error.message}")
             }
         }
     }
 
+    /** Operands for [signature] holding a stand-in column under every parameter's name. */
+    private fun probeOperands(signature: Signature): SqlOperands {
+        val probe = SqlExpr.Column("probe", VType.Unknown)
+        val (variadic, single) = signature.parameters.partition { parameter -> parameter.variadic }
+        return SqlOperands(
+            signature,
+            single.associate { parameter -> parameter.name to probe },
+            variadic.associate { parameter -> parameter.name to listOf(probe) },
+        )
+    }
+
     /** Runs each selected binding's DDL once with the schema; a refusal is recorded, or stops the store when the system insists. */
-    private fun installRenderings(conn: Connection) {
+    private fun installRenderings(connection: Connection) {
         for ((function, binding) in renderings) {
-            if (binding.ddl.isEmpty()) continue
-            try {
-                conn.createStatement().use { statement -> for (sql in binding.ddl) statement.execute(sql) }
-                refusedDdl.remove(function)
-            } catch (error: java.sql.SQLException) {
-                val message = error.message ?: error::class.simpleName ?: "refused"
-                if (function in insistRendered)
-                    throw IllegalStateException("${dialect.name} store: the database refused the DDL of ${binding::class.qualifiedName}, the binding for '$function', which this system insists on: $message", error)
-                refusedDdl[function] = message
-            }
+            if (binding.ddl.isNotEmpty()) installRendering(connection, function, binding)
+        }
+    }
+
+    private fun installRendering(connection: Connection, function: String, binding: SqlFunctionBinding) {
+        try {
+            connection.createStatement().use { statement -> for (sql in binding.ddl) statement.execute(sql) }
+            refusedDdl.remove(function)
+        } catch (error: SQLException) {
+            val message = error.message ?: error::class.simpleName ?: "refused"
+            if (function in insistRendered)
+                throw IllegalStateException("${dialect.name} store: the database refused the DDL of ${binding::class.qualifiedName}, the binding for '$function', which this system insists on: $message", error)
+            refusedDdl[function] = message
         }
     }
 
@@ -238,26 +257,34 @@ open class SqlStore(
         }
     }
 
-    private fun <T : Any> roundTrip(type: VelleType<T>, b: SqlTypeBinding<*>) = onConnection { conn ->
-        val samples: List<Any> = type.samples.let { s -> listOfNotNull(s.sample, s.below?.invoke(s.sample), s.above?.invoke(s.sample)) }
-        val col = extensionColumn(b)
-        conn.createStatement().use { it.execute("CREATE TEMP TABLE velle_e4 (v ${col.columnType})") }
+    private fun <T : Any> roundTrip(type: VelleType<T>, binding: SqlTypeBinding<*>) = onConnection { connection ->
+        val given = type.samples
+        val samples: List<Any> = listOfNotNull(given.sample, given.below?.invoke(given.sample), given.above?.invoke(given.sample))
+        val column = extensionColumn(binding)
+        connection.createStatement().use { statement -> statement.execute("CREATE TEMP TABLE velle_e4 (v ${column.columnType})") }
         try {
-            for (sample in samples) {
-                val carrier = b.encodeAny(sample)
-                if (!b.storage.carrier.isInstance(carrier))
-                    throw IllegalStateException("${dialect.name} store's binding for '${model.specNameOf(type)}' (${b::class.qualifiedName}) names " +
-                        "${b.storage} storage but encodes ${type.canonicalAny(sample)} as ${carrier::class.simpleName}, not ${b.storage.carrier.simpleName}")
-                conn.prepareStatement("INSERT INTO velle_e4 (v) VALUES (?)").use { ps -> ps.setObject(1, col.bind(sample)); ps.executeUpdate() }
-                val back = conn.prepareStatement("SELECT v FROM velle_e4").use { ps -> ps.executeQuery().use { rs -> rs.next(); col.read(rs, "v") } }
-                conn.createStatement().use { it.execute("DELETE FROM velle_e4") }
-                if (!type.equalAny(sample, back))
-                    throw IllegalStateException("${dialect.name} store's binding for '${model.specNameOf(type)}' (${b::class.qualifiedName}) does not round-trip " +
-                        "${type.canonicalAny(sample)}: it read back ${type.canonicalAny(back)}")
-            }
+            for (sample in samples) roundTripSample(connection, type, binding, column, sample)
         } finally {
-            conn.createStatement().use { it.execute("DROP TABLE velle_e4") }
+            connection.createStatement().use { statement -> statement.execute("DROP TABLE velle_e4") }
         }
+    }
+
+    private fun roundTripSample(connection: Connection, type: VelleType<*>, binding: SqlTypeBinding<*>, column: ScalarColumn, sample: Any) {
+        val carrier = binding.encodeAny(sample)
+        if (!binding.storage.carrier.isInstance(carrier))
+            throw IllegalStateException("${dialect.name} store's binding for '${model.specNameOf(type)}' (${binding::class.qualifiedName}) names " +
+                "${binding.storage} storage but encodes ${type.canonicalAny(sample)} as ${carrier::class.simpleName}, not ${binding.storage.carrier.simpleName}")
+        connection.prepareStatement("INSERT INTO velle_e4 (v) VALUES (?)").use { insert ->
+            insert.setObject(1, column.bind(sample))
+            insert.executeUpdate()
+        }
+        val readBack = connection.prepareStatement("SELECT v FROM velle_e4").use { select ->
+            select.executeQuery().use { results -> results.next(); column.read(results, "v") }
+        }
+        connection.createStatement().use { statement -> statement.execute("DELETE FROM velle_e4") }
+        if (!type.equalAny(sample, readBack))
+            throw IllegalStateException("${dialect.name} store's binding for '${model.specNameOf(type)}' (${binding::class.qualifiedName}) does not round-trip " +
+                "${type.canonicalAny(sample)}: it read back ${type.canonicalAny(readBack)}")
     }
 
     // ── columns: one path for builtin and extension scalars ─────────────────
@@ -273,34 +300,33 @@ open class SqlStore(
         val columnType: String get() = storage.columnType
         val answers: Set<String> = claims intersect storage.answers
         fun bind(value: Any): Any = storage.bind(encode(value))
-        fun read(rs: ResultSet, column: String): Any = decode(storage.read(rs, column))
+        fun read(results: ResultSet, column: String): Any = decode(storage.read(results, column))
     }
 
     private val scalarColumns = HashMap<VType, ScalarColumn>()
 
-    private fun scalarColumn(t: VType): ScalarColumn = scalarColumns.getOrPut(t) {
-        when (t) {
-            is VType.Ext -> extensionColumn(bindingOf(t))
-            else -> {
-                val storage = builtinStorage(t) ?: throw IllegalArgumentException("not a scalar column type: $t")
-                val encode: (Any) -> Any = when (storage) {
-                    StorageClass.INTEGER -> { v -> toBigDecimal(v).longValueExact() }
-                    StorageClass.DECIMAL -> { v -> toBigDecimal(v) }
-                    else -> { v -> v }
-                }
-                ScalarColumn(dialect.column(storage), encode, { it }, ALL_COMPARISONS)
-            }
-        }
+    private fun scalarColumn(type: VType): ScalarColumn = scalarColumns.getOrPut(type) {
+        if (type is VType.Ext) extensionColumn(bindingOf(type)) else builtinColumn(type)
     }
 
-    private fun extensionColumn(b: SqlTypeBinding<*>): ScalarColumn =
-        ScalarColumn(dialect.column(b.storage), { b.encodeAny(it) }, { b.decode(it) }, b.answers)
+    private fun builtinColumn(type: VType): ScalarColumn {
+        val storage = builtinStorage(type) ?: throw IllegalArgumentException("not a scalar column type: $type")
+        val encode: (Any) -> Any = when (storage) {
+            StorageClass.INTEGER -> { number -> toBigDecimal(number).longValueExact() }
+            StorageClass.DECIMAL -> { number -> toBigDecimal(number) }
+            else -> { value -> value }
+        }
+        return ScalarColumn(dialect.column(storage), encode, { stored -> stored }, ALL_COMPARISONS)
+    }
+
+    private fun extensionColumn(binding: SqlTypeBinding<*>): ScalarColumn =
+        ScalarColumn(dialect.column(binding.storage), { value -> binding.encodeAny(value) }, { stored -> binding.decode(stored) }, binding.answers)
 
     /** The storage class of a builtin scalar (Reference §5), or null for a reference or collection. */
-    private fun builtinStorage(t: VType): StorageClass? = when (t) {
-        is VType.Optional -> builtinStorage(t.inner)
+    private fun builtinStorage(type: VType): StorageClass? = when (type) {
+        is VType.Optional -> builtinStorage(type.inner)
         VType.Text -> StorageClass.TEXT
-        is VType.Num -> if (t.name == "integer" || t.name == "long") StorageClass.INTEGER else StorageClass.DECIMAL
+        is VType.Num -> if (isWholeNumber(type)) StorageClass.INTEGER else StorageClass.DECIMAL
         VType.Bool -> StorageClass.BOOLEAN
         VType.DateT -> StorageClass.DATE
         VType.DateTimeT -> StorageClass.DATETIME
@@ -311,8 +337,12 @@ open class SqlStore(
         else -> null
     }
 
-    private fun bindingOf(t: VType.Ext): SqlTypeBinding<*> =
-        model.registry[t.qualifiedName]?.let { bindingFor(it) } ?: throw IllegalStateException("${dialect.name} store has no binding for '${t.qualifiedName}'")
+    /** A number type held in the dialect's integer column; every other number type is held as a decimal. */
+    private fun isWholeNumber(type: VType.Num): Boolean = type.name == "integer" || type.name == "long"
+
+    private fun bindingOf(type: VType.Ext): SqlTypeBinding<*> =
+        model.registry[type.qualifiedName]?.let { registered -> bindingFor(registered) }
+            ?: throw IllegalStateException("${dialect.name} store has no binding for '${type.qualifiedName}'")
 
     /** The binding for an extension type: a type the spec declares by its words is held as its
      *  word by [EnumBinding], shipped here; any other type's binding is a library of its own (E4). */
@@ -324,12 +354,12 @@ open class SqlStore(
 
     /** Numerics arrive as BigDecimal from the runtime, but a typed store layer
      *  may hand back Int/Long/Double (the generated row types). */
-    private fun toBigDecimal(v: Any): BigDecimal = when (v) {
-        is BigDecimal -> v
-        is Int -> BigDecimal(v)
-        is Long -> BigDecimal(v)
-        is Double -> BigDecimal.valueOf(v)
-        else -> throw IllegalArgumentException("not numeric: $v")
+    private fun toBigDecimal(number: Any): BigDecimal = when (number) {
+        is BigDecimal -> number
+        is Int -> BigDecimal(number)
+        is Long -> BigDecimal(number)
+        is Double -> BigDecimal.valueOf(number)
+        else -> throw IllegalArgumentException("not numeric: $number")
     }
 
     // ── the schema, derived from the model ──────────────────────────────────
@@ -337,39 +367,48 @@ open class SqlStore(
     /** A scalar, to-one reference, or timestamp column. [union] marks a
      *  reference whose declared target is a static union: the concrete shape
      *  lives in the sibling discriminator column [shapeColumn]. */
-    private data class Col(val name: String, val type: VType, val union: Boolean)
+    private data class FieldColumn(val name: String, val type: VType, val union: Boolean)
 
-    /** A collection field, persisted as a junction table. [elem] is the element
+    /** A collection field, persisted as a junction table. [element] is the element
      *  type; [union] marks a reference collection typed with a static union. */
-    private data class Coll(val name: String, val elem: VType, val union: Boolean)
+    private data class FieldCollection(val name: String, val element: VType, val union: Boolean)
 
     private fun isUnion(shape: String) = model.isStaticUnion(shape)
 
-    private fun columnsOf(shape: String): List<Col> =
-        model.shapes.getValue(shape).members.mapNotNull { m ->
-            when (m) {
-                // a transient field is in the act's input and has no column (Reference §4)
-                is StoredProp -> if (m.transient) null else model.typeOf(m.type).let { t ->
-                    if (t is VType.Coll || t is VType.CollS) null
-                    else Col(m.name, t, t.instanceShape()?.let { isUnion(it) } == true)
-                }
-                is TimestampProp -> Col(m.name, VType.DateTimeT, union = false)
-                // the actor of a durable act (Reference §22): a reference column to the clause's base shape
-                is ActorProp -> (model.baseOf(m.shape) ?: m.shape).let { Col(m.name, VType.Inst(it), isUnion(it)) }
+    private fun columnsOf(shape: String): List<FieldColumn> =
+        model.shapes.getValue(shape).members.mapNotNull { member -> columnOf(member) }
+
+    private fun columnOf(member: Member): FieldColumn? = when (member) {
+        is StoredProp -> storedColumn(member)
+        is TimestampProp -> FieldColumn(member.name, VType.DateTimeT, union = false)
+        is ActorProp -> actorColumn(member)
+        else -> null
+    }
+
+    /** A stored field's column; none for a transient field, which is in the act's input (Reference §4), or for a collection. */
+    private fun storedColumn(stored: StoredProp): FieldColumn? {
+        if (stored.transient) return null
+        val type = model.typeOf(stored.type)
+        if (type is VType.Coll || type is VType.CollS) return null
+        return FieldColumn(stored.name, type, type.instanceShape()?.let { shape -> isUnion(shape) } == true)
+    }
+
+    /** The actor of a durable act (Reference §22): a reference column to the clause's base shape. */
+    private fun actorColumn(actor: ActorProp): FieldColumn {
+        val baseShape = model.baseOf(actor.shape) ?: actor.shape
+        return FieldColumn(actor.name, VType.Inst(baseShape), isUnion(baseShape))
+    }
+
+    private fun collectionsOf(shape: String): List<FieldCollection> =
+        model.shapes.getValue(shape).members.filterIsInstance<StoredProp>().filterNot { stored -> stored.transient }.mapNotNull { stored ->
+            when (val type = model.typeOf(stored.type)) {
+                is VType.Coll -> FieldCollection(stored.name, VType.Inst(type.shape), isUnion(type.shape))
+                is VType.CollS -> FieldCollection(stored.name, model.scalarOf(type.name), union = false)
                 else -> null
             }
         }
 
-    private fun collectionsOf(shape: String): List<Coll> =
-        model.shapes.getValue(shape).members.filterIsInstance<StoredProp>().filterNot { it.transient }.mapNotNull { m ->
-            when (val t = model.typeOf(m.type)) {
-                is VType.Coll -> Coll(m.name, VType.Inst(t.shape), isUnion(t.shape))
-                is VType.CollS -> Coll(m.name, model.scalarOf(t.name), union = false)
-                else -> null
-            }
-        }
-
-    private val persistedShapes = model.shapes.keys.filter { it !in model.transients }
+    private val persistedShapes = model.shapes.keys.filter { shape -> shape !in model.transients }
 
     /** A key (Reference §21, "Keys") kept by the database: one `UNIQUE` per key, over the
      *  key's columns and the shape column of a union-typed reference among them. Absent
@@ -377,15 +416,18 @@ open class SqlStore(
      *  count. The runtime still refuses the second record at the door, with the rejection
      *  as data; the constraint guards against two commits racing from separate processes. */
     private fun keyConstraints(shape: String): String {
-        val columns = columnsOf(shape).associateBy { it.name }
+        val columns = columnsOf(shape).associateBy { column -> column.name }
         return model.keysOf(shape).joinToString("") { key ->
-            val names = key.fields.flatMap { field ->
-                val column = columns[field] ?: return@flatMap emptyList()
-                if (column.union) listOf(field, shapeColumn(field)) else listOf(field)
-            }
-            """, UNIQUE (${names.joinToString(", ") { "\"$it\"" }})"""
+            val names = key.fields.flatMap { field -> columns[field]?.let { column -> storedNames(column) }.orEmpty() }
+            ", UNIQUE (${quoted(names)})"
         }
     }
+
+    /** The column's own name, and its discriminator column's when it is typed with a union. */
+    private fun storedNames(column: FieldColumn): List<String> =
+        if (column.union) listOf(column.name, shapeColumn(column.name)) else listOf(column.name)
+
+    private fun quoted(names: List<String>): String = names.joinToString(", ") { name -> "\"$name\"" }
 
     private fun shapeColumn(field: String) = "${field}__shape"
     private fun junctionTable(shape: String, field: String) = "${shape}__$field"
@@ -394,72 +436,78 @@ open class SqlStore(
     /** The moment each schedule last ran, one row per schedule ([TickMemory]). No shape's table starts in lower case. */
     private val tickTable = "velle_tick"
     private val momentStorage: StorageColumn get() = dialect.column(StorageClass.DATETIME)
+    private val textColumnType: String get() = dialect.column(StorageClass.TEXT).columnType
 
-    private fun columnType(t: VType): String = when {
-        t is VType.Optional -> columnType(t.inner)
-        t is VType.Inst -> keyStorage.columnType
-        else -> scalarColumn(t).columnType
+    private fun columnType(type: VType): String = when {
+        type is VType.Optional -> columnType(type.inner)
+        type is VType.Inst -> keyStorage.columnType
+        else -> scalarColumn(type).columnType
     }
 
-    fun createSchema() = onConnection { conn ->
-        conn.createStatement().use { st ->
-            for (shape in persistedShapes) {
-                val cols = columnsOf(shape).joinToString("") { c ->
-                    """, "${c.name}" ${columnType(c.type)}""" +
-                        if (c.union) """, "${shapeColumn(c.name)}" ${dialect.column(StorageClass.TEXT).columnType}""" else ""
-                }
-                st.execute("""CREATE TABLE IF NOT EXISTS "$shape" (id ${dialect.keyColumn}$cols${keyConstraints(shape)})""")
-                for (coll in collectionsOf(shape)) {
-                    val member = if (coll.elem is VType.Inst) {
-                        "target ${keyStorage.columnType} NOT NULL" +
-                            if (coll.union) ", target_shape ${dialect.column(StorageClass.TEXT).columnType} NOT NULL" else ""
-                    } else """value ${columnType(coll.elem)} NOT NULL"""
-                    // `pos` is the member's place in the collection: membership order is
-                    // stored, never inferred from the database's row order
-                    st.execute(
-                        """CREATE TABLE IF NOT EXISTS "${junctionTable(shape, coll.name)}" """ +
-                            """(owner ${keyStorage.columnType} NOT NULL, pos ${keyStorage.columnType} NOT NULL, $member)"""
-                    )
-                }
-            }
-            // Capture persistence: per-membership memory for each capture-carrying
-            // refinement. This store picks a table per refinement — one row per
-            // current membership, deleted on exit; nullable columns on the base
-            // table or a discriminator would do equally, the mapping is the
-            // store's call (Hydration.kt, captureSchemas).
-            for (cs in model.captureSchemas) {
-                val cols = cs.props.joinToString("") { ", \"${it.name}\" ${columnType(it.type)}" }
-                st.execute("""CREATE TABLE IF NOT EXISTS "${captureTable(cs.refinement)}" (id ${keyStorage.columnType} PRIMARY KEY$cols)""")
-            }
-            st.execute(
-                """CREATE TABLE IF NOT EXISTS "$tickTable" """ +
-                    """(schedule ${dialect.column(StorageClass.TEXT).columnType} PRIMARY KEY, ran_at ${momentStorage.columnType} NOT NULL)"""
-            )
+    fun createSchema() = onConnection { connection ->
+        connection.createStatement().use { statement ->
+            for (shape in persistedShapes) createShapeTables(statement, shape)
+            for (captureSchema in model.captureSchemas) createCaptureTable(statement, captureSchema)
+            statement.execute("""CREATE TABLE IF NOT EXISTS "$tickTable" (schedule $textColumnType PRIMARY KEY, ran_at ${momentStorage.columnType} NOT NULL)""")
         }
-        installRenderings(conn)
+        installRenderings(connection)
+    }
+
+    private fun createShapeTables(statement: Statement, shape: String) {
+        val columns = columnsOf(shape).joinToString("") { column ->
+            """, "${column.name}" ${columnType(column.type)}""" +
+                if (column.union) """, "${shapeColumn(column.name)}" $textColumnType""" else ""
+        }
+        statement.execute("""CREATE TABLE IF NOT EXISTS "$shape" (id ${dialect.keyColumn}$columns${keyConstraints(shape)})""")
+        for (collection in collectionsOf(shape)) createJunctionTable(statement, shape, collection)
+    }
+
+    /** `pos` is the member's place in the collection: membership order is stored, never inferred from the database's row order. */
+    private fun createJunctionTable(statement: Statement, shape: String, collection: FieldCollection) {
+        val member = when {
+            collection.element !is VType.Inst -> "value ${columnType(collection.element)} NOT NULL"
+            collection.union -> "target ${keyStorage.columnType} NOT NULL, target_shape $textColumnType NOT NULL"
+            else -> "target ${keyStorage.columnType} NOT NULL"
+        }
+        statement.execute(
+            """CREATE TABLE IF NOT EXISTS "${junctionTable(shape, collection.name)}" """ +
+                """(owner ${keyStorage.columnType} NOT NULL, pos ${keyStorage.columnType} NOT NULL, $member)"""
+        )
+    }
+
+    /**
+     * Capture persistence: per-membership memory for a capture-carrying
+     * refinement. This store picks a table per refinement, one row per current
+     * membership, deleted on exit; nullable columns on the base table or a
+     * discriminator would do equally, the mapping is the store's call
+     * (Hydration.kt, captureSchemas).
+     */
+    private fun createCaptureTable(statement: Statement, captureSchema: CaptureSchema) {
+        val columns = captureSchema.props.joinToString("") { remembered -> ", \"${remembered.name}\" ${columnType(remembered.type)}" }
+        statement.execute("""CREATE TABLE IF NOT EXISTS "${captureTable(captureSchema.refinement)}" (id ${keyStorage.columnType} PRIMARY KEY$columns)""")
     }
 
     // ── ticks: the moment each schedule last ran (Hydration.kt, TickMemory) ──
 
-    override fun latestTick(schedule: String): Instant? = onConnection { conn ->
-        conn.prepareStatement("""SELECT ran_at FROM "$tickTable" WHERE schedule = ?""").use { select ->
+    override fun latestTick(schedule: String): Instant? = onConnection { connection ->
+        connection.prepareStatement("""SELECT ran_at FROM "$tickTable" WHERE schedule = ?""").use { select ->
             select.setString(1, schedule)
             select.executeQuery().use { rows -> if (rows.next()) momentStorage.read(rows, "ran_at") as Instant else null }
         }
     }
 
     /** Replaces the schedule's row, or inserts its first. The write unit holds the schedule's queue key, so the two statements are one step. */
-    override fun persistTick(schedule: String, moment: Instant) = onConnection { conn ->
-        val replaced = conn.prepareStatement("""UPDATE "$tickTable" SET ran_at = ? WHERE schedule = ?""").use { update ->
+    override fun persistTick(schedule: String, moment: Instant) = onConnection { connection ->
+        val replaced = connection.prepareStatement("""UPDATE "$tickTable" SET ran_at = ? WHERE schedule = ?""").use { update ->
             update.setObject(1, momentStorage.bind(moment))
             update.setString(2, schedule)
             update.executeUpdate()
         }
-        if (replaced == 0) insertTick(conn, schedule, moment)
+        if (replaced == 0) insertTick(connection, schedule, moment)
     }
 
-    private fun insertTick(conn: Connection, schedule: String, moment: Instant) {
-        conn.prepareStatement("""INSERT INTO "$tickTable" (schedule, ran_at) VALUES (?, ?)""").use { insert ->
+    private fun insertTick(connection: Connection, schedule: String, moment: Instant) {
+        connection.prepareStatement("""INSERT INTO "$tickTable" (schedule, ran_at) VALUES (?, ?)""").use { insert ->
             insert.setString(1, schedule)
             insert.setObject(2, momentStorage.bind(moment))
             insert.executeUpdate()
@@ -487,7 +535,7 @@ open class SqlStore(
      *  *and* concrete shape, each target shape with its own keys: Post#1 and Photo#1 are
      *  different rows behind the same key. */
     override fun fetchReferencingAny(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> {
-        val union = columnsOf(shape).first { it.name == field }.union
+        val union = columnsOf(shape).first { column -> column.name == field }.union
         return targets.distinct().chunked(keysPerStatement).flatMap { some ->
             if (union) referencingAnyOfUnion(shape, field, some)
             else select(shape, """WHERE "$field" IN (${placeholders(some.size)})""") { statement ->
@@ -513,19 +561,20 @@ open class SqlStore(
     private fun placeholders(count: Int): String = List(count) { "?" }.joinToString(", ")
 
     override fun fetchCaptures(instance: Ref.Persisted, refinement: String): Map<String, Any?>? {
-        val cs = model.captureSchemas.find { it.refinement == refinement } ?: return null
-        return onConnection { conn -> conn.prepareStatement("""SELECT * FROM "${captureTable(refinement)}" WHERE id = ?""").use { ps ->
-            ps.setLong(1, keyLong(instance.key))
-            ps.executeQuery().use { rs ->
-                if (!rs.next()) null
-                else buildMap {
-                    for (p in cs.props) {
-                        if (rs.getObject(p.name) == null) continue
-                        put(p.name, readColumn(p.type, p.name, rs, union = false))
-                    }
-                }
+        val captureSchema = model.captureSchemas.find { schema -> schema.refinement == refinement } ?: return null
+        return onConnection { connection ->
+            connection.prepareStatement("""SELECT * FROM "${captureTable(refinement)}" WHERE id = ?""").use { select ->
+                select.setLong(1, keyLong(instance.key))
+                select.executeQuery().use { results -> if (results.next()) readCaptures(captureSchema, results) else null }
             }
-        } }
+        }
+    }
+
+    private fun readCaptures(captureSchema: CaptureSchema, results: ResultSet): Map<String, Any?> = buildMap {
+        for (remembered in captureSchema.props) {
+            if (results.getObject(remembered.name) == null) continue
+            put(remembered.name, readColumn(remembered.type, remembered.name, results, union = false))
+        }
     }
 
     /**
@@ -543,95 +592,111 @@ open class SqlStore(
      *   (QF's contract in Query.kt).
      */
     override fun fetchCandidates(shape: String, filter: QF): List<Row> {
-        val r = WhereRenderer()
-        val where = r.render(filter, shape, "t0", positive = true)
+        val renderer = WhereRenderer()
+        val where = renderer.render(filter, shape, "t0", positive = true)
         if (where == "TRUE") return fetchAll(shape)
-        return onConnection { conn -> conn.prepareStatement("""SELECT t0.* FROM "$shape" t0 WHERE $where ORDER BY t0.id""").use { ps ->
-            r.binds.forEachIndexed { i, b -> ps.setObject(i + 1, b) }
-            val rows = ps.executeQuery().use { rs ->
-                buildList { while (rs.next()) add(readRow(shape, rs)) }
+        return onConnection { connection ->
+            val rows = connection.prepareStatement("""SELECT t0.* FROM "$shape" t0 WHERE $where ORDER BY t0.id""").use { select ->
+                renderer.binds.forEachIndexed { index, bound -> select.setObject(index + 1, bound) }
+                readRows(shape, select)
             }
-            withCollections(conn, shape, rows, everyRow = false)
-        } }
+            withCollections(connection, shape, rows, everyRow = false)
+        }
     }
 
     private inner class WhereRenderer {
         val binds = mutableListOf<Any?>()
         private var nextAlias = 1
 
-        fun render(f: QF, shape: String, alias: String, positive: Boolean): String = when (f) {
+        fun render(filter: QF, shape: String, alias: String, positive: Boolean): String = when (filter) {
             QF.True -> "TRUE"
             QF.False -> "FALSE"
-            is QF.And -> "(${render(f.l, shape, alias, positive)} AND ${render(f.r, shape, alias, positive)})"
-            is QF.Or -> "(${render(f.l, shape, alias, positive)} OR ${render(f.r, shape, alias, positive)})"
-            is QF.Not -> "NOT (${render(f.inner, shape, alias, !positive)})"
-            is QF.NullCheck -> """$alias."${f.field}" IS ${if (f.isNull) "" else "NOT "}NULL"""
-            is QF.TextBlank -> """($alias."${f.field}" IS NULL OR TRIM($alias."${f.field}") = '')"""
-            is QF.Cmp -> renderCmp(f, shape, alias, positive)
-            is QF.CallCmp -> renderCallCmp(f, alias, positive)
-            is QF.Pred -> renderPred(f, alias, positive)
-            is QF.Exists -> {
-                val a = "t${nextAlias++}"
-                // correlation through a union-typed back-reference must also
-                // match the subject's concrete shape (keys are per table)
-                val corr = f.refField?.let { rf ->
-                    val col = columnsOf(f.shape).find { it.name == rf }
-                    if (col?.union == true) {
-                        binds.add(shape)
-                        """$a."$rf" = $alias.id AND $a."${shapeColumn(rf)}" = ? AND """
-                    } else """$a."$rf" = $alias.id AND """
-                } ?: ""
-                """EXISTS (SELECT 1 FROM "${f.shape}" $a WHERE $corr${render(f.inner, f.shape, a, positive)})"""
-            }
-            is QF.RelPred -> {
-                if (f.shape !in persistedShapes) degrade(positive) // a union: no single table to join
-                else {
-                    val a = "t${nextAlias++}"
-                    """EXISTS (SELECT 1 FROM "${f.shape}" $a WHERE $a.id = $alias."${f.field}" AND ${render(f.inner, f.shape, a, positive)})"""
-                }
-            }
+            is QF.And -> "(${render(filter.l, shape, alias, positive)} AND ${render(filter.r, shape, alias, positive)})"
+            is QF.Or -> "(${render(filter.l, shape, alias, positive)} OR ${render(filter.r, shape, alias, positive)})"
+            is QF.Not -> "NOT (${render(filter.inner, shape, alias, !positive)})"
+            is QF.NullCheck -> """$alias."${filter.field}" IS ${if (filter.isNull) "" else "NOT "}NULL"""
+            is QF.TextBlank -> """($alias."${filter.field}" IS NULL OR TRIM($alias."${filter.field}") = '')"""
+            is QF.Cmp -> renderCmp(filter, shape, alias, positive)
+            is QF.CallCmp -> renderCallCmp(filter, alias, positive)
+            is QF.Pred -> renderPred(filter, alias, positive)
+            is QF.Exists -> renderExists(filter, shape, alias, positive)
+            is QF.RelPred -> renderRelPred(filter, alias, positive)
         }
 
-        private fun renderCmp(f: QF.Cmp, shape: String, alias: String, positive: Boolean): String {
-            val colType = columnsOf(shape).find { it.name == f.field }?.type ?: return degrade(positive)
-            val bare = if (colType is VType.Optional) colType.inner else colType
-            val col = """$alias."${f.field}""""
-            // the text operators (Reference §10) render to LIKE with `\` as the escape
-            // character; a database whose LIKE folds case may over-return against
-            // the case-sensitive predicate — legal under the superset contract,
-            // and the evaluator decides in memory
-            if (f.op in TEXT_OPERATORS) {
-                val text = (f.value as? QConst.QText)?.v?.takeIf { bare == VType.Text } ?: return degrade(positive)
-                // `matches` is the whole text against a regular expression, where the database has them
-                if (f.op == "matches") {
-                    val sql = dialect.regexMatch(col) ?: return degrade(positive)
-                    binds.add(text)
-                    return sql
-                }
-                val pattern = when (f.op) {
-                    "contains" -> "%" + likeEscape(text) + "%"
-                    "starts with" -> likeEscape(text) + "%"
-                    "ends with" -> "%" + likeEscape(text)
-                    else -> text // `like`: the author's pattern, same wildcards, same escape
-                }
-                binds.add(pattern)
-                return "$col LIKE ? ESCAPE '\\'"
+        private fun newAlias(): String = "t${nextAlias++}"
+
+        /** Some row of the filter's shape satisfies its inner filter, and points at the subject row when the filter names a reference field. */
+        private fun renderExists(exists: QF.Exists, subjectShape: String, subjectAlias: String, positive: Boolean): String {
+            val pointingAlias = newAlias()
+            val correlation = exists.refField
+                ?.let { referenceField -> correlation(exists.shape, referenceField, pointingAlias, subjectShape, subjectAlias) }
+                ?: ""
+            return """EXISTS (SELECT 1 FROM "${exists.shape}" $pointingAlias WHERE $correlation${render(exists.inner, exists.shape, pointingAlias, positive)})"""
+        }
+
+        /** The pointing row's reference is the subject row. Through a union-typed reference it
+         *  must also match the subject's concrete shape, since keys are per table. */
+        private fun correlation(pointingShape: String, referenceField: String, pointingAlias: String, subjectShape: String, subjectAlias: String): String {
+            val sameKey = """$pointingAlias."$referenceField" = $subjectAlias.id AND """
+            val unionTyped = columnsOf(pointingShape).find { column -> column.name == referenceField }?.union == true
+            if (!unionTyped) return sameKey
+            binds.add(subjectShape)
+            return """$sameKey$pointingAlias."${shapeColumn(referenceField)}" = ? AND """
+        }
+
+        /** The row the subject's reference points at satisfies the inner filter. A union names no single table to join. */
+        private fun renderRelPred(relation: QF.RelPred, alias: String, positive: Boolean): String {
+            if (relation.shape !in persistedShapes) return degrade(positive)
+            val targetAlias = newAlias()
+            return """EXISTS (SELECT 1 FROM "${relation.shape}" $targetAlias WHERE $targetAlias.id = $alias."${relation.field}" AND ${render(relation.inner, relation.shape, targetAlias, positive)})"""
+        }
+
+        private fun renderCmp(comparison: QF.Cmp, shape: String, alias: String, positive: Boolean): String {
+            val columnType = columnsOf(shape).find { column -> column.name == comparison.field }?.type ?: return degrade(positive)
+            val bareType = bareOf(columnType)
+            val column = """$alias."${comparison.field}""""
+            if (comparison.op in TEXT_OPERATORS)
+                return textComparison(comparison.op, comparison.value, bareType) { column } ?: degrade(positive)
+            val value = constantFor(comparison.value, bareType) ?: return degrade(positive)
+            if (comparison.op !in answersOf(bareType)) return degrade(positive)
+            binds.add(bindValue(value, bareType))
+            return comparisonSql(column, comparison.op)
+        }
+
+        /** `column op ?`, where an absent column satisfies `!=` and fails every other comparison. */
+        private fun comparisonSql(column: String, op: String): String = when (op) {
+            "==" -> "$column = ?"
+            "!=" -> "($column IS NULL OR $column != ?)"
+            else -> "$column $op ?"
+        }
+
+        /**
+         * `operand op constant` for a text operator (Reference §10), or null where it is
+         * left to the evaluator. `matches` is the whole text against a regular
+         * expression, where the database has them. The others render to LIKE with `\`
+         * as the escape character; a database whose LIKE folds case may over-return
+         * against the case-sensitive predicate, which is legal under the superset
+         * contract, and the evaluator decides in memory. [operand] is written out only
+         * once the comparison is known to render, since writing it queues its constants.
+         */
+        private fun textComparison(op: String, constant: QConst, operandType: VType, operand: () -> String): String? {
+            val text = (constant as? QConst.QText)?.v?.takeIf { operandType == VType.Text } ?: return null
+            if (op != "matches") {
+                val rendered = operand()
+                binds.add(likePattern(op, text))
+                return "$rendered LIKE ? ESCAPE '\\'"
             }
-            val value = constantFor(f.value, bare) ?: return degrade(positive)
-            val bound = if (bare is VType.Inst) {
-                if (f.op !in keyStorage.answers) return degrade(positive)
-                keyStorage.bind(value)
-            } else {
-                val sc = scalarColumn(bare)
-                if (f.op !in sc.answers) return degrade(positive)
-                sc.bind(value)
-            }
-            binds.add(bound)
-            return when (f.op) {
-                "==" -> "$col = ?"
-                "!=" -> "($col IS NULL OR $col != ?)"
-                else -> "$col ${f.op} ?"
-            }
+            if (dialect.regexMatch("x") == null) return null
+            val matched = dialect.regexMatch(operand())
+            binds.add(text)
+            return matched
+        }
+
+        private fun likePattern(op: String, text: String): String = when (op) {
+            "contains" -> "%" + likeEscape(text) + "%"
+            "starts with" -> likeEscape(text) + "%"
+            "ends with" -> "%" + likeEscape(text)
+            else -> text // `like`: the author's pattern, same wildcards, same escape
         }
 
         // ── a registered function's call, through its binding (Extension-functions, "Holding a function in a store") ──
@@ -640,32 +705,37 @@ open class SqlStore(
         private fun callTree(call: QCall, alias: String): SqlExpr? {
             val binding = renderings[call.function]?.takeIf { call.function !in refusedDdl } ?: return null
             val signature = model.registry.function(call.function)?.signatures?.getOrNull(call.signature) ?: return null
-            val single = HashMap<String, SqlExpr>()
-            val many = HashMap<String, List<SqlExpr>>()
-            for ((name, arg) in call.operands) {
-                if (arg is QArg.Many) many[name] = arg.items.map { operand(it, alias) ?: return null }
-                else single[name] = operand(arg, alias) ?: return null
-            }
-            return binding.render(SqlOperands(signature, single, many))
+            val operands = operandsOf(call, signature, alias) ?: return null
+            return binding.render(operands)
         }
 
-        private fun operand(arg: QArg, alias: String): SqlExpr? = when (arg) {
-            is QArg.Column -> SqlExpr.Column("""$alias."${arg.field}"""", bareOf(arg.type))
-            is QArg.Const -> bareOf(arg.type).let { bare -> constantFor(arg.value, bare)?.let { SqlExpr.Param(it, bare) } }
+        private fun operandsOf(call: QCall, signature: Signature, alias: String): SqlOperands? {
+            val single = HashMap<String, SqlExpr>()
+            val many = HashMap<String, List<SqlExpr>>()
+            for ((name, argument) in call.operands) {
+                if (argument is QArg.Many) many[name] = argument.items.map { item -> operand(item, alias) ?: return null }
+                else single[name] = operand(argument, alias) ?: return null
+            }
+            return SqlOperands(signature, single, many)
+        }
+
+        private fun operand(argument: QArg, alias: String): SqlExpr? = when (argument) {
+            is QArg.Column -> SqlExpr.Column("""$alias."${argument.field}"""", bareOf(argument.type))
+            is QArg.Const -> bareOf(argument.type).let { bareType -> constantFor(argument.value, bareType)?.let { value -> SqlExpr.Param(value, bareType) } }
             is QArg.Many -> null
         }
 
-        private fun bareOf(t: VType): VType = if (t is VType.Optional) t.inner else t
+        private fun bareOf(type: VType): VType = if (type is VType.Optional) type.inner else type
 
-        /** Writes [e] out, queueing every constant it holds in the order its `?` appears. */
-        private fun renderExpr(e: SqlExpr): String = when (e) {
-            is SqlExpr.Column -> e.reference
-            is SqlExpr.Param -> { binds.add(bindValue(e.value, e.type)); "?" }
-            is SqlExpr.Literal -> { binds.add(literalBind(e.value)); "?" }
-            is SqlExpr.Call -> "${e.name}(${e.args.joinToString(", ") { renderExpr(it) }})"
-            is SqlExpr.Infix -> "(${renderExpr(e.left)} ${e.op} ${renderExpr(e.right)})"
-            is SqlExpr.Cast -> "CAST(${renderExpr(e.expr)} AS ${dialect.column(e.storage).columnType})"
-            is SqlExpr.Raw -> Regex("\\{(\\d+)\\}").replace(e.sql) { match -> renderExpr(e.args[match.groupValues[1].toInt()]) }
+        /** Writes [expression] out, queueing every constant it holds in the order its `?` appears. */
+        private fun renderExpr(expression: SqlExpr): String = when (expression) {
+            is SqlExpr.Column -> expression.reference
+            is SqlExpr.Param -> { binds.add(bindValue(expression.value, expression.type)); "?" }
+            is SqlExpr.Literal -> { binds.add(literalBind(expression.value)); "?" }
+            is SqlExpr.Call -> "${expression.name}(${expression.args.joinToString(", ") { argument -> renderExpr(argument) }})"
+            is SqlExpr.Infix -> "(${renderExpr(expression.left)} ${expression.op} ${renderExpr(expression.right)})"
+            is SqlExpr.Cast -> "CAST(${renderExpr(expression.expr)} AS ${dialect.column(expression.storage).columnType})"
+            is SqlExpr.Raw -> Regex("\\{(\\d+)\\}").replace(expression.sql) { match -> renderExpr(expression.args[match.groupValues[1].toInt()]) }
         }
 
         private fun bindValue(value: Any, type: VType): Any =
@@ -689,48 +759,40 @@ open class SqlStore(
          * it satisfies `!=` and fails every other comparison, in either polarity,
          * so the clause is forced to true or false and never left NULL under `not`.
          */
-        private fun renderCallCmp(f: QF.CallCmp, alias: String, positive: Boolean): String {
-            val tree = callTree(f.call, alias) ?: return degrade(positive)
-            val result = f.call.result
-            if (f.op in TEXT_OPERATORS) {
-                val text = (f.value as? QConst.QText)?.v?.takeIf { result == VType.Text } ?: return degrade(positive)
-                if (f.op == "matches") {
-                    if (dialect.regexMatch("x") == null) return degrade(positive)
-                    val sql = dialect.regexMatch(renderExpr(tree))!!
-                    binds.add(text)
-                    return "COALESCE($sql, FALSE)"
-                }
-                val pattern = when (f.op) {
-                    "contains" -> "%" + likeEscape(text) + "%"
-                    "starts with" -> likeEscape(text) + "%"
-                    "ends with" -> "%" + likeEscape(text)
-                    else -> text
-                }
-                val rendered = renderExpr(tree)
-                binds.add(pattern)
-                return "COALESCE($rendered LIKE ? ESCAPE '\\', FALSE)"
-            }
-            if (f.op !in answersOf(result)) return degrade(positive)
-            val value = constantFor(f.value, result) ?: return degrade(positive)
-            if (f.op == "!=") {
-                val once = renderExpr(tree)
-                val again = renderExpr(tree)
-                binds.add(bindValue(value, result))
-                return "($once IS NULL OR $again != ?)"
-            }
+        private fun renderCallCmp(comparison: QF.CallCmp, alias: String, positive: Boolean): String {
+            val tree = callTree(comparison.call, alias) ?: return degrade(positive)
+            val resultType = comparison.call.result
+            if (comparison.op in TEXT_OPERATORS)
+                return textComparison(comparison.op, comparison.value, resultType) { renderExpr(tree) }
+                    ?.let { matched -> "COALESCE($matched, FALSE)" }
+                    ?: degrade(positive)
+            if (comparison.op !in answersOf(resultType)) return degrade(positive)
+            val value = constantFor(comparison.value, resultType) ?: return degrade(positive)
+            if (comparison.op == "!=") return callDiffers(tree, bindValue(value, resultType))
             val rendered = renderExpr(tree)
-            binds.add(bindValue(value, result))
-            return "COALESCE($rendered ${if (f.op == "==") "=" else f.op} ?, FALSE)"
+            binds.add(bindValue(value, resultType))
+            return "COALESCE($rendered ${if (comparison.op == "==") "=" else comparison.op} ?, FALSE)"
+        }
+
+        /** `call != constant`, which an absent result satisfies: the call is written out twice, its constants queued each time. */
+        private fun callDiffers(tree: SqlExpr, bound: Any): String {
+            val once = renderExpr(tree)
+            val again = renderExpr(tree)
+            binds.add(bound)
+            return "($once IS NULL OR $again != ?)"
         }
 
         /** A registered predicate's call: true when its result is, and an absent result is false. */
-        private fun renderPred(f: QF.Pred, alias: String, positive: Boolean): String {
-            val tree = callTree(f.call, alias) ?: return degrade(positive)
+        private fun renderPred(predicate: QF.Pred, alias: String, positive: Boolean): String {
+            val tree = callTree(predicate.call, alias) ?: return degrade(positive)
             return "COALESCE(${renderExpr(tree)}, FALSE)"
         }
 
-        private fun likeEscape(s: String): String = buildString {
-            for (c in s) { if (c == '\\' || c == '%' || c == '_') append('\\'); append(c) }
+        private fun likeEscape(text: String): String = buildString {
+            for (character in text) {
+                if (character == '\\' || character == '%' || character == '_') append('\\')
+                append(character)
+            }
         }
 
         private fun degrade(positive: Boolean): String = if (positive) "TRUE" else "FALSE"
@@ -739,96 +801,111 @@ open class SqlStore(
          *  vocabulary, or null where no value of that type equals the constant
          *  (a fraction against an integer column, an unparseable text against a
          *  uuid): the comparison is then the evaluator's. */
-        private fun constantFor(c: QConst, bare: VType): Any? = when (c) {
-            is QConst.QNum ->
-                if (bare is VType.Num && (bare.name == "integer" || bare.name == "long")) runCatching { c.v.longValueExact() }.getOrNull()
-                else if (bare is VType.Num) c.v
-                else null
-            is QConst.QText -> c.v.takeIf { bare == VType.Text }
-            is QConst.QUuid -> c.v.takeIf { bare == VType.UuidT }
-            is QConst.QDuration -> c.v.takeIf { bare == VType.DurationT }
-            is QConst.QTime -> c.v.takeIf { bare == VType.TimeT }
-            is QConst.QBytes -> c.v.takeIf { bare == VType.BytesT }
-            is QConst.QBool -> c.v.takeIf { bare == VType.Bool }
-            is QConst.QDate -> c.v.takeIf { bare == VType.DateT }
-            is QConst.QDateTime -> c.v.takeIf { bare == VType.DateTimeT }
+        private fun constantFor(constant: QConst, bareType: VType): Any? = when (constant) {
+            is QConst.QNum -> numberFor(constant.v, bareType)
+            is QConst.QText -> constant.v.takeIf { bareType == VType.Text }
+            is QConst.QUuid -> constant.v.takeIf { bareType == VType.UuidT }
+            is QConst.QDuration -> constant.v.takeIf { bareType == VType.DurationT }
+            is QConst.QTime -> constant.v.takeIf { bareType == VType.TimeT }
+            is QConst.QBytes -> constant.v.takeIf { bareType == VType.BytesT }
+            is QConst.QBool -> constant.v.takeIf { bareType == VType.Bool }
+            is QConst.QDate -> constant.v.takeIf { bareType == VType.DateT }
+            is QConst.QDateTime -> constant.v.takeIf { bareType == VType.DateTimeT }
             // an instance constant (the query API's "this customer"): the row key
-            is QConst.QRef -> (c.ref.key.value as? Number)?.toLong().takeIf { bare is VType.Inst }
+            is QConst.QRef -> (constant.ref.key.value as? Number)?.toLong().takeIf { bareType is VType.Inst }
             // an extension type's constant: the binding encodes it
-            is QConst.QExt -> c.value.takeIf { bare is VType.Ext && bare.qualifiedName == c.type.qualifiedName }
+            is QConst.QExt -> constant.value.takeIf { bareType is VType.Ext && bareType.qualifiedName == constant.type.qualifiedName }
+        }
+
+        /** A number constant against a number column: a whole number for an integer column, and none where the constant has a fraction. */
+        private fun numberFor(number: BigDecimal, bareType: VType): Any? {
+            if (bareType !is VType.Num) return null
+            return if (isWholeNumber(bareType)) runCatching { number.longValueExact() }.getOrNull() else number
         }
     }
 
     /** The rows of [shape] under [where], and each collection field of all of them in one statement more. */
-    private fun select(shape: String, where: String, bind: (PreparedStatement) -> Unit = {}): List<Row> = onConnection { conn ->
-        val rows = conn.prepareStatement("""SELECT * FROM "$shape" $where ORDER BY id""").use { ps ->
-            bind(ps)
-            ps.executeQuery().use { rs ->
-                buildList { while (rs.next()) add(readRow(shape, rs)) }
-            }
+    private fun select(shape: String, where: String, bind: (PreparedStatement) -> Unit = {}): List<Row> = onConnection { connection ->
+        val rows = connection.prepareStatement("""SELECT * FROM "$shape" $where ORDER BY id""").use { select ->
+            bind(select)
+            readRows(shape, select)
         }
-        withCollections(conn, shape, rows, everyRow = where.isEmpty())
+        withCollections(connection, shape, rows, everyRow = where.isEmpty())
     }
 
+    /** Runs [select] and reads every row of [shape] it returns, without their collection fields. */
+    private fun readRows(shape: String, select: PreparedStatement): List<Row> =
+        select.executeQuery().use { results ->
+            buildList { while (results.next()) add(readRow(shape, results)) }
+        }
+
     /** [rows] with their collection fields, each field read once for all of them; [everyRow] when the rows are the whole table. */
-    private fun withCollections(conn: Connection, shape: String, rows: List<Row>, everyRow: Boolean): List<Row> {
+    private fun withCollections(connection: Connection, shape: String, rows: List<Row>, everyRow: Boolean): List<Row> {
         val collections = collectionsOf(shape)
         if (rows.isEmpty() || collections.isEmpty()) return rows
         val owners = if (everyRow) null else rows.map { row -> keyLong(row.key) }
-        val membersByField = collections.associate { coll -> coll.name to readCollections(conn, shape, coll, owners) }
+        val membersByField = collections.associate { collection -> collection.name to readCollections(connection, shape, collection, owners) }
         return rows.map { row ->
             row.copy(fields = row.fields + membersByField.mapValues { (_, membersByOwner) -> membersByOwner[keyLong(row.key)].orEmpty() })
         }
     }
 
     /** The row's own columns; its collection fields are read for all rows of one statement together ([withCollections]). */
-    private fun readRow(shape: String, rs: ResultSet): Row {
-        val key = rs.getLong("id")
+    private fun readRow(shape: String, results: ResultSet): Row {
+        val key = results.getLong("id")
         val fields = buildMap {
-            for (c in columnsOf(shape)) {
-                if (rs.getObject(c.name) == null) continue
-                put(c.name, readColumn(c.type, c.name, rs, c.union))
+            for (column in columnsOf(shape)) {
+                if (results.getObject(column.name) == null) continue
+                put(column.name, readColumn(column.type, column.name, results, column.union))
             }
         }
         return Row(shape, StoreKey(key), fields)
     }
 
-    private fun readColumn(t: VType, name: String, rs: ResultSet, union: Boolean): Any = when (t) {
-        is VType.Optional -> readColumn(t.inner, name, rs, union)
+    private fun readColumn(type: VType, name: String, results: ResultSet, union: Boolean): Any = when (type) {
+        is VType.Optional -> readColumn(type.inner, name, results, union)
         // references leave the store as typed refs — the concrete shape from
         // the model, or from the discriminator when the model only says "union"
         is VType.Inst -> Ref.Persisted(
-            if (union) rs.getString(shapeColumn(name)) else t.shape,
-            StoreKey(keyStorage.read(rs, name) as Long),
+            if (union) results.getString(shapeColumn(name)) else type.shape,
+            StoreKey(keyStorage.read(results, name) as Long),
         )
-        else -> scalarColumn(t).read(rs, name)
+        else -> scalarColumn(type).read(results, name)
     }
 
     /**
      * A collection field's members for [owners], or for every owner when null (a scan), each
      * owner's in membership order (the junction's `pos` column): one statement per [keysPerStatement] owners.
      */
-    private fun readCollections(conn: Connection, shape: String, coll: Coll, owners: List<Long>?): Map<Long, List<Any>> {
-        val table = junctionTable(shape, coll.name)
+    private fun readCollections(connection: Connection, shape: String, collection: FieldCollection, owners: List<Long>?): Map<Long, List<Any>> {
         val membersByOwner = LinkedHashMap<Long, MutableList<Any>>()
-        fun read(where: String, some: List<Long>) =
-            conn.prepareStatement("""SELECT * FROM "$table" $where ORDER BY owner, pos""").use { ps ->
-                some.forEachIndexed { index, owner -> ps.setLong(index + 1, owner) }
-                ps.executeQuery().use { rs ->
-                    while (rs.next()) membersByOwner.getOrPut(rs.getLong("owner")) { mutableListOf() }.add(readMember(coll, rs))
-                }
-            }
-        if (owners == null) read("", emptyList())
-        else owners.chunked(keysPerStatement).forEach { some -> read("WHERE owner IN (${placeholders(some.size)})", some) }
+        val table = junctionTable(shape, collection.name)
+        if (owners == null) readMembers(connection, table, collection, "", emptyList(), membersByOwner)
+        else owners.chunked(keysPerStatement).forEach { some ->
+            readMembers(connection, table, collection, "WHERE owner IN (${placeholders(some.size)})", some, membersByOwner)
+        }
         return membersByOwner
     }
 
-    private fun readMember(coll: Coll, rs: ResultSet): Any =
-        if (coll.elem is VType.Inst) Ref.Persisted(
-            if (coll.union) rs.getString("target_shape") else coll.elem.shape,
-            StoreKey(keyStorage.read(rs, "target") as Long),
+    /** Adds to [membersByOwner] the members of the junction [table] under [where], bound with [owners]. */
+    private fun readMembers(
+        connection: Connection, table: String, collection: FieldCollection, where: String, owners: List<Long>,
+        membersByOwner: MutableMap<Long, MutableList<Any>>,
+    ) {
+        connection.prepareStatement("""SELECT * FROM "$table" $where ORDER BY owner, pos""").use { select ->
+            owners.forEachIndexed { index, owner -> select.setLong(index + 1, owner) }
+            select.executeQuery().use { results ->
+                while (results.next()) membersByOwner.getOrPut(results.getLong("owner")) { mutableListOf() }.add(readMember(collection, results))
+            }
+        }
+    }
+
+    private fun readMember(collection: FieldCollection, results: ResultSet): Any =
+        if (collection.element is VType.Inst) Ref.Persisted(
+            if (collection.union) results.getString("target_shape") else collection.element.shape,
+            StoreKey(keyStorage.read(results, "target") as Long),
         )
-        else readColumn(coll.elem, "value", rs, union = false)
+        else readColumn(collection.element, "value", results, union = false)
 
     // ── the commit callback: the transaction's mutation set, atomically ──────
 
@@ -852,124 +929,136 @@ open class SqlStore(
         // get a transaction of their own
         if (unit != null) {
             check(unit.kind == WorkKind.WRITE) { "a commit arrived inside a read unit of work" }
-            return write(unit.conn, commit)
+            return write(unit.connection, commit)
         }
-        return dataSource.connection.use { conn ->
-            dialect.prepare(conn)
-            dialect.beginWrite(conn)
-            try {
-                write(conn, commit).also { conn.commit() }
-            } catch (e: Exception) {
-                conn.rollback()
-                throw e
-            } finally {
-                runCatching { conn.autoCommit = true }
-            }
+        return dataSource.connection.use { connection -> writeInOwnTransaction(connection, commit) }
+    }
+
+    private fun writeInOwnTransaction(connection: Connection, commit: CommitSet): List<StoreKey> {
+        dialect.prepare(connection)
+        dialect.beginWrite(connection)
+        try {
+            return write(connection, commit).also { connection.commit() }
+        } catch (error: Exception) {
+            connection.rollback()
+            throw error
+        } finally {
+            runCatching { connection.autoCommit = true }
         }
     }
 
-    private fun write(conn: Connection, commit: CommitSet): List<StoreKey> {
+    private fun write(connection: Connection, commit: CommitSet): List<StoreKey> {
         val minted = mutableListOf<StoreKey>()
-        for (c in commit.created) minted.add(insert(conn, c, minted))
-        for (a in commit.assigned) update(conn, a, minted)
-        for (c in commit.captured) upsertCapture(conn, c, minted)
-        for (r in commit.retracted) deleteCapture(conn, r)
-        for (d in commit.deleted) delete(conn, d)
+        for (creation in commit.created) minted.add(insert(connection, creation, minted))
+        for (assignment in commit.assigned) update(connection, assignment, minted)
+        for (capture in commit.captured) upsertCapture(connection, capture, minted)
+        for (retraction in commit.retracted) deleteCapture(connection, retraction)
+        for (deletion in commit.deleted) delete(connection, deletion)
         return minted
     }
 
     /** A reference value as this store's key column: persisted refs carry
      *  their key, pending refs resolve against the keys minted so far. */
-    private fun refKey(v: Any, minted: List<StoreKey>): Long = when (v) {
-        is Ref.Persisted -> keyLong(v.key)
-        is Ref.Pending -> keyLong(minted[v.index])
-        else -> throw IllegalArgumentException("reference value is not a Ref: $v")
+    private fun refKey(reference: Any, minted: List<StoreKey>): Long = when (reference) {
+        is Ref.Persisted -> keyLong(reference.key)
+        is Ref.Pending -> keyLong(minted[reference.index])
+        else -> throw IllegalArgumentException("reference value is not a Ref: $reference")
     }
 
-    private fun refShape(v: Any): String =
-        (v as? RowRef)?.shape ?: throw IllegalArgumentException("reference value is not a Ref: $v")
+    private fun refShape(reference: Any): String =
+        (reference as? RowRef)?.shape ?: throw IllegalArgumentException("reference value is not a Ref: $reference")
 
-    private fun insert(conn: Connection, c: CommitSet.Creation, minted: List<StoreKey>): StoreKey {
-        val cols = columnsOf(c.shape)
-        val names = cols.flatMap { col -> listOf(col.name) + if (col.union) listOf(shapeColumn(col.name)) else emptyList() }
+    /**
+     * What one field's value binds to its columns, in [storedNames]' order: the
+     * value, and for a union-typed reference the concrete shape after it.
+     */
+    private fun boundValues(column: FieldColumn, value: Any?, minted: List<StoreKey>): List<Any?> {
+        val written = writeColumn(column.type, value, minted)
+        return if (column.union) listOf(written, value?.let { reference -> refShape(reference) }) else listOf(written)
+    }
+
+    private fun insert(connection: Connection, creation: CommitSet.Creation, minted: List<StoreKey>): StoreKey {
+        val columns = columnsOf(creation.shape)
+        val names = columns.flatMap { column -> storedNames(column) }
+        val bound = columns.flatMap { column -> boundValues(column, creation.fields[column.name], minted) }
         // the minted key comes back with the insert (standard SQL `RETURNING`)
-        val sql = """INSERT INTO "${c.shape}" (${names.joinToString(", ") { "\"$it\"" }}) """ +
-            """VALUES (${names.joinToString(", ") { "?" }}) RETURNING id"""
-        val key = conn.prepareStatement(sql).use { ps ->
-            var i = 1
-            for (col in cols) {
-                val v = c.fields[col.name]
-                ps.setObject(i++, writeColumn(col.type, v, minted))
-                if (col.union) ps.setObject(i++, v?.let { refShape(it) })
-            }
-            ps.executeQuery().use { rs -> rs.next(); StoreKey(rs.getLong(1)) }
+        val sql = """INSERT INTO "${creation.shape}" (${quoted(names)}) VALUES (${placeholders(names.size)}) RETURNING id"""
+        val key = connection.prepareStatement(sql).use { insert ->
+            bound.forEachIndexed { index, value -> insert.setObject(index + 1, value) }
+            insert.executeQuery().use { results -> results.next(); StoreKey(results.getLong(1)) }
         }
-        for (coll in collectionsOf(c.shape)) writeCollection(conn, c.shape, coll, keyLong(key), c.fields[coll.name], minted)
+        for (collection in collectionsOf(creation.shape))
+            writeCollection(connection, creation.shape, collection, keyLong(key), creation.fields[collection.name], minted)
         return key
     }
 
-    private fun update(conn: Connection, a: CommitSet.Assign, minted: List<StoreKey>) {
-        val shape = a.target.shape
-        collectionsOf(shape).find { it.name == a.field }?.let { coll ->
+    private fun update(connection: Connection, assignment: CommitSet.Assign, minted: List<StoreKey>) {
+        val shape = assignment.target.shape
+        val key = keyLong(assignment.target.key)
+        val collection = collectionsOf(shape).find { candidate -> candidate.name == assignment.field }
+        if (collection != null) {
             // whole-set replacement: the junction rows become exactly the new set
-            conn.prepareStatement("""DELETE FROM "${junctionTable(shape, coll.name)}" WHERE owner = ?""").use { ps ->
-                ps.setLong(1, keyLong(a.target.key))
-                ps.executeUpdate()
-            }
-            writeCollection(conn, shape, coll, keyLong(a.target.key), a.value, minted)
+            deleteByKey(connection, """DELETE FROM "${junctionTable(shape, collection.name)}" WHERE owner = ?""", key)
+            writeCollection(connection, shape, collection, key, assignment.value, minted)
             return
         }
-        val col = columnsOf(shape).first { it.name == a.field }
-        val set = """"${a.field}" = ?""" + if (col.union) """, "${shapeColumn(a.field)}" = ?""" else ""
-        conn.prepareStatement("""UPDATE "$shape" SET $set WHERE id = ?""").use { ps ->
-            var i = 1
-            ps.setObject(i++, writeColumn(col.type, a.value, minted))
-            if (col.union) ps.setObject(i++, a.value?.let { refShape(it) })
-            ps.setLong(i, keyLong(a.target.key))
-            ps.executeUpdate()
+        val column = columnsOf(shape).first { candidate -> candidate.name == assignment.field }
+        val assignments = storedNames(column).joinToString(", ") { name -> "\"$name\" = ?" }
+        val bound = boundValues(column, assignment.value, minted)
+        connection.prepareStatement("""UPDATE "$shape" SET $assignments WHERE id = ?""").use { update ->
+            bound.forEachIndexed { index, value -> update.setObject(index + 1, value) }
+            update.setLong(bound.size + 1, key)
+            update.executeUpdate()
         }
     }
 
-    private fun writeCollection(conn: Connection, shape: String, coll: Coll, owner: Long, value: Any?, minted: List<StoreKey>) {
+    private fun writeCollection(connection: Connection, shape: String, collection: FieldCollection, owner: Long, value: Any?, minted: List<StoreKey>) {
         val members = value as? List<*> ?: return // absent reads as the empty collection
         if (members.isEmpty()) return
-        val table = junctionTable(shape, coll.name)
-        val sql = if (coll.elem is VType.Inst) {
-            if (coll.union) """INSERT INTO "$table" (owner, pos, target, target_shape) VALUES (?, ?, ?, ?)"""
-            else """INSERT INTO "$table" (owner, pos, target) VALUES (?, ?, ?)"""
-        } else """INSERT INTO "$table" (owner, pos, value) VALUES (?, ?, ?)"""
-        conn.prepareStatement(sql).use { ps ->
-            members.forEachIndexed { pos, m ->
-                ps.setLong(1, owner)
-                ps.setLong(2, pos.toLong())
-                ps.setObject(3, writeColumn(coll.elem, m, minted))
-                if (coll.elem is VType.Inst && coll.union) ps.setString(4, refShape(m!!))
-                ps.addBatch()
+        val table = junctionTable(shape, collection.name)
+        val namesShape = collection.element is VType.Inst && collection.union
+        val sql = when {
+            collection.element !is VType.Inst -> """INSERT INTO "$table" (owner, pos, value) VALUES (?, ?, ?)"""
+            collection.union -> """INSERT INTO "$table" (owner, pos, target, target_shape) VALUES (?, ?, ?, ?)"""
+            else -> """INSERT INTO "$table" (owner, pos, target) VALUES (?, ?, ?)"""
+        }
+        connection.prepareStatement(sql).use { insert ->
+            members.forEachIndexed { position, member ->
+                insert.setLong(1, owner)
+                insert.setLong(2, position.toLong())
+                insert.setObject(3, writeColumn(collection.element, member, minted))
+                if (namesShape) insert.setString(4, refShape(member!!))
+                insert.addBatch()
             }
-            ps.executeBatch()
+            insert.executeBatch()
         }
     }
 
-    private fun upsertCapture(conn: Connection, c: CommitSet.Capture, minted: List<StoreKey>) {
-        val cs = model.captureSchemas.first { it.refinement == c.refinement }
-        val names = listOf("id") + cs.props.map { it.name }
+    private fun upsertCapture(connection: Connection, capture: CommitSet.Capture, minted: List<StoreKey>) {
+        val captureSchema = model.captureSchemas.first { schema -> schema.refinement == capture.refinement }
+        val names = listOf("id") + captureSchema.props.map { remembered -> remembered.name }
         // re-entry overwrites the previous membership's memory (standard SQL upsert)
-        val onConflict = if (cs.props.isEmpty()) "DO NOTHING"
-            else "DO UPDATE SET " + cs.props.joinToString(", ") { "\"${it.name}\" = excluded.\"${it.name}\"" }
-        val sql = """INSERT INTO "${captureTable(c.refinement)}" """ +
-            """(${names.joinToString(", ") { "\"$it\"" }}) VALUES (${names.joinToString(", ") { "?" }}) """ +
-            """ON CONFLICT (id) $onConflict"""
-        conn.prepareStatement(sql).use { ps ->
-            ps.setLong(1, refKey(c.instance, minted))
-            cs.props.forEachIndexed { i, p -> ps.setObject(i + 2, writeColumn(p.type, c.values[p.name], minted)) }
-            ps.executeUpdate()
+        val onConflict = if (captureSchema.props.isEmpty()) "DO NOTHING"
+            else "DO UPDATE SET " + captureSchema.props.joinToString(", ") { remembered -> "\"${remembered.name}\" = excluded.\"${remembered.name}\"" }
+        val sql = """INSERT INTO "${captureTable(capture.refinement)}" (${quoted(names)}) VALUES (${placeholders(names.size)}) ON CONFLICT (id) $onConflict"""
+        connection.prepareStatement(sql).use { upsert ->
+            upsert.setLong(1, refKey(capture.instance, minted))
+            captureSchema.props.forEachIndexed { index, remembered ->
+                upsert.setObject(index + 2, writeColumn(remembered.type, capture.values[remembered.name], minted))
+            }
+            upsert.executeUpdate()
         }
     }
 
-    private fun deleteCapture(conn: Connection, r: CommitSet.Retraction) {
-        conn.prepareStatement("""DELETE FROM "${captureTable(r.refinement)}" WHERE id = ?""").use { ps ->
-            ps.setLong(1, keyLong(r.instance.key))
-            ps.executeUpdate()
+    private fun deleteCapture(connection: Connection, retraction: CommitSet.Retraction) {
+        deleteByKey(connection, """DELETE FROM "${captureTable(retraction.refinement)}" WHERE id = ?""", keyLong(retraction.instance.key))
+    }
+
+    /** Runs [sql], a DELETE naming one key. */
+    private fun deleteByKey(connection: Connection, sql: String, key: Long) {
+        connection.prepareStatement(sql).use { delete ->
+            delete.setLong(1, key)
+            delete.executeUpdate()
         }
     }
 
@@ -1009,7 +1098,7 @@ open class SqlStore(
 
     /** A member's row leaves the junction table, so the record leaves the collection. */
     private fun junctionEmptyings(pointingShape: String, deletedShape: String): List<EmptyingStatement> =
-        collectionsOf(pointingShape).filter { collection -> pointsAt(collection.elem, deletedShape) }.map { collection ->
+        collectionsOf(pointingShape).filter { collection -> pointsAt(collection.element, deletedShape) }.map { collection ->
             val table = junctionTable(pointingShape, collection.name)
             if (collection.union) EmptyingStatement("""DELETE FROM "$table" WHERE target = ? AND target_shape = ?""", namesShape = true)
             else EmptyingStatement("""DELETE FROM "$table" WHERE target = ?""", namesShape = false)
@@ -1028,8 +1117,8 @@ open class SqlStore(
                 }
         }
 
-    private fun emptyReferences(conn: Connection, emptying: EmptyingStatement, deleted: Ref.Persisted) {
-        conn.prepareStatement(emptying.sql).use { statement ->
+    private fun emptyReferences(connection: Connection, emptying: EmptyingStatement, deleted: Ref.Persisted) {
+        connection.prepareStatement(emptying.sql).use { statement ->
             statement.setLong(1, keyLong(deleted.key))
             if (emptying.namesShape) statement.setString(2, deleted.shape)
             statement.executeUpdate()
@@ -1042,29 +1131,21 @@ open class SqlStore(
      * holding the key of a row that is gone. Then the row, its own collections,
      * and any capture memory keyed on it go. The key is never reused.
      */
-    private fun delete(conn: Connection, d: CommitSet.Deletion) {
-        val shape = d.target.shape
-        val key = keyLong(d.target.key)
-        for (emptying in emptyingStatementsByShape.getValue(shape)) emptyReferences(conn, emptying, d.target)
-        conn.prepareStatement("""DELETE FROM "$shape" WHERE id = ?""").use { ps ->
-            ps.setLong(1, key); ps.executeUpdate()
-        }
-        for (coll in collectionsOf(shape)) {
-            conn.prepareStatement("""DELETE FROM "${junctionTable(shape, coll.name)}" WHERE owner = ?""").use { ps ->
-                ps.setLong(1, key); ps.executeUpdate()
-            }
-        }
-        for (cs in model.captureSchemas.filter { it.base == shape }) {
-            conn.prepareStatement("""DELETE FROM "${captureTable(cs.refinement)}" WHERE id = ?""").use { ps ->
-                ps.setLong(1, key); ps.executeUpdate()
-            }
-        }
+    private fun delete(connection: Connection, deletion: CommitSet.Deletion) {
+        val shape = deletion.target.shape
+        val key = keyLong(deletion.target.key)
+        for (emptying in emptyingStatementsByShape.getValue(shape)) emptyReferences(connection, emptying, deletion.target)
+        deleteByKey(connection, """DELETE FROM "$shape" WHERE id = ?""", key)
+        for (collection in collectionsOf(shape))
+            deleteByKey(connection, """DELETE FROM "${junctionTable(shape, collection.name)}" WHERE owner = ?""", key)
+        for (captureSchema in model.captureSchemas.filter { schema -> schema.base == shape })
+            deleteByKey(connection, """DELETE FROM "${captureTable(captureSchema.refinement)}" WHERE id = ?""", key)
     }
 
-    private fun writeColumn(t: VType, v: Any?, minted: List<StoreKey>): Any? = when {
-        v == null -> null
-        t is VType.Optional -> writeColumn(t.inner, v, minted)
-        t is VType.Inst -> keyStorage.bind(refKey(v, minted))
-        else -> scalarColumn(t).bind(v)
+    private fun writeColumn(type: VType, value: Any?, minted: List<StoreKey>): Any? = when {
+        value == null -> null
+        type is VType.Optional -> writeColumn(type.inner, value, minted)
+        type is VType.Inst -> keyStorage.bind(refKey(value, minted))
+        else -> scalarColumn(type).bind(value)
     }
 }

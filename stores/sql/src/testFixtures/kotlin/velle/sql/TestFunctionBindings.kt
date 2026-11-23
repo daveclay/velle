@@ -87,3 +87,28 @@ object IsEvenSql : SqlFunctionBinding {
     override fun render(operands: SqlOperands): SqlExpr =
         SqlExpr.Infix(SqlExpr.Infix(operands["value"], "%", SqlExpr.Literal(2)), "=", SqlExpr.Literal(0))
 }
+
+/** A rendering of the builtin `trim`, handed to the store by the scenario that reads a text result. */
+object TrimSql : SqlFunctionBinding {
+    override val function = "velle.trim"
+    override fun render(operands: SqlOperands): SqlExpr = SqlExpr.Call("TRIM", operands["text"])
+}
+
+/** A rendering of `doubled` written as [doubling] says, over the call's one operand. */
+class DoubledAs(private val doubling: (SqlExpr) -> SqlExpr) : SqlFunctionBinding {
+    override val function = "velle.sqltest.doubled"
+    override fun render(operands: SqlOperands): SqlExpr = doubling(operands["value"])
+}
+
+/** The rendering of `isEven` compared to a boolean constant of the binding's own. */
+object IsEvenIsTrueSql : SqlFunctionBinding {
+    override val function = "velle.sqltest.isEven"
+    override fun render(operands: SqlOperands): SqlExpr =
+        SqlExpr.Infix(IsEvenSql.render(operands), "=", SqlExpr.Literal(true))
+}
+
+/** A rendering of the builtin `trim` over the text joined to an empty text constant of the binding's own. */
+object TrimOfJoinedSql : SqlFunctionBinding {
+    override val function = "velle.trim"
+    override fun render(operands: SqlOperands): SqlExpr = SqlExpr.Call("TRIM", SqlExpr.Infix(operands["text"], "||", SqlExpr.Literal("")))
+}
