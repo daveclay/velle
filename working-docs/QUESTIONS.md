@@ -1,6 +1,6 @@
 # Open questions — the directory
 
-One line per open question (OQ) here, and nothing else. An OQ whose context fits in its line is only the line. An OQ with more lives in `questions/OQ<n>-*.md`, where the file's header states the question in plain terms before the dense part begins, and the discussion, the decisions, and the work items as `- [ ]` lines are in the file. OQ tags are stable — numbers are never renumbered or reused (next free: OQ170), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
+One line per open question (OQ) here, and nothing else. An OQ whose context fits in its line is only the line. An OQ with more lives in `questions/OQ<n>-*.md`, where the file's header states the question in plain terms before the dense part begins, and the discussion, the decisions, and the work items as `- [ ]` lines are in the file. OQ tags are stable — numbers are never renumbered or reused (next free: OQ171), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
 
 **Every work item has a tag** (Dave, 2026-11-11). A work item is one action, verb-first, one line. It is a `- [ ]` line in the file of the OQ that holds its context, or, when no OQ holds it, an OQ of its own: a tagged line here, `- **OQ<n>** — <the action>`, with a file only once its context outgrows the line. A `- [ ]` line never stands here, so every piece of work can be named by a tag. This file is a directory; an OQ file holds the details. OQs are grouped by the part of Velle they change, not by where they were found; S-numbers, P-numbers, and B-numbers are findings of the peptides, pharmacy, and batches passes, recorded in OQ16's calibration record.
 
@@ -55,7 +55,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 ## Spec generation
 
 - **OQ95** — Generate a case per key (Reference §21 "Keys"): a second record sharing the key's values is refused, absent values of an optional key do not collide; today `SpecGen.neverTests` skips a key by name
-- **[OQ56](questions/OQ56-spec-generation.md)** — the generator's blind spots: boundary cases, aged exits, rule-materialized refinements, the suite's own reads · `testgen.md` phases 2 and 3 ride here; eleven work items
+- **[OQ56](questions/OQ56-spec-generation.md)** — the generator's blind spots: boundary cases, aged exits, rule-materialized refinements, the suite's own reads · `testgen.md` phases 2 and 3 ride here; twelve work items
 
 ## Reads: the query API and stores (Reference §22)
 
@@ -125,6 +125,7 @@ A frontend framework grown from the console: given the model description and not
 
 ## Examples and docs
 
+- **[OQ170](questions/OQ170-comparing-two-versions-of-a-spec.md)** — a tool that reads two versions of a spec and says what changed in Velle's words (what is now refused, what can now move a record into a refinement, what can now fire a rule), not as changed lines of text · opened 2026-11-23 from Dave's note; investigated the same day (`SpecComparisonProbeTest`, seven edits to `examples/billing/billing.velle`); D1, D2, D4, and D6 decided; D3, D5, and D7 await Dave; nothing built
 - **OQ157** — Note: this is about the rule graph diagram, the flowchart under "Rule graph" in each example's `output/DIAGRAMS-<system>.md`, which `RuleGraphGen` writes. "Draw" means draw in that diagram. The rules themselves run correctly. Draw a transient act that has no partition in the rule graph: `RuleGraphGen.renderTransient` returns when no refinement divides the act, and `RuleGraphGen.edge` skips every rule whose condition is a transient act, so in `examples/billing/output/DIAGRAMS-Billing.md` the acts `SignUp`, `BillCustomer`, and `SubmitPayment` of `examples/billing/billing.velle` have no edge to rules `AdmitCustomer`, `OpenInvoice`, and `RecordPayment`, and `never (SubmitPayment where amount <= 0)` has no accept-or-refuse diamond, while the graph's own caption reads an act with no outgoing edge as waking no rule; the sequence diagram draws all of it correctly; pinned by `RuleGraphGenTest`, `a transient act with no partition is drawn with no refusal and no rule` · opened 2026-11-20 from OQ156
 - **OQ118** — Add human-readable examples of *invalid* velle with the diagnostics each produces — `examples/` shows only working specs; nothing shows a reader what a rejection (e.g. V15's order-dependence error) looks like or how to fix it. `working-docs/examples/survey/` is a seed: fifteen small specs on one domain, each a refused or unsound spelling beside the one that validates, with the diagnostic each produces in its README.
 
