@@ -36,3 +36,11 @@ java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
 }
+
+// This module's own tests are the conformance scenarios, and they run in a dialect's
+// module. The coverage report for the classes here is therefore read from the SQLite
+// module's test run, so `gradlew test jacocoTestReport` reports what those scenarios reach.
+tasks.named<org.gradle.testing.jacoco.tasks.JacocoReport>("jacocoTestReport") {
+    dependsOn(":stores:sqlite:test")
+    executionData(rootProject.file("stores/sqlite/build/jacoco/test.exec"))
+}
