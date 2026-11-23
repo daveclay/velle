@@ -642,6 +642,11 @@ abstract class SqlStoreConformance {
         assertEquals(matching, a.candidates("Thing", named("matches", "ca.")))
         // a text operator against a constant that is not text is left to the evaluator
         assertEquals(everyName, a.candidates("Thing", QF.CallCmp(trimmed, "contains", QConst.QNum(BigDecimal(1)))))
+        // an underscore and a backslash in the constant are matched as themselves too
+        a.thing("a_b", 1, null)
+        a.thing("a\\b", 1, null)
+        assertEquals(listOf<Any?>("a_b"), a.candidates("Thing", named("contains", "_")))
+        assertEquals(listOf<Any?>("a\\b"), a.candidates("Thing", named("contains", "\\")))
     }
 
     @Test
@@ -942,6 +947,35 @@ abstract class SqlStoreConformance {
         assertNull(a.scalar("""SELECT "escalatedWith" FROM "capture_Escalated""""))
     }
 
+    @Test
+    fun `a remembered reference reads back as its record, and survives the deletion of another shape's record with the same key`() {
+        val escalationSpec = """
+            act Agent { name: text }
+            act Ticket {
+                subject: text
+                agent: one Agent? initially required
+                urgent: boolean
+            }
+            shape Escalated = Ticket where urgent {
+                captured escalatedWith: one Agent? = agent
+            }
+            transient act Close { ticket: one Ticket }
+            rule ApplyClose when Close { delete ticket }
+        """.trimIndent()
+        val a = attach(spec = escalationSpec)
+        val ada = accepted(a.sys.commit("Agent", mapOf("name" to "Ada")))!!
+        val outage = accepted(a.sys.commit("Ticket", mapOf("subject" to "Outage", "agent" to a.id(ada), "urgent" to false)))!!
+        val fire = accepted(a.sys.commit("Ticket", mapOf("subject" to "Fire", "agent" to a.id(ada), "urgent" to true)))!!
+        assertEquals(ada.key, outage.key, "Agent#1 and Ticket#1 share a key")
+
+        val b = attach(a.ds, spec = escalationSpec)
+        assertEquals(mapOf<String, Any?>("escalatedWith" to ada), b.store.fetchCaptures(fire, "Escalated"))
+        assertNull(b.store.fetchCaptures(outage, "Escalated"), "a ticket that is not escalated remembers nothing")
+
+        accepted(b.sys.commit("Close", mapOf("ticket" to b.id(outage))))
+        assertEquals(mapOf<String, Any?>("escalatedWith" to ada), b.store.fetchCaptures(fire, "Escalated"), "the closed ticket is not the agent")
+    }
+
     // ── E4: an extension type's binding, checked at start-up through the dialect's column ──
 
     protected val moneySpec = """
@@ -986,6 +1020,16 @@ abstract class SqlStoreConformance {
             assertEquals("Bea", a.sys.get(a.id(bea), "name"), "the read sees the state it started from, not the write landed since")
         }
         a.sys.scope { assertEquals("Beatrix", a.sys.get(a.id(bea), "name"), "the next read sees it") }
+    }
+
+    @Test
+    fun `a commit the store fails partway through leaves nothing behind`() {
+        val a = attach()
+        a.customer("Ada")
+        // the customer's own row is written before its tags, and the tags now have nowhere to go
+        a.execute("""DROP TABLE "Customer__tags"""")
+        assertFailsWith<Exception> { a.customer("Bea", tags = listOf("vip")) }
+        assertEquals(1L, a.count("Customer"), "Bea's row went with the failed commit")
     }
 
     @Test
@@ -1071,13 +1115,14 @@ abstract class SqlStoreConformance {
     fun `an extension type flows through its binding and the comparison is pushed down`() {
         val a = attach(spec = moneySpec, bindings = listOf(CentsBinding()))
         val acct = accepted(a.sys.commit("Account", emptyMap()))!!
+        accepted(a.sys.commit("Account", emptyMap()))
         accepted(a.sys.commit("Deposit", mapOf("account" to a.id(acct), "amount" to Money.of("12.50"))))
-        assertEquals(1250L, (a.scalar("""SELECT balance FROM "Account"""") as Number).toLong())
+        assertEquals(1250L, (a.scalar("""SELECT balance FROM "Account" WHERE balance > 0""") as Number).toLong())
         val b = attach(a.ds, spec = moneySpec, bindings = listOf(CentsBinding()))
         b.counting.reset()
         assertEquals(1, b.sys.scope { b.sys.instancesOf("Funded") }.size)
-        assertEquals(1, b.counting.candidates.single().third, "the binding answers >=, so the store returns only the funded account")
-        assertEquals(Money.of("12.50"), b.sys.scope { b.sys.get(b.sys.instancesOf("Account").single(), "balance") })
+        assertEquals(1, b.counting.candidates.single().third, "the binding answers >=, so the store returns only the funded account of the two")
+        assertEquals(Money.of("12.50"), b.sys.scope { b.sys.get(b.sys.instancesOf("Funded").single(), "balance") })
     }
 
     @Test
