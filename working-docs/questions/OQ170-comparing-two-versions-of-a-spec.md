@@ -1,6 +1,6 @@
 # OQ170 — a tool that reads two versions of a spec and says what changed in Velle's words, not as changed lines of text
 
-**Status:** opened 2026-11-23 from Dave's note. Investigated against HEAD the same day. D1 to D9 decided. D10 awaits Dave. Nothing built except the probe test.
+**Status:** opened 2026-11-23 from Dave's note. Investigated against HEAD the same day. D1 to D10 decided; the build plan is §3. Nothing built except the probe test.
 
 **In plain terms:** a review of a change to a spec today means reading changed lines of text and working out what they do to the business. The compiler already knows what a spec means, so it could read the old spec and the new one and say "a line item can now clear an overdue invoice" instead of "line 87 was deleted".
 
@@ -393,7 +393,7 @@ Costs:
 
 **Decided:** no, Dave, 2026-11-24. His reasoning: in theory it would be nice to have, but he is skeptical it could work in practice without breaking. It is a separate tool. This command compares two specs and explains the differences in behaviour; a second tool, given the two specs, would say which records will change. The second tool is OQ171. The proposed changes above are not built under this OQ.
 
-### D10. Where Velle does not define what happens to a stored record when the spec changes, the report says exactly that, and the definition is OQ28's
+### D10. Where Velle does not define what happens to a stored record when the spec changes, the report says exactly that, and the definition is OQ28's · Decided 2026-11-24
 
 Does the report say "Velle does not define what happens to these records" at each place the language is silent, with OQ28 widened to answer them?
 
@@ -419,14 +419,49 @@ Costs:
 
 - `Compare.kt` prints "Velle does not define what happens to these records" with the reason, at each of U1 to U5.
 - OQ28's file gains U1 to U4, and its title widens from a new rule to any change of spec over records that already exist.
+- Added with the answer, 2026-11-24: in place of the two lines above, `Compare.kt` says, for each rule whose condition reads a refinement the change rewrites, what could now happen to a hypothetical record. For U1 in case C's spec with `PaidInvoice` rewritten: "An Invoice can now become a PaidInvoice by this change alone, with no SubmitPayment. SendReceipt could then fire for it." The sentence is a "could", as every consequence of D2 is a "can". It never says "nothing happens" and never says "not defined".
+
+**Decided:** no, Dave, 2026-11-24, following his answer to D5. "Nothing happens" is not necessarily true, but Velle can say "you changed the refinement of a rule, this is what could happen". The tool communicates the changes in behaviour of a hypothetical system, not of a specific real system. Engineers and product owners use it to guide reviews and to understand how behaviour changes over time, across a history of spec changes. A later, separate data migration tool could be guided by it: given the current spec and a new spec, it reads the actual records and says which ones the change reaches. That tool is OQ171. OQ28 is not widened by this OQ. The two tests that pin what the runtime does today at U1 to U4 belong to a running system's records, and moved to OQ28's work items.
 
 ## 3. The build
 
-Waits on D10.
+Every decision is decided. This is the plan, in build order, gathered from the "Proposed changes" of D1 to D8 and D10. D9's changes are not built here (OQ171).
+
+1. `compiler/src/main/kotlin/velle/Ast.kt`: each declaration keeps the line it starts on, from `Lexer.kt` through `Parser.kt` (D7).
+2. `StateFlowGen.kt`, `RuleGraphGen.kt`, `ContentionMapGen.kt`: each returns a list of facts, and a separate function draws them. No generated file changes; `StateFlowGenTest`, `RuleGraphGenTest`, and every example's `DIAGRAMS-<system>.md` pin that (D6).
+3. The sentence forms for conditions move out of `SpecGen.kt` to one place that `SpecGen.kt` and `Compare.kt` both read. No generated file changes (D7).
+4. The facts that decide "means the same" (D8):
+   - `compiler/src/main/kotlin/velle/ext/VelleType.kt`, class `Operator`: two new members, swapped sides and grouping, each defaulting to not stated.
+   - `compiler/src/main/kotlin/velle/ext/VelleFunction.kt`: every fact an `Operator` can state that applies to a call, arguments in any order and grouping, each defaulting to not stated.
+   - `compiler/src/main/kotlin/velle/ext/builtin/BuiltinTypes.kt` and `BuiltinFunctions.kt`: the builtins state their facts.
+   - Check E2 in `wiki/Normative/checks.md` and its code in `TypeRegistry.kt` test each new operator fact on the type's samples.
+   - A new file under `compiler/src/main/kotlin/velle/` that writes a condition in its agreed spelling from the facts, concluding nothing across an ordered comparison and its negation unless `PresenceFacts.kt` proves both sides present.
+5. `compiler/src/main/kotlin/velle/Compare.kt`, the command `velle.CompareKt <before.velle> <after.velle>`, printing Markdown; both specs must validate (D1). What it prints:
+   - Its own limits in its first lines (D1).
+   - What was edited, as sentences: added, removed, and changed declarations; a removed and an added declaration equal but for the name as a rename, with the warning about stored records (D4); a changed condition reported as changed only when the agreed spellings differ (D3, D8), with old and new shown as sentences.
+   - What the edit changes for declarations nobody edited, one group per shape or act, each a "can" or "can no longer", from the facts of step 2, the door set in `Prohibitions.kt`, the advisories, and the generated cases (D2).
+   - What happens to a hypothetical record: for each changed refinement condition and each added or changed constraint over a stored shape, a record that enters and a record that leaves, and for each rule on a schedule over that refinement, what its next tick does with such a record (D5).
+   - For each rule whose condition reads a refinement the change rewrites, what could now happen to a hypothetical record (D10).
+   - Every sentence uses shape and refinement names as the spec spells them, and ends with a pointer to the file, the line, and the declaration as written; for a consequence, the edited declaration that causes it; for a removal, the line in the old spec (D7).
+   - Where "means the same" rests on a fact an extension stated, the function or operator and its library are named (D8).
+   - A construct with no sentence form is printed as Velle under a line saying the tool has no words for it yet (D7).
+6. Tests: `SpecComparisonProbeTest` is replaced by tests of the command over the same seven edits (D1); a test per fact of D8, evaluating both spellings over records with present and absent values.
+7. Wiki:
+   - `wiki/Normative/diagrams.md`, "The projection principle" and "Notation": the sentences that name a diagram diff as the review point at the command (D1).
+   - A new guide page for the command, with the billing cases as its examples, stating that every consequence is a "can" or a "could", listing the facts it compares, and saying it describes a hypothetical system, not a store's records (D1, D2, D5, D10).
+   - `wiki/Guides/Extension-types.md` and `wiki/Guides/Extension-functions.md`: the new members; the facts are the author's claims, what each lets Velle conclude, and that a spec author reads them to decide whether to use the function (D8).
+8. The examples' output is regenerated and must not change.
+9. The settling commit deletes this file and adds OQ170's row to the settled table in `working-docs/QUESTIONS.md`.
 
 ## 4. Work items
 
-- [ ] Write a test that starts a system on `examples/billing/billing.velle`, stores an archived overdue invoice and a paid invoice, restarts it over the same store on the spec edited as in case C and with the condition of `PaidInvoice` rewritten, and commits to each record, pinning what the runtime does today for U1 and U2 of D10.
-- [ ] Write the same kind of test for U3 and U4 of D10: a constraint added over records that break it, and a required field added to a stored shape.
+- [ ] Give each declaration in `Ast.kt` the line it starts on (§3 step 1).
+- [ ] Split `StateFlowGen.kt`, `RuleGraphGen.kt`, and `ContentionMapGen.kt` into facts and drawing, with no generated file changed (§3 step 2).
+- [ ] Move the sentence forms for conditions out of `SpecGen.kt` to a place `Compare.kt` also reads (§3 step 3).
+- [ ] Add the operator and function facts, the builtins' statements of them, E2's checks, and the agreed spelling of a condition (§3 step 4).
+- [ ] Write `Compare.kt` (§3 step 5).
+- [ ] Replace `SpecComparisonProbeTest` with tests of the command, and write a test per fact (§3 step 6).
+- [ ] Update `diagrams.md`, the extension guides, and write the command's guide page (§3 step 7).
+- [ ] Regenerate the examples' output and confirm nothing changed (§3 step 8).
 
-The gap that cases C, D, and G show in the generated cases is a work item in OQ56.
+The gap that cases C, D, and G show in the generated cases is a work item in OQ56. The two tests that pin what the runtime does at U1 to U4 of D10 moved to OQ28.
