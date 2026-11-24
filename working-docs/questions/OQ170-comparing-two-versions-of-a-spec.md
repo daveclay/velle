@@ -1,6 +1,6 @@
 # OQ170 — a tool that reads two versions of a spec and says what changed in Velle's words, not as changed lines of text
 
-**Status:** opened 2026-11-23 from Dave's note. Investigated against HEAD the same day. D1, D2, D3, D4, D6, D7, D8, and D9 decided. D5 and D10 await Dave. Nothing built except the probe test.
+**Status:** opened 2026-11-23 from Dave's note. Investigated against HEAD the same day. D1 to D9 decided. D10 awaits Dave. Nothing built except the probe test.
 
 **In plain terms:** a review of a change to a spec today means reading changed lines of text and working out what they do to the business. The compiler already knows what a spec means, so it could read the old spec and the new one and say "a line item can now clear an overdue invoice" instead of "line 87 was deleted".
 
@@ -186,7 +186,7 @@ Costs:
 
 **Decided:** yes, Dave, 2026-11-23.
 
-### D5. The report says which records already stored are affected, described from the two specs alone
+### D5. The report says which records already stored are affected, described from the two specs alone · Decided 2026-11-24
 
 Does the first build say which stored records a change reaches, as a description worked out from the two specs with no store read?
 
@@ -248,6 +248,9 @@ Costs:
 
 - `Compare.kt` prints, for each changed refinement condition and each added or changed constraint over a stored shape, the records that enter and the records that leave, and for each rule on a schedule over that refinement, what its next tick does with them.
 - The first line of the report no longer says it is silent about stored records.
+- Added with the answer, 2026-11-24: the report speaks of a hypothetical record, never of the records on the books. Case C reads "An Invoice that is an OverdueInvoice and an ArchivedInvoice, and not an IssuedInvoice, becomes an ActionableOverdue", under a heading such as "What happens to an Invoice like this", not "Invoices already on the books".
+
+**Decided:** yes, Dave, 2026-11-24, as one of two separate behaviours. This command explains how the state of a hypothetical record would change. Which real records would change is the other behaviour, a separate tool, OQ171.
 
 ### D6. The tool compares facts, and the diagram generators are split so that the diagrams and the tool read the same facts · Decided 2026-11-23
 
@@ -419,7 +422,7 @@ Costs:
 
 ## 3. The build
 
-Waits on D5 and D10.
+Waits on D10.
 
 ## 4. Work items
 
