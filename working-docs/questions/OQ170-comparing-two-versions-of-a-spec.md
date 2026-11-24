@@ -1,6 +1,6 @@
 # OQ170 — a tool that reads two versions of a spec and says what changed in Velle's words, not as changed lines of text
 
-**Status:** opened 2026-11-23 from Dave's note. Investigated against HEAD the same day. D1, D2, D3, D4, D6, D7, and D8 decided. D5, D9, and D10 await Dave. Nothing built except the probe test.
+**Status:** opened 2026-11-23 from Dave's note. Investigated against HEAD the same day. D1, D2, D3, D4, D6, D7, D8, and D9 decided. D5 and D10 await Dave. Nothing built except the probe test.
 
 **In plain terms:** a review of a change to a spec today means reading changed lines of text and working out what they do to the business. The compiler already knows what a spec means, so it could read the old spec and the new one and say "a line item can now clear an overdue invoice" instead of "line 87 was deleted".
 
@@ -370,7 +370,7 @@ Costs:
 
 **Decided:** yes, Dave, 2026-11-24. His note on extension functions, the same day: the extension function API gives an author's function enough to take part in this reasoning. A stated fact may not be verifiable against the function's actual body, and that is sufficient: the community accepts, rejects, or improves a function on what its author states, and a Velle author decides whether to use it.
 
-### D9. The command can be pointed at a store, and then counts the records D5 describes
+### D9. The command can be pointed at a store, and then counts the records D5 describes · Decided 2026-11-24
 
 Does the command take a store to read, so that "every invoice that is overdue and archived, and not issued" becomes "37 invoices"?
 
@@ -387,6 +387,8 @@ Costs:
 
 - `Compare.kt` takes an optional store connection and prints a count beside each description.
 - The wiki guide page for the command: how to point it at a store.
+
+**Decided:** no, Dave, 2026-11-24. His reasoning: in theory it would be nice to have, but he is skeptical it could work in practice without breaking. It is a separate tool. This command compares two specs and explains the differences in behaviour; a second tool, given the two specs, would say which records will change. The second tool is OQ171. The proposed changes above are not built under this OQ.
 
 ### D10. Where Velle does not define what happens to a stored record when the spec changes, the report says exactly that, and the definition is OQ28's
 
@@ -417,7 +419,7 @@ Costs:
 
 ## 3. The build
 
-Waits on D5, D9, and D10.
+Waits on D5 and D10.
 
 ## 4. Work items
 
