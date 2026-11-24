@@ -134,6 +134,12 @@ and any reversal with its date.>
   file's build section (§"The build") gathers the lists of every decided
   decision; it does not restate them in different words.
 
+Decision sections stand in the file in the order of their numbers, D1 first.
+A decision added later takes the next number and goes last, or goes where it
+belongs with every later decision renumbered in the same edit; it is never
+slotted in out of order (Dave, 2026-11-24, OQ170: "I really hate that the
+Decisions aren't in order").
+
 Decision numbers inside an OQ may be reused or renumbered; leave no pointer
 behind for a decision merged into another of the same file (Dave,
 2026-11-22: "I do not care if decision numbers are re-used in the OQ").

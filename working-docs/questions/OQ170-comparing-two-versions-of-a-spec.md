@@ -1,6 +1,6 @@
 # OQ170 — a tool that reads two versions of a spec and says what changed in Velle's words, not as changed lines of text
 
-**Status:** opened 2026-11-23 from Dave's note. Investigated against HEAD the same day. D1, D2, D3, D4, and D6 decided. D5, D7, and D8 await Dave. Nothing built except the probe test.
+**Status:** opened 2026-11-23 from Dave's note. Investigated against HEAD the same day. D1, D2, D3, D4, D6, and D7 decided. D5, D8, D9, and D10 await Dave. Nothing built except the probe test.
 
 **In plain terms:** a review of a change to a spec today means reading changed lines of text and working out what they do to the business. The compiler already knows what a spec means, so it could read the old spec and the new one and say "a line item can now clear an overdue invoice" instead of "line 87 was deleted".
 
@@ -35,9 +35,9 @@ What the cases say:
 
 ## 2. What to decide
 
-Decisions: D1 whether the tool exists and its form. D2 whether it reports consequences. D3 what it says about a reworded condition. D4 what it says about a rename. D5 whether it speaks about stored records. D6 a build question, how the tool gets its facts. D7 whether the report is written wholly in the business's words, with no Velle in it. D8 which rewrites of a condition the tool computes as meaning the same.
+Decisions: D1 whether the tool exists and its form. D2 whether it reports consequences. D3 what it says about a reworded condition. D4 what it says about a rename. D5 whether it describes the stored records a change reaches. D6 a build question, how the tool gets its facts. D7 whether the report is written wholly in the business's words, with no Velle in it. D8 how the tool computes that two conditions mean the same. D9 whether the command counts affected records in a store. D10 what the report says where Velle does not define what happens to a stored record.
 
-The sample reports below are my wording, to show the kind of sentence. No wording is decided by any of D1 to D6. D7 asks about the wording.
+The sample reports below are my wording, to show the kind of sentence. No wording is decided by any of D1 to D6. D7 decides the wording.
 
 ### D1. Velle gets a command that reads two versions of a spec and reports the change in Velle's words · Decided 2026-11-23
 
@@ -162,6 +162,162 @@ Costs of the recommendation:
 
 **Decided:** no, Dave, 2026-11-23. He took the alternative: whether two conditions mean the same is computed. His words: "for some operators that will work, but presumably not for extension functions". A rewrite the tool cannot compute is still reported as the recommendation says, old and new shown and no claim made. Which rewrites are computed is D8.
 
+### D4. A declaration that disappears under one name and appears under another with the same body is reported as renamed · Decided 2026-11-23
+
+Does the report say "Reminder was renamed to Nudge" when the only difference between a removed declaration and an added one is the name?
+
+Recommendation: yes, worded as what the tool inferred, with one warning attached.
+
+```
+Edited
+- Renamed: shape Reminder is now shape Nudge. Nothing else about it changed.
+  Records already stored as Reminder are not carried over by this change.
+```
+
+Costs:
+
+- Two files cannot tell a rename from deleting one shape and creating another that happens to match. The report says "renamed" on the evidence of the body alone.
+- A rename is not free for a running system. The SQL store names a table after its shape (`stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, the `CREATE TABLE IF NOT EXISTS "$shape"` statement), and the generated read and act API is named after it too. So the warning line is part of the rename sentence, not an extra.
+- A rename together with an edit to the body is reported as one removal and one addition. The tool does not guess further.
+
+#### Proposed changes
+
+- `Compare.kt` pairs a removed and an added declaration whose printed forms are equal once the name is replaced, for shapes, acts, rules, fields, and refinements.
+
+**Decided:** yes, Dave, 2026-11-23.
+
+### D5. The report says which records already stored are affected, described from the two specs alone
+
+Does the first build say which stored records a change reaches, as a description worked out from the two specs with no store read?
+
+Rewritten 2026-11-24. The first draft proposed silence about stored records. Dave's concern: without this the comparison is very limited. He is right for an edit to a refinement's condition or to a constraint over a stored shape, where most of what the change means is what it does to records already there. The first draft also put three things in one decision. They are now three: this one, D9 (counting the records in a real store), and D10 (what Velle does with them when the new spec starts).
+
+Recommendation: yes. When a refinement's condition changes, the records that enter it are the ones that meet the new condition and not the old, and the records that leave are the ones that meet the old and not the new. Both are conditions the tool can write down from the two specs, using the reasoning of D8 to simplify them.
+
+From `examples/billing/billing.velle`, with the edit of case C. Billing has no `uses` lines.
+
+```velle
+shape Invoice {
+    customer: one Customer    -- stored
+    due: Date                 -- stored
+    balance: Money = total - sum(payments, amount)   -- derived: what is still owed
+}
+
+shape OverdueInvoice = Invoice where balance > 0 and due < today
+    -- refinement: an invoice is a member whenever the condition holds
+
+shape IssuedInvoice = Invoice where exists Issuance for this
+    -- refinement: a member once an Issuance points at the invoice
+
+shape ArchivedInvoice = Invoice where
+    exists ArchiveRequest for this and not exists UnarchiveRequest for this
+    -- refinement: archived and not since unarchived
+
+shape ActionableOverdue = OverdueInvoice and not ArchivedInvoice
+    -- refinement composed of two others. THE EDIT changes it to:
+    --     OverdueInvoice and not IssuedInvoice
+
+rule RemindOverdue
+    when (ActionableOverdue where
+          not exists (Reminder where invoice == this and sentOn > today - 7 days))
+    on Weekly {                                       -- runs at each Weekly tick, once per member
+    Reminder from { invoice: this, sentOn: today }    -- creates a Reminder for that invoice
+}
+```
+
+What the report would add for case C, in the wording D7 asks about:
+
+```
+Invoices already on the books
+- Every invoice that is overdue and archived, and not issued, becomes an actionable overdue invoice.
+  At the next Weekly tick each one gets a reminder, unless it had one in the last 7 days.
+- Every invoice that is overdue and issued, and not archived, stops being an actionable overdue invoice.
+  It gets no more reminders.
+```
+
+The second sentence of the first item can be said because a rule on a schedule runs over whoever is a member at the tick (Reference §16). What cannot be said is D10.
+
+Costs:
+
+- The description is only as plain as the tool can make the two conditions. "Meets the new condition and not the old" for conditions with counts, walks, or extension functions may not simplify, and the report then prints both conditions and says the affected records are those that meet one and not the other.
+- It describes which records. It does not say how many, and "every invoice that is overdue and archived" may be none. That is D9.
+- A reviewer reads these sentences as what will happen when the change ships. They are that only for rules on a schedule. For everything else the report must say what D10 decides, in the same place, or the sentences mislead.
+- It leans against one design principle, stated here so it is not missed: a system's state changes only on a tick or an incoming act. Replacing the spec moves records into and out of refinements with neither. The report would be the first place Velle says so out loud.
+
+#### Proposed changes
+
+- `Compare.kt` prints, for each changed refinement condition and each added or changed constraint over a stored shape, the records that enter and the records that leave, and for each rule on a schedule over that refinement, what its next tick does with them.
+- The first line of the report no longer says it is silent about stored records.
+
+### D6. The tool compares facts, and the diagram generators are split so that the diagrams and the tool read the same facts · Decided 2026-11-23
+
+Do `StateFlowGen.kt` and `RuleGraphGen.kt` get split into a step that works out the facts and a step that draws them, so the comparison reads the facts and not the drawn lines?
+
+Recommendation: yes. This is a build question with no effect on what a spec means. Today each generator works out a fact and writes its Mermaid line in one pass. The other way to build the tool is the way the probe test works, comparing drawn lines, and cases A, F, and G show what that gives: order changes, one sentence repeated eight times, a rename as eleven lines.
+
+Costs:
+
+- `StateFlowGen.kt` is 796 lines and `RuleGraphGen.kt` 226, both changed without changing one generated line. `StateFlowGenTest`, `RuleGraphGenTest`, and every example's checked-in `DIAGRAMS-<system>.md` pin that.
+- Until it is done, the tool can be built with its first part only (D2), which needs nothing from the diagram generators.
+
+#### Proposed changes
+
+- `StateFlowGen.kt`, `RuleGraphGen.kt`, `ContentionMapGen.kt`: each returns a list of facts, and a separate function draws them. No generated file changes.
+
+**Decided:** yes, Dave, 2026-11-23.
+
+### D7. The report is written wholly in the business's words: the names the spec gives things, and everyday words, with no Velle keyword and no Velle text · Decided 2026-11-24
+
+Does the report hold no Velle at all, so that even the part saying what was edited is sentences and never a printed declaration?
+
+This question comes from Dave's reasoning on D2 (2026-11-23): the report explains the change "in terms of the business domain, not the velle domain or text". My samples in D1, D3, and D4 do not meet that. They print `never (LineItem where price < 0)` and `Invoice where balance > 0 and due <= today`, which is Velle text, and they say "shape" and "move an Invoice out of OverdueInvoice", which is how Velle talks about a business, not how the business talks.
+
+Recommendation: yes. The names in a spec (`Invoice`, `OverdueInvoice`, `LineItem`, `price`) are the business's own words and stay. Everything around them is everyday words. The compiler already writes conditions as sentences for the generated cases: `examples/billing/output/SPEC_INDEX-Billing.md` says "a LineItem where price below 0.00 is refused" for `never (LineItem where price < 0)`, written by `SpecGen.kt`.
+
+Case B, as D1 shows it and as this decision would have it:
+
+```
+As D1 shows it                                    With no Velle in it
+
+Edited                                            A line item with a price below 0.00 is no longer refused.
+- Removed: never (LineItem where price < 0)
+                                                  Because of that:
+What that changes                                 - A new line item can now make an overdue invoice
+- LineItem: a LineItem with a negative price        stop being overdue. Before, a line item could only
+  is now accepted. It was refused.                  make an invoice overdue.
+- Invoice: a new LineItem can now move an
+  Invoice out of OverdueInvoice. Before, it
+  could only move one in.
+```
+
+Case D, the condition of D3, both ways:
+
+```
+As D3 shows it                                    With no Velle in it
+
+- Changed: shape OverdueInvoice                   An invoice is overdue when its balance is above 0 and its
+    was: Invoice where balance > 0                due is on or before today. Before: when its balance is
+         and due < today                          above 0 and its due is before today.
+    now: Invoice where balance > 0
+         and due <= today
+```
+
+Costs:
+
+- Every construct needs a sentence form, and a condition can be anything a spec can say: a count, a walk, a selection, a nested `exists`. `SpecGen.kt` has sentences for comparisons only; a `never` with any other condition gets no generated case today (a work item in OQ56). Until a construct has a sentence, the report must fall back to printing its Velle, and say that it is doing so, or it drops the change. So "no Velle" is a goal the first build reaches for the common forms only.
+- A sentence can be read two ways where Velle text cannot. "Its balance is above 0 and its due is on or before today" is clear. A condition with `and`, `or`, and `not` together is not, in a sentence. The engineer reviewing the same change loses the exact text and goes to the `.velle` file for it.
+- The business's names are spelled as the spec spells them, `OverdueInvoice` and `LineItem`. Writing "overdue invoice" and "line item" means the tool splits names into words, which is a guess about names like `SKU` or `B2BOrder`. The recommendation is to split, since the generated diagrams are for the same reader. Dave may prefer the names untouched.
+- The engineer is the second reader of every review. If the report serves only the product owner, the engineer reads the text diff beside it. That is the same two-reader split Velle itself is built on, so one report may not serve both.
+
+#### Proposed changes
+
+- `Compare.kt` writes every line as a sentence. A construct with no sentence form is printed as Velle under a line saying the tool has no words for it yet.
+- The sentence forms for conditions move out of `SpecGen.kt` to one place that `SpecGen.kt` and `Compare.kt` both read.
+- Added with the answer, 2026-11-24: every sentence ends with a pointer to where in the spec it comes from: the file, the line, and the declaration as written. For a consequence, the pointer is the edited declaration that causes it, since that is where the change would be undone. For a removed declaration, it is the line in the old spec.
+- Added with the answer, 2026-11-24: each declaration in `compiler/src/main/kotlin/velle/Ast.kt` keeps the line it starts on. `Lexer.kt` counts lines for its tokens today, and `Parser.kt` reports them only in a syntax error.
+
+**Decided:** both, Dave, 2026-11-24. The report reads in plain English, so that a person who is not technical can understand which business rules changed. When that person decides against a change, they must be able to tell the engineer where in the spec to make it, so each sentence also points at the place in the Velle that says it. His words: "it needs to read in plain english enough for non-tech humans to understand what business rules have changed. But, in the case where the human decides _against_ some behavior, they need to communicate where in velle to make that change." The pointer is the one place Velle text appears, and it is a reference for the engineer, not something the product owner reads. Names are split into words, as recommended; he did not ask for them untouched.
+
 ### D8. Each operator states facts about itself, and the tool computes "means the same" by reasoning from those facts, never from a list of operator names
 
 Does each operator carry its own facts, such as "my two sides may be swapped", so that the tool works out whether two conditions mean the same from the facts of the operators in them?
@@ -209,117 +365,58 @@ Costs:
 - `wiki/Guides/Extension-types.md` and `wiki/Guides/Extension-functions.md`: the new members.
 - A test per fact, evaluating both spellings over records with present and absent values.
 
-### D4. A declaration that disappears under one name and appears under another with the same body is reported as renamed · Decided 2026-11-23
+### D9. The command can be pointed at a store, and then counts the records D5 describes
 
-Does the report say "Reminder was renamed to Nudge" when the only difference between a removed declaration and an added one is the name?
+Does the command take a store to read, so that "every invoice that is overdue and archived, and not issued" becomes "37 invoices"?
 
-Recommendation: yes, worded as what the tool inferred, with one warning attached.
-
-```
-Edited
-- Renamed: shape Reminder is now shape Nudge. Nothing else about it changed.
-  Records already stored as Reminder are not carried over by this change.
-```
+Recommendation: yes, as a later build than D5, and optional each time the command runs. The description of D5 is a condition over a stored shape, which is what the read API already runs (Reference §22; `compiler/src/main/kotlin/velle/Query.kt`). The store API says nothing of how records are kept, so the count works over any store.
 
 Costs:
 
-- Two files cannot tell a rename from deleting one shape and creating another that happens to match. The report says "renamed" on the evidence of the body alone.
-- A rename is not free for a running system. The SQL store names a table after its shape (`stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, the `CREATE TABLE IF NOT EXISTS "$shape"` statement), and the generated read and act API is named after it too. So the warning line is part of the rename sentence, not an extra.
-- A rename together with an edit to the body is reported as one removal and one addition. The tool does not guess further.
+- The count is of one store at one moment: a test system, or the live one. The report must name which and when, and a count from a test system says little about the live one.
+- A condition that reads `today` is counted as of the day the command runs, not the day the change ships.
+- The command becomes something that connects to a running system's records. Who may run it, and against what, is the engineer's to arrange. Velle would only read.
+- The new condition is evaluated over records stored under the old spec. Where the change also adds or removes a field, some of those records cannot be read as the new spec describes them. That case is D10's.
 
 #### Proposed changes
 
-- `Compare.kt` pairs a removed and an added declaration whose printed forms are equal once the name is replaced, for shapes, acts, rules, fields, and refinements.
+- `Compare.kt` takes an optional store connection and prints a count beside each description.
+- The wiki guide page for the command: how to point it at a store.
 
-**Decided:** yes, Dave, 2026-11-23.
+### D10. Where Velle does not define what happens to a stored record when the spec changes, the report says exactly that, and the definition is OQ28's
 
-### D5. The first build says nothing about records already stored
+Does the report say "Velle does not define what happens to these records" at each place the language is silent, with OQ28 widened to answer them?
 
-Does the first build stay silent on what the change does to the records a running system already holds?
+Recommendation: yes. The tool cannot report a behaviour the language has not decided, and a report that passes over these places would read as "nothing happens". The places found so far:
 
-Recommendation: yes, silent, and it says so in its first line.
+| Label | The change | What is not defined |
+|---|---|---|
+| U1 | A refinement's condition is rewritten and a rule fires when a record enters it, as rule `SendReceipt` does on `PaidInvoice` in `examples/billing/billing.velle` | Whether the rule ever fires for a record that became a member by the rewrite. The runtime looks for a record entering a refinement only when a commit changes data the condition reads (`compiler/src/main/kotlin/velle/ConditionWatchers.kt`, `canChangeUnder`; Reference §11). No commit is the entry here. No test pins what happens at such a record's next commit |
+| U2 | The same, with a rule that fires when a record leaves the refinement, as rule `NoteUnarchival` does on `ArchivedInvoice` | The same question for leaving, and what a value captured at entry holds for a record that never entered by a commit |
+| U3 | A constraint is added over a stored shape, and records already stored break it | Whether those records are found, and whether the next commit that touches one is refused |
+| U4 | A required field is added to a stored shape | What value the records already stored have for it. OQ154 covers a record the runtime cannot read, for a row changed outside Velle; this is the same record reached by a change of spec |
+| U5 | A new rule is added over records that already meet its condition | This is OQ28 as it stands today |
 
-Case D shows what is left out. With `due <= today`, an invoice due today that was not overdue under the old spec is overdue under the new one. Whether rule `RemindOverdue` then treats it as newly overdue is a question about deploying a spec over existing records. That is OQ28, which is not designed. In case B, removing a refusal leaves no stored record in the wrong; adding one could, and the tool would not say so.
+A rule on a schedule is the one case that is defined: its next tick runs over whoever is a member (Reference §16).
 
 Costs:
 
-- A reviewer may read "an invoice is now overdue on its due date" as covering the invoices already on the books. It does not. The report describes two sets of rules, not the moment one replaces the other.
-- The alternative needs OQ28 decided first, and a store to read. It would hold this question until then.
+- The report will say "not defined" often, on the edits that matter most. That is the true state of the language, and it puts a price on leaving OQ28 undesigned.
+- OQ28 grows from one question (U5) to five. It is the larger piece of work behind this tool, and this tool cannot finish without it.
+- U1 to U4 are stated from reading the source, not from running it. A test that starts a system on one spec, stores records, restarts it on the edited spec, and commits, would pin what the runtime does today. That is a work item below.
 
 #### Proposed changes
 
-- `Compare.kt` opens every report with one line: the report compares what the two specs say, and does not say what happens to records stored under the old one.
-- OQ28 gains a pointer: the comparison is where its answer would be reported.
-
-### D7. The report is written wholly in the business's words: the names the spec gives things, and everyday words, with no Velle keyword and no Velle text
-
-Does the report hold no Velle at all, so that even the part saying what was edited is sentences and never a printed declaration?
-
-This question comes from Dave's reasoning on D2 (2026-11-23): the report explains the change "in terms of the business domain, not the velle domain or text". My samples in D1, D3, and D4 do not meet that. They print `never (LineItem where price < 0)` and `Invoice where balance > 0 and due <= today`, which is Velle text, and they say "shape" and "move an Invoice out of OverdueInvoice", which is how Velle talks about a business, not how the business talks.
-
-Recommendation: yes. The names in a spec (`Invoice`, `OverdueInvoice`, `LineItem`, `price`) are the business's own words and stay. Everything around them is everyday words. The compiler already writes conditions as sentences for the generated cases: `examples/billing/output/SPEC_INDEX-Billing.md` says "a LineItem where price below 0.00 is refused" for `never (LineItem where price < 0)`, written by `SpecGen.kt`.
-
-Case B, as D1 shows it and as this decision would have it:
-
-```
-As D1 shows it                                    With no Velle in it
-
-Edited                                            A line item with a price below 0.00 is no longer refused.
-- Removed: never (LineItem where price < 0)
-                                                  Because of that:
-What that changes                                 - A new line item can now make an overdue invoice
-- LineItem: a LineItem with a negative price        stop being overdue. Before, a line item could only
-  is now accepted. It was refused.                  make an invoice overdue.
-- Invoice: a new LineItem can now move an
-  Invoice out of OverdueInvoice. Before, it
-  could only move one in.
-```
-
-Case D, the condition of D3, both ways:
-
-```
-As D3 shows it                                    With no Velle in it
-
-- Changed: shape OverdueInvoice                   An invoice is overdue when its balance is above 0 and its
-    was: Invoice where balance > 0                due is on or before today. Before: when its balance is
-         and due < today                          above 0 and its due is before today.
-    now: Invoice where balance > 0
-         and due <= today
-```
-
-Costs:
-
-- Every construct needs a sentence form, and a condition can be anything a spec can say: a count, a walk, a selection, a nested `exists`. `SpecGen.kt` has sentences for comparisons only; a `never` with any other condition gets no generated case today (a work item in OQ56). Until a construct has a sentence, the report must fall back to printing its Velle, and say that it is doing so, or it drops the change. So "no Velle" is a goal the first build reaches for the common forms only.
-- A sentence can be read two ways where Velle text cannot. "Its balance is above 0 and its due is on or before today" is clear. A condition with `and`, `or`, and `not` together is not, in a sentence. The engineer reviewing the same change loses the exact text and goes to the `.velle` file for it.
-- The business's names are spelled as the spec spells them, `OverdueInvoice` and `LineItem`. Writing "overdue invoice" and "line item" means the tool splits names into words, which is a guess about names like `SKU` or `B2BOrder`. The recommendation is to split, since the generated diagrams are for the same reader. Dave may prefer the names untouched.
-- The engineer is the second reader of every review. If the report serves only the product owner, the engineer reads the text diff beside it. That is the same two-reader split Velle itself is built on, so one report may not serve both.
-
-#### Proposed changes
-
-- `Compare.kt` writes every line as a sentence. A construct with no sentence form is printed as Velle under a line saying the tool has no words for it yet.
-- The sentence forms for conditions move out of `SpecGen.kt` to one place that `SpecGen.kt` and `Compare.kt` both read.
-
-### D6. The tool compares facts, and the diagram generators are split so that the diagrams and the tool read the same facts · Decided 2026-11-23
-
-Do `StateFlowGen.kt` and `RuleGraphGen.kt` get split into a step that works out the facts and a step that draws them, so the comparison reads the facts and not the drawn lines?
-
-Recommendation: yes. This is a build question with no effect on what a spec means. Today each generator works out a fact and writes its Mermaid line in one pass. The other way to build the tool is the way the probe test works, comparing drawn lines, and cases A, F, and G show what that gives: order changes, one sentence repeated eight times, a rename as eleven lines.
-
-Costs:
-
-- `StateFlowGen.kt` is 796 lines and `RuleGraphGen.kt` 226, both changed without changing one generated line. `StateFlowGenTest`, `RuleGraphGenTest`, and every example's checked-in `DIAGRAMS-<system>.md` pin that.
-- Until it is done, the tool can be built with its first part only (D2), which needs nothing from the diagram generators.
-
-#### Proposed changes
-
-- `StateFlowGen.kt`, `RuleGraphGen.kt`, `ContentionMapGen.kt`: each returns a list of facts, and a separate function draws them. No generated file changes.
-
-**Decided:** yes, Dave, 2026-11-23.
+- `Compare.kt` prints "Velle does not define what happens to these records" with the reason, at each of U1 to U5.
+- OQ28's file gains U1 to U4, and its title widens from a new rule to any change of spec over records that already exist.
 
 ## 3. The build
 
-Waits on D5, D7, and D8.
+Waits on D5, D8, D9, and D10.
 
 ## 4. Work items
 
-None until D1 is answered. The gap that cases C, D, and G show in the generated cases is a work item in OQ56.
+- [ ] Write a test that starts a system on `examples/billing/billing.velle`, stores an archived overdue invoice and a paid invoice, restarts it over the same store on the spec edited as in case C and with the condition of `PaidInvoice` rewritten, and commits to each record, pinning what the runtime does today for U1 and U2 of D10.
+- [ ] Write the same kind of test for U3 and U4 of D10: a constraint added over records that break it, and a required field added to a stored shape.
+
+The gap that cases C, D, and G show in the generated cases is a work item in OQ56.
