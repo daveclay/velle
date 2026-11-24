@@ -368,7 +368,7 @@ Costs:
 - Added with Dave's note, 2026-11-24: where the report concludes that two conditions mean the same from a fact an extension stated, it names the function or operator and its library, as "the same, if `velle.finance` is right that `Money + Money` may be swapped".
 - Added with Dave's note, 2026-11-24: `wiki/Guides/Extension-functions.md` says the facts are the author's claims, what each one lets Velle conclude, and that a spec author reads them to decide whether to use the function.
 
-**Decided:** yes, Dave, 2026-11-24. His note on extension functions, the same day: the extension function API gives an author's function enough to take part in this reasoning. A stated fact may not be verifiable against the function's actual body, and that is sufficient: the community accepts, rejects, or improves a function on what its author states, and a Velle author decides whether to use it. Velle checks a fact on the argument types' samples where it can, as E2 does for an operator, and otherwise trusts it.
+**Decided:** yes, Dave, 2026-11-24. His note on extension functions, the same day: the extension function API gives an author's function enough to take part in this reasoning. A stated fact may not be verifiable against the function's actual body, and that is sufficient: the community accepts, rejects, or improves a function on what its author states, and a Velle author decides whether to use it.
 
 ### D9. The command can be pointed at a store, and then counts the records D5 describes
 
