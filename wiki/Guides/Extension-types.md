@@ -108,10 +108,13 @@ class MoneyType : VelleType<Money>, Ordered<Money>, Summable<Money> {
     override val ordering: Comparator<Money> = Comparator { a, b -> a.compareTo(b) }
 
     override val operators: List<Operator<*, *, *>> = listOf(
-        Operator<Money, Money, Money>("+", qualifiedName, qualifiedName, qualifiedName, { a, b -> a + b }, foldStepsCommute = true, foldIdempotent = false),
+        Operator<Money, Money, Money>("+", qualifiedName, qualifiedName, qualifiedName, { a, b -> a + b }, foldStepsCommute = true, foldIdempotent = false,
+            sidesMayBeSwapped = true, groupingDoesNotMatter = true),
         Operator<Money, Money, Money>("-", qualifiedName, qualifiedName, qualifiedName, { a, b -> a - b }, foldStepsCommute = true, foldIdempotent = false),
-        Operator<Money, BigDecimal, Money>("*", qualifiedName, "decimal", qualifiedName, { a, b -> a * b }, foldStepsCommute = false, foldIdempotent = false),
-        Operator<BigDecimal, Money, Money>("*", "decimal", qualifiedName, qualifiedName, { a, b -> b * a }, foldStepsCommute = false, foldIdempotent = false),
+        Operator<Money, BigDecimal, Money>("*", qualifiedName, "decimal", qualifiedName, { a, b -> a * b }, foldStepsCommute = false, foldIdempotent = false,
+            sidesMayBeSwapped = true),
+        Operator<BigDecimal, Money, Money>("*", "decimal", qualifiedName, qualifiedName, { a, b -> b * a }, foldStepsCommute = false, foldIdempotent = false,
+            sidesMayBeSwapped = true),
     )
 
     override val zero: Money = Money.ZERO
@@ -131,7 +134,7 @@ class MoneyType : VelleType<Money>, Ordered<Money>, Summable<Money> {
 - `literals` says which constants a spec may write where a `Money` is expected: a number, a quoted text, both, or neither. The reader turns the constant into a value, or throws `LiteralRejected` with the reason the compiler reports at the constant. `Money` reads `12.50` and refuses `0.125`.
 - `canonical` gives one text per distinct value. The compiler uses it to tell values apart, to check the type's other claims, and as the text that stands for the value wherever the runtime needs one. `display`, which defaults to it, is how a value reads in a rejection message.
 - `ordering`, from `Ordered<Money>`, is the capability behind `<`, `<=`, `>`, `>=`, `max`, `min`, a selector's `by`, and a query's order. A class that does not implement `Ordered` refuses every one of those for the type.
-- `operators` is the arithmetic the type takes part in, one line per combination of left type, operator, right type, and result. Types are named by qualified name: a builtin by its keyword, a registered type by `namespace.name`. Both directions of a mixed operation are separate lines, as `Money * decimal` and `decimal * Money` are above. An operator returns a value for every pair of its operands and has no way to refuse one; an exception thrown inside it fails the whole transaction and is a bug in the type. An operation that is only sometimes defined is not an operator. Each line carries two facts about folding a value into itself, `x = x + y` ([§19](Reference-19-Self-referential-folds-and-tolerates)): whether applying two steps in either order gives the same result, and whether applying one step twice changes nothing. `+` on `Money` has the first and not the second, so a rule may fold a balance at a scheduled tick, and an unguarded fold after a commit is still refused.
+- `operators` is the arithmetic the type takes part in, one line per combination of left type, operator, right type, and result. Types are named by qualified name: a builtin by its keyword, a registered type by `namespace.name`. Both directions of a mixed operation are separate lines, as `Money * decimal` and `decimal * Money` are above. An operator returns a value for every pair of its operands and has no way to refuse one; an exception thrown inside it fails the whole transaction and is a bug in the type. An operation that is only sometimes defined is not an operator. Each line carries two facts about folding a value into itself, `x = x + y` ([§19](Reference-19-Self-referential-folds-and-tolerates)): whether applying two steps in either order gives the same result, and whether applying one step twice changes nothing. `+` on `Money` has the first and not the second, so a rule may fold a balance at a scheduled tick, and an unguarded fold after a commit is still refused. Two more facts are optional and default to false: `sidesMayBeSwapped`, that `a + b` gives what `b + a` gives, and `groupingDoesNotMatter`, that `(a + b) + c` gives what `a + (b + c)` gives. The [comparison of two specs](Comparing-specs) reads them to see that an expression written differently means the same. For a line over two types, such as `Money * decimal`, the mirrored line `decimal * Money` must state the swap too. `Money` states the swap for `+` and both `*` lines, and grouping for `+`.
 - `zero` and `plus`, from `Summable<Money>`, are what `sum(collection, field)` does over a field of the type: the value of an empty collection, and how two values add. A class that does not implement `Summable` refuses `sum` on the type.
 - `samples` is what the generated tests need: a value to commit, the nearest values below and above a given one, and the Kotlin source that constructs a value in a test file. `below` and `above` return `null` at the type's edge. For a type with discrete values the step is one unit, a cent for `Money`; for a continuous one any strictly smaller or larger value serves. For a `never (LineItem where price < 0)` the generated test commits `below(0)` expecting refusal and `0` expecting acceptance.
 
@@ -183,7 +186,8 @@ The field is the type's own class everywhere. The input class for `LineItem` tak
 
 - [§5 Scalars](Reference-05-Scalars), the builtin types an extension type stands beside.
 - [§10 Predicate expressions](Reference-10-Predicate-expressions), where comparisons and constants are read.
-- [§19 Self-referential folds](Reference-19-Self-referential-folds-and-tolerates), what the two operator facts buy a rule.
+- [§19 Self-referential folds](Reference-19-Self-referential-folds-and-tolerates), what the two fold facts buy a rule.
+- [Comparing specs](Comparing-specs), what the swap and grouping facts buy a review.
 - [Extension functions](Extension-functions), a function written against the capabilities a type implements.
 - [Act API](Act-API) and [Read API](Read-API), the generated Kotlin the type appears in.
 - [Store API](Store-API), the whole contract a store implements, and where the binding sits in it.

@@ -127,12 +127,7 @@ object SpecGen {
             return out
         }
 
-        fun leftmostName(e: RefExpr): String? = when (e) {
-            is RefName -> e.name
-            is RefNot -> leftmostName(e.inner)
-            is RefAnd -> leftmostName(e.left)
-            is RefOr -> leftmostName(e.left)
-        }
+        fun leftmostName(e: RefExpr): String? = Sentences.leftmostName(e)
 
         // ── condition analysis ───────────────────────────────────────────────
 
@@ -561,7 +556,7 @@ object SpecGen {
         }
 
         /** Interface kdoc: what the implementer owes. Rule-agnostic, since rules sharing a bare condition share the given. (Exit rules demand their pair inline — a state-given and an exit action.) */
-        fun article(name: String) = if (name.first().lowercaseChar() in "aeiou") "an" else "a"
+        fun article(name: String) = Sentences.article(name)
 
         /** The same case, rendered as a Gherkin scenario for the .feature documentation. */
         fun recordScenario(
@@ -707,7 +702,7 @@ object SpecGen {
             val bound = if (ext != null) Picked.ext(ext, extLiteral(ext, literal) ?: return skip(ordinal, "bound is not a value of the type")) else Picked.num(literal)
 
             val fields = commitFields(shape, fieldPath.root) ?: return skip(ordinal, "unconstructible act")
-            val opWords = opWords(cmp.op)
+            val opWords = Sentences.comparisonWords(cmp.op)
             val relGivens = shape.members.filterIsInstance<StoredProp>()
                 .filter { it.initially == null }
                 .mapNotNull { ((it.type as? RelType)?.takeIf { t -> !t.optional })?.shape }
@@ -946,11 +941,6 @@ object SpecGen {
                 }
             }
             return ActFields(setup, pairs, actorArg, if (parts.isEmpty()) "" else ", parts = mapOf(${parts.joinToString(", ")})")
-        }
-
-        fun opWords(op: String): String = when (op) {
-            "<=" -> "at most"; "<" -> "below"; ">=" -> "at least"; ">" -> "above"
-            "==" -> "equal to"; "!=" -> "other than"; else -> op
         }
 
         fun plain(v: BigDecimal): String = v.stripTrailingZeros().toPlainString()

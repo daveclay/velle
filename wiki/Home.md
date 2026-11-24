@@ -67,6 +67,7 @@ Walkthroughs that gather what the Reference and the normative documents settle, 
 - [[Store API|Store-API]] — the contract between a running system and the database that holds its records: connecting a store, the reads and the commit a store must get right, and the one read it may narrow to make a sweep faster
 - [[Serving a system|Serving-a-system]] — a spec behind REST and GraphQL on Spring Boot over PostgreSQL by declaring one bean: the endpoints, the schema, the JSON an act's input takes, who is calling, the schedules, and the console
 - [[The API layer|API-layer]] — how that is built, class by class: the operations in `apis/json`, the GraphQL schema from the model, the Spring Boot starter's beans, one request end to end, and how to replace a transport, a store, or the identity
+- [[Comparing specs|Comparing-specs]] — reading two versions of a spec and saying what changed in the spec's own names: what was edited, what that changes elsewhere, what it does to a record like the ones the system keeps, and where in the spec each sentence comes from
 
 ## Working notes
 

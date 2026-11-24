@@ -15,6 +15,8 @@ import java.time.LocalDate
  * - [Median] (`velle.test.median`): over a `many` of any ordered type, absent when empty.
  * - [RoundTo] (`velle.test.roundTo`): any number to a number of places.
  * - [Clamp] (`velle.test.clamp`): a value of any ordered type between two of the same type.
+ * - [Larger] (`velle.test.larger`): the larger of two values of one ordered type, stating that its
+ *   arguments may be given in any order and grouped any way, as an extension's claims.
  * - [TestDay] (`velle.test.Day`): a type with a calendar date and nothing else, so `year(d)`
  *   and `isBusinessDay(d)` reach it through `HasCalendarDate` alone.
  */
@@ -100,4 +102,23 @@ class TestDay : VelleType<Day>, HasCalendarDate<Day> {
     override val operators: List<Operator<*, *, *>> = emptyList()
     override fun calendarDate(v: Day, context: FunctionContext): LocalDate = v.date
     override val samples = Samples(Day(LocalDate.of(2026, 1, 15)), kotlinSource = { "velle.ext.Day(java.time.LocalDate.parse(\"${it.date}\"))" })
+}
+
+class Larger : VelleFunction {
+    override val name = "larger"
+    override val namespace = "velle.test"
+    override val signatures = listOf(Signature(
+        parameters = listOf(
+            Parameter("first", Accepts.Is(Ordered::class)),
+            Parameter("second", Accepts.SameAs(0)),
+        ),
+        result = Returns.SameAs(0),
+        apply = { _, args ->
+            val ordering = args[0].capability<Ordered<Any>>().ordering
+            val (first, second) = args.map { argument -> argument.value }
+            if (ordering.compare(first, second) >= 0) first else second
+        },
+    ))
+    override val argumentsInAnyOrder = true
+    override val groupingDoesNotMatter = true
 }

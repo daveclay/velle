@@ -65,6 +65,16 @@ class ExtensionTypeTest {
         override val name = "Price"
         override val operators = listOf(Operator<Cents, Cents, Cents>("+", qualifiedName, qualifiedName, qualifiedName, { a, b -> Cents(a.cents + b.cents) }, foldStepsCommute = true, foldIdempotent = true))
     }
+    private class LyingSwap : VelleType<Cents> by TestMoney() {
+        override val name = "Price"
+        override val operators = listOf(Operator<Cents, Cents, Cents>("-", qualifiedName, qualifiedName, qualifiedName, { a, b -> Cents(a.cents - b.cents) },
+            foldStepsCommute = true, foldIdempotent = false, sidesMayBeSwapped = true))
+    }
+    private class LyingGrouping : VelleType<Cents> by TestMoney() {
+        override val name = "Price"
+        override val operators = listOf(Operator<Cents, Cents, Cents>("-", qualifiedName, qualifiedName, qualifiedName, { a, b -> Cents(a.cents - b.cents) },
+            foldStepsCommute = true, foldIdempotent = false, groupingDoesNotMatter = true))
+    }
     private class LyingSum : VelleType<Cents> by TestMoney(), Summable<Cents> {
         override val name = "Price"
         override val operators = emptyList<Operator<*, *, *>>()
@@ -83,6 +93,8 @@ class ExtensionTypeTest {
         assertTrue(e2(LyingOrder()).any { "below(sample) does not order strictly below the sample" in it })
         assertTrue(e2(LyingFold()).any { "claims foldIdempotent but" in it })
         assertTrue(e2(LyingSum()).any { "zero + sample is not the sample" in it })
+        assertTrue(e2(LyingSwap()).any { "claims sidesMayBeSwapped but a - b differs from b - a on its samples" in it })
+        assertTrue(e2(LyingGrouping()).any { "claims groupingDoesNotMatter but (a - b) - c differs from a - (b - c) on its samples" in it })
         assertTrue(e2(LyingLiteral()).any { "fromNumber(canonical(sample)) is not equal to the sample" in it })
         assertEquals(emptyList(), TypeRegistry(listOf(TestMoney(), TestBadge())).diagnostics)
     }

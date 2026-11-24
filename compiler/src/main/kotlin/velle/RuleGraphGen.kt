@@ -23,7 +23,20 @@ package velle
  * own guard" is the guard-disarm pattern made visible — the rule's own write
  * is exactly what makes its re-evaluation harmless.
  */
+/**
+ * One fact the rule graph draws as an edge: a commit of [source] (an act's `commit<Act>`, a
+ * rule, or a branch of a transient act's dispatch) can change the condition of [rule].
+ * [parts] say how (what the source writes, when the rule runs, under which guard), and
+ * [crossesBoundary] is set when the rule runs outside the source's envelope. The rule graph
+ * draws these and the comparison of two specs compares them.
+ */
+internal data class MayFire(val source: String, val rule: String, val parts: List<String>, val crossesBoundary: Boolean)
+
 internal object RuleGraphGen {
+
+    /** Every may-fire edge of the rule graph, before any drawing. */
+    fun mayFire(model: Model, catalog: KindCatalog): List<MayFire> =
+        Graph(model, catalog).also { graph -> graph.build() }.mayFire.distinct()
 
     fun render(model: Model, catalog: KindCatalog): String {
         val g = Graph(model, catalog)
@@ -59,6 +72,7 @@ internal object RuleGraphGen {
         val analysis = FlowAnalysis(model, catalog)
         val legend = mutableListOf<String>()
         private val lines = mutableListOf<String>()
+        val mayFire = mutableListOf<MayFire>()
         private val summaries = mutableMapOf<String, ReadSummary>()
 
         fun build(): List<String> {
@@ -144,7 +158,10 @@ internal object RuleGraphGen {
         private fun branch(act: String, label: String, p: RefinementDecl) {
             val rules = rulesOf(p)
             if (rules.isEmpty()) lines.add("q$act -->|\"${esc(label)}\"| ${p.name}[\"${p.name}\"]")
-            for (rule in rules) lines.add("q$act -->|\"${esc(label)}\"| ${rule.name}")
+            for (rule in rules) {
+                mayFire.add(MayFire("commit$act", rule.name, listOf(label), crossesBoundary = false))
+                lines.add("q$act -->|\"${esc(label)}\"| ${rule.name}")
+            }
         }
 
         private fun rulesOf(p: RefinementDecl): List<RuleDecl> =
@@ -213,9 +230,15 @@ internal object RuleGraphGen {
         }
 
         private fun emit(from: String, to: String, parts: List<String>, dotted: Boolean) {
-            val arrow = if (dotted) "-.->" else "-->"
-            val label = parts.joinToString(" — ")
-            lines.add(if (label.isEmpty()) "$from $arrow $to" else "$from $arrow|\"${esc(label)}\"| $to")
+            val fact = MayFire(from, to, parts, dotted)
+            mayFire.add(fact)
+            lines.add(drawn(fact))
+        }
+
+        private fun drawn(fact: MayFire): String {
+            val arrow = if (fact.crossesBoundary) "-.->" else "-->"
+            val label = fact.parts.joinToString(" — ")
+            return if (label.isEmpty()) "${fact.source} $arrow ${fact.rule}" else "${fact.source} $arrow|\"${esc(label)}\"| ${fact.rule}"
         }
 
         private fun summaryOf(rule: RuleDecl): ReadSummary =

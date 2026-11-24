@@ -41,10 +41,13 @@ class MoneyType : VelleType<Money>, Ordered<Money>, Summable<Money> {
     override val ordering: Comparator<Money> = Comparator { a, b -> a.compareTo(b) }
 
     override val operators: List<Operator<*, *, *>> = listOf(
-        Operator<Money, Money, Money>("+", qualifiedName, qualifiedName, qualifiedName, { a, b -> a + b }, foldStepsCommute = true, foldIdempotent = false),
+        Operator<Money, Money, Money>("+", qualifiedName, qualifiedName, qualifiedName, { a, b -> a + b }, foldStepsCommute = true, foldIdempotent = false,
+            sidesMayBeSwapped = true, groupingDoesNotMatter = true),
         Operator<Money, Money, Money>("-", qualifiedName, qualifiedName, qualifiedName, { a, b -> a - b }, foldStepsCommute = true, foldIdempotent = false),
-        Operator<Money, BigDecimal, Money>("*", qualifiedName, "decimal", qualifiedName, { a, b -> a * b }, foldStepsCommute = false, foldIdempotent = false),
-        Operator<BigDecimal, Money, Money>("*", "decimal", qualifiedName, qualifiedName, { a, b -> b * a }, foldStepsCommute = false, foldIdempotent = false),
+        Operator<Money, BigDecimal, Money>("*", qualifiedName, "decimal", qualifiedName, { a, b -> a * b }, foldStepsCommute = false, foldIdempotent = false,
+            sidesMayBeSwapped = true),
+        Operator<BigDecimal, Money, Money>("*", "decimal", qualifiedName, qualifiedName, { a, b -> b * a }, foldStepsCommute = false, foldIdempotent = false,
+            sidesMayBeSwapped = true),
     )
 
     override val zero: Money = Money.ZERO

@@ -16,6 +16,9 @@ class Parser(private val tokens: List<Token>) {
     companion object {
         fun parse(source: String): List<Decl> = Parser(Lexer(source).lex()).parseSpec()
 
+        /** The declarations with the line each starts on. */
+        fun parseLocated(source: String): List<LocatedDecl> = Parser(Lexer(source).lex()).parseLocatedSpec()
+
         /** A predicate on its own (Reference §10), as a query's `where` arrives over a wire:
          *  the whole of [source] must be one predicate, or a [VelleSyntaxError] says where it is not. */
         fun parsePredicate(source: String): Expr = Parser(Lexer(source).lex()).parseWholePredicate()
@@ -51,14 +54,17 @@ class Parser(private val tokens: List<Token>) {
         return e
     }
 
-    fun parseSpec(): List<Decl> {
-        val decls = mutableListOf<Decl>()
+    fun parseSpec(): List<Decl> = parseLocatedSpec().map { located -> located.decl }
+
+    fun parseLocatedSpec(): List<LocatedDecl> {
+        val declarations = mutableListOf<LocatedDecl>()
         skipNewlines()
         while (!at(TokType.EOF)) {
-            decls.add(parseDecl())
+            val firstLine = peek().line
+            declarations.add(LocatedDecl(parseDecl(), firstLine))
             skipNewlines()
         }
-        return decls
+        return declarations
     }
 
     private fun parseDecl(): Decl {

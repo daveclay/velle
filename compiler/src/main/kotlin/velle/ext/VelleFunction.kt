@@ -46,6 +46,19 @@ interface VelleFunction {
      */
     val foldStepsCommute: Boolean get() = false
     val foldIdempotent: Boolean get() = false
+
+    /**
+     * Two facts the comparison of two specs reads to conclude that two calls mean the same
+     * (the guide `Comparing-specs.md`). Each is the function author's claim. Velle cannot read the body to
+     * check it; a spec author reads the claims to decide whether to use the function. Each
+     * defaults to not stated, which only ever makes the comparison report a rewording as a change.
+     * - [argumentsInAnyOrder]: the arguments may be given in any order, `f(a, b)` equals `f(b, a)`.
+     *   True of `max`/`min`.
+     * - [groupingDoesNotMatter]: `f(f(a, b), c)` equals `f(a, f(b, c))`, and both equal `f(a, b, c)`
+     *   where the function takes that many. True of `max`/`min`.
+     */
+    val argumentsInAnyOrder: Boolean get() = false
+    val groupingDoesNotMatter: Boolean get() = false
 }
 
 /**

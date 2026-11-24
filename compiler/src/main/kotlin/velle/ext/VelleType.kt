@@ -117,6 +117,15 @@ class Literals<T : Any>(
  *   `(x op a) op a` equals `x op a`. True of `max`/`min`, union, boolean or;
  *   false of `+`. Lets V8 accept an unguarded `after commit` or scheduled fold.
  *
+ * Two more facts let the comparison of two specs conclude that two spellings of a condition
+ * mean the same (the guide `Comparing-specs.md`). They are claims too, checked on the samples by E2 and
+ * otherwise trusted, and each defaults to not stated, which only ever makes the comparison
+ * report a rewording as a change:
+ * - [sidesMayBeSwapped]: `a op b` equals `b op a`. True of `+` and `*` on numbers; false of
+ *   `-`. For a line over two different types, the mirrored line must exist and state it too.
+ * - [groupingDoesNotMatter]: `(a op b) op c` equals `a op (b op c)`, for a line whose operands
+ *   and result are one type. True of `+` and `*` on numbers.
+ *
  * An operator is total over its declared operand types: it returns a value for
  * every pair. There is no failure channel on purpose: an exception from an
  * extension is a transaction error and a bug in the extension. An operation
@@ -131,6 +140,8 @@ class Operator<L : Any, R : Any, O : Any>(
     val apply: (L, R) -> O,
     val foldStepsCommute: Boolean,
     val foldIdempotent: Boolean,
+    val sidesMayBeSwapped: Boolean = false,
+    val groupingDoesNotMatter: Boolean = false,
 ) {
     @Suppress("UNCHECKED_CAST")
     internal fun applyAny(l: Any, r: Any): Any = apply(l as L, r as R)

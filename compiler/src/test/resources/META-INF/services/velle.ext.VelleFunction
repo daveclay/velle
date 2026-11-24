@@ -3,3 +3,4 @@ velle.ext.OtherBusinessDay
 velle.ext.Median
 velle.ext.RoundTo
 velle.ext.Clamp
+velle.ext.Larger

@@ -35,10 +35,12 @@ computed from it — same spec in, same artifact out, regenerated at every
 compile. A projection cannot drift, and cannot disagree with a sibling
 projection, because none of them is maintained; all of them are derived. This
 is the Reference's "code is fungible" stance ([§2](Reference-02-Philosophy)) extended to documentation.
-Determinism is also what makes the artifacts *reviewable*: a spec edit
-surfaces as an artifact diff in the pull request, the system's behavioral
-change visible as a picture change, with no human in the loop to forget to
-update it.
+Determinism also means a spec edit never leaves a diagram behind: the
+regenerated diagrams always show the edited spec, with no human in the loop to
+forget to update them. To review the edit itself, compare the two versions of
+the spec with `velle.CompareKt` ([Comparing specs](Comparing-specs)). It reads
+the same facts the diagrams are drawn from and says what changed in the
+spec's own names.
 
 One stance runs through every member: each diagram is **may**-something —
 may-fire, may-cause, may-flip. The derivations over-approximate, matching the
@@ -226,8 +228,7 @@ pseudostates, flowchart diamonds), and one format covers every family member.
 labeling, activation bars, and lifeline destruction (a natural rendering for
 transient acts — a lifeline that ends at its frame's close *is* `transient
 act`) earn the Java dependency. Both being text formats serves the
-determinism principle directly: regenerated artifacts diff in pull requests,
-so a spec edit surfaces as a readable diagram diff in review.
+determinism principle directly: the same spec always draws the same text.
 
 ## Limits and future members
 

@@ -4,6 +4,9 @@ package velle
 
 sealed interface Decl
 
+/** A declaration with the line of the spec it starts on, for a reader pointed back at the source. */
+data class LocatedDecl(val decl: Decl, val line: Int)
+
 /** Base shape. `exposed` is set by the `act` declaration (Reference §22, "External input"). */
 data class ShapeDecl(
     val name: String,

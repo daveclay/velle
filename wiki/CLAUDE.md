@@ -85,7 +85,8 @@ names the page alone, `[§5](Reference-05-Scalars)`, never a folder or `.md`.
   `compiler/src/test/resources/diagnostics/` and never edited by hand.
 - `Guides/`: `Act-API.md`, `Read-API.md`, `Store-API.md`,
   `Serving-a-system.md`, `API-layer.md`, `Extension-types.md`,
-  `Extension-functions.md`, `Authorization.md`, `Concurrency.md`, and
+  `Extension-functions.md`, `Authorization.md`, `Concurrency.md`,
+  `Comparing-specs.md`, and
   `Binding-API.md`, a pointer kept so old links to it still land.
 - `Notes/`: working notes such as `Velle-UI.md`, and images.
 - `Personal-Notes/`: Dave's own writing. These rules do not apply there.

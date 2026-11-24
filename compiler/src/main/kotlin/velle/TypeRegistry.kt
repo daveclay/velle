@@ -397,8 +397,57 @@ private class ClaimsCheck<T : Any>(private val type: VelleType<T>, private val r
                 if (!equalResult(o.applyAny(o.applyAny(x, a), a), o.applyAny(x, a)))
                     fail("operator '${o.op}' claims foldIdempotent but (x ${o.op} a) ${o.op} a differs from x ${o.op} a on its samples")
         }
+        for (line in type.operators) checkComparisonFacts(line)
         return out
     }
+
+    /** E2 for the two facts the comparison of two specs reads: swapped sides and grouping, on the operands' samples. */
+    private fun checkComparisonFacts(line: Operator<*, *, *>) {
+        val leftSamples = TypeRegistry.samplesOf(line.left, registry)
+        val rightSamples = TypeRegistry.samplesOf(line.right, registry)
+        val resultType = registry.builtins[line.result] ?: registry[line.result] ?: return
+        val sameResult = { first: Any, second: Any -> equalAny(resultType, first, second) }
+        if (line.sidesMayBeSwapped) checkSidesSwap(line, leftSamples, rightSamples, sameResult)
+        if (line.groupingDoesNotMatter) checkGrouping(line, leftSamples, sameResult)
+    }
+
+    private fun checkSidesSwap(line: Operator<*, *, *>, leftSamples: List<Any>, rightSamples: List<Any>, sameResult: (Any, Any) -> Boolean) {
+        val mirrored = if (line.left == line.right) line else mirroredLine(line)
+        if (mirrored == null || !mirrored.sidesMayBeSwapped) {
+            fail("operator '${line.left} ${line.op} ${line.right}' claims sidesMayBeSwapped but no line '${line.right} ${line.op} ${line.left}' states it too")
+            return
+        }
+        for (leftValue in leftSamples) for (rightValue in rightSamples)
+            if (!sameResult(line.applyAny(leftValue, rightValue), mirrored.applyAny(rightValue, leftValue))) {
+                fail("operator '${line.op}' claims sidesMayBeSwapped but a ${line.op} b differs from b ${line.op} a on its samples")
+                return
+            }
+    }
+
+    private fun checkGrouping(line: Operator<*, *, *>, samples: List<Any>, sameResult: (Any, Any) -> Boolean) {
+        if (line.left != line.right || line.left != line.result) {
+            fail("operator '${line.left} ${line.op} ${line.right}' claims groupingDoesNotMatter over more than one type")
+            return
+        }
+        for (first in samples) for (second in samples) for (third in samples) {
+            val groupedLeft = line.applyAny(line.applyAny(first, second), third)
+            val groupedRight = line.applyAny(first, line.applyAny(second, third))
+            if (!sameResult(groupedLeft, groupedRight)) {
+                fail("operator '${line.op}' claims groupingDoesNotMatter but (a ${line.op} b) ${line.op} c differs from a ${line.op} (b ${line.op} c) on its samples")
+                return
+            }
+        }
+    }
+
+    private fun mirroredLine(line: Operator<*, *, *>): Operator<*, *, *>? {
+        val owners = listOfNotNull(registry.builtins[line.right] ?: registry[line.right], registry.builtins[line.left] ?: registry[line.left])
+        return owners.flatMap { owner -> owner.operators }
+            .firstOrNull { candidate -> candidate.op == line.op && candidate.left == line.right && candidate.right == line.left }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun equalAny(resultType: VelleType<*>, first: Any, second: Any): Boolean =
+        (resultType as VelleType<Any>).equal(first, second)
 
     companion object {
         /** The sample, its neighbours when the type gives them, and the sum's zero: the values E2 checks on. */

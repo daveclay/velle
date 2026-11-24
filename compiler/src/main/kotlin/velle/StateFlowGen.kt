@@ -32,12 +32,7 @@ package velle
 internal object StateFlowGen {
 
     fun render(model: Model, catalog: KindCatalog): String {
-        val byBase = linkedMapOf<String, MutableList<RefinementDecl>>()
-        for (r in model.refinements.values) {
-            if (model.isStaticUnion(r.name)) continue
-            // a refinement over a union is an axis of each operand (Reference §9)
-            for (base in model.basesOf(r.name)) byBase.getOrPut(base) { mutableListOf() }.add(r)
-        }
+        val byBase = StateFlowFacts.refinementsByBase(model)
         if (byBase.isEmpty()) return ""
         return buildString {
             appendLine("## State flow")
@@ -66,6 +61,55 @@ internal object StateFlowGen {
 
 internal fun RefinementDecl.whereExpr(): Expr? = (expr as? RefName)?.where
 
+/**
+ * One fact the state-flow diagrams draw as an arrow: a commit of [cause] can move a record of
+ * [base] into the refinement [refinement] ([Dir.TOWARD_TRUE]), out of it ([Dir.TOWARD_FALSE]),
+ * or either way with no proof of which ([Dir.UNKNOWN], drawn "may flip"). The diagrams draw
+ * these and the comparison of two specs compares them.
+ */
+internal data class MembershipMove(val base: String, val refinement: String, val cause: Cause, val direction: Dir)
+
+/** The state-flow facts: what the diagrams draw, before any drawing. */
+internal object StateFlowFacts {
+
+    /** The refinements of [base] that are states of their own, `base where <predicate>`;
+     *  the others are views composed of them. */
+    fun atomicRefinements(model: Model, base: String, refinements: List<RefinementDecl>): List<RefinementDecl> =
+        refinements.filter { refinement ->
+            val narrowed = refinement.expr as? RefName ?: return@filter false
+            (narrowed.name == base || model.isStaticUnion(narrowed.name)) && narrowed.where != null
+        }
+
+    /** Every move of every state of every shape that is kept, the births excepted (a birth is the diagram's start arrow). */
+    fun moves(model: Model, catalog: KindCatalog): List<MembershipMove> {
+        val analysis = FlowAnalysis(model, catalog)
+        return refinementsByBase(model).filterKeys { base -> base !in model.transients }
+            .flatMap { (base, refinements) ->
+                atomicRefinements(model, base, refinements).flatMap { refinement -> movesOf(model, catalog, analysis, base, refinement) }
+            }
+    }
+
+    fun refinementsByBase(model: Model): Map<String, List<RefinementDecl>> {
+        val byBase = linkedMapOf<String, MutableList<RefinementDecl>>()
+        for (refinement in model.refinements.values) {
+            if (model.isStaticUnion(refinement.name)) continue
+            // a refinement over a union is an axis of each operand (Reference §9)
+            for (base in model.basesOf(refinement.name)) byBase.getOrPut(base) { mutableListOf() }.add(refinement)
+        }
+        return byBase
+    }
+
+    fun movesOf(model: Model, catalog: KindCatalog, analysis: FlowAnalysis, base: String, refinement: RefinementDecl): List<MembershipMove> {
+        val where = refinement.whereExpr()!!
+        val summary = model.predicateSummary(refinement.name)
+        return catalog.causes
+            .filterNot { cause -> cause.kind is CommitKind.Create && cause.kind.shape == base }
+            .filter { cause -> catalog.touches(cause.kind, summary) }
+            .map { cause -> MembershipMove(base, refinement.name, cause, analysis.dir(where, cause.kind, base)) }
+            .filter { move -> move.direction != Dir.NONE }
+    }
+}
+
 /** How a commit kind can move a predicate's truth value. */
 internal enum class Dir { TOWARD_TRUE, TOWARD_FALSE, NONE, UNKNOWN }
 
@@ -88,7 +132,7 @@ private class ShapeFlow(
 ) {
     /** Refinements of the form `base where <predicate>` become states; anything
      *  else (compositions, refinements of refinements) is a derived view. */
-    val atomics = refs.filter { (it.expr as? RefName)?.let { e -> (e.name == base || model.isStaticUnion(e.name)) && e.where != null } == true }
+    val atomics = StateFlowFacts.atomicRefinements(model, base, refs)
     val composites = refs - atomics.toSet()
     val analysis = FlowAnalysis(model, catalog)
 
@@ -239,23 +283,9 @@ private class ShapeFlow(
     private class Causes(val enter: List<String>, val exit: List<String>, val flip: List<String>)
 
     private fun causesFor(r: RefinementDecl): Causes {
-        val where = r.whereExpr()!!
-        val summary = model.predicateSummary(r.name)
-        val enter = mutableListOf<String>()
-        val exit = mutableListOf<String>()
-        val flip = mutableListOf<String>()
-        for (cause in catalog.causes) {
-            val k = cause.kind
-            if (k is CommitKind.Create && k.shape == base) continue // birth is the [*] arrow
-            if (!catalog.touches(k, summary)) continue
-            when (analysis.dir(where, k, base)) {
-                Dir.TOWARD_TRUE -> enter.add(cause.label)
-                Dir.TOWARD_FALSE -> exit.add(cause.label)
-                Dir.UNKNOWN -> flip.add(cause.label)
-                Dir.NONE -> {}
-            }
-        }
-        return Causes(enter.distinct(), exit.distinct(), flip.distinct())
+        val moves = StateFlowFacts.movesOf(model, catalog, analysis, base, r)
+        fun labels(direction: Dir) = moves.filter { move -> move.direction == direction }.map { move -> move.cause.label }.distinct()
+        return Causes(labels(Dir.TOWARD_TRUE), labels(Dir.TOWARD_FALSE), labels(Dir.UNKNOWN))
     }
 
     /** exitOnly: the axis only models leaving (born a member) — entries have

@@ -41,7 +41,7 @@ object BuiltinTypes {
     val byName: Map<String, VelleType<*>> = all.associateBy { it.name }
 }
 
-/** A builtin: lowercase keyword names, the `velle` namespace, no operator lines yet. */
+/** A builtin: lowercase keyword names, the `velle` namespace, no operator lines unless a type states its own. */
 sealed class BuiltinType<T : Any>(override val name: String) : VelleType<T> {
     override val namespace = "velle"
     override val operators: List<Operator<*, *, *>> get() = emptyList()
@@ -72,6 +72,18 @@ sealed class NumberType(name: String, private val whole: Boolean) : BuiltinType<
     override fun abs(v: BigDecimal): BigDecimal = v.abs()
     override val zero: BigDecimal = BigDecimal.ZERO
     override fun plus(a: BigDecimal, b: BigDecimal): BigDecimal = a.add(b)
+
+    /** The facts of the language's own arithmetic on one number type. The arithmetic itself is
+     *  still the language's; these lines state what it is known to obey, and E2 checks them. */
+    override val operators: List<Operator<*, *, *>> by lazy { listOf(
+        Operator<BigDecimal, BigDecimal, BigDecimal>("+", name, name, name, { left, right -> left.add(right) },
+            foldStepsCommute = true, foldIdempotent = false, sidesMayBeSwapped = true, groupingDoesNotMatter = true),
+        Operator<BigDecimal, BigDecimal, BigDecimal>("-", name, name, name, { left, right -> left.subtract(right) },
+            foldStepsCommute = true, foldIdempotent = false),
+        Operator<BigDecimal, BigDecimal, BigDecimal>("*", name, name, name, { left, right -> left.multiply(right) },
+            foldStepsCommute = false, foldIdempotent = false, sidesMayBeSwapped = true, groupingDoesNotMatter = true),
+    ) }
+
     override val samples = Samples(
         sample = BigDecimal("2"),
         below = { it.subtract(BigDecimal.ONE) },

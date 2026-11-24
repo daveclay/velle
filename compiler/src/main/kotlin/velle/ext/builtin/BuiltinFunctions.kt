@@ -146,6 +146,8 @@ sealed class Extreme(name: String, private val pickFirst: (Int) -> Boolean) : Bu
     )
     override val foldStepsCommute = true
     override val foldIdempotent = true
+    override val argumentsInAnyOrder = true
+    override val groupingDoesNotMatter = true
 }
 
 object Max : Extreme("max", { it >= 0 })
