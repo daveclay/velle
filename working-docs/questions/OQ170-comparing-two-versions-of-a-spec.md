@@ -1,6 +1,6 @@
 # OQ170 — a tool that reads two versions of a spec and says what changed in Velle's words, not as changed lines of text
 
-**Status:** opened 2026-11-23 from Dave's note. Investigated against HEAD the same day. D1, D2, D3, D4, D6, and D7 decided. D5, D8, D9, and D10 await Dave. Nothing built except the probe test.
+**Status:** opened 2026-11-23 from Dave's note. Investigated against HEAD the same day. D1, D2, D3, D4, D6, D7, and D8 decided. D5, D9, and D10 await Dave. Nothing built except the probe test.
 
 **In plain terms:** a review of a change to a spec today means reading changed lines of text and working out what they do to the business. The compiler already knows what a spec means, so it could read the old spec and the new one and say "a line item can now clear an overdue invoice" instead of "line 87 was deleted".
 
@@ -318,7 +318,7 @@ Costs:
 
 **Decided:** both, Dave, 2026-11-24. The report reads in plain English, so that a person who is not technical can understand which business rules changed. When that person decides against a change, they must be able to tell the engineer where in the spec to make it, so each sentence also points at the place in the Velle that says it. His words: "it needs to read in plain english enough for non-tech humans to understand what business rules have changed. But, in the case where the human decides _against_ some behavior, they need to communicate where in velle to make that change." The pointer is the one place Velle text appears, and it is a reference for the engineer, not something the product owner reads. Names are split into words, as recommended; he did not ask for them untouched. Reversed in part by Dave, 2026-11-24: the report uses the shape and refinement names as the spec spells them, `OverdueInvoice` and `LineItem`, and never splits them into words.
 
-### D8. Each operator states facts about itself, and the tool computes "means the same" by reasoning from those facts, never from a list of operator names
+### D8. Each operator states facts about itself, and the tool computes "means the same" by reasoning from those facts, never from a list of operator names · Decided 2026-11-24
 
 Does each operator carry its own facts, such as "my two sides may be swapped", so that the tool works out whether two conditions mean the same from the facts of the operators in them?
 
@@ -364,6 +364,8 @@ Costs:
 - `Compare.kt` compares agreed spellings, and reports a declaration as changed only when they differ.
 - `wiki/Guides/Extension-types.md` and `wiki/Guides/Extension-functions.md`: the new members.
 - A test per fact, evaluating both spellings over records with present and absent values.
+
+**Decided:** yes, Dave, 2026-11-24.
 
 ### D9. The command can be pointed at a store, and then counts the records D5 describes
 
@@ -412,7 +414,7 @@ Costs:
 
 ## 3. The build
 
-Waits on D5, D8, D9, and D10.
+Waits on D5, D9, and D10.
 
 ## 4. Work items
 
