@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D3 decided. D4 to D8 await Dave. Nothing built.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D4 decided. D5 to D8 await Dave. Nothing built.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -90,7 +90,7 @@ Costs:
 
 **Decided:** yes, 2026-11-25.
 
-### D4. The compiler ships inside the skill as one self-contained jar
+### D4. The compiler ships inside the skill as one self-contained jar · Decided 2026-11-25
 
 Is the compiler shipped inside the skill folder, as one jar that holds the Kotlin standard library, rather than downloaded the first time the skill runs?
 
@@ -105,6 +105,8 @@ Costs:
 #### Proposed changes
 
 - A Gradle task in `compiler/build.gradle.kts` that builds the self-contained jar and copies it into the skill folder.
+
+**Decided:** yes, 2026-11-25. Dave presumes separate jars per tool could be built later to keep the size down.
 
 ### D5. The skill carries Velle's own extension libraries and no others
 
