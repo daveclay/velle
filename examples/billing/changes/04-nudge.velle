@@ -1,0 +1,235 @@
+-- Version 04 of the billing spec, in the history under examples/billing/changes/.
+-- A Reminder is now called a Nudge.
+
+-- Billing: a small invoicing system — the first Velle spec, and v0's test fixture.
+-- Deliberately exercises the full v0 surface: every property kind, relationships,
+-- refinements (composition, capture, frozen), guards with disarm proofs, a
+-- a fold accepted as written, after-commit with a backstop, a tick sweep whose memory is
+-- data, when-leaving, rejection-as-data, and door-checked `never`s.
+--
+-- Comment convention (here and in membership.velle): plain comments tell the
+-- business story; `velle:` comments note the language machinery on show.
+--
+-- Amounts are `Money`, an extension type (Reference §5) from the velle.finance
+-- library on this system's classpath: exact to the cent, ordered, summable, and
+-- read from a plain number constant. Nothing declares it; the name is in scope.
+
+-- ── Invoices and line items ──────────────────────────────────────────────────
+
+-- An invoice bills one customer for its line items. Its total, remaining
+-- balance, and status are always current — read straight off the line items
+-- and payments on record, never kept by hand.
+-- velle: derived properties over inferred inverse collections; `initially
+-- randomUUID` mints the outward-facing reference at the record's creation —
+-- on the rule-created record, where no committer exists to supply it
+transient act BillCustomer {
+    customer: one Customer
+    due: Date
+}
+
+Status is one of "paid", "overdue", "open"
+
+shape Invoice {
+    customer: one Customer
+    due: Date
+    reference: text initially randomUUID
+    issuedOn: timestamp on create
+    total: Money = sum(lineItems, amount)
+    balance: Money = total - sum(payments, amount)
+    status: Status = if balance <= 0 then "paid" else if due < today then "overdue" else "open"
+}
+
+rule OpenInvoice when BillCustomer {
+    Invoice from { customer: customer, due: due }
+}
+
+act LineItem {
+    invoice: one Invoice
+    description: text
+    price: Money
+    quantity: integer
+    amount: Money = quantity * price
+}
+
+-- No line item may have a zero quantity. A negative price is a discount — bad submissions
+-- line. Bad submissions are refused at the door, before they ever become data.
+-- velle: constraints no rule can move, checked at the door (Reference §21)
+never (LineItem where quantity <= 0)
+
+-- ── Payments ─────────────────────────────────────────────────────────────────
+
+-- Payments land against an invoice; zero and negative amounts are refused at
+-- the door, before anything is kept.
+transient act SubmitPayment {
+    invoice: one Invoice
+    amount: Money
+}
+
+never (SubmitPayment where amount <= 0)
+
+shape Payment {
+    invoice: one Invoice
+    amount: Money
+    receivedOn: timestamp on create
+}
+
+rule RecordPayment when SubmitPayment {
+    Payment from { invoice: invoice, amount: amount }
+}
+
+-- We remember the largest single payment each customer has ever made.
+-- velle: a fold accepted as written (max): duplication- and order-insensitive, so no guard owed
+rule TrackLargestPayment when Payment {
+    invoice.customer.largestPayment = max(invoice.customer.largestPayment, amount)
+}
+
+-- Paying an invoice off in full earns a receipt.
+shape PaidInvoice = Invoice where total > 0 and balance <= 0
+
+shape Receipt {
+    invoice: one Invoice
+    sentOn: DateTime
+}
+
+rule SendReceipt when PaidInvoice {
+    Receipt from { invoice: this, sentOn: now }
+}
+
+-- The receipt is then emailed — and must not be lost even if the system dies
+-- right after the payment: email immediately, and sweep hourly for any receipt
+-- that never got its email.
+-- velle: durable follow-up — declared boundary, canonical guard, healed hourly
+shape UnemailedReceipt = Receipt where not exists ReceiptEmail for this
+
+shape ReceiptEmail {
+    receipt: one Receipt
+    queuedOn: DateTime
+}
+
+rule EmailReceipt when UnemailedReceipt after commit, Hourly {
+    ReceiptEmail from { receipt: this, queuedOn: now }
+}
+
+-- ── Overdue reminders ────────────────────────────────────────────────────────
+
+-- Chase unpaid, past-due invoices that were issued to the customer, but
+-- never nag more than once a fortnight per invoice, and leave archived invoices alone.
+-- velle: a tick sweep whose cross-tick memory is data (the Nudge itself)
+shape OverdueInvoice = Invoice where due < today and balance > 0
+
+-- velle: composition — overdue and not shelved away
+shape ActionableOverdue = OverdueInvoice and IssuedInvoice and not ArchivedInvoice
+
+shape Nudge {
+    invoice: one Invoice
+    sentOn: Date
+}
+
+rule RemindOverdue
+    when (ActionableOverdue where
+          not exists (Nudge where invoice == this and sentOn > today - 14 days))
+    on Weekly {
+    Nudge from { invoice: this, sentOn: today }
+}
+
+-- ── Issuance freezes the due date ────────────────────────────────────────────
+
+-- Once an invoice is issued to the customer, its due date is locked. Anyone
+-- may still *request* a change; on an issued invoice the request is refused,
+-- and the refusal is a record the requester can read back, with the reason.
+-- The request itself is a message, not a record: it is decided at its own
+-- commit and not kept — the refusal copies what it needs.
+-- velle: `frozen` write-gate; rejection as data over a `transient` act — the
+-- partition evaluates exactly once, at the act's commit (Reference §4); the
+-- complement pair (P / not P) is what proves every request gets a response (V18)
+act Issuance {
+    invoice: one Invoice
+}
+
+shape IssuedInvoice = Invoice where exists Issuance for this {
+    frozen due
+}
+
+transient act ChangeDueDate {
+    invoice: one Invoice
+    newDue: Date
+}
+
+shape ApplicableDueChange = ChangeDueDate where invoice is not IssuedInvoice
+shape RefusedDueChange    = ChangeDueDate where invoice is IssuedInvoice
+
+rule ApplyDueChange when ApplicableDueChange {
+    invoice.due = newDue
+}
+
+shape DueChangeRefusal {
+    invoice: one Invoice
+    requestedDue: Date
+    reason: text
+    refusedOn: DateTime
+}
+
+rule RecordDueChangeRefusal when RefusedDueChange {
+    DueChangeRefusal from { invoice: invoice, requestedDue: newDue, reason: "invoice is issued", refusedOn: now }
+}
+
+-- ── Archival ─────────────────────────────────────────────────────────────────
+
+-- Old invoices can be archived to get them out of the way, and unarchived
+-- later. Unarchiving produces a notice that records when the invoice had been
+-- archived — useful when someone asks why it disappeared from reports.
+-- velle: capture at entry (`archivedOn`), read at exit by its last reader
+act ArchiveRequest {
+    invoice: one Invoice
+}
+
+act UnarchiveRequest {
+    invoice: one Invoice
+}
+
+shape ArchivedInvoice = Invoice where
+    exists ArchiveRequest for this and not exists UnarchiveRequest for this {
+    captured archivedOn: Date = today
+}
+
+shape UnarchiveNotice {
+    invoice: one Invoice
+    wasArchivedOn: Date
+    noticedOn: DateTime
+}
+
+rule NoteUnarchival when leaving ArchivedInvoice {
+    UnarchiveNotice from { invoice: this, wasArchivedOn: archivedOn, noticedOn: now }
+}
+
+-- ── Customers ────────────────────────────────────────────────────────────────
+
+-- A customer signs up with a name and email. The sign-up is the input; the
+-- customer record is what the system keeps about it, with its own system-
+-- maintained fields — an act carries only committer fields (V21).
+-- Support can fix a mistyped email on their behalf — the correction is an act
+-- of its own, so there is always a record that it happened and who asked for it.
+transient act SignUp {
+    name: text
+    email: text
+}
+
+shape Customer {
+    name: text
+    email: text
+    signedUpOn: timestamp on create
+    largestPayment: Money initially 0
+}
+
+rule AdmitCustomer when SignUp {
+    Customer from { name: name, email: email }
+}
+
+act CorrectEmail {
+    customer: one Customer
+    corrected: text
+}
+
+rule ApplyEmailCorrection when CorrectEmail {
+    customer.email = corrected
+}

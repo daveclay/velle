@@ -60,6 +60,8 @@ The third says what the edit does to a record like the ones the system keeps:
 - At the next Weekly tick, RemindOverdue no longer runs for it.
 ```
 
+`examples/billing/changes/` holds a history of six changes to `examples/billing/billing.velle`, each version a whole spec, with the report for each change checked in beside it. Its README says what each report shows.
+
 When nothing the spec says has changed, the report says `No change.` Reordering the file, editing a comment, and rewriting a condition in other words that mean the same are all no change.
 
 ## What was edited

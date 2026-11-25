@@ -12,6 +12,8 @@ Each folder here is one example system: the spec, `<system>/<system>.velle`; its
 ./gradlew :examples:vendors:app:bootRun               # the vendors catalogue beside Authentik; console at http://localhost:8096/velle, sign in as grace or linus
 ```
 
+`./gradlew :examples:billing:output:compareChanges` writes the reports in `examples/billing/changes/`, a history of changes to the billing spec with what each one does to the business (its `README.md`).
+
 Any other example runs the same way: `./gradlew :examples:<system>:app:bootRun`. The pharmacy's application loads ninety days of test data into an empty database.
 
 ## Ports

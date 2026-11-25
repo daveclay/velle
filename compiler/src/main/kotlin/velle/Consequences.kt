@@ -29,7 +29,9 @@ internal class SpecFacts(val version: SpecVersion) {
 
     val advisories: Set<String> = Validator.advisories(version.source).map { diagnostic -> diagnostic.message }.toSet()
 
-    val generatedCases: Set<String> = SpecGen.generate(version.source, "System").index.lines()
+    /** The cases the generator writes, from its index; the cases it lists as not yet generated are left out. */
+    val generatedCases: Set<String> = SpecGen.generate(version.source, "System").index
+        .substringBefore("## Not yet generated").lines()
         .filter { line -> line.startsWith("- ") }.map { line -> line.removePrefix("- ") }.toSet()
 
     val baseOf: (String) -> String = { name -> model.baseOf(name) ?: name }

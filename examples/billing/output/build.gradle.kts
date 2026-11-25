@@ -43,6 +43,29 @@ tasks.register<JavaExec>("generate") {
     args("../billing.velle", "Billing", "--diagrams")
 }
 
+// The billing spec's history of changes (examples/billing/changes/): each version is compared
+// with the one before it, and the first with the last, by `velle.CompareKt`, and the report is
+// written beside the specs as Markdown. ChangeHistoryTest fails when a report is stale.
+val changesDirectory = layout.projectDirectory.dir("../changes")
+val compareChanges = tasks.register("compareChanges") {
+    description = "Compare each version of the billing spec in examples/billing/changes/ with the one before it"
+}
+afterEvaluate {
+    val versions = changesDirectory.asFile.listFiles { file -> file.name.endsWith(".velle") }!!.map { file -> file.name }.sorted()
+    val pairs = versions.zipWithNext() + (versions.first() to versions.last())
+    for ((before, after) in pairs) {
+        val reportName = if (after == versions.last() && before == versions.first()) "${before.substringBefore("-")}-to-${after.substringBefore("-")}.md" else after.removeSuffix(".velle") + ".md"
+        val step = tasks.register<JavaExec>("compare-" + reportName.removeSuffix(".md")) {
+            classpath = sourceSets["main"].runtimeClasspath
+            mainClass.set("velle.CompareKt")
+            workingDir = changesDirectory.asFile
+            args(before, after)
+            doFirst { standardOutput = changesDirectory.file(reportName).asFile.outputStream() }
+        }
+        compareChanges.configure { dependsOn(step) }
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)

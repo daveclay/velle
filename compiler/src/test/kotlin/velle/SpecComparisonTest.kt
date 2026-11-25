@@ -152,6 +152,7 @@ class SpecComparisonTest {
             "- A Payment stored before this change is now forbidden when its amount is at most 0. Its next change could be refused." in report,
             report,
         )
+        assertTrue("generated case" !in report, "a case the generator skips, such as a never over a kept shape, is not a generated case: $report")
     }
 
     @Test
