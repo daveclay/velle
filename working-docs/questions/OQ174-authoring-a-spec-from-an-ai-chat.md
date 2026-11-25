@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D6 decided. D7 and D8 await Dave. Nothing built.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D7 decided. D8 awaits Dave. Nothing built.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -145,7 +145,7 @@ Costs:
 
 **Decided:** yes, 2026-11-25.
 
-### D7. Each accepted decision is one commit quoting the discussion
+### D7. Each accepted decision is one commit quoting the discussion · Decided 2026-11-25
 
 When the draft is in a git repository, does the skill commit each decision the product owner accepts as its own commit, whose message quotes what was said that led to it?
 
@@ -155,6 +155,8 @@ Costs:
 
 - A host without git, or a draft not in a repository, has no history. The skill then keeps the quotes nowhere, and says so at the start of the session.
 - A quoted message carries what people said in a meeting into a repository others read. The skill asks before the first commit of a session.
+
+**Decided:** yes, 2026-11-25, on the condition that a machine without git can still produce a Velle spec. Git is never required: the `velle` command never calls it, and every step of a design session but the commit runs without it, so a session on such a machine ends with the same draft and no history.
 
 ### D8. What the room leaves undecided is a list beside the draft, never a guess inside it
 
