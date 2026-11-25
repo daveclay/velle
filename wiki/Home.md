@@ -69,6 +69,7 @@ Walkthroughs that gather what the Reference and the normative documents settle, 
 - [[Using a system from an AI chat|AI-chat]] — reading the records and committing the acts of a running system from a chat client such as Claude: connecting it, a conversation with the billing system, what the assistant can and cannot do, and acting as yourself
 - [[The API layer|API-layer]] — how that is built, class by class: the operations in `apis/json`, the GraphQL schema from the model, the Spring Boot starter's beans, one request end to end, and how to replace a transport, a store, or the identity
 - [[Comparing specs|Comparing-specs]] — reading two versions of a spec and saying what changed in the spec's own names: what was edited, what that changes elsewhere, what it does to a record like the ones the system keeps, and where in the spec each sentence comes from
+- [[Best practices|Best-practices]] — spellings that keep a spec readable: naming the parts of a long condition in a rule or a prohibition as refinements, and when a condition can stay inline
 
 ## Working notes
 

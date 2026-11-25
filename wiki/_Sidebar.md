@@ -50,6 +50,7 @@
 - [[Using a system from an AI chat|AI-chat]]
 - [[The API layer|API-layer]]
 - [[Comparing specs|Comparing-specs]]
+- [[Best practices|Best-practices]]
 
 **Notes**
 
