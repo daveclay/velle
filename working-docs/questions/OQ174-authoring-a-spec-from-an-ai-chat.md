@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 and D2 decided. D3 to D8 await Dave. Nothing built.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D3 decided. D4 to D8 await Dave. Nothing built.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -65,7 +65,7 @@ Costs:
 
 **Decided:** yes, 2026-11-25.
 
-### D3. One command, `velle`, with four subcommands
+### D3. One command, `velle`, with four subcommands · Decided 2026-11-25
 
 Does the skill reach the compiler through one command, `velle`, with the subcommands `validate`, `compare`, `describe`, and `try`, each printing Markdown?
 
@@ -87,6 +87,8 @@ Costs:
 - A new `velle.Cli` entry point in `compiler/src/main/kotlin/velle/` with the four subcommands.
 - `compiler/src/main/kotlin/velle/Compare.kt` becomes the `compare` subcommand.
 - A new test per subcommand over `examples/billing/billing.velle`.
+
+**Decided:** yes, 2026-11-25.
 
 ### D4. The compiler ships inside the skill as one self-contained jar
 
