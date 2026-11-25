@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D7 decided. D8 awaits Dave. Nothing built.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D8 decided. The build plan (§6) awaits Dave's review; nothing built. Nothing built.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -158,7 +158,7 @@ Costs:
 
 **Decided:** yes, 2026-11-25, on the condition that a machine without git can still produce a Velle spec. Git is never required: the `velle` command never calls it, and every step of a design session but the commit runs without it, so a session on such a machine ends with the same draft and no history.
 
-### D8. What the room leaves undecided is a list beside the draft, never a guess inside it
+### D8. What the room leaves undecided is a list beside the draft, never a guess inside it · Decided 2026-11-25
 
 When the discussion leaves something undecided, does the skill write it as a question in a file beside the draft, and leave the spec without it, rather than write its own best guess into the spec?
 
@@ -168,6 +168,8 @@ Costs:
 
 - The file's name and form are the skill's own, with no meaning to the compiler. A spec can validate while the list is long.
 - Turning a validator diagnostic into a business question is the assistant's wording, which D2 otherwise forbids for rules. It is allowed for questions because a question changes nothing in the spec.
+
+**Decided:** yes, 2026-11-25.
 
 ## 4. Not in this question
 
@@ -179,4 +181,36 @@ Costs:
 
 - [ ] Check which assistants besides Claude Code and claude.ai read the open skill format, whether each lets a skill run a script, whether each sandbox has Java 21, and what size each allows a skill to be (D1, D4).
 - [ ] List the forms in `examples/` for which `Sentences` has no words, each one a gap a product owner would see as Velle (D2, D3).
-- [ ] Try a design session in chat by rebuilding part of `examples/billing/billing.velle` from an empty draft, before any audio work (§4).
+- [ ] Add `velle.Cli` with `validate`, `compare`, and `describe`, and make `Compare.kt` the `compare` subcommand (§6, stage 1).
+- [ ] Add the Gradle task that builds the self-contained jar with `extensions/finance` and copies it into the skill folder (§6, stage 1).
+- [ ] Write `skills/velle-design/`: `SKILL.md`, `scripts/velle`, `references/` (§6, stage 1).
+- [ ] Add the test that fails when `references/` and `wiki/Reference/` disagree (§6, stage 1).
+- [ ] Try a design session in chat by rebuilding part of `examples/billing/billing.velle` from an empty draft, before any audio work (§4, §6 stage 1).
+- [ ] Write the decision on what a scenario for `velle try` says, from what stage 1's trial session needed (§6, stage 2).
+- [ ] Add `velle try` (§6, stage 2).
+- [ ] Add the authoring MCP server in `apis/mcp/` over the same code as `velle.Cli` (§6, stage 3).
+
+## 6. The build
+
+Three stages, each landing on its own. Stage 1 is enough for a design session in Claude Code or claude.ai. The work items in §5 mirror this list.
+
+### Stage 1: the skill with `validate`, `compare`, and `describe`
+
+1. **Code.** A new `velle.Cli` in `compiler/src/main/kotlin/velle/` with the subcommands `validate`, `compare`, and `describe`, each printing Markdown (D3). `validate` prints the diagnostics or a line saying the draft validates, and writes no file. `compare` is the body of today's `Compare.kt`, which stays as a thin entry point so `wiki/Guides/Comparing-specs.md` keeps working. `describe` prints the whole spec in the words of `Sentences` and `RuleSentences`, showing the Velle for a form they have no words for. Nothing in it calls git (D7).
+2. **The jar.** A Gradle task in `compiler/build.gradle.kts` builds one jar holding the compiler, the Kotlin standard library, and `extensions/finance`, and no store binding (D4, D5). It copies the jar into `skills/velle-design/scripts/`.
+3. **The skill.** `skills/velle-design/` at the repo root (D6):
+   - `SKILL.md` with `name` and `description` only in its first lines (D1). Its body is the procedure: edit the draft, run `validate`, run `compare` against the version before the edit, show the product owner only the compiler's sentences and ask whether that is what they meant (D2); on acceptance commit with the quoted discussion when the draft is in git and the room agreed at the first commit, otherwise keep going without history and say so at the start (D7); on rejection undo the edit; write what the room leaves undecided, and every proof the validator cannot make, as a question in a file beside the draft (D8). It says to use the authoring MCP tools when they are connected and the script otherwise (D1).
+   - `scripts/velle`, a shell launcher running the jar with `java`, and the jar.
+   - `references/`, a condensed Velle reference from `wiki/Reference/`.
+4. **Tests.** One per subcommand over `examples/billing/billing.velle`, which uses `Money`, run against the built jar so the standard library and `extensions/finance` are proven to be inside it. A test that fails when `references/` names a keyword `wiki/Reference/` does not, or the reverse (D6).
+5. **Wiki.** A new guide, `wiki/Guides/Design-session.md`: loading the skill in Claude Code and in claude.ai, a session from an empty draft, what the product owner sees, and what a machine without git or Java gets. Linked from `Home.md` and `_Sidebar.md`. `GLOSSARY.md` gains "skill". `Comparing-specs.md` gains the `velle compare` spelling.
+6. **Repo.** The root `CLAUDE.md` names `skills/` in its list of folders.
+7. **Trial.** One design session in chat that rebuilds part of `examples/billing/billing.velle` from an empty draft. What it needed and lacked goes into this file before stage 2.
+
+### Stage 2: `velle try`
+
+Waits on a decision, written into this file after stage 1's trial, on what a scenario says. Then `try` runs the scenario over an empty `MemoryStore` with each act committed in turn and prints, per act, accepted or refused with the `never` that refused it (D3). The skill's procedure gains "when the room gives an example, run it". A test per outcome over `examples/billing/billing.velle`.
+
+### Stage 3: the authoring MCP server
+
+A server in `apis/mcp/`, apart from `VelleMcp`, whose tools are `validate`, `compare`, `describe`, and `try`, calling the same code as `velle.Cli` (D1). A test that the server and the command give the same answer for the same draft. `wiki/Guides/Design-session.md` gains connecting it, and `wiki/Guides/API-layer.md` the server. The settled row moves into the table in the commit that lands this stage, and this file is deleted in it.
