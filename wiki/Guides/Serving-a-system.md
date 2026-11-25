@@ -358,6 +358,7 @@ The API layer runs no spec that did not validate. What it refuses at the boundar
 
 ## Related pages
 
+- [Using a system from an AI chat](AI-chat), connecting a chat client to the MCP server on this page and what the assistant does there.
 - [The API layer](API-layer), how the endpoints on this page are built: the operations, the schema builder, the starter's beans, and one request end to end.
 - [Act API](Act-API), the generated commit function the application's own code calls, and the shape of an act's input the JSON mirrors.
 - [Read API](Read-API), the generated reads and typed queries the application's own endpoints call.

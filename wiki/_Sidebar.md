@@ -47,6 +47,7 @@
 - [[Extension functions|Extension-functions]]
 - [[Store API|Store-API]]
 - [[Serving a system|Serving-a-system]]
+- [[Using a system from an AI chat|AI-chat]]
 - [[The API layer|API-layer]]
 - [[Comparing specs|Comparing-specs]]
 
