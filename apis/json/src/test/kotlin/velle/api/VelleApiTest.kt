@@ -218,6 +218,32 @@ class VelleApiTest {
         assertEquals(1L, customer["key"]) // SQLite's first row id
     }
 
+    // ── a dry run: the answer a commit would give, nothing kept ─────────────────
+
+    @Test
+    @Suppress("UNCHECKED_CAST")
+    fun `a dry run answers as a commit would and keeps nothing`() {
+        val api = billing(sqlite = true)
+        accepted(api.commit("SignUp", mapOf("name" to "Ada", "email" to "ada@example.com"), actor = null))
+        val ada = api.query("Customer", null, listOf("name"), null, null, null).items().single()
+        accepted(api.commit("BillCustomer", mapOf("customer" to ada["key"], "due" to "2026-04-01"), null))
+        val invoiceKey = api.query("Invoice", null, listOf("due"), null, null, null).items().single()["key"]!!
+
+        assertEquals(mapOf<String, Any?>("accepted" to true), api.check("SubmitPayment", mapOf("invoice" to invoiceKey, "amount" to "40.00"), null))
+        assertEquals(0, api.count("Payment", null, null), "the payment the rule made was not kept")
+
+        val zero = api.check("SubmitPayment", mapOf("invoice" to invoiceKey, "amount" to 0), null)
+        val committedZero = api.commit("SubmitPayment", mapOf("invoice" to invoiceKey, "amount" to 0), null)
+        assertEquals(committedZero["reason"], zero["reason"], "a refusal is the one a commit gives")
+        val rejection = zero["rejection"] as Map<String, Any?>
+        assertEquals((committedZero["rejection"] as Map<String, Any?>)["declaration"], rejection["declaration"])
+        assertEquals(false, zero["accepted"])
+
+        val malformed = assertFailsWith<ApiException> { api.check("SubmitPayment", mapOf("invoice" to invoiceKey, "amount" to "ten"), null) }
+        assertEquals(ApiException.Kind.BAD_REQUEST, malformed.kind)
+        assertEquals(ApiException.Kind.NOT_FOUND, assertFailsWith<ApiException> { api.check("Nothing", emptyMap(), null) }.kind)
+    }
+
     // ── authorization: the actor on a commit, the viewer on a read ──────────────
 
     @Test

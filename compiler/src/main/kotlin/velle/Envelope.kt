@@ -51,6 +51,30 @@ internal class Envelope(private val system: VelleSystem) {
     }
 
     /**
+     * Run [body] as [run] does, up to and including the prohibitions checked at the close,
+     * and then undo it ([VelleSystem.check]): nothing is written, no deletion lands, and no
+     * after-commit firing runs. The answer is the one a commit would have had.
+     */
+    fun <T> dryRun(
+        actor: Long? = null,
+        keys: () -> Set<AdmissionKey> = { emptySet() },
+        body: (Transaction) -> T,
+    ): Result<T> {
+        val (writeUnit, transaction) = open(actor)
+        return try {
+            writeUnit.serialize(keys())
+            workingSet.beginSnapshot()
+            val outcome = body(transaction)
+            system.prohibitions.checkAtClose(transaction)
+            abandon(transaction, Outcome.Checked)
+            Result.success(outcome)
+        } catch (failure: Exception) {
+            abandon(transaction, if (failure is NeverViolation) Outcome.Refused else Outcome.Failed(failure))
+            Result.failure(failure)
+        }
+    }
+
+    /**
      * Write one record of [shape] outside the trust boundary ([VelleSystem.seed]): its own
      * envelope, in which no rule fires and no prohibition is checked. A seed bypasses the
      * rules, so no domain was derived for it: it takes the shape's width.

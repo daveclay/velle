@@ -24,7 +24,7 @@ interface NewValue {
  *  harness-controlled clock, the boundary every commit overload passes, and the
  *  degenerate query behind each `<shapes>()` accessor. */
 abstract class GeneratedSystem(spec: String, startTime: Instant) {
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(spec)), startTime)
+    val system: VelleSystem = VelleSystem(Model(Parser.parse(spec)), startTime, source = spec)
 
     // ── clock (harness-controlled; ticks are separate calls) ──
     val now: Instant get() = system.now

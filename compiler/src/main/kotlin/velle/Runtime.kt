@@ -33,6 +33,8 @@ class VelleSystem(
     /** The moment the system starts at: the clock's first reading, and the previous tick before a schedule's first. */
     internal val startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"),
     val zone: ZoneId = ZoneId.of("UTC"),
+    /** The text of the spec [model] was compiled from, comments included, when the system was built from one; null otherwise. */
+    val source: String? = null,
 ) {
     @Volatile
     var now: Instant = startTime
@@ -198,6 +200,20 @@ class VelleSystem(
         parts: Map<String, List<Map<String, Any?>>> = emptyMap(),
         actor: Long? = null,
     ): CommitResult = scope { actCommitter.commit(shape, suppliedFields, parts, actor) }
+
+    /**
+     * A dry run of [commit]: the act is read, its rules run, and its prohibitions are
+     * checked exactly as a commit would, under the same queue keys, and then everything
+     * is undone and nothing reaches the store. The answer is what a commit would answer
+     * now; another commit can land before the real one, so it is no promise. Firings
+     * behind an `after commit` boundary run after a commit is over and are not covered.
+     */
+    fun check(
+        shape: String,
+        suppliedFields: Map<String, Any?>,
+        parts: Map<String, List<Map<String, Any?>>> = emptyMap(),
+        actor: Long? = null,
+    ): CheckResult = scope { actCommitter.check(shape, suppliedFields, parts, actor) }
 
     /**
      * Seed a record outside the trust boundary (Reference §22, "The actor";

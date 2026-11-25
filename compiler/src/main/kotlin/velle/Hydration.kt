@@ -282,6 +282,8 @@ sealed interface Outcome {
     data object Committed : Outcome
     /** A `never` refused the envelope (Reference §21): nothing to make durable. */
     data object Refused : Outcome
+    /** A dry run ([VelleSystem.check]): the envelope's rules ran and their work is not to be kept. Nothing to make durable. */
+    data object Checked : Outcome
     /** The envelope failed inside: the commit callback or a lock threw. Nothing to make durable. */
     data class Failed(val cause: Throwable) : Outcome
 }

@@ -22,6 +22,9 @@ velle:
       zone: America/New_York
   console:
     path: /velle
+  mcp:
+    path: /mcp           # the MCP server an AI chat client connects to
+    unauthenticated: true # billing declares no authorization: every record and act is open; a deployment declares who may do what
 logging:
   level:
     velle: info

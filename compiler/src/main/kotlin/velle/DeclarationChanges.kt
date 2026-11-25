@@ -42,7 +42,7 @@ object DeclarationSentences {
     /** The declaration described in the present tense, or null when there are no words for it. */
     fun described(compared: Compared): String? = when (val declaration = compared.declaration) {
         is RefinementDecl -> refinementCondition(declaration, compared.version)
-        is NeverDecl -> prohibition(declaration, compared.version)
+        is NeverDecl -> forbidden(declaration, compared.version)
         is RuleDecl -> RuleSentences.described(declaration, compared.version)
         is ShapeDecl -> ShapeChanges.described(declaration)
         is EnumDecl -> "one of the words " + declaration.words.joinToString(", ") { word -> "\"$word\"" }
@@ -85,13 +85,14 @@ object DeclarationSentences {
 
     /** What the prohibition forbids, as a clause about the record it is over, for a `never`; what it
      *  demands, for a requirement. */
-    fun forbidden(declaration: NeverDecl, version: SpecVersion): String? = prohibition(declaration, version)
+    fun forbidden(declaration: NeverDecl, version: SpecVersion): String? = forbidden(declaration, version.baseShapes)
 
-    private fun prohibition(declaration: NeverDecl, version: SpecVersion): String? {
+    /** [forbidden], given the names of the spec's shapes and acts, [baseShapes]. */
+    fun forbidden(declaration: NeverDecl, baseShapes: Set<String>): String? {
         if (declaration.keyDeclaration != null || declaration.fromActorClause) return null
         val requirement = declaration.requirement
         if (requirement != null) return Sentences.predicate(requirement.predicate, Sentences.Subject.record)
-        return Sentences.clause(declaration.target, version.baseShapes)
+        return Sentences.clause(declaration.target, baseShapes)
     }
 
     /**

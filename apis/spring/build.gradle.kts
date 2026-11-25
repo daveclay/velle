@@ -19,6 +19,7 @@ repositories {
 dependencies {
     api(platform("org.springframework.boot:spring-boot-dependencies:4.1.2"))
     api(project(":apis:graphql"))
+    api(project(":apis:mcp"))
     api(project(":stores:postgres"))
     api(project(":stores:sqlite"))
     api("org.springframework.boot:spring-boot-starter-webmvc")

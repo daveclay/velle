@@ -395,9 +395,13 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
             val outcome = outcomeType(act)
             m.field { it.name(lower(act)).description(actDescription(act))
                 .argument(GraphQLArgument.newArgument().name("input").type(GraphQLNonNull.nonNull(input)))
+                .argument(GraphQLArgument.newArgument().name("dryRun").type(Scalars.GraphQLBoolean).defaultValueProgrammatic(false)
+                    .description("Answer what a commit would answer now, for what runs inside the commit, and keep nothing. No promise: another commit can land first."))
                 .type(GraphQLNonNull.nonNull(outcome)) }
             registry.dataFetcher(FieldCoordinates.coordinates("Mutation", lower(act)), DataFetcher { env ->
-                api.commit(act, toWire(env.getArgument<Map<String, Any?>>("input")!!) as Map<String, Any?>, VelleGraphQL.actorOf(env))
+                val body = toWire(env.getArgument<Map<String, Any?>>("input")!!) as Map<String, Any?>
+                if (env.getArgument<Boolean>("dryRun") == true) api.check(act, body, VelleGraphQL.actorOf(env))
+                else api.commit(act, body, VelleGraphQL.actorOf(env))
             })
         }
         if (ticks) {
@@ -427,7 +431,7 @@ private class SchemaBuilder(private val api: VelleApi, private val ticks: Boolea
     private fun outcomeType(act: String): GraphQLObjectType {
         val b = GraphQLObjectType.newObject().name("${act}Outcome").description("The commit's verdict: accepted with the record it became, or refused with the reason and the rejection as data.")
             .field { it.name("accepted").type(GraphQLNonNull.nonNull(Scalars.GraphQLBoolean)) }
-            .field { it.name("ref").type(GraphQLTypeReference.typeRef("Reference")).description("The record the act became; null for a transient act and for a refusal.") }
+            .field { it.name("ref").type(GraphQLTypeReference.typeRef("Reference")).description("The record the act became; null for a transient act, a refusal, and a dry run.") }
             .field { it.name("reason").type(Scalars.GraphQLString) }
             .field { it.name("rejection").type(GraphQLTypeReference.typeRef("Rejection")) }
         if (act !in model.transients) {

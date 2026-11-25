@@ -62,6 +62,18 @@ class BillingOverSqliteTest {
     private fun parse(body: String): Map<String, Any?> = json.readValue(body, Map::class.java) as Map<String, Any?>
 
     @Test
+    fun `a dry run over rest answers with the statuses of a commit and keeps nothing`() {
+        val before = parse(mvc.get("/billing/shapes/Customer/count").andReturn().response.contentAsString)["count"]
+        val checked = parse(mvc.post("/billing/acts/SignUp?dryRun=true") { contentType = MediaType.APPLICATION_JSON; content = """{"name": "Bea", "email": "bea@example.com"}""" }
+            .andExpect { status { isOk() } }.andReturn().response.contentAsString)
+        assertEquals(mapOf<String, Any?>("accepted" to true), checked)
+        assertEquals(before, parse(mvc.get("/billing/shapes/Customer/count").andReturn().response.contentAsString)["count"])
+        // a field left out is refused by the runtime as a commit would be: 422, with nothing kept
+        mvc.post("/billing/acts/SignUp?dryRun=true") { contentType = MediaType.APPLICATION_JSON; content = """{"name": "Bea"}""" }.andExpect { status { isUnprocessableContent() } }
+        mvc.post("/billing/acts/SignUp?dryRun=true") { contentType = MediaType.APPLICATION_JSON; content = """{"name": "Bea", "colour": "red"}""" }.andExpect { status { isBadRequest() } }
+    }
+
+    @Test
     fun `commits land in the database and read back through the api path configured`() {
         mvc.post("/billing/acts/SignUp") { contentType = MediaType.APPLICATION_JSON; content = """{"name": "Ada", "email": "ada@example.com"}""" }.andExpect { status { isOk() } }
         val customers = parse(mvc.get("/billing/shapes/Customer?orderBy=name").andExpect { status { isOk() } }.andReturn().response.contentAsString)

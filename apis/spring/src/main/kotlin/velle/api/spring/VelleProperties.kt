@@ -24,6 +24,9 @@ import java.time.ZoneId
  *   console:
  *     enabled: true       # serve the console page
  *     path: /velle
+ *   mcp:
+ *     path: /mcp          # serve the MCP server for AI chat clients here; unset, no MCP server
+ *     unauthenticated: false # serve it for a spec that declares no authorization
  * ```
  */
 @ConfigurationProperties("velle")
@@ -33,6 +36,18 @@ class VelleProperties {
     var ticker = Ticker()
     var schedules: Map<String, Schedule> = emptyMap()
     var console = Console()
+    var mcp = Mcp()
+
+    class Mcp {
+        /** Where the MCP server is served. Unset, there is none. */
+        var path: String? = null
+        /**
+         * Serve the MCP server for a spec that declares no authorization, whose every record and
+         * act is then open to whoever connects an assistant. Off, such a spec stops the
+         * application at startup with the path set.
+         */
+        var unauthenticated: Boolean = false
+    }
 
     class Api {
         /** The path the REST endpoints hang from. */

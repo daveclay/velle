@@ -79,7 +79,8 @@ class VelleGraphQLTest {
         assertTrue("isPaidInvoice: Boolean!" in sdl, sdl)
         assertTrue("type PaidInvoice {" in sdl, sdl)
         assertTrue("invoices(after: String, first: Int, orderBy: [String!], where: String): InvoicePage!" in sdl, sdl)
-        assertTrue("signUp(input: SignUpInput!): SignUpOutcome!" in sdl, sdl)
+        val signUp = sdl.substringAfter("  signUp(").substringBefore("): SignUpOutcome!")
+        assertTrue("input: SignUpInput!" in signUp && "dryRun: Boolean = false" in signUp, sdl)
         assertTrue("input LineItemInput {" in sdl && "invoice: ID!" in sdl && "price: Money!" in sdl, sdl)
         assertTrue("tick(schedule: String!): TickOutcome!" in sdl, sdl)
         assertTrue("ticks: [LatestTick!]!" in sdl, sdl)
@@ -130,6 +131,14 @@ class VelleGraphQLTest {
         // a malformed value is a coercion error before anything runs
         val bad = e.errors("""mutation(${'$'}i: ID!) { submitPayment(input: {invoice: ${'$'}i, amount: "ten"}) { accepted } }""", mapOf("i" to invoice["key"]))
         assertTrue(bad.isNotEmpty() && bad.first().message.contains("ten"), bad.toString())
+
+        // a dry run answers as the commit would and keeps nothing
+        val checked = e.run("""mutation(${'$'}i: ID!) { submitPayment(input: {invoice: ${'$'}i, amount: "1300.00"}, dryRun: true) { accepted ref { key } } }""", mapOf("i" to invoice["key"]))
+        assertEquals(true, checked.at("submitPayment", "accepted"))
+        assertNull(checked.at("submitPayment", "ref"))
+        assertEquals(0, e.run("""{ paymentCount }""").at("paymentCount"))
+        val checkedZero = e.run("""mutation(${'$'}i: ID!) { submitPayment(input: {invoice: ${'$'}i, amount: 0}, dryRun: true) { accepted rejection { targetShape } } }""", mapOf("i" to invoice["key"]))
+        assertEquals("SubmitPayment", checkedZero.at("submitPayment", "rejection", "targetShape"))
 
         e.run("""mutation(${'$'}i: ID!) { submitPayment(input: {invoice: ${'$'}i, amount: "1300.00"}) { accepted } }""", mapOf("i" to invoice["key"]))
         val paid = e.run("""query(${'$'}k: ID!) { invoice(key: ${'$'}k) { status isPaidInvoice } paidInvoiceCount receipts(orderBy: ["sentOn"]) { items { invoice { status } } } }""", mapOf("k" to invoice["key"]))

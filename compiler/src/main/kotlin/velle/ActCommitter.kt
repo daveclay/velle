@@ -55,6 +55,33 @@ internal class ActCommitter(private val system: VelleSystem) {
         return CommitResult.Accepted(id, ref, afterRejections, afterFailures)
     }
 
+    /** A dry run of an act of [shape] ([VelleSystem.check]): the same input reading and the same envelope as [commit], undone at its close. */
+    fun check(
+        shape: String,
+        suppliedFields: Map<String, Any?>,
+        parts: Map<String, List<Map<String, Any?>>>,
+        actor: Long?,
+    ): CheckResult {
+        val prepared = try {
+            system.actInput.prepare(shape, suppliedFields, parts, actor)
+        } catch (refusal: InputRefusal) {
+            return CheckResult.WouldBeRefused(refusal.reason)
+        }
+        val result = system.envelope.dryRun(
+            actor,
+            keys = { system.queueKeys.ofAct(shape, prepared.mutations, prepared.rootIndex) },
+        ) {
+            system.commitProcessor.apply(prepared.mutations, actCommit = true)
+        }
+        system.workingSet.beginSnapshot()
+        return result.fold(
+            onSuccess = { CheckResult.WouldBeAccepted },
+            onFailure = { failure -> wouldBeRefused(refused(failure) as CommitResult.Refused) },
+        )
+    }
+
+    private fun wouldBeRefused(refusal: CommitResult.Refused) = CheckResult.WouldBeRefused(refusal.reason, refusal.rejection)
+
     private fun refused(failure: Throwable): CommitResult = when (failure) {
         is NeverViolation -> CommitResult.Refused(failure.rejection.message, failure.rejection)
         // a firing that failed on the books: the committer is told by the refusal (Reference §14)

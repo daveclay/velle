@@ -19,6 +19,19 @@ sealed interface CommitResult {
 }
 
 /**
+ * A dry run's answer ([VelleSystem.check]): what a commit of the act would answer now.
+ * It covers what runs inside the commit, its rules and its prohibitions, and not the
+ * firings behind an `after commit` boundary, which run after the commit is over. It is
+ * no promise: another commit can land before the act is committed for real.
+ */
+sealed interface CheckResult {
+    /** A commit now would be accepted. */
+    data object WouldBeAccepted : CheckResult
+    /** A commit now would be refused, with the [reason] and the [rejection] a commit would answer ([CommitResult.Refused]). */
+    data class WouldBeRefused(val reason: String, val rejection: Rejection? = null) : CheckResult
+}
+
+/**
  * A typed commit's outcome (Reference §22, "External input"): the generated
  * surface commits one typed input value per act and hands back the same
  * value with the verdict, so a refusal holds what was refused as the

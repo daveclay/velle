@@ -13,11 +13,12 @@ examples/billing/app   BillingApplication, OverdueController        the applicat
 apis/spring            VelleAutoConfiguration, VelleRestController,  the Spring Boot starter: HTTP in, the store,
                        ActorResolver, VelleProperties, VelleConsole  the actor, the schedules, the console
 apis/graphql           VelleGraphQL                                  a GraphQL schema built from the model
+apis/mcp               VelleMcp, ActTools, ReadTools, Resources      an MCP server built from the model
 apis/json              VelleApi, Wire, Describe                      every operation, in JSON-shaped values
 compiler               VelleSystem, Model, Parser, Cursor            the runtime and the compiled spec
 ```
 
-- Each module depends on the one below it and on nothing beside it. `apis/json` imports no web framework and no GraphQL library. `apis/graphql` imports graphql-java and `apis/json`, and knows nothing of Spring. `apis/spring` imports Spring Boot and both.
+- Each module depends on the one below it and on nothing beside it. `apis/json` imports no web framework and no GraphQL library. `apis/graphql` imports graphql-java and `apis/json`, and knows nothing of Spring. `apis/mcp` imports the MCP Java SDK, `io.modelcontextprotocol.sdk:mcp-core`, and `apis/json`, and knows nothing of Spring or GraphQL. `apis/spring` imports Spring Boot and all three.
 - Every operation, from REST, GraphQL, the scheduler, or the application's own code, goes through one `VelleApi` instance. There is no second path to the runtime.
 
 ## apis/json: the operations
@@ -50,6 +51,7 @@ The operations, each a public function on `VelleApi`:
 | `read(root, key, viewer)` | finds the record by the store's key; not found when gone, not a member of the refinement, or not visible to the viewer; answers `Wire.record` |
 | `readEach(refs, viewer)` | the records behind several references in one scope, null in place of any the viewer may not see; what a GraphQL collection field calls |
 | `query(root, where, orderBy, size, after, viewer)` | parses `where` with `Parser.parsePredicate`, the order with `-` for descending, the page and its cursor; runs `system.query`; answers the items and the next cursor through `Cursor.encode`. `query`, `read`, and `readEach` take an optional `selected`, the names of the members and `is<Refinement>` flags the caller wants; a record then holds its shape, its key, and those, and no other member is evaluated |
+| `check(act, body, actor)` | everything `commit` does, up to and including the prohibitions checked at the transaction's end, then undone through `system.check`: the working set is put back, the store's unit of work ends without a write, and no `after commit` rule runs. Answers `{"accepted": true}` or the refusal `commit` would answer |
 | `count(root, where, viewer)` | the same query, counted |
 | `tick(schedule)` | `system.tick`; answers the time and the rejections |
 | `latestTick(schedule)`, `latestTicks()` | `system.latestTick`; answers the schedule and the moment it last ran, null before its first tick, for one schedule or for every schedule the description names. A tick is not a record ([§17](Reference-17-Schedule-triggers)), so no viewer is asked for |
@@ -92,6 +94,15 @@ What the builder makes, per model element:
 - A `tick` mutation when `ticks` is on.
 - A `ticks` query answering every schedule with the moment it last ran, whether or not `ticks` is on. Its fetcher is `api.latestTicks`. The builder refuses a spec whose own shape would claim the name `ticks` or the type `LatestTick`, and says which shape to rename.
 
+## apis/mcp: an MCP server from the model
+
+`VelleMcp` in `apis/mcp/src/main/kotlin/velle/api/mcp/VelleMcp.kt` builds the tools and resources of an [MCP](GLOSSARY) server from one `VelleApi`, and `server(transport)` hands them to the SDK's stateless server over any transport. It names no transport. The one that carries a call puts the actor it resolved into the call's context under `VelleMcp.ACTOR`, and every tool reads it from there.
+
+- `ActTools` makes one tool per act in `api.acts`. `InputSchema` turns the act's entry in `api.description` into a JSON Schema: a property per field, an `enum` for an enumeration, an array of nested objects per part, `required` for every field not declared optional. The schema tells the assistant what to send, and `Wire.input` still reads and refuses the input, so the two cannot disagree on what is accepted. The description is `ActDescription(model).of(act)` from the compiler, written from the model: the act's actor, the prohibitions `Validator.doorNevers` checks at its door, put in words by `DeclarationSentences`, and the rules triggered on the act or drawn from its commit in the rule graph, with what each creates. The input `@dryRun` sends the call to `api.check` instead of `api.commit`. The `@` keeps it apart from every field a spec can name, as `@shape` and `@new` are.
+- `ReadTools` makes `read`, `query`, and `count`, each with `shape` as an `enum` of `api.readable`, marked read-only. An act's name starts with a capital letter, so it never takes one of these names.
+- `Answers` turns an answer into the tool's result. A refusal is a successful result whose text is the `reason` and whose structured content is the whole answer. An `ApiException` is a result marked as an error, its message and details as the text.
+- `Resources` serves `velle://model`, `api.description` as JSON, and `velle://spec`, `system.source`, when the system has one. A generated system passes its spec's text to the runtime it builds; a `VelleSystem` built from a `Model` alone has none.
+
 ## apis/spring: the starter
 
 `VelleAutoConfiguration` in `apis/spring/src/main/kotlin/velle/api/spring/VelleAutoConfiguration.kt` is one auto-configuration class. Its header:
@@ -108,6 +119,7 @@ class VelleAutoConfiguration {
 - `after DataSourceAutoConfiguration` means the application's `DataSource` exists before the store is connected. `before GraphQlAutoConfiguration` means the schema bean below is in place before Spring's GraphQL support looks for one, so Spring's own schema-file loading backs off.
 - `SystemDeclared` is the one condition for the whole class: the application has declared either a `GeneratedSystem` bean, which every generated system is, or a `VelleSystem` bean, the runtime built from spec text with no generated code. With neither, the starter does nothing.
 - `VelleRestController` and `VelleConsole` are imported rather than scanned, so they exist only when the starter is active.
+- `McpServing` exists only when `velle.mcp.path` is set. It builds the SDK's `HttpServletStatelessServerTransport` at that path, whose context extractor reads the actor `velleActorFilter` left on the request, builds the `VelleMcp` server on it, and registers the transport as a servlet. The actor filter runs for every request, so a call to the MCP server is resolved exactly as a REST call is.
 
 The beans it declares, in the order a request meets them:
 
@@ -217,6 +229,7 @@ The same request as the GraphQL mutation `submitPayment(input: {invoice: "1", am
 - The application stops when `velle.schedules` names a schedule the spec does not have, with the message naming both lists.
 - The application stops when the `DataSource` is a database with no SQL dialect, with the message naming the database and the `SqlStore` bean to declare instead.
 - The application stops when no `GeneratedSystem` or `VelleSystem` bean is declared and something depends on `VelleApi`, since the starter then declares nothing.
+- The application stops when `velle.mcp.path` is set, the spec declares no authorization, and `velle.mcp.unauthenticated` is not true, with the message naming the setting.
 
 ## Related pages
 

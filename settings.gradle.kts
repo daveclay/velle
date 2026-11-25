@@ -13,6 +13,8 @@ rootProject.name = "velle"
 // :apis:json                  — the API layer: a system's operations in wire terms (JSON-shaped
 //                               values), model-driven, naming no transport
 // :apis:graphql               — a GraphQL schema built from the model, over that layer
+// :apis:mcp                   — an MCP server built from the model, over that layer: a tool
+//                               per act, the reads, the model and the spec as resources
 // :apis:spring                — the Spring Boot starter: REST and GraphQL endpoints, the store
 //                               from the application's DataSource, scheduled ticks, the console
 // :console                    — the console page the starter serves: a React and TypeScript
@@ -22,6 +24,7 @@ include(
     "compiler",
     "apis:json",
     "apis:graphql",
+    "apis:mcp",
     "apis:spring",
     "console",
     "examples:billing:app",

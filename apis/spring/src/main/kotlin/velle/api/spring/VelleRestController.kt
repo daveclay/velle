@@ -21,6 +21,7 @@ import velle.api.VelleApi
  * |---|---|
  * | `GET  /api` | the model: acts, shapes, schedules, authorization |
  * | `POST /api/acts/{Act}` | commit the act with the JSON body as its input; 200 accepted, 422 refused, 400 malformed |
+ * | `POST /api/acts/{Act}?dryRun=true` | what a commit would answer now, with the same statuses; nothing is kept |
  * | `GET  /api/shapes/{Shape}/{key}` | one record; 404 when gone, not a member, or not shown to the actor |
  * | `GET  /api/shapes/{Shape}?where=&orderBy=&size=&after=` | a query in the spec's predicate language, ordered and paged |
  * | `GET  /api/shapes/{Shape}/count?where=` | how many |
@@ -38,8 +39,14 @@ class VelleRestController(private val api: VelleApi, private val props: VellePro
     fun describe(): Map<String, Any?> = api.description
 
     @PostMapping("/acts/{act}")
-    fun commit(@PathVariable act: String, @RequestBody body: Map<String, Any?>, request: HttpServletRequest): ResponseEntity<Map<String, Any?>> {
-        val outcome = api.commit(act, body, VelleAutoConfiguration.actorOf(request))
+    fun commit(
+        @PathVariable act: String,
+        @RequestBody body: Map<String, Any?>,
+        @RequestParam(required = false, defaultValue = "false") dryRun: Boolean,
+        request: HttpServletRequest,
+    ): ResponseEntity<Map<String, Any?>> {
+        val actor = VelleAutoConfiguration.actorOf(request)
+        val outcome = if (dryRun) api.check(act, body, actor) else api.commit(act, body, actor)
         val status = if (outcome["accepted"] == true) HttpStatus.OK else HttpStatus.UNPROCESSABLE_CONTENT
         return ResponseEntity.status(status).body(outcome)
     }

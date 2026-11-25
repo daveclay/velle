@@ -1,6 +1,6 @@
 # Serving a system
 
-A running Velle system is reached from outside through the API layer: one set of operations, built from the spec's model, that commits an act, reads a record, runs a query, counts, fires a tick, and describes the model. Nothing in it is written per act or per shape. Over that layer sit a REST surface, a GraphQL schema, and a Spring Boot starter that connects the system to the application's database, resolves who is calling, runs the schedules, and serves a console page. After reading this page you can put a spec behind a web API on Spring Boot over PostgreSQL by declaring one bean, and you know what each endpoint takes and answers.
+A running Velle system is reached from outside through the API layer: one set of operations, built from the spec's model, that commits an act, reads a record, runs a query, counts, fires a tick, and describes the model. Nothing in it is written per act or per shape. Over that layer sit a REST surface, a GraphQL schema, an [MCP](GLOSSARY) server for AI chat clients, and a Spring Boot starter that connects the system to the application's database, resolves who is calling, runs the schedules, and serves a console page. After reading this page you can put a spec behind a web API on Spring Boot over PostgreSQL by declaring one bean, and you know what each endpoint takes and answers.
 
 ## The situation
 
@@ -108,6 +108,7 @@ Every endpoint hangs from `velle.api.path`, `/api` here. `{Shape}` is a shape or
 |---|---|
 | `GET /api` | the model: every act and what it takes, every readable shape and its members, the schedules, whether the system has authorization |
 | `POST /api/acts/{Act}` | commits the act with the JSON body as its input: 200 when accepted, 422 when a `never` refused it, 400 when the body is malformed |
+| `POST /api/acts/{Act}?dryRun=true` | what a commit of the act would answer now, with the same statuses, and nothing kept |
 | `GET /api/shapes/{Shape}/{key}` | one record by the store's key: 404 when there is none, it is not a member of the refinement, or the caller may not see it |
 | `GET /api/shapes/{Shape}?where=&orderBy=&size=&after=` | the records that satisfy `where`, in the order `orderBy` names, a page at a time |
 | `GET /api/shapes/{Shape}/count?where=` | how many |
@@ -157,6 +158,7 @@ GET /api/shapes/OverdueInvoice?where=balance > 1000&orderBy=-due&size=20
 - A record carries every member of the shape, including derived properties and inferred inverse collections, and one `is<Refinement>` flag per refinement of the shape, as the generated model object does.
 - `where` is a predicate in the spec's own language over the members of the shape ([§10](Reference-10-Predicate-expressions)): `balance > 0 and due < today`. `orderBy` names one or more orderable members, `-due` for descending. Left off, the records come in the order of their keys in the store: the same order on every request, so paging works, and one that means nothing to the business. A refinement that reads several shapes then comes shape by shape, in the order of the shapes' names. `after` is the `next` value of the previous page, opaque.
 - A refusal is an answer, not an error. The rejection beside the reason is the same data the generated commit function returns ([§21](Reference-21-never)), projected for the actor as a read would be.
+- `?dryRun=true` asks for a [dry run](GLOSSARY). It runs the act's rules and checks its prohibitions as the commit would, then keeps nothing: an accepted act answers `{"accepted": true}`, a refused one the same refusal as above. It covers what runs inside the commit, and not a rule declared `after commit` ([§11](Reference-11-rule-when-on)). Another commit can land between the dry run and the real one, so the answer says what would happen now and promises nothing.
 
 ## GraphQL
 
@@ -218,6 +220,7 @@ query {
 - A static union ([§9](Reference-09-Composing-refinements)) is a GraphQL union of its operands. A field typed by one is queried with `... on Fermentation { }`.
 - `Date`, `DateTime`, `Time`, `UUID`, `Duration`, `Bytes`, `Decimal`, and `Long` are scalars carrying the same text and numbers as REST. Each extension type is a scalar under its own name, `Money` here.
 - One mutation per act, taking an input type shaped as the act's input class is ([Act API](Act-API)). A `one` field is an `ID`, or a `RefInput` with `shape`, `key`, and `new` where the field's type is a union or the field may point at a sibling value. A field named in `with` takes `{existing: {...}}` or exactly one `new<Operand>: {...}`. A nested value may carry `asNew: 1` for a sibling to point at with `{new: 1}`.
+- Each mutation takes `dryRun: true` beside its input for the dry run the REST endpoint offers: the same outcome, with no reference and no record, and nothing kept.
 - The outcome is the acceptance or the refusal as data, with the record read back after an accepted durable act. A malformed input is a GraphQL error before anything runs, and a refused query is a GraphQL error carrying `extensions.kind`.
 
 ## Who is calling
@@ -270,6 +273,44 @@ Velle never authenticates. The resolver is where the application's identity beco
 - An act declared `by` with no actor resolved is refused with 401. An act without `by` ignores the actor.
 - A read on a system with any `by` or `visible to` clause with no actor resolved is refused with 401. There is no anonymous view: `visible to anyone` is for every viewer the resolver provides. A system with no authorization serves the engineer's own view, which sees everything.
 - A record the viewer may not see is 404 by key and absent from a query. A field the viewer may not see is null. A refusal's rejection is projected for the actor the same way.
+
+## An AI chat session
+
+The finance team wants to ask an AI assistant "which invoices are overdue?" and "record a payment of 40.00 against invoice 12", and have it done against the live system. The starter serves the system as an [MCP](GLOSSARY) server, the protocol AI chat clients such as Claude use to call a server's operations. The billing application turns it on in `examples/billing/app/src/main/resources/application.yaml`:
+
+```yaml
+velle:
+  mcp:
+    path: /mcp
+    unauthenticated: true
+```
+
+- `path` is where the server answers. A chat client is pointed at `http://localhost:8090/mcp`. With no path there is no MCP server.
+- `unauthenticated: true` is needed because `examples/billing/billing.velle` says nothing about who may commit or see what ([Authorization](Authorization)), so whoever connects an assistant can read every record and commit every act. Without the setting, a spec like that stops the application at startup, with a message naming the setting. A spec that declares authorization needs no setting.
+
+What the assistant sees:
+
+- One tool per act, named for the act. Its input is the act's fields, each required unless the spec declares it optional, with the values of an enumeration listed and a part collection as a list of nested objects. A field is written as it is over REST, above.
+- Each act's description, written from the spec's rules: who commits it, what refuses it at the door, which rules it can start, and what they create. For `SubmitPayment`:
+
+  ```
+  Commits a SubmitPayment. It leaves no record of its own.
+  A SubmitPayment is refused when its amount is at most 0.
+  Committing it can start rule RecordPayment, which creates a Payment.
+  Every prohibition in the spec is checked when its work is done; a refusal names the prohibition it broke.
+  ```
+
+- An input `"@dryRun": true` on every act's tool, for the dry run of the REST endpoint. The assistant can tell the person "this payment would be refused" before anything is recorded.
+- Three tools shared by every shape: `read` one record by its key, `query` the records that satisfy a `where` in the spec's own language, a page at a time, and `count` them. Their description teaches the assistant the predicate language of [§10](Reference-10-Predicate-expressions). They are marked read-only, so a client can let them run without asking the person each time, and still ask before an act.
+- Two documents the client can attach to the conversation: `velle://model`, the description `GET /api` answers, and `velle://spec`, the spec's text with its comments, when the system was built from a spec's text, as a generated system is.
+
+What an act's tool answers:
+
+- An accepted act answers what `POST /api/acts/{Act}` answers, as the tool's result.
+- A refused act is a successful result, not an error. Its text is the refusal's sentence, which names the prohibition and the values that broke it, and the structured part is the answer REST gives with 422. The assistant passes the reason on to the person.
+- A malformed input, an unknown record, a query the validator refuses, and a missing actor are results marked as errors, with the message REST would give with 400, 404, or 401. The assistant reads the message and corrects the call.
+
+Who is calling is the same question as over REST. Every call to the MCP server is one HTTP request, and the application's actor resolver answers it, as ["Who is calling"](#who-is-calling) above describes, from whatever the application's own security established: a header, a session, or a sign-in at an identity provider. The starter's own test of all this is `apis/spring/src/test/kotlin/velle/api/spring/McpOverHttpTest.kt`, which drives the vendors spec with the MCP library's own client.
 
 ## The application's own code
 

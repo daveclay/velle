@@ -41,7 +41,10 @@ import velle.TickListener
 import velle.Ref
 import velle.VelleSystem
 import velle.api.VelleApi
+import io.modelcontextprotocol.server.transport.HttpServletStatelessServerTransport
+import org.springframework.boot.web.servlet.ServletRegistrationBean
 import velle.api.graphql.VelleGraphQL
+import velle.api.mcp.VelleMcp
 import velle.postgres.PostgresStore
 import velle.FetchTogether
 import velle.sql.SqlStore
@@ -66,7 +69,8 @@ import javax.sql.DataSource
  * - registers who hears a tick, and an act whose after-commit firings were refused or
  *   failed: the application's [TickListener] beans, or the log; and the metrics when
  *   the application has a `MeterRegistry` ([TickListeners]);
- * - serves the console page at `velle.console.path`.
+ * - serves the console page at `velle.console.path`;
+ * - serves the MCP server for AI chat clients at `velle.mcp.path`, when it is set ([McpServing]).
  *
  * Every operation passes through one [VelleApi], so REST, GraphQL, and the ticks
  * take turns on the system and its store connection.
@@ -224,6 +228,42 @@ class VelleAutoConfiguration {
                 log.error("Velle tick $schedule failed", e)
             }
         }
+    }
+
+    /**
+     * The MCP server ([VelleMcp]) at `velle.mcp.path`, over HTTP, one request per call: the
+     * actor the [ActorResolver] found for the request is the call's actor, as on REST. A spec
+     * that declares no authorization would hand every record and act to whoever connects an
+     * assistant, so it stops the application here unless `velle.mcp.unauthenticated` says so.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnProperty(prefix = "velle.mcp", name = ["path"])
+    class McpServing {
+
+        private val log = LoggerFactory.getLogger(McpServing::class.java)
+
+        @Bean
+        fun velleMcpTransport(api: VelleApi, props: VelleProperties): HttpServletStatelessServerTransport {
+            val path = props.mcp.path!!
+            if (!api.model.hasAuthorization && !props.mcp.unauthenticated)
+                throw IllegalStateException(
+                    "velle.mcp.path is set, and this spec declares no authorization: every record and act would be open to whoever connects an assistant. " +
+                        "Declare who commits and sees what in the spec, or set velle.mcp.unauthenticated: true to serve it anyway."
+                )
+            val mcp = VelleMcp(api)
+            val transport = HttpServletStatelessServerTransport.builder()
+                .jsonMapper(mcp.json)
+                .messageEndpoint(path)
+                .contextExtractor { request -> VelleMcp.contextFor(actorOf(request)) }
+                .build()
+            mcp.server(transport)
+            log.info("Velle MCP server at {}: {} tools", path, mcp.tools.size)
+            return transport
+        }
+
+        @Bean
+        fun velleMcpServlet(transport: HttpServletStatelessServerTransport, props: VelleProperties): ServletRegistrationBean<HttpServletStatelessServerTransport> =
+            ServletRegistrationBean(transport, props.mcp.path!!).apply { setName("velleMcp") }
     }
 
     /**

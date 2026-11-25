@@ -1,5 +1,6 @@
 package velle.api
 
+import velle.CheckResult
 import velle.CommitResult
 import velle.Cursor
 import velle.Diagnostic
@@ -9,6 +10,7 @@ import velle.Parser
 import velle.Query
 import velle.QueryRefused
 import velle.Ref
+import velle.Rejection
 import velle.StoreKey
 import velle.TickRejected
 import velle.VelleSyntaxError
@@ -80,7 +82,30 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
      * `{"accepted": false, "reason": ..., "rejection": {...}}`, the rejection as
      * data when a `never` refused it ([Reference §21]) and null for a malformed input.
      */
-    fun commit(act: String, body: Map<String, Any?>, actor: Ref<*>?): Map<String, Any?> {
+    fun commit(act: String, body: Map<String, Any?>, actor: Ref<*>?): Map<String, Any?> =
+        withInput(act, body, actor) { input, actorId ->
+            when (val result = system.commit(act, input.fields, input.parts, actorId)) {
+                is CommitResult.Accepted -> linkedMapOf("accepted" to true, "ref" to result.ref?.let(wire::ref))
+                is CommitResult.Refused -> refusal(result.reason, result.rejection)
+            }
+        }
+
+    /**
+     * A dry run of [commit] ([VelleSystem.check]): the answer a commit of [act] would
+     * give now, `{"accepted": true}` or the same refusal [commit] answers, and nothing
+     * kept. It covers what runs inside the commit, not the firings behind an
+     * `after commit` boundary, and it is no promise: another commit can land first.
+     */
+    fun check(act: String, body: Map<String, Any?>, actor: Ref<*>?): Map<String, Any?> =
+        withInput(act, body, actor) { input, actorId ->
+            when (val result = system.check(act, input.fields, input.parts, actorId)) {
+                is CheckResult.WouldBeAccepted -> linkedMapOf("accepted" to true)
+                is CheckResult.WouldBeRefused -> refusal(result.reason, result.rejection)
+            }
+        }
+
+    /** [act]'s input read from [body] and its actor resolved, inside one scope: what [commit] and [check] share. */
+    private fun <T> withInput(act: String, body: Map<String, Any?>, actor: Ref<*>?, run: (input: Wire.Input, actorId: Long?) -> T): T {
         if (act !in model.exposed) throw ApiException.notFound("no act '$act'")
         val actorProp = model.shapes.getValue(act).actor
         if (actorProp != null && actor == null)
@@ -88,12 +113,12 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
         return scope {
             val input = wire.input(act, body)
             val actorId = if (actorProp != null) system.idOf(actor!!) else null
-            when (val r = system.commit(act, input.fields, input.parts, actorId)) {
-                is CommitResult.Accepted -> linkedMapOf("accepted" to true, "ref" to r.ref?.let(wire::ref))
-                is CommitResult.Refused -> linkedMapOf("accepted" to false, "reason" to r.reason, "rejection" to r.rejection?.let(wire::rejection))
-            }
+            run(input, actorId)
         }
     }
+
+    private fun refusal(reason: String, rejection: Rejection?): Map<String, Any?> =
+        linkedMapOf("accepted" to false, "reason" to reason, "rejection" to rejection?.let(wire::rejection))
 
     // ── read ────────────────────────────────────────────────────────────────────
 
