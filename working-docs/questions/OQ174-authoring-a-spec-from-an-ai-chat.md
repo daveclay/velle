@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 decided. D2 to D8 await Dave. Nothing built.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 and D2 decided. D3 to D8 await Dave. Nothing built.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -49,7 +49,7 @@ Costs:
 
 **Decided:** yes, 2026-11-25.
 
-### D2. The product owner confirms the compiler's sentences, never the assistant's summary
+### D2. The product owner confirms the compiler's sentences, never the assistant's summary · Decided 2026-11-25
 
 Does the skill show the product owner, after each edit, only the sentences the compiler wrote about it, and never its own summary of what it changed?
 
@@ -62,6 +62,8 @@ Costs:
 - Where `Sentences` has no words for a form, the read-back shows Velle (§2). A product owner will see code until those forms have words. D3 lists them as work.
 - A consequence today points at every edit whose names it mentions, not at the edit that causes it (OQ172). In a session with several edits between read-backs, the product owner cannot tell which decision caused which consequence. One read-back per edit avoids it until OQ172 is built.
 - The compiler's sentences are fixed English. A room that speaks another language reads them in English.
+
+**Decided:** yes, 2026-11-25.
 
 ### D3. One command, `velle`, with four subcommands
 
