@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. Not designed. D1 to D8 await Dave. Nothing built.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 decided. D2 to D8 await Dave. Nothing built.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -30,7 +30,7 @@ Checked against HEAD on 2026-11-25.
 
 ## 3. What to decide
 
-### D1. Velle ships a skill as the way an assistant writes a spec, and the authoring MCP server only serves a host that cannot run commands
+### D1. Velle ships a skill as the way an assistant writes a spec, and the authoring MCP server only serves a host that cannot run commands · Decided 2026-11-25
 
 Does Velle ship a design-session skill in the open skill format as the main way an assistant helps write a spec, with an authoring MCP server as the route for a host whose skill cannot run a command?
 
@@ -46,6 +46,8 @@ Costs:
 
 - A new folder holds the skill (D6).
 - `apis/mcp/` gains a second server, apart from `VelleMcp`, whose tools are D3's subcommands.
+
+**Decided:** yes, 2026-11-25.
 
 ### D2. The product owner confirms the compiler's sentences, never the assistant's summary
 
