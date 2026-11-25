@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D4 decided. D5 to D8 await Dave. Nothing built.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D5 decided. D6 to D8 await Dave. Nothing built.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -108,7 +108,7 @@ Costs:
 
 **Decided:** yes, 2026-11-25. Dave presumes separate jars per tool could be built later to keep the size down.
 
-### D5. The skill carries Velle's own extension libraries and no others
+### D5. The skill carries Velle's own extension libraries and no others · Decided 2026-11-25
 
 Does the skill's jar include the extension libraries under `extensions/`, so a spec that uses `Money` validates, while a spec using any other library cannot be run through the skill?
 
@@ -118,6 +118,8 @@ Costs:
 
 - A team with its own extension types cannot use the skill on their spec without building their own copy of the jar, or using the MCP server running on their own classpath.
 - `extensions/finance-sql` is a store binding, not needed to validate or to `try` in memory, and stays out.
+
+**Decided:** yes, 2026-11-25.
 
 ### D6. The skill lives in its own folder at the repo root
 
