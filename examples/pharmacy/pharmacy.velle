@@ -711,6 +711,7 @@ never (FillPrescription where lot.drug is Controlled and
 -- paid claims' verdicts, a derived property read through a refinement filter
 shape Fill {
     prescription: one Prescription
+    plan = prescription.order.patient.plan
     lot: one StockLot
     quantity: integer
     fillNumber: integer
@@ -1014,8 +1015,8 @@ rule NoticeExpiry when leaving ActivePrescription on Daily {
 -- unanswered for a day is followed up hourly.
 -- velle: a refinement-body property narrowed by the predicate's `is some`
 -- and read in the body of a rule on a refinement of that refinement
-shape InsuredFill = VerifiedFill where prescription.order.patient.plan is some {
-    insurer: one InsurancePlan = prescription.order.patient.plan
+shape InsuredFill = VerifiedFill where plan is some {
+    insurer: one InsurancePlan = plan
 }
 
 -- velle: a shape's own clauses replace the spec-wide default — a claim is

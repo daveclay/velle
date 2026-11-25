@@ -37,8 +37,8 @@ import velle.generated.pharmacy.*
  *     CounterAlert from { fill: this, raisedOn: now }
  * }
  *
- * shape InsuredFill = VerifiedFill where prescription.order.patient.plan is some {
- *     insurer: one InsurancePlan = prescription.order.patient.plan
+ * shape InsuredFill = VerifiedFill where plan is some {
+ *     insurer: one InsurancePlan = plan
  * }
  *
  * rule SubmitClaim when (InsuredFill where not (exists Claim for this)) {

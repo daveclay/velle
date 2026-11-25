@@ -1326,6 +1326,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeFill(id: Long): Fill = Fill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
+        plan = (system.get(id, "plan") as Long?)?.let { system.refFor(it) },
         lot = system.refFor(system.get(id, "lot") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
         fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
@@ -2214,6 +2215,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeVerifiedFill(id: Long): VerifiedFill = VerifiedFill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
+        plan = (system.get(id, "plan") as Long?)?.let { system.refFor(it) },
         lot = system.refFor(system.get(id, "lot") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
         fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
@@ -2243,6 +2245,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeRejectedFill(id: Long): RejectedFill = RejectedFill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
+        plan = (system.get(id, "plan") as Long?)?.let { system.refFor(it) },
         lot = system.refFor(system.get(id, "lot") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
         fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
@@ -2272,6 +2275,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeConsumingFill(id: Long): ConsumingFill = ConsumingFill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
+        plan = (system.get(id, "plan") as Long?)?.let { system.refFor(it) },
         lot = system.refFor(system.get(id, "lot") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
         fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
@@ -2301,6 +2305,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeCounsellingDue(id: Long): CounsellingDue = CounsellingDue(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
+        plan = (system.get(id, "plan") as Long?)?.let { system.refFor(it) },
         lot = system.refFor(system.get(id, "lot") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
         fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
@@ -2330,6 +2335,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeReadyForPickup(id: Long): ReadyForPickup = ReadyForPickup(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
+        plan = (system.get(id, "plan") as Long?)?.let { system.refFor(it) },
         lot = system.refFor(system.get(id, "lot") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
         fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
@@ -2360,6 +2366,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeUncollected(id: Long): Uncollected = Uncollected(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
+        plan = (system.get(id, "plan") as Long?)?.let { system.refFor(it) },
         lot = system.refFor(system.get(id, "lot") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
         fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
@@ -2450,6 +2457,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     private fun materializeInsuredFill(id: Long): InsuredFill = InsuredFill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
+        plan = (system.get(id, "plan") as Long?)?.let { system.refFor(it) },
         lot = system.refFor(system.get(id, "lot") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
         fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
@@ -3623,6 +3631,7 @@ never (FillPrescription where lot.drug is Controlled and
 -- paid claims' verdicts, a derived property read through a refinement filter
 shape Fill {
     prescription: one Prescription
+    plan = prescription.order.patient.plan
     lot: one StockLot
     quantity: integer
     fillNumber: integer
@@ -3926,8 +3935,8 @@ rule NoticeExpiry when leaving ActivePrescription on Daily {
 -- unanswered for a day is followed up hourly.
 -- velle: a refinement-body property narrowed by the predicate's `is some`
 -- and read in the body of a rule on a refinement of that refinement
-shape InsuredFill = VerifiedFill where prescription.order.patient.plan is some {
-    insurer: one InsurancePlan = prescription.order.patient.plan
+shape InsuredFill = VerifiedFill where plan is some {
+    insurer: one InsurancePlan = plan
 }
 
 -- velle: a shape's own clauses replace the spec-wide default — a claim is
@@ -5111,6 +5120,7 @@ data class MonitoringCheck(
 data class Fill(
     override val key: StoreKey,
     val prescription: Ref<Prescription>,
+    val plan: Ref<InsurancePlan>?,
     val lot: Ref<StockLot>,
     val quantity: Int,
     val fillNumber: Int,
@@ -6367,6 +6377,7 @@ data class MultiplePrescribers(
 data class VerifiedFill(
     override val key: StoreKey,
     val prescription: Ref<Prescription>,
+    val plan: Ref<InsurancePlan>?,
     val lot: Ref<StockLot>,
     val quantity: Int,
     val fillNumber: Int,
@@ -6406,6 +6417,7 @@ data class VerifiedFill(
 data class RejectedFill(
     override val key: StoreKey,
     val prescription: Ref<Prescription>,
+    val plan: Ref<InsurancePlan>?,
     val lot: Ref<StockLot>,
     val quantity: Int,
     val fillNumber: Int,
@@ -6445,6 +6457,7 @@ data class RejectedFill(
 data class ConsumingFill(
     override val key: StoreKey,
     val prescription: Ref<Prescription>,
+    val plan: Ref<InsurancePlan>?,
     val lot: Ref<StockLot>,
     val quantity: Int,
     val fillNumber: Int,
@@ -6484,6 +6497,7 @@ data class ConsumingFill(
 data class CounsellingDue(
     override val key: StoreKey,
     val prescription: Ref<Prescription>,
+    val plan: Ref<InsurancePlan>?,
     val lot: Ref<StockLot>,
     val quantity: Int,
     val fillNumber: Int,
@@ -6523,6 +6537,7 @@ data class CounsellingDue(
 data class ReadyForPickup(
     override val key: StoreKey,
     val prescription: Ref<Prescription>,
+    val plan: Ref<InsurancePlan>?,
     val lot: Ref<StockLot>,
     val quantity: Int,
     val fillNumber: Int,
@@ -6563,6 +6578,7 @@ data class ReadyForPickup(
 data class Uncollected(
     override val key: StoreKey,
     val prescription: Ref<Prescription>,
+    val plan: Ref<InsurancePlan>?,
     val lot: Ref<StockLot>,
     val quantity: Int,
     val fillNumber: Int,
@@ -6688,6 +6704,7 @@ data class AutoRefill(
 data class InsuredFill(
     override val key: StoreKey,
     val prescription: Ref<Prescription>,
+    val plan: Ref<InsurancePlan>?,
     val lot: Ref<StockLot>,
     val quantity: Int,
     val fillNumber: Int,
@@ -7043,6 +7060,7 @@ class MonitoringCheckFields(path: List<String> = emptyList()) : Fields(path) {
 
 class FillFields(path: List<String> = emptyList()) : Fields(path) {
     val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
     val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
     val quantity: NumField get() = NumField(fieldPath + "quantity")
     val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
@@ -7633,6 +7651,7 @@ class MultiplePrescribersFields(path: List<String> = emptyList()) : Fields(path)
 
 class VerifiedFillFields(path: List<String> = emptyList()) : Fields(path) {
     val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
     val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
     val quantity: NumField get() = NumField(fieldPath + "quantity")
     val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
@@ -7652,6 +7671,7 @@ class VerifiedFillFields(path: List<String> = emptyList()) : Fields(path) {
 
 class RejectedFillFields(path: List<String> = emptyList()) : Fields(path) {
     val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
     val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
     val quantity: NumField get() = NumField(fieldPath + "quantity")
     val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
@@ -7671,6 +7691,7 @@ class RejectedFillFields(path: List<String> = emptyList()) : Fields(path) {
 
 class ConsumingFillFields(path: List<String> = emptyList()) : Fields(path) {
     val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
     val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
     val quantity: NumField get() = NumField(fieldPath + "quantity")
     val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
@@ -7690,6 +7711,7 @@ class ConsumingFillFields(path: List<String> = emptyList()) : Fields(path) {
 
 class CounsellingDueFields(path: List<String> = emptyList()) : Fields(path) {
     val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
     val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
     val quantity: NumField get() = NumField(fieldPath + "quantity")
     val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
@@ -7709,6 +7731,7 @@ class CounsellingDueFields(path: List<String> = emptyList()) : Fields(path) {
 
 class ReadyForPickupFields(path: List<String> = emptyList()) : Fields(path) {
     val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
     val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
     val quantity: NumField get() = NumField(fieldPath + "quantity")
     val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
@@ -7729,6 +7752,7 @@ class ReadyForPickupFields(path: List<String> = emptyList()) : Fields(path) {
 
 class UncollectedFields(path: List<String> = emptyList()) : Fields(path) {
     val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
     val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
     val quantity: NumField get() = NumField(fieldPath + "quantity")
     val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
@@ -7790,6 +7814,7 @@ class AutoRefillFields(path: List<String> = emptyList()) : Fields(path) {
 
 class InsuredFillFields(path: List<String> = emptyList()) : Fields(path) {
     val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
     val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
     val quantity: NumField get() = NumField(fieldPath + "quantity")
     val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
