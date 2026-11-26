@@ -114,7 +114,7 @@ The third part says what the edit does to a record like the ones the system keep
 
 [Comparing specs](Comparing-specs) explains each part.
 
-For each line under "What that changes" that nobody asked for, the assistant quotes it and asks whether they want it, one question at a time. Here the one such line names `Issuance`, the record the spec keeps when an invoice is issued, so it is what the product owner asked for. Only when every such line has its own answer does the assistant ask whether the change is what they meant.
+In the same reply, under the report, the assistant quotes each line of "What that changes" that names a rule or a record nobody mentioned. Here the one such line names `Issuance`, the record the spec keeps when an invoice is issued, so it is what the product owner asked for. The assistant ends with one question: do they want this change, with what follows from it? It asks about a single line first only when that line says something a business would likely not want.
 
 ### Accepting a change
 
@@ -129,6 +129,16 @@ The next decision follows the same steps. The product owner says: "Wait two week
 The report has no other part, because the edit changes nothing else. The product owner accepts it.
 
 The compiler never reads a comment in the spec, so a report never shows one. The comment above `OverdueInvoice` still says reminders go no more than once a week. So, after the change is accepted, the assistant shows the engineer that comment and proposes new wording. It changes the comment only on the engineer's word, in the same git commit.
+
+### A change nobody answers
+
+People in a meeting often state a decision, glance at the report, and talk about the next thing. The assistant does not hold the conversation up, and does not drop the decision. It keeps the change in the spec and writes a comment on the line above it:
+
+```velle
+-- Not confirmed, 2026-11-26: "Wait two weeks between reminders"
+```
+
+Its next reply starts by saying that the change is in but not yet confirmed. At the end of the session it asks about each such change, and removes the comment from one that is confirmed. One that is rejected is undone as a change of its own, with its own read-back. If the session stops early, the comments stay in the spec for its next reader.
 
 ### A change undone and parked as a question
 
@@ -146,7 +156,7 @@ and, under "What that changes":
 - A new LineItem can now make an Invoice stop being an OverdueInvoice.
 ```
 
-Nobody asked for that consequence, so the assistant quotes it and asks about it. The product owner sees what it implies: "Hold on. Could a discount push an invoice's total below zero? I don't know what we'd want then. Undo that. We need to ask finance."
+Nobody asked for that consequence, and a business might not want it, so the assistant quotes it and asks about that line alone. The product owner sees what it implies: "Hold on. Could a discount push an invoice's total below zero? I don't know what we'd want then. Undo that. We need to ask finance."
 
 The assistant puts back the saved version, runs `velle validate` to show the spec validates again, and makes no git commit. It writes the open question into `billing.questions.md`, a file beside the spec named after it:
 
@@ -158,7 +168,7 @@ The spec keeps its refusal on that point until a later session answers the quest
 
 ### Ending
 
-At the end the assistant runs `velle compare` from the copy it kept at the start to the spec, and shows every change of the session at once. It lists the questions still open in `billing.questions.md`. It says whether the spec validates and what it committed. Pushing, merging, and opening a review are left to you.
+At the end the assistant runs `velle compare` from the copy it kept at the start to the spec, and shows every change of the session at once. It asks about each change still marked `-- Not confirmed`. It lists the questions still open in `billing.questions.md`. It says whether the spec validates and what it committed. Pushing, merging, and opening a review are left to you.
 
 ## The three commands
 
@@ -187,7 +197,7 @@ A rule already in the spec that does not follow a best practice is not rewritten
 - Copy the spec into another of your folders. It works on the file where it is, and keeps its saved versions in a temporary folder.
 - Write a guess into the spec. Anything that turns on what the business means becomes a question to you, or a line in the questions file.
 - Rewrite a rule already in the spec to meet a best practice without asking.
-- Change a comment without the engineer's word.
+- Change a comment of yours without the engineer's word. The only comment it writes unasked is `-- Not confirmed`, which it removes itself.
 - Write Velle when it cannot run the compiler. It tells you why and stops.
 
 ## When it does not work

@@ -33,7 +33,8 @@ Every command prints Markdown and changes no file. A command exits with 0 when i
 3. **Keep the starting version.** Copy the draft as it stands to a temporary folder outside the team's folders. You compare against it at the end.
 4. **Read the best practices.** Read `references/Best-practices.md`. Then look for a file named `best-practices.md` in the same folder as the draft. It holds the team's own best practices. Follow both, and where they disagree follow the team's.
 5. **Say what will be kept.** If the draft is in a git repository, say that you can commit each accepted decision with the words that led to it, and ask whether to do so. If it is not, or git is not available, say once that the session will keep no history, and carry on. A session never needs git.
-6. **Show where things stand.** For an existing spec, ask what they came to change and run `describe` with that name, so everyone starts from what the spec says today. Describe the whole spec only when asked, or when it is short.
+6. **Ask who is in the session.** A product owner and an engineer in a meeting get everything below as written. An engineer working alone gets the shorter loop under "When an engineer works alone". If you cannot tell, ask.
+7. **Show where things stand.** For an existing spec, ask what they came to change and run `describe` with that name, so everyone starts from what the spec says today. Describe the whole spec only when asked, or when it is short.
 
 ## For each change
 
@@ -53,8 +54,21 @@ Every command prints Markdown and changes no file. A command exits with 0 when i
    - **Accepted:** a yes to that one question accepts the change. A yes that could be answering a question about a single line accepts only that line. Ask the closing question then.
    - **Rejected:** restore the saved version. Ask what they meant instead, unless they have already said to leave it or to park it.
    - **Partly right:** restore the saved version and make the corrected change as a new edit.
-   - **No answer, and they move on:** do not hold the conversation up, and do not lose the decision. Keep the change in the draft. Say in one line at the top of your next reply that it is in but not yet confirmed. Write it in the questions file as a change shown and not confirmed, with the lines you quoted. You ask about it again at the end of the session.
-8. **Keep a record, if they agreed to commits.** Commit the draft and the questions file, and nothing else. The first line of the message is the decision in the words of the person who made it, shortened to fit one line: "Only issued invoices get reminders". The body holds the report's "What was edited" part as printed, then the quoted discussion, with any question about a line and its answer. For a change not yet confirmed, the body says so. When a question is parked and the draft did not change, commit the questions file alone, with a first line that starts "Parked:" and gives the question. Never create a branch and never push. Without git there is nothing to do here.
+   - **No answer, and they move on:** do not hold the conversation up, and do not lose the decision. Keep the change in the draft, and mark it there with a comment on the line above what you changed, or where a removed line stood: `-- Not confirmed, 2026-11-26: "Only issued invoices get reminders"`, with the date and the decision in the words of the person who made it. Say in one line at the top of your next reply that it is in but not yet confirmed. You ask about it again at the end of the session, and remove the comment when it is confirmed or undone.
+8. **Keep a record, if they agreed to commits.** Commit the draft and the questions file, and nothing else. The first line of the message is the decision in the words of the person who made it, shortened to fit one line: "Only issued invoices get reminders". The body holds the report's "What was edited" part as printed, then the quoted discussion, with any question about a line and its answer. For a change not yet confirmed, the body says so and holds the lines you quoted under "This also follows". When a question is parked and the draft did not change, commit the questions file alone, with a first line that starts "Parked:" and gives the question. Never create a branch and never push. Without git there is nothing to do here.
+
+## When an engineer works alone
+
+An engineer also uses this skill without a product owner, to write a spec or tune one in a quick exchange. The compiler's report still follows every edit, because it is how the engineer sees what an edit did to rules they did not touch. What changes:
+
+- Show Velle code freely, and take instructions given in Velle's own terms.
+- Make several changes in one go when the engineer asks for them together, then show one report for all of them.
+- After each edit show the `compare` report as printed, with the lines under "What that changes" that the engineer did not mention quoted beneath it. Ask nothing. The engineer says so when something is wrong. Do still ask about a line a business would likely not want.
+- Mark nothing as not confirmed. What the engineer does not object to stands.
+- Anything that turns on what the business means still goes to the engineer as a question. If they cannot answer for the business, it goes in the questions file.
+- Commit when the engineer says to, with their instruction as the first line.
+
+Saving the version before each edit, validating, raising new advisories, the best practices, and the end of the session are the same.
 
 ## Explaining what the report names
 
@@ -77,6 +91,8 @@ When the discussion leaves something open, write it as a question in a file besi
 
 A spec's comments are the team's own words, and the compiler does not read them, so `compare` never shows them. When your edit makes a comment near it untrue, do not rewrite the comment quietly. After the change is accepted, show the engineer the comment and the wording you propose, and change it only on their word. It goes in the next commit.
 
+The one comment you write unasked is `-- Not confirmed` on a change nobody answered. It is yours to add and yours to remove.
+
 ## Best practices on an existing spec
 
 Everything you write follows the best practices. When a rule already in the spec does not follow one, never rewrite it on your own. Propose the rewrite as a change, name the best practice and whether it is Velle's or the team's, and take it through the same read-back. A rewrite that changes no meaning shows in the report as meaning the same, and the product owner accepts or rejects it like any other change.
@@ -84,7 +100,7 @@ Everything you write follows the best practices. When a rule already in the spec
 ## Ending the session
 
 1. Run `compare` from the starting version to the draft and show the whole report. It is every change of the session at once.
-2. Name each change that was shown and not confirmed, and ask about each. One they reject is undone as a new change, with its own read-back.
+2. Find every `-- Not confirmed` comment in the draft, name each of those changes, and ask about each. Remove the comment of one they confirm. One they reject is undone as a new change, with its own read-back. If the session ends before they answer, the comments stay, so the next reader of the spec sees what nobody confirmed.
 3. List the questions still open in the questions file.
 4. Say where the draft is, whether it validates, and what was committed, if anything. Do not push, merge, or open a review. Say that those are theirs to do.
 

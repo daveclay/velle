@@ -831,7 +831,7 @@ shape Product {
 - The committer is `actor` in the act's scope, or the name given by `by Staff as filledBy`. Nobody supplies or assigns it. A kept act stores it.
 - The shape after `by` is a `shape` or a refinement of one, never an act.
 - `visible to Staff` at the top is the default. `visible to anyone` in a body makes records public. `cost: decimal visible to Manager` hides one field from everyone else.
-- Once a spec has any `by` or `visible to`, every shape and kept act must say who sees it, itself or through the default. Visibility applies only to reads; no rule or prohibition depends on the reader.
+- **The first `by` costs more than its own line.** Once a spec has any `by` or `visible to`, every shape and kept act must say who sees it, itself or through the default. Adding one `by` to a spec that had none draws the refusal below for each of them, and who may see what is a decision for the people in the session, not yours. Visibility applies only to reads; no rule or prohibition depends on the reader.
 - The first manager, where hiring needs one, is created by the engineer outside the spec.
 
 **Refused.** An actor that is an act. The same spec draws the visibility message below for `Staff` and `Refund` too.
@@ -877,7 +877,7 @@ Rules that read the actor, and gates that read the data, are in [prohibitions.md
 | "Remind them, but at most once a week." | a scheduled rule on `not exists (Reminder where invoice == this and sentOn > today - 7 days)` |
 | "A payment is never zero or negative." | `never (SubmitPayment where amount <= 0)` over the request |
 | "No two customers share an email." | `email: text unique` |
-| "Only a manager may approve a refund." | `act ApproveRefund by Manager { ... }` |
+| "Only a manager may approve a refund." | `act ApproveRefund by Manager { ... }`. The first `by` in a spec also makes the compiler ask who may see every kind of record (§14), so ask the engineer before adding it. |
 | "A fill must come from a lot of the same drug." | `FillPrescription requires lot.drug == prescription.drug` |
 | "Once issued, the due date can't change." | `frozen due` on `IssuedInvoice`, and the change request split |
 | "When a member is no longer delinquent, restore service." | `rule RestoreService when leaving Delinquent { ... }` |

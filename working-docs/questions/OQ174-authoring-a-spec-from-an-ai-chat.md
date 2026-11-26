@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D12 decided. D13 awaits Dave. Stage 1 of the build (§6) is built but for its second trial session: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. Stages 2 and 3 are not started.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D13 decided. D14 awaits Dave. Stage 1 of the build (§6) is built but for its second trial session: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. Stages 2 and 3 are not started.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -67,7 +67,7 @@ On 2026-11-26, with the skill as revised after the first trial: the billing sess
 - **The read-back does not say what values a field can now take.** Removing `never (LineItem where price < 0)` lets a total go below zero, and the report names only the rules and refinements a line item can now reach (`examples/billing/changes/02-discounts.md`). The product owner noticed the total unaided. Nothing is planned for it here.
 - **In a first session the report's heading reads oddly.** "What the compiler derives from the edits for declarations nobody edited" stands over a spec in which everything is new. Work item below.
 - **The third trial barely tested the reference.** `references/language.md` opens with almost the same invoicing system the script described, so the assistant copied it. Work item below.
-- **A role gate has a cost the reference does not state:** the first `by` in a spec makes the compiler ask who may see every kind of record. Work item below.
+- **A role gate has a cost the reference does not state:** the first `by` in a spec makes the compiler ask who may see every kind of record. `references/language.md` §14 and §15 now say so.
 - **Smaller ones, fixed in `SKILL.md`:** who decides when only one person speaks, how a turn with several decisions is split, the choices that are the engineer's, parking a question as a commit, and what an entry in the questions file holds.
 
 ## 3. What to decide
@@ -303,7 +303,7 @@ Costs:
 
 **Decided:** yes, 2026-11-26.
 
-### D13. A change that was read back and never confirmed stays in the spec, marked, and is confirmed at the end of the session
+### D13. A change that was read back and never confirmed stays in the spec, marked, and is confirmed at the end of the session · Decided 2026-11-26
 
 When the assistant has shown the read-back of a change and the people move on to the next topic without saying yes or no, does the change stay in the draft, recorded as shown and not confirmed, to be asked about again when the session ends?
 
@@ -321,6 +321,33 @@ Costs:
 
 - `skills/velle-design/SKILL.md`, "For each change", step 7 "No answer, and they move on", and "Ending the session", step 2. Both are written as recommended, ahead of the answer.
 
+**Decided:** yes (Dave, 2026-11-26). He added that a comment in the spec is a fine way to mark a discussion that may not have been confirmed. So the mark is a `-- Not confirmed` comment on the line above the change, with the date and the decision in the speaker's words, and it replaces the entry in the questions file that the recommendation proposed. `SKILL.md` step 7, "Comments in the spec", and "Ending the session" step 2 are written that way. A session that ends abruptly now leaves the mark in the spec itself, where the next reader sees it.
+
+### D14. An engineer working alone gets the compiler's report after every edit and is asked nothing
+
+When an engineer uses the skill without a product owner, does the assistant still show the comparison after every edit, but stop asking for a yes, show Velle code freely, and take several changes at once?
+
+Dave (2026-11-26): the assistant is sometimes used in a meeting to capture requirements, and other times by an engineer to fine-tune or write a spec in a tighter loop, talking to the assistant more directly. Every step of `SKILL.md` so far was written for the meeting. In the tighter loop, a closing question after each edit and one decision at a time are in the way, and there is no product owner for D2 to protect.
+
+Recommendation: yes. The assistant asks at the start who is in the session. For an engineer alone:
+
+- The `compare` report still follows every edit, with the lines about rules nobody edited quoted beneath it. It is how the engineer sees what an edit did elsewhere.
+- No closing question. What the engineer does not object to stands, and nothing is marked as not confirmed (D13).
+- Velle code is shown freely, and several changes asked for together are made together, with one report.
+- A question that turns on what the business means still goes to the engineer, and to the questions file (D8) when they cannot answer for the business.
+- A commit is made when the engineer says so.
+
+Costs:
+
+- A change made this way was never confirmed by a product owner in the compiler's sentences, and nothing in the spec says so. D2 holds only for a session with a product owner in it. Whether such a change is reviewed later is the team's choice of how it reviews its spec (§4).
+- The assistant relies on being told who is present. An engineer who says they are alone while a product owner listens gets the shorter loop.
+- The alternative, marking every change of such a session as not confirmed, would fill a spec with marks during ordinary engineering work.
+
+#### Proposed changes
+
+- `skills/velle-design/SKILL.md`: "Before the first change" step 6 asks who is in the session, and the section "When an engineer works alone" holds the shorter loop. Both are written as recommended, ahead of the answer.
+- `wiki/Guides/Design-session.md` gains a section on an engineer working alone, once this is answered.
+
 ## 4. Not in this question
 
 - Listening to a meeting's audio. Dave, 2026-11-25: "it is likely sufficient to first capture a design session in an AI chat in velle before considering audio transcription." It gets its own question once a design session in chat has been tried. It adds a speech-to-text service that labels speakers, and the question of when the assistant edits, since it should not edit on every sentence spoken.
@@ -335,7 +362,8 @@ Costs:
 - [ ] Try a design session on a domain the reference does not use as its example, such as bookings or a pharmacy, from an empty draft (§2, "What the second and third trial sessions showed").
 - [ ] Let `velle describe <draft> <Name>` take a rule's name (§2, same section).
 - [ ] Reword the comparison's heading over "What that changes" so it reads rightly when every declaration is new (§2, same section).
-- [ ] Say in `skills/velle-design/references/language.md` that the first `by` in a spec makes the compiler ask who may see each kind of record, with the refusal it prints (§2, same section).
+- [ ] Run a trial session on the change loop as rewritten after the third trial, and one of an engineer working alone (D13, D14). Neither has been through a trial.
+- [ ] Add a section on an engineer working alone to `wiki/Guides/Design-session.md` once D14 is answered.
 - [ ] Write the decision on what a scenario for `velle try` says, from what stage 1's trial session needed (§6, stage 2).
 - [ ] Add `velle try` (§6, stage 2).
 - [ ] Add the authoring MCP server in `apis/mcp/` over the same code as `velle.Cli` (§6, stage 3).
