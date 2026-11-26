@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D15 decided. Stage 1 of the build (§6) is built but for its second trial session: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. Stages 2 and 3 are not started.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D15 decided. Stage 1 of the build (§6) is built and has been through five trial sessions, the last two before the skill's latest rewrite: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. Stages 2 and 3 are not started.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -119,7 +119,7 @@ Costs:
 - A consequence today points at every edit whose names it mentions, not at the edit that causes it (OQ172). In a session with several edits between read-backs, the product owner cannot tell which decision caused which consequence. One read-back per edit avoids it until OQ172 is built.
 - The compiler's sentences are fixed English. A room that speaks another language reads them in English.
 
-**Decided:** yes, 2026-11-25.
+**Decided:** yes, 2026-11-25. Narrowed 2026-11-26 by D15: the product owner is shown the compiler's sentences after every change and is no longer asked to say yes to each.
 
 ### D3. One command, `velle`, with four subcommands · Decided 2026-11-25
 
@@ -335,7 +335,7 @@ Costs:
 
 - `skills/velle-design/SKILL.md`, "For each change", step 7 "No answer, and they move on", and "Ending the session", step 2. Both are written as recommended, ahead of the answer.
 
-**Decided:** yes (Dave, 2026-11-26). He added that a comment in the spec is a fine way to mark a discussion that may not have been confirmed. So the mark is a `-- Not confirmed` comment on the line above the change, with the date and the decision in the speaker's words, and it replaces the entry in the questions file that the recommendation proposed. `SKILL.md` step 7, "Comments in the spec", and "Ending the session" step 2 are written that way. A session that ends abruptly now leaves the mark in the spec itself, where the next reader sees it.
+**Decided:** yes (Dave, 2026-11-26). He added that a comment in the spec is a fine way to mark a discussion that may not have been confirmed. So the mark is a `-- Not confirmed` comment on the line above the change, with the date and the decision in the speaker's words, and it replaces the entry in the questions file that the recommendation proposed. `SKILL.md` step 7, "Comments in the spec", and "Ending the session" step 2 are written that way. A session that ends abruptly now leaves the mark in the spec itself, where the next reader sees it. Narrowed 2026-11-26 by D15: only a change the assistant had a question about is marked, and the comment holds the question.
 
 ### D14. An engineer working alone gets the compiler's report after every edit and is asked nothing · Decided 2026-11-26
 
