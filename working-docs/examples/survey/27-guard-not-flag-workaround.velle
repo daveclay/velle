@@ -1,0 +1,18 @@
+-- The same guard as a boolean flag, `not applied`, with `this.applied = true`.
+-- The compiler accepts it. It gives up recording when the deposit was applied.
+
+act Account {
+    note: text
+}
+
+act Deposit {
+    account: one Account
+    applied: boolean initially false
+}
+
+shape UnappliedDeposit = Deposit where not applied
+
+rule ApplyDeposit when UnappliedDeposit after commit, Hourly {
+    account.note = "deposit applied"
+    this.applied = true
+}

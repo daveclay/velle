@@ -1,0 +1,12 @@
+-- A count over a filtered walk written inside count(...):
+-- `count(walk recruits where gold)`. Reference §7 "Walks: a value found along a
+-- relationship" says a walk's type is "a collection like any other", and
+-- `count(Member where gold)` parses. The parser refuses a walk inside count(...),
+-- with or without `where`.
+
+act Member {
+    referrer: one Member?
+    gold: boolean
+    recruits: many Member = (Member where referrer == this)
+    goldBelow: integer = count(walk recruits where gold)
+}

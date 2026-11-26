@@ -1,0 +1,17 @@
+-- A field declared `tolerates reordering`, folded only by a rule that fires on
+-- commit, which cannot reorder. Reference §19 "What the compiler checks" says a
+-- `tolerates` that covers no hazard the rule can meet is refused, naming this
+-- case. The compiler accepts it, with no advisory.
+
+act Account {
+    balance: decimal tolerates reordering
+}
+
+act Deposit {
+    account: one Account
+    amount: decimal
+}
+
+rule ApplyDeposit when Deposit {
+    account.balance = account.balance + amount
+}

@@ -1,0 +1,20 @@
+-- A run-once guard written as a field that is absent until the body sets it:
+-- `appliedOn is none`, with `this.appliedOn = now`. Reference §18 "How to write
+-- one" offers this spelling. The compiler does not see it as a guard and
+-- refuses the rule as unguarded.
+
+act Account {
+    note: text
+}
+
+act Deposit {
+    account: one Account
+    appliedOn: DateTime?
+}
+
+shape UnappliedDeposit = Deposit where appliedOn is none
+
+rule ApplyDeposit when UnappliedDeposit after commit, Hourly {
+    account.note = "deposit applied"
+    this.appliedOn = now
+}

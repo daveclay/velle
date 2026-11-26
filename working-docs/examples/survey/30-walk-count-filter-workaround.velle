@@ -1,0 +1,10 @@
+-- The filtered walk declared as a property of its own, then counted. The
+-- compiler accepts it. It costs one more named property.
+
+act Member {
+    referrer: one Member?
+    gold: boolean
+    recruits: many Member = (Member where referrer == this)
+    goldDownline: many Member = (walk recruits where gold)
+    goldBelow: integer = count(goldDownline)
+}
