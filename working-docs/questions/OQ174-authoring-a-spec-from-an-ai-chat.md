@@ -29,6 +29,21 @@ Checked against HEAD on 2026-11-25.
 - **Extension libraries.** A spec's `uses` lines name types and functions found on the classpath through Java's `ServiceLoader` (`compiler/src/main/kotlin/velle/TypeRegistry.kt`). `examples/billing/billing.velle` uses `Money` from `extensions/finance`, so it does not validate with the compiler jar alone.
 - **The repo's own skills.** `oq`, `implement`, and `ub-mode` live in `.claude/skills/`, which only Claude Code reads. They use only `name` and `description` in their first lines, which is the open format.
 
+### What each host can run
+
+Read from each vendor's documentation on 2026-11-26. "Not documented" means the page does not say; nothing here was tried on the host itself.
+
+- **The format.** The specification (agentskills.io/specification) requires `name`, at most 64 characters of lowercase letters, digits, and hyphens, equal to the folder's name, and `description`, at most 1,024 characters. It allows `license`, `compatibility`, `metadata`, and `allowed-tools` and nothing else. claude.ai's help page (support.claude.com, "How to create custom skills") gives 200 characters for `description`, so the skill's is kept under 200. An upload to claude.ai or the Claude API refuses any other key (code.claude.com/docs/en/skills).
+- **Size.** The Claude API takes 30 MB per skill (platform.claude.com, skills guide) and OpenAI's hosted shell 50 MB with 25 MB per file (developers.openai.com, tools-skills). The jar of D4 is under every stated limit.
+- **A developer's own machine.** Claude Code, the Claude Agent SDK, OpenAI's Codex CLI, Google's Gemini CLI and Antigravity, GitHub Copilot's CLI and VS Code, and Cursor each load the format from a folder and run a skill's script in the user's shell (each vendor's skills page). The script works there when the machine has Java 21.
+- **Claude Code cloud sessions.** OpenJDK 21 is installed (code.claude.com/docs/en/cloud-environments). The script works as it is.
+- **claude.ai.** A skill is uploaded as a ZIP and may run code in a sandbox. Whether that sandbox has Java is not documented. It is a work item (§5) to try it.
+- **The Claude API's code execution container.** No Java is listed and it has no network (platform.claude.com, code-execution-tool). The script cannot run there.
+- **OpenAI's hosted shell.** Java 17, and no network by default (developers.openai.com, tools-shell). A jar built for Java 21 cannot run there.
+- **ChatGPT.** Skills are uploaded on business plans (help.openai.com, "Skills in ChatGPT"). Where a skill's code runs is not documented.
+
+What follows from it: a product owner in claude.ai may not be able to run the script, in which case that host needs the authoring MCP server of stage 3 before it can hold a design session at all. A sandbox without network cannot download a jar, which D4 already avoids.
+
 ## 3. What to decide
 
 ### D1. Velle ships a skill as the way an assistant writes a spec, and the authoring MCP server only serves a host that cannot run commands · Decided 2026-11-25
@@ -235,7 +250,7 @@ Costs:
 
 ## 5. Work items
 
-- [ ] Check which assistants besides Claude Code and claude.ai read the open skill format, whether each lets a skill run a script, whether each sandbox has Java 21, and what size each allows a skill to be (D1, D4).
+- [ ] Upload the skill to claude.ai and run `scripts/velle validate` there, to learn whether its sandbox has Java 21, which no documentation says (§2, "What each host can run").
 - [ ] List the forms in `examples/` for which `Sentences` has no words, each one a gap a product owner would see as Velle (D2, D3).
 - [ ] Add `velle.Cli` with `validate`, `compare`, and `describe`, `describe` taking an optional name (D9), and make `Compare.kt` the `compare` subcommand (§6, stage 1).
 - [ ] Add the Gradle task that builds the self-contained jar with `extensions/finance` and copies it and `wiki/Guides/Best-practices.md` into the skill folder (§6, stage 1).
