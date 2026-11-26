@@ -1,6 +1,6 @@
 # OQ155 — Whether the tables Velle creates declare foreign keys
 
-**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1 decided 2026-11-26; D3 and D4 await Dave. On 2026-11-21 Dave cleared his answers to D1 and D2, D2 moved to OQ160, and D4 was added. OQ160 was settled and built on 2026-11-22, so D4 no longer waits on it. Nothing built, and four things are not yet checked (§4).
+**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1 and D3 decided 2026-11-26; D4 awaits Dave. On 2026-11-21 Dave cleared his answers to D1 and D2, D2 moved to OQ160, and D4 was added. OQ160 was settled and built on 2026-11-22, so D4 no longer waits on it. Nothing built, and four things are not yet checked (§4).
 
 **In plain terms:** When one record points at another, the database could be told so, and it would then refuse to remove a record that others still point at. Velle creates the tables and does not tell the database this today. The question is whether it should.
 
@@ -56,7 +56,7 @@ In `examples/pharmacy/pharmacy.velle`, `Interaction` points at `Drug`, and no ru
 
 Whether a reference to a deleted record is emptied was OQ160 D3 from 2026-11-21. Dave decided yes on 2026-11-22 and it is built: the store empties every stored reference to a deleted record in the same commit (`wiki/Guides/Store-API.md`, "What a store must do"; `SqlStore.delete` in `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`). What foreign key a reference to a shape some rule deletes declares is D4.
 
-### D3. A database that already exists is not altered
+### D3. A database that already exists is not altered · Decided 2026-11-26
 
 Should `createSchema` add foreign keys only to tables it creates, leaving the tables of an existing database as they are, and leaving the engineer to add or drop constraints when the spec changes?
 
@@ -66,6 +66,8 @@ Costs:
 
 - Two databases running the same spec can differ in what they enforce, depending on when each was created.
 - When a spec gains a rule that deletes a shape, an existing database keeps the foreign keys from D1 and refuses that rule's delete until the engineer drops them. The error must say so.
+
+**Decided:** yes for now, 2026-11-26.
 
 ### D4. A reference to a shape some rule deletes declares the same foreign key as D1's
 
@@ -99,7 +101,7 @@ Costs:
 
 ## 3. The build
 
-Not written. D1 is decided; D3 and D4 await Dave.
+Not written. D1 and D3 are decided; D4 awaits Dave.
 
 ## 4. Work items
 
