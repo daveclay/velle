@@ -1,0 +1,43 @@
+-- Loan and Rental each take the fields of Borrowing, so `member` and `dueOn` are declared once,
+-- on Borrowing. Rule MoveLoan gives a loan to another member by setting the loan's `member`.
+--
+-- `velle compare` from an empty spec (an empty file) to this file prints, under "What that
+-- changes":
+--
+--   ### Member
+--   - Time passing can now make a Member become a MemberWithLateBorrowing.
+--   - Time passing can now make a Member stop being a MemberWithLateBorrowing.
+--
+--   ### Loan
+--   - A new Member can now make a Loan become a LoanOfLateMember.
+--   - A new Member can now make a Loan stop being a LoanOfLateMember.
+--
+-- Four things are wrong. No line says MoveLoan can make a Member become or stop being a
+-- MemberWithLateBorrowing, though moving a late loan does both. No line says MoveLoan can make
+-- a Loan become or stop being a LoanOfLateMember, though the loan's member changes. No line
+-- says a new Loan or a new Rental can make a Member become a MemberWithLateBorrowing. And a
+-- new Member cannot change which member an existing Loan names. The same spec with `member`
+-- and `dueOn` declared on Loan itself draws the MoveLoan lines and the new Loan line.
+act Member { name: text }
+
+shape Borrowing {
+    member: one Member
+    dueOn: Date
+}
+
+act Loan is Borrowing { title: text }
+
+act Rental is Borrowing { fee: integer }
+
+transient act Transfer {
+    loan: one Loan
+    receiver: one Member
+}
+
+rule MoveLoan when Transfer {
+    loan.member = receiver
+}
+
+shape MemberWithLateBorrowing = Member where exists (borrowings where dueOn < today)
+
+shape LoanOfLateMember = Loan where member.name == "late"

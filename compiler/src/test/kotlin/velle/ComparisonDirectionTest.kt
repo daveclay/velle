@@ -137,6 +137,55 @@ class ComparisonDirectionTest {
         assertDoesNotSay("Time passing can now make a Member stop being a MemberWithLateBook.", consequences)
     }
 
+    // ── a rule re-pointing a reference moves the record on the other side ────
+
+    private fun movingLoans(lateLoanTest: String) = """
+        act Member { name: text }
+
+        act Loan {
+            member: one Member
+            dueOn: Date
+        }
+
+        transient act Transfer {
+            loan: one Loan
+            receiver: one Member
+        }
+
+        rule MoveLoan when Transfer {
+            loan.member = receiver
+        }
+
+        shape MemberWithLateLoan = Member where $lateLoanTest
+    """.trimIndent()
+
+    @Test
+    fun `a rule moving a loan to another member, read through the member's loans, moves members both ways`() {
+        val consequences = consequencesOf(movingLoans("exists (loans where dueOn < today)"))
+
+        assertSays("MoveLoan setting Loan's member can now make a Member become a MemberWithLateLoan.", consequences)
+        assertSays("MoveLoan setting Loan's member can now make a Member stop being a MemberWithLateLoan.", consequences)
+    }
+
+    @Test
+    fun `a rule moving a loan to another member, read as the loans naming the member, moves members both ways`() {
+        val consequences = consequencesOf(movingLoans("exists (Loan where member == this and dueOn < today)"))
+
+        assertSays("MoveLoan setting Loan's member can now make a Member become a MemberWithLateLoan.", consequences)
+        assertSays("MoveLoan setting Loan's member can now make a Member stop being a MemberWithLateLoan.", consequences)
+    }
+
+    /** `for` names the reference field only by its type, and the comparison does not read that
+     *  field from the test: this pins what the comparison says today, the new Loan and no move. */
+    @Test
+    fun `a rule moving a loan to another member, read as the loans for the member, is not said to move members`() {
+        val consequences = consequencesOf(movingLoans("exists Loan for this"))
+
+        assertSays("A new Loan can now make a Member become a MemberWithLateLoan.", consequences)
+        assertDoesNotSay("MoveLoan setting Loan's member can now make a Member become a MemberWithLateLoan.", consequences)
+        assertDoesNotSay("MoveLoan setting Loan's member can now make a Member stop being a MemberWithLateLoan.", consequences)
+    }
+
     // ── a rule's creation is read for the values it gives the record ─────────
 
     private fun lending(dueOn: String) = """

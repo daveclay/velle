@@ -1,0 +1,30 @@
+-- A loan belongs to one member. A member has a loan when a Loan exists for it. Rule MoveLoan
+-- gives a loan to another member when a Transfer arrives, by setting the loan's `member`.
+--
+-- `velle compare` from an empty spec (an empty file) to this file prints, under "What that
+-- changes", exactly one line about MemberWithLoan:
+--
+--   ### Member
+--   - A new Loan can now make a Member become a MemberWithLoan.
+--
+-- Two lines are missing. Moving a member's only loan makes its receiver a MemberWithLoan and
+-- makes the member it left stop being one. The same condition spelled `exists loans` or
+-- `exists (Loan where member == this)` draws both lines. The compiler does not record which
+-- field of Loan `for this` matched, so a write of `Loan.member` is not seen as a change.
+act Member { name: text }
+
+act Loan {
+    member: one Member
+    dueOn: Date
+}
+
+transient act Transfer {
+    loan: one Loan
+    receiver: one Member
+}
+
+rule MoveLoan when Transfer {
+    loan.member = receiver
+}
+
+shape MemberWithLoan = Member where exists Loan for this

@@ -1217,6 +1217,9 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     private fun record(scope: String, m: MemberInfo, s: ReadSummary) {
         if (m.stored) s.fields.add(m.owner to m.name)
+        // an inferred inverse is the declared side read from the other end: which records it
+        // holds is the reference field each of them stores (Reference §6)
+        m.inverse?.let { declaredSide -> s.fields.add(declaredSide.shape to declaredSide.field) }
         if (m.timestamp) s.collFields.add(m.owner to m.name)
         (m.type as? VType.Coll)?.let { s.collShapes.add(it.shape) }
         m.derived?.let { d ->
@@ -1359,7 +1362,8 @@ const val VALUE_ALIAS = "<value>"
 
 /** [includesHeldReads] is false for the one question that sets them aside: which reads make a `never` a guarantee (checks.md V10). */
 class ReadSummary(val includesHeldReads: Boolean = true) {
-    /** (owner shape, stored field) pairs the predicate/expression reads */
+    /** (owner shape, stored field) pairs the predicate/expression reads; reading an inferred
+     *  inverse reads the reference field on its declared side */
     val fields = mutableSetOf<Pair<String, String>>()
     /** shapes whose existence/instances are consulted (exists, selectors, for-queries) */
     val existsShapes = mutableSetOf<String>()

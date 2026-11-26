@@ -83,4 +83,33 @@ class StateFlowGenTest {
         assertTrue("**RemindOverdue** — runs at every Weekly tick" in invoice)
         assertFalse("--> ActionableOverdue" in invoice, "a composition is not a state")
     }
+
+    private val movingLoans = """
+        act Member { name: text }
+
+        act Loan {
+            member: one Member
+            dueOn: Date
+        }
+
+        transient act Transfer {
+            loan: one Loan
+            receiver: one Member
+        }
+
+        rule MoveLoan when Transfer {
+            loan.member = receiver
+        }
+
+        shape MemberWithLateLoan = Member where exists (loans where dueOn < today)
+    """.trimIndent()
+
+    @Test
+    fun `a rule moving a loan to another member draws the member moving both ways`() {
+        val library = DiagramGen.generate(movingLoans, "Library")
+        val member = library.substringAfter("## State flow").substringAfter("### Member").substringBefore("\n### ")
+
+        assertTrue("out --> MemberWithLateLoan : MoveLoan writes Loan.member — may flip" in member, member)
+        assertTrue("MemberWithLateLoan --> out : MoveLoan writes Loan.member — may flip" in member, member)
+    }
 }
