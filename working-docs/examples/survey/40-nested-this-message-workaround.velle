@@ -1,0 +1,12 @@
+-- The tool that is out from `40-nested-this-message-refused.velle`, with the inner condition
+-- named as a refinement over Loan, so `this` in it is the loan. `velle validate` prints
+-- "`40-nested-this-message-workaround.velle` validates." It costs one more named refinement.
+act Tool { name: text }
+
+act Loan { tool: one Tool }
+
+act Return { loan: one Loan }
+
+shape OpenLoan = Loan where not exists Return for this
+
+shape ToolOut = Tool where exists (loans where OpenLoan)

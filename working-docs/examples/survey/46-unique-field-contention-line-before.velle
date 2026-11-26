@@ -1,0 +1,5 @@
+-- The earlier version of `46-unique-field-contention-line-accepted.velle` for `velle compare`:
+-- a member with a name and no email.
+act Member {
+    name: text
+}

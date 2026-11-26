@@ -1,0 +1,45 @@
+-- A member whose balance is below zero is delinquent, and gets a flag while delinquent. Rule
+-- FlagMember fires in the commit of every Charge. `velle validate` passes, and prints three A5
+-- advisories under "What the compiler advises". The first is:
+--
+--   - [A5] every commit touching Member joins a single queue. Reads Member.balance with no path back to any key (rule FlagMember), so any two such commits conflict. State the policy:
+--     - correlate the read (relate Member to the shape that partitions it), or
+--     - move the rule to a schedule (`on <Schedule>`) — the read then runs once per tick instead of inside every commit, or
+--     - declare `tolerates contention` on the rule FlagMember (OQ40)
+--
+-- The other two, for Flag ("Consults OpenFlag through a path the derivation cannot key") and
+-- Resolution ("Consults Resolution through a path the derivation cannot key"), end the same
+-- way, "declare `tolerates contention` on the rule FlagMember (OQ40)". OQ40 is a settled
+-- question in `working-docs/QUESTIONS.md` and means nothing to the author reading the advisory.
+-- `compiler/CLAUDE.md` "Diagnostics" says a diagnostic is read by a Velle author and carries no
+-- internal vocabulary; "the derivation cannot key" is internal vocabulary too. The parser does
+-- the same in `43-tolerates-names-oq-tag-refused.velle`.
+act Member {
+    name: text
+    balance: decimal
+}
+
+transient act Charge {
+    member: one Member
+    amount: decimal
+}
+
+rule ApplyCharge when Charge {
+    member.balance = member.balance - amount
+}
+
+shape Delinquent = Member where balance < 0
+
+shape Flag { member: one Member }
+
+shape Resolution { flag: one Flag }
+
+shape OpenFlag = Flag where not exists Resolution for this
+
+rule FlagMember when (Delinquent where not exists OpenFlag for this) {
+    Flag from { member: this }
+}
+
+rule ResolveFlag when leaving Delinquent {
+    Resolution from { flag: (OpenFlag for this) }
+}

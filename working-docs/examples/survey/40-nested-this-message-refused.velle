@@ -1,0 +1,18 @@
+-- A tool is out when one of its loans has no return. Inside `(loans where ...)`, `this` is still
+-- the Tool, not the loan (Reference §10), so `exists Return for this` asks for a Return that
+-- points at a Tool, and Return has no such field. `velle validate` refuses it:
+--
+--   - [V13] exists Return for ... — 'for' matches 0 fields of 'Return' (needs exactly one; name the field or use the where-filtered form)
+--
+-- The message prints `...` where `this` was written, and never says that `this` is a Tool here.
+-- A reader would expect "`this` inside `(loans where ...)` is the Tool; Return has no field of
+-- type Tool", and the spelling that works, `40-nested-this-message-workaround.velle`:
+-- `shape OpenLoan = Loan where not exists Return for this` and
+-- `shape ToolOut = Tool where exists (loans where OpenLoan)`.
+act Tool { name: text }
+
+act Loan { tool: one Tool }
+
+act Return { loan: one Loan }
+
+shape ToolOut = Tool where exists (loans where not exists Return for this)

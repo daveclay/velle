@@ -1,0 +1,33 @@
+-- A tool that is out cannot be borrowed. `Borrow` is a transient act, so
+-- `never (Borrow where ...)` is a refusal: Reference §21 says a refusal "is checked once, when
+-- the request arrives". `returnedOn` is set by rule TakeBackTool. `velle validate` refuses it:
+--
+--   - [V10] a 'never' reads 'Loan.returnedOn', which rule 'TakeBackTool' assigns, so it is a guarantee that the rules keep it true, and the compiler cannot yet prove one over every assignment; read a field no rule assigns, or derive 'returnedOn' from the records the rule writes (Reference §21)
+--
+-- The message calls a refusal a guarantee. Reference §21 says a guarantee "is a prohibition over
+-- state that only rules can produce", proved at compile time, and that nobody is ever refused by
+-- one. This `never` turns away a Borrow when it arrives and binds no rule. A reader would expect
+-- it to validate, or else a message that says why a refusal that reads an assigned field is
+-- refused. V10 refusing a `never` over an assigned field is OQ53's item "Prove a `never` over a
+-- rule-written field inductively", shown over a kept act in `03-assigned-field-refused.velle`.
+-- The word "guarantee" for a refusal is not in OQ53.
+act Tool { name: text }
+
+transient act Borrow { tool: one Tool }
+
+shape Loan {
+    tool: one Tool
+    returnedOn: Date?
+}
+
+rule LendTool when Borrow {
+    Loan from { tool: tool, returnedOn: none }
+}
+
+transient act ReturnTool { loan: one Loan }
+
+rule TakeBackTool when ReturnTool {
+    loan.returnedOn = today
+}
+
+never (Borrow where exists (tool.loans where returnedOn is none))

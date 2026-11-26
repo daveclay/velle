@@ -1,0 +1,21 @@
+-- A library's member, entered by the staff and kept. Reference §3 says a shape declared `act`
+-- "can also be submitted from outside", so a record the staff enter, such as a member, is an
+-- `act`. `velle describe` on this file prints:
+--
+--   ## What someone can ask for
+--
+--   ### Member
+--
+--   - Member is a request someone makes, kept as a record.
+--     In the spec: 41-act-called-request-accepted.velle, line 18, `act Member`
+--     - Its name is a text.
+--     - Its email is a text, and no two Member records have the same one.
+--
+-- `velle compare` from an empty spec (an empty file) prints "New: Member, a request someone
+-- makes, kept as a record, with name (a text), email (a text, no two the same)." A member is a
+-- person, not a request. A reader would expect words for a record someone enters, such as
+-- "Member is a record someone enters, and the system keeps it."
+act Member {
+    name: text
+    email: text unique
+}

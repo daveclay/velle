@@ -1,0 +1,38 @@
+-- A visit is at most 600 minutes, and a deposit request is at least 10 and at most 1000, so 600,
+-- 10, and 1000 are allowed. `velle compare` from an empty spec (an empty file) to this file
+-- prints, under "The spec as a whole", this line, followed in the report by its "In the spec:"
+-- lines, left out here:
+--
+--   - The compiler now writes 7 more example tests from the spec. They check that a new MakeDeposit produces a Deposit, by RecordDeposit, that a MakeDeposit whose amount is above 1000 is refused, that a MakeDeposit whose amount is below 10 is refused, that a MakeDeposit whose amount is 10 is accepted, that a MakeDeposit whose amount is 999 is accepted, that a Visit whose minutes is above 600 is refused, and that a Visit whose minutes is 599 is accepted.
+--
+-- Under `<` the accepted case is the bound itself, 10. Under `>` it is one below the bound, so no
+-- test checks that a visit of exactly 600 minutes or a deposit of exactly 1000 is accepted, the
+-- value that tells `>` from `>=`. For the decimal `amount`, 999 is not the value next to the
+-- bound either. The nearest work item is OQ56's boundary synthesis, "the two bounds themselves
+-- under `between`", which does not name `>`.
+act Member { name: text }
+
+act Visit {
+    member: one Member
+    minutes: integer
+}
+
+never (Visit where minutes > 600)
+
+transient act MakeDeposit {
+    member: one Member
+    amount: decimal
+}
+
+shape Deposit {
+    member: one Member
+    amount: decimal
+}
+
+rule RecordDeposit when MakeDeposit {
+    Deposit from { member: member, amount: amount }
+}
+
+never (MakeDeposit where amount > 1000)
+
+never (MakeDeposit where amount < 10)

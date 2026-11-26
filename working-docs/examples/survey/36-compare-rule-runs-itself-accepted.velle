@@ -1,0 +1,22 @@
+-- Every night, rule SuspendMembers suspends each member that has no suspension yet, by creating
+-- a Suspension for it. The Suspension it creates makes its own condition,
+-- `not exists Suspension for this`, false for that member, and true for no other member.
+--
+-- `velle compare` from an empty spec (an empty file) to this file prints, under "What that
+-- changes", these lines among others. Each is followed in the report by its "In the spec:"
+-- lines, left out here.
+--
+--   ### Member
+--   - A new Member can now cause SuspendMembers to run, later rather than in the same commit.
+--   ### SuspendMembers
+--   - SuspendMembers can now cause SuspendMembers to run, later rather than in the same commit.
+--
+-- The second line cannot happen: creating a Suspension can only take a member out of the rule's
+-- condition, so the rule never causes itself to run. The first line is true.
+act Member { name: text }
+
+shape Suspension { member: one Member }
+
+rule SuspendMembers when (Member where not exists Suspension for this) on Nightly {
+    Suspension from { member: this }
+}

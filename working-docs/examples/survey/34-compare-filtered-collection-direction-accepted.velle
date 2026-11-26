@@ -1,0 +1,51 @@
+-- A loan is open while it has no return, and late once its due date is past. A member has an
+-- open loan, or a late loan, when one of its loans is. Nothing assigns `dueOn`, so time passing
+-- can only make a loan late, never not late. A new Return only adds to its loan's `returns`, so
+-- it can only take a loan out of `count(returns) < 1`, never put one in. Rule NoticeMembers runs
+-- for a member with an open loan and no notice.
+--
+-- `velle compare` from an empty spec (an empty file) to this file prints, under "What that
+-- changes", these lines among others. Each is followed in the report by its "In the spec:"
+-- lines, left out here.
+--
+--   ### Loan
+--   - A new Return can now make a Loan stop being an OpenLoan.
+--   - Time passing can now make a Loan become a LateLoan.
+--   ### Member
+--   - Time passing can now make a Member become a MemberWithLateLoan.
+--   - Time passing can now make a Member stop being a MemberWithLateLoan.
+--   - A new Return can now make a Member become a MemberWithOpenLoan.
+--   - A new Return can now make a Member stop being a MemberWithOpenLoan.
+--   ### Return
+--   - A new Return can now cause NoticeMembers to run, later rather than in the same commit.
+--
+-- On one loan the direction is right: OpenLoan and LateLoan each get one line. Read through
+-- `exists (loans where ...)`, the same two conditions get both directions, and three lines
+-- cannot happen: "Time passing can now make a Member stop being a MemberWithLateLoan", "A new
+-- Return can now make a Member become a MemberWithOpenLoan", and "A new Return can now cause
+-- NoticeMembers to run". No refinement is named inside a condition and no sum is read, so this
+-- is not the case in `33-positive-payment-enters-overdue-accepted.velle` (OQ182). The report's
+-- line "NoticeMembers can now cause NoticeMembers to run" is the case in
+-- `36-compare-rule-runs-itself-accepted.velle`.
+act Member { name: text }
+
+act Loan {
+    member: one Member
+    dueOn: Date
+}
+
+act Return { loan: one Loan }
+
+shape Notice { member: one Member }
+
+shape OpenLoan = Loan where count(returns) < 1
+
+shape LateLoan = Loan where dueOn < today
+
+shape MemberWithLateLoan = Member where exists (loans where dueOn < today)
+
+shape MemberWithOpenLoan = Member where exists (loans where count(returns) < 1)
+
+rule NoticeMembers when (Member where exists (loans where count(returns) < 1) and not exists Notice for this) on Nightly {
+    Notice from { member: this }
+}

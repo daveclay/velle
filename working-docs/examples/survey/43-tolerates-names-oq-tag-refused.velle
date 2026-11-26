@@ -1,0 +1,12 @@
+-- A `never` signed with the wrong hazard, `tolerates loss`. `velle validate` refuses it:
+--
+--   - The compiler cannot read it: a never signs 'tolerates contention' only (OQ40), found LIDENT('loss') (at 12:44)
+--
+-- The message ends its rule with "(OQ40)", a settled question in `working-docs/QUESTIONS.md`
+-- that means nothing to the author, and names the token as "LIDENT", a word of the parser.
+-- The text is written in `compiler/src/main/kotlin/velle/Parser.kt`, `parseToleratesContention`.
+act Member {
+    name: text
+    balance: decimal
+}
+never (Member where balance < 0) tolerates loss

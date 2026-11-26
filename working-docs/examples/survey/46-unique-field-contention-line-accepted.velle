@@ -1,0 +1,25 @@
+-- A member has a name and an email, and no two members share an email. `velle compare` from
+-- `46-unique-field-contention-line-before.velle`, the member without its email, to this file
+-- prints:
+--
+--   ## What was edited
+--
+--   - Member now has the field email (a text, no two the same).
+--     In the spec: 46-unique-field-contention-line-accepted.velle, line 22, `act Member`
+--
+--   ## What that changes
+--   ...
+--   ### Member
+--
+--   - A new Member now waits its turn behind other work on the same email value. Before: behind nothing.
+--     In the spec: 46-unique-field-contention-line-accepted.velle, line 22, `act Member`
+--
+-- `velle compare` from an empty spec (an empty file) to this file prints only "New: Member, a
+-- request someone makes, kept as a record, with name (a text), email (a text, no two the
+-- same).", and no section "What that changes". The two reports end at the same spec and disagree
+-- on whether a new Member waits behind other work on the same email, so a report over a whole
+-- session drops what the report over one change said.
+act Member {
+    name: text
+    email: text unique
+}

@@ -1,0 +1,29 @@
+-- A member may be referred by another member, never by itself, and may be suspended. The
+-- prohibition is written as a named refinement and `never SelfReferral`. `velle describe` on
+-- this file prints, among its lines:
+--
+--   - Its suspended is a boolean, starting as false.
+--   - A Member is an ActiveMember when its suspended is false.
+--   ...
+--   ## What is never allowed
+--
+--   ### Member
+--
+--   - A SelfReferral is forbidden when it is a SelfReferral.
+--     In the spec: 44-describe-tautology-and-boolean-accepted.velle, line 27, `never SelfReferral`
+--
+-- "A SelfReferral is forbidden when it is a SelfReferral" is true and says nothing: a reader
+-- would expect "A Member is forbidden when it is a SelfReferral", or the refinement's own words,
+-- as the same prohibition written in place draws: "A Member is forbidden when its referredBy is
+-- present and its referredBy is it." for the last line of this file. "Its suspended is a boolean" and "its suspended is false" name a boolean field as a
+-- noun; a reader would expect "It may be suspended, starting as not suspended" and "when it is
+-- not suspended".
+shape Member {
+    name: text
+    referredBy: one Member?
+    suspended: boolean initially false
+}
+shape SelfReferral = Member where referredBy is some and referredBy == this
+never SelfReferral
+shape ActiveMember = Member where not suspended
+never (Member where referredBy is some and referredBy == this)

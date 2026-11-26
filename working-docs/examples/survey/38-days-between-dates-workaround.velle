@@ -1,0 +1,25 @@
+-- The late fee of 2 a day from `37-days-between-dates-refused.velle`, written the one way that
+-- validates: every night a loan that is out and past due gets one LateDay record, and the fee is
+-- 2 times the number of them. `velle validate` prints "`38-days-between-dates-workaround.velle`
+-- validates."
+--
+-- It gives up the meaning. The fee counts the nights the Nightly schedule ran while the loan was
+-- late, not the days between `dueOn` and `returnedOn`, so a night whose run is missed may be a day
+-- the member is not charged for (whether a missed run is made up is open, OQ34). It also keeps a
+-- record per late day that the business never asked for.
+act Loan {
+    dueOn: Date
+    returnedOn: Date?
+    lateFee: decimal = 2 * count(lateDays)
+}
+
+shape LateDay {
+    loan: one Loan
+    countedOn: Date
+}
+
+rule CountLateDay
+    when (Loan where returnedOn is none and dueOn < today and not exists (LateDay where loan == this and countedOn == today))
+    on Nightly {
+    LateDay from { loan: this, countedOn: today }
+}

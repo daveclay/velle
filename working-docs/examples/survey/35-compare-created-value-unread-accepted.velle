@@ -1,0 +1,32 @@
+-- Rule LendTool creates every Loan, with `dueOn` set to seven days from today. A member has a
+-- late loan when one of its loans is due before today, so no loan is late on the day it is
+-- created.
+--
+-- `velle compare` from an empty spec (an empty file) to this file prints, under "What that
+-- changes", these lines among others. Each is followed in the report by its "In the spec:"
+-- lines, left out here.
+--
+--   ### Member
+--   - LendTool creating a Loan can now make a Member become a MemberWithLateLoan.
+--   - Time passing can now make a Member become a MemberWithLateLoan.
+--   - Time passing can now make a Member stop being a MemberWithLateLoan.
+--
+-- The first line cannot happen: the loan LendTool creates is due seven days after today, so
+-- `dueOn < today` is false in the commit that creates it. The compiler does not read the value
+-- the rule gives `dueOn`. A member becomes a MemberWithLateLoan by time passing, which the
+-- second line already says. The third line is the case in
+-- `34-compare-filtered-collection-direction-accepted.velle`.
+act Member { name: text }
+
+transient act Borrow { member: one Member }
+
+shape Loan {
+    member: one Member
+    dueOn: Date
+}
+
+rule LendTool when Borrow {
+    Loan from { member: member, dueOn: today + 7 days }
+}
+
+shape MemberWithLateLoan = Member where exists (loans where dueOn < today)
