@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D15 decided. D16 and D17 await Dave. Stages 2 and 3 are built as each recommends (Dave, 2026-11-26: "implement stage 2 and 3"): `velle try`, and the authoring MCP server. The file stays until D16 and D17 are answered and the work items in §5 are done or moved. Stage 1 of the build (§6) is built and has been through five trial sessions, the last two before the skill's latest rewrite: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. 
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D16 decided. D17 awaits Dave. Stages 2 and 3 are built, stage 3 as D17 recommends (Dave, 2026-11-26: "implement stage 2 and 3"): `velle try`, and the authoring MCP server. The file stays until D17 is answered and the work items in §5 are done or moved. Stage 1 of the build (§6) is built and has been through five trial sessions, the last two before the skill's latest rewrite: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. 
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -396,7 +396,7 @@ Costs:
 
 **Decided:** yes (Dave, 2026-11-26).
 
-### D16. A scenario for `velle try` is a JSON list of steps in the words the API layer already uses
+### D16. A scenario for `velle try` is a JSON list of steps in the words the API layer already uses · Decided 2026-11-26
 
 Is a scenario a JSON file listing steps, where a step commits an act with the same body the REST API takes, lets time pass, runs a schedule, names a record a rule created, or shows a record?
 
@@ -437,6 +437,8 @@ Costs:
 - `skills/velle-design/SKILL.md`: the commands table gains `try`, and a section on running an example the people give. `skills/velle-design/references/` gains `scenarios.md`.
 - `wiki/Guides/Design-session.md`: the commands table and a part of the walk-through.
 - Tests: one per kind of step and per outcome over `examples/billing/changes/00-billing.velle`, and one against the built jar.
+
+**Decided:** yes (Dave, 2026-11-26). He reads the scenario as the acts' data in the form a REST API might take, which `try` checks against the spec. The names in place of store keys and the four other kinds of step were put to him before he answered.
 
 ### D17. The authoring MCP server runs on the person's own machine and its tools take the spec as text
 
