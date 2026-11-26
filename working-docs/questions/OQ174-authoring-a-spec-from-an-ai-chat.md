@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D9 decided. D10 and D11 await Dave. The build plan (§6) awaits Dave's review. Nothing built.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D11 decided. The build plan (§6) awaits Dave's review. Nothing built.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -189,7 +189,7 @@ Costs:
 
 **Decided:** yes, 2026-11-25. Dave expects real-world specs to be too big in general and would split one into several files to organize a large system, which is not a priority (OQ175, `working-docs/QUESTIONS.md`); reading a large spec in parts is worth having whether or not a spec can be split.
 
-### D10. Velle's best practices reach a team with the skill, never from the wiki directly
+### D10. Velle's best practices reach a team with the skill, never from the wiki directly · Decided 2026-11-26
 
 Does the skill carry the best practices of the version it was built from, copied from `wiki/Guides/Best-practices.md` when the skill is built, so a team gets new best practices by taking a new copy of the skill, and the assistant never reads the wiki during a session?
 
@@ -204,7 +204,9 @@ Costs:
 
 - The Gradle task of D4 copies `wiki/Guides/Best-practices.md` into `skills/velle-design/references/` when it copies the jar, so the copy in the repo is never edited by hand.
 
-### D11. A team's own best practices sit in a file beside its spec and win over Velle's
+**Decided:** yes, 2026-11-26.
+
+### D11. A team's own best practices sit in a file beside its spec and win over Velle's · Decided 2026-11-26
 
 Does the skill read a team's own best practices from a file named `best-practices.md` in the same folder as the draft, follow them as it follows Velle's, and follow the team's where the two disagree?
 
@@ -222,6 +224,8 @@ Costs:
 - `SKILL.md` reads `best-practices.md` beside the draft when it exists, follows it where it disagrees with `references/Best-practices.md`, and names the source of each best practice it cites.
 - `wiki/Guides/Design-session.md` says where a team writes its own best practices and that they win.
 
+**Decided:** yes, 2026-11-26.
+
 ## 4. Not in this question
 
 - Listening to a meeting's audio. Dave, 2026-11-25: "it is likely sufficient to first capture a design session in an AI chat in velle before considering audio transcription." It gets its own question once a design session in chat has been tried. It adds a speech-to-text service that labels speakers, and the question of when the assistant edits, since it should not edit on every sentence spoken.
@@ -234,8 +238,8 @@ Costs:
 - [ ] Check which assistants besides Claude Code and claude.ai read the open skill format, whether each lets a skill run a script, whether each sandbox has Java 21, and what size each allows a skill to be (D1, D4).
 - [ ] List the forms in `examples/` for which `Sentences` has no words, each one a gap a product owner would see as Velle (D2, D3).
 - [ ] Add `velle.Cli` with `validate`, `compare`, and `describe`, `describe` taking an optional name (D9), and make `Compare.kt` the `compare` subcommand (§6, stage 1).
-- [ ] Add the Gradle task that builds the self-contained jar with `extensions/finance` and copies it into the skill folder (§6, stage 1).
-- [ ] Write `skills/velle-design/`: `SKILL.md`, which tells the assistant to follow the best practices page, `scripts/velle`, `references/` (§6, stage 1).
+- [ ] Add the Gradle task that builds the self-contained jar with `extensions/finance` and copies it and `wiki/Guides/Best-practices.md` into the skill folder (§6, stage 1).
+- [ ] Write `skills/velle-design/`: `SKILL.md`, which tells the assistant to follow the best practices page and a team's own `best-practices.md` beside the draft, `scripts/velle`, `references/` (§6, stage 1).
 - [ ] Add the test that fails when `references/` and `wiki/Reference/` disagree, or the copy of the best practices page differs from `wiki/Guides/Best-practices.md` (§6, stage 1).
 - [ ] Try two design sessions in chat, before any audio work: one changing `examples/billing/changes/00-billing.velle` toward the changes in `examples/billing/changes/README.md`, and one rebuilding part of the billing spec from an empty draft (§4, §6 stage 1).
 - [ ] Write the decision on what a scenario for `velle try` says, from what stage 1's trial session needed (§6, stage 2).
@@ -249,13 +253,13 @@ Three stages, each landing on its own. Stage 1 is enough for a design session in
 ### Stage 1: the skill with `validate`, `compare`, and `describe`
 
 1. **Code.** A new `velle.Cli` in `compiler/src/main/kotlin/velle/` with the subcommands `validate`, `compare`, and `describe`, each printing Markdown (D3). `validate` prints the diagnostics or a line saying the draft validates, and writes no file. `compare` is the body of today's `Compare.kt`, which stays as a thin entry point so `wiki/Guides/Comparing-specs.md` keeps working. `describe` prints the whole spec in the words of `Sentences` and `RuleSentences`, showing the Velle for a form they have no words for, or one part of it when given a name (D9). Nothing in it calls git (D7).
-2. **The jar.** A Gradle task in `compiler/build.gradle.kts` builds one jar holding the compiler, the Kotlin standard library, and `extensions/finance`, and no store binding (D4, D5). It copies the jar into `skills/velle-design/scripts/`.
+2. **The jar.** A Gradle task in `compiler/build.gradle.kts` builds one jar holding the compiler, the Kotlin standard library, and `extensions/finance`, and no store binding (D4, D5). It copies the jar into `skills/velle-design/scripts/`, and `wiki/Guides/Best-practices.md` into `skills/velle-design/references/`, so that copy is never edited by hand (D10).
 3. **The skill.** `skills/velle-design/` at the repo root (D6):
-   - `SKILL.md` with `name` and `description` only in its first lines (D1). Its body is the procedure: open the draft the team gives it, existing or empty, keep the starting version, and describe the part the room came to change (D9); then for each change edit the draft, run `validate`, run `compare` against the version before the edit, show the product owner only the compiler's sentences and ask whether that is what they meant (D2); on acceptance commit with the quoted discussion when the draft is in git and the room agreed at the first commit, otherwise keep going without history and say so at the start (D7); on rejection undo the edit; write what the room leaves undecided, and every proof the validator cannot make, as a question in a file beside the draft (D8). Everything it writes into the draft follows `references/Best-practices.md`, such as naming the parts of a long condition as refinements. When a rule already in the spec does not follow a best practice on that page, the assistant never rewrites it on its own. It proposes the rewrite as a change, and the product owner accepts or rejects it like any other change. At the end of the session it runs `compare` from the starting version to the draft, so the room reads every change of the meeting at once. It works on the file where it finds it and never creates a branch, copies a spec, or pushes (D7). It says to use the authoring MCP tools when they are connected and the script otherwise (D1).
+   - `SKILL.md` with `name` and `description` only in its first lines (D1). Its body is the procedure: open the draft the team gives it, existing or empty, keep the starting version, and describe the part the room came to change (D9); then for each change edit the draft, run `validate`, run `compare` against the version before the edit, show the product owner only the compiler's sentences and ask whether that is what they meant (D2); on acceptance commit with the quoted discussion when the draft is in git and the room agreed at the first commit, otherwise keep going without history and say so at the start (D7); on rejection undo the edit; write what the room leaves undecided, and every proof the validator cannot make, as a question in a file beside the draft (D8). Everything it writes into the draft follows `references/Best-practices.md`, such as naming the parts of a long condition as refinements, and the team's own `best-practices.md` beside the draft when there is one, which wins where the two disagree (D11). It never reads the wiki during a session (D10). When a rule already in the spec does not follow a best practice on that page, the assistant never rewrites it on its own. It proposes the rewrite as a change, naming the best practice and whether it is Velle's or the team's, and the product owner accepts or rejects it like any other change (D11). At the end of the session it runs `compare` from the starting version to the draft, so the room reads every change of the meeting at once. It works on the file where it finds it and never creates a branch, copies a spec, or pushes (D7). It says to use the authoring MCP tools when they are connected and the script otherwise (D1).
    - `scripts/velle`, a shell launcher running the jar with `java`, and the jar.
    - `references/`, a condensed Velle reference from `wiki/Reference/`, and a copy of `wiki/Guides/Best-practices.md`.
 4. **Tests.** One per subcommand over `examples/billing/billing.velle`, which uses `Money`, run against the built jar so the standard library and `extensions/finance` are proven to be inside it. A test that fails when `references/` names a keyword `wiki/Reference/` does not, or the reverse, or when `references/Best-practices.md` differs from `wiki/Guides/Best-practices.md` (D6).
-5. **Wiki.** A new guide, `wiki/Guides/Design-session.md`: loading the skill in Claude Code and in claude.ai, a session changing an existing spec, a first session from an empty draft, what the product owner sees, and what a machine without git or Java gets. Linked from `Home.md` and `_Sidebar.md`. `GLOSSARY.md` gains "skill". `Comparing-specs.md` gains the `velle compare` spelling.
+5. **Wiki.** A new guide, `wiki/Guides/Design-session.md`: loading the skill in Claude Code and in claude.ai, a session changing an existing spec, a first session from an empty draft, where a team writes its own best practices and that they win over Velle's (D11), what the product owner sees, and what a machine without git or Java gets. Linked from `Home.md` and `_Sidebar.md`. `GLOSSARY.md` gains "skill". `Comparing-specs.md` gains the `velle compare` spelling.
 6. **Repo.** The root `CLAUDE.md` names `skills/` in its list of folders.
 7. **Trial.** Two design sessions in chat. The main one changes an existing spec: it starts from `examples/billing/changes/00-billing.velle` and makes some of the changes listed in `examples/billing/changes/README.md` from a discussion, and its reports can be checked against the reports already in that folder. The second rebuilds part of the billing spec from an empty draft. What they needed and lacked goes into this file before stage 2.
 
