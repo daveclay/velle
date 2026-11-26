@@ -102,8 +102,8 @@ A decision section (Dave, 2026-11-11):
 ### D<n>. <the decision in one sentence>
 
 <The decision text: the question put to Dave, phrased as a question he
-answers, then the recommendation, the costs as a short list, the
-full-context Velle. Written once, when the decision is proposed, and not
+answers, then the recommendation, the pros and cons of doing it and of
+not doing it as short lists, the full-context Velle. Written once, when the decision is proposed, and not
 rewritten when it is answered.>
 
 #### Proposed changes
@@ -210,7 +210,7 @@ to its header (shape in §1).
 Each decision section:
 
 - Opens with the decision as one plain sentence Dave would say, yes-or-no
-  where possible. The costs come after, as a short list (Dave, 2026-10-12,
+  where possible. The pros and cons come after, as short lists (Dave, 2026-10-12,
   on OQ49 S7: "worded in such a complicated way, it could have simply
   asked...").
 - Asks Dave a question, explicitly and in so many words, with a question
@@ -219,7 +219,26 @@ Each decision section:
   is not a decision, because there is nothing for Dave to answer. Describing
   is not asking (Dave, 2026-11-11).
 - Carries a recommendation.
-- Lists the costs as consequences for Velle, not only as implementation
+- Weighs both sides, as pros and cons, not costs alone: what Velle gains
+  and loses by doing the thing, and what it gains and loses by not doing it.
+  Not doing it is an option with its own costs, such as a gap that stays
+  open, a check that stays a runtime check, or a spelling a product owner
+  keeps having to work around; name them (Dave, 2026-11-26: "I want to
+  capture the costs of doing one thing vs not doing that thing"). When a
+  decision has more than two options, each option gets its pros and cons.
+  A section with this shape:
+
+  ```
+  **If we do it**
+  - Pro: <what Velle gains>
+  - Con: <what Velle loses or must start checking>
+
+  **If we don't**
+  - Pro: <what Velle keeps>
+  - Con: <what stays missing or stays checked>
+  ```
+
+- Lists the pros and cons as consequences for Velle, not only as implementation
   work: what the compiler can no longer prove or must start checking (a
   design in which a wrong state cannot be represented beats one in which it
   is checked), what a product owner can no longer say or must now say, and
