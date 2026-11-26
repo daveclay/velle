@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D9 decided. The build plan (§6) awaits Dave's review; nothing built. Nothing built.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D9 decided. D10 and D11 await Dave. The build plan (§6) awaits Dave's review. Nothing built.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -188,6 +188,39 @@ Costs:
 - `velle describe <draft> [<name>]` in `velle.Cli`, with a test describing `Invoice` in `examples/billing/billing.velle`.
 
 **Decided:** yes, 2026-11-25. Dave expects real-world specs to be too big in general and would split one into several files to organize a large system, which is not a priority (OQ175, `working-docs/QUESTIONS.md`); reading a large spec in parts is worth having whether or not a spec can be split.
+
+### D10. Velle's best practices reach a team with the skill, never from the wiki directly
+
+Does the skill carry the best practices of the version it was built from, copied from `wiki/Guides/Best-practices.md` when the skill is built, so a team gets new best practices by taking a new copy of the skill, and the assistant never reads the wiki during a session?
+
+Recommendation: yes. A best practice can name a construct, as "Name the parts of a long condition" names refinements. A page read live from the wiki can describe a construct the skill's compiler does not have yet, and the assistant would write Velle that does not validate. Copied at build, the best practices and the compiler in one skill always match. A session also needs no network, which not every host's sandbox allows (D4).
+
+Costs:
+
+- A team on an old copy of the skill follows old best practices until it takes a new one, as it runs an old compiler until then (D4).
+- A best practice added to the wiki reaches nobody until a skill is built and published. The drift test (§6, stage 1, Tests) keeps the copy in the repo equal to the wiki, not the copies teams already have.
+
+#### Proposed changes
+
+- The Gradle task of D4 copies `wiki/Guides/Best-practices.md` into `skills/velle-design/references/` when it copies the jar, so the copy in the repo is never edited by hand.
+
+### D11. A team's own best practices sit in a file beside its spec and win over Velle's
+
+Does the skill read a team's own best practices from a file named `best-practices.md` in the same folder as the draft, follow them as it follows Velle's, and follow the team's where the two disagree?
+
+A team's engineers will have best practices of their own, such as how they name refinements or how they order a spec's sections. They belong to the team and to its spec, not to Velle, so they live with the spec and never in the skill. Recommendation: yes, the team's file wins, and when the assistant proposes a rewrite (§6, stage 1, The skill) it names the best practice it follows and whose it is, so the product owner can tell a Velle best practice from the team's.
+
+Costs:
+
+- Velle cannot check that a team's best practice is good. A team can write one that makes a spec harder for a product owner to read, and the assistant will follow it.
+- A fixed name beside the draft means one set of best practices per folder. A team with several specs in one folder shares one file, and a team that keeps its best practices elsewhere copies them there.
+- The file is read in the session only; the compiler never reads it, and no best practice of either kind becomes a check. A spec that ignores every best practice still validates.
+- Leans on the same idea as "A binding is a library" (root `CLAUDE.md`), that the owner of a spec chooses and Velle never overrides the choice, without extending that principle to decide this.
+
+#### Proposed changes
+
+- `SKILL.md` reads `best-practices.md` beside the draft when it exists, follows it where it disagrees with `references/Best-practices.md`, and names the source of each best practice it cites.
+- `wiki/Guides/Design-session.md` says where a team writes its own best practices and that they win.
 
 ## 4. Not in this question
 
