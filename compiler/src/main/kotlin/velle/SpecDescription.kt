@@ -59,6 +59,12 @@ object SpecDescription {
         }
     }
 
+    /** What `describe` says of one declaration of [version], [declaration], as it says it in a whole description; null when the spec does not hold it as written. */
+    fun ofDeclaration(version: SpecVersion, declaration: Decl): DescribedDeclaration? {
+        val located = version.declarations.firstOrNull { candidate -> candidate.decl == declaration } ?: return null
+        return described(Compared(located, version), version)
+    }
+
     /** The names of the spec's rules, in the order the spec gives them. A `never` has no name, so it cannot be asked for. */
     fun ruleNames(version: SpecVersion): List<String> =
         version.declarations.map { located -> located.decl }.filterIsInstance<RuleDecl>().map { rule -> rule.name }
@@ -210,6 +216,9 @@ object DescriptionReport {
         }
         described.declarations.forEach { declaration -> appendDeclaration(declaration) }
     }
+
+    /** One declaration as a description prints it: its sentence or Velle, its place in the spec, and its parts. */
+    fun renderedDeclaration(declaration: DescribedDeclaration): String = buildString { appendDeclaration(declaration) }
 
     private fun StringBuilder.appendDeclaration(declaration: DescribedDeclaration) {
         when (val summary = declaration.summary) {

@@ -8,7 +8,10 @@ import kotlin.system.exitProcess
 /**
  * The `velle` command: `validate`, `compare`, and `describe`, each printing Markdown for an
  * assistant to read and a product owner to be shown. It writes no file, and calls neither git
- * nor the network. `skills/velle-design/scripts/velle` runs it from the skill's jar.
+ * nor the network. Each reads its files, then works on their text, which the authoring MCP
+ * server hands it directly. `try` runs a system, so it lives in the API layer (`apis/json`),
+ * whose entry point `velle.api.VelleCommandKt` runs this command for the rest;
+ * `skills/velle-design/scripts/velle` runs that entry point from the skill's jar.
  */
 fun main(arguments: Array<String>) {
     exitWith(Cli.run(arguments.toList()))
@@ -47,10 +50,12 @@ object Cli {
         "    velle validate <draft.velle>",
         "    velle compare <before.velle> <after.velle>",
         "    velle describe <draft.velle> [<Name>]",
+        "    velle try <draft.velle> <scenario.json>",
         "",
         "`validate` says whether the draft validates, and if not, why.",
         "`compare` says what changed from one version of a spec to another. Both must validate.",
         "`describe` says what the draft says, or with a Name, what it says about that shape, act, refinement, or rule.",
+        "`try` runs a scenario's steps on the draft, from an empty system, and says what each step did.",
         "",
         "Each prints Markdown and changes no file.",
         "",
@@ -69,8 +74,13 @@ object Cli {
 
     private fun usageOutcome() = CommandOutcome(usage, CommandOutcome.USAGE)
 
-    fun validate(path: String): CommandOutcome = when (val draft = Draft.read(path)) {
-        is Draft.Valid -> CommandOutcome.done("`$path` validates.\n" + advisories(draft.version))
+    fun validate(path: String): CommandOutcome = validated(path, Draft.read(path))
+
+    /** [validate] for a spec given as text, called [name] in the answer. */
+    fun validateText(name: String, source: String): CommandOutcome = validated(name, Draft.of(name, source))
+
+    private fun validated(name: String, draft: Draft): CommandOutcome = when (draft) {
+        is Draft.Valid -> CommandOutcome.done("`$name` validates.\n" + advisories(draft.version))
         is Draft.Refused -> CommandOutcome.refused(draft.report)
     }
 
@@ -88,9 +98,13 @@ object Cli {
         }
     }
 
-    fun compare(beforePath: String, afterPath: String): CommandOutcome {
-        val before = Draft.read(beforePath)
-        val after = Draft.read(afterPath)
+    fun compare(beforePath: String, afterPath: String): CommandOutcome = compared(Draft.read(beforePath), Draft.read(afterPath))
+
+    /** [compare] for two specs given as text, called [beforeName] and [afterName] in the answer. */
+    fun compareText(beforeName: String, beforeSource: String, afterName: String, afterSource: String): CommandOutcome =
+        compared(Draft.of(beforeName, beforeSource), Draft.of(afterName, afterSource))
+
+    private fun compared(before: Draft, after: Draft): CommandOutcome {
         if (before is Draft.Valid && after is Draft.Valid) {
             return CommandOutcome.done(SpecComparison.report(before.version, after.version))
         }
@@ -98,8 +112,13 @@ object Cli {
         return CommandOutcome.refused(reports.joinToString("\n"))
     }
 
-    fun describe(path: String, name: String?): CommandOutcome {
-        val version = when (val draft = Draft.read(path)) {
+    fun describe(path: String, name: String?): CommandOutcome = described(path, Draft.read(path), name)
+
+    /** [describe] for a spec given as text, called [fileName] in the answer. */
+    fun describeText(fileName: String, source: String, name: String?): CommandOutcome = described(fileName, Draft.of(fileName, source), name)
+
+    private fun described(path: String, draft: Draft, name: String?): CommandOutcome {
+        val version = when (draft) {
             is Draft.Valid -> draft.version
             is Draft.Refused -> return CommandOutcome.refused(draft.report)
         }

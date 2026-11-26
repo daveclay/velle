@@ -16,7 +16,7 @@ One rule does not bend. **Nobody takes your word for what the spec means.** Afte
 
 Reach the compiler one of two ways. Use the first that is available.
 
-1. Tools named `validate`, `compare`, and `describe` from a connected Velle authoring server.
+1. Tools named `validate`, `compare`, `describe`, and `try` from a connected Velle authoring server. They take the text of a spec where the script takes a file, and print the same thing.
 2. The script in this skill: `scripts/velle <subcommand> ...`. It needs Java 21 or later. If it reports that Java or its jar is missing, tell the people exactly that and stop. Do not write Velle without a compiler to check it.
 
 | Command | What it prints |
@@ -26,6 +26,7 @@ Reach the compiler one of two ways. Use the first that is available.
 | `velle describe <draft.velle>` | The whole spec as sentences. |
 | `velle describe <draft.velle> <Name>` | One shape or act, with its refinements, the rules and prohibitions over it, and the rules elsewhere that create or change it. The name of a refinement works too. |
 | `velle describe <draft.velle> <RuleName>` | That one rule's sentence, and the shape or act it is over. |
+| `velle try <draft.velle> <scenario.json>` | What the spec does with an example: step by step, what was accepted or refused and by which prohibition, and the records created or changed. |
 
 Every command prints Markdown and changes no file. A command exits with 0 when it did what was asked, 1 when a draft does not validate or a name is not in it, 2 when it was called wrongly, and 3 when the machine cannot run the compiler.
 
@@ -58,6 +59,16 @@ Do these quietly. None of them is a question to the people unless it says so.
    - **They answer your question:** act on the answer.
    - **They move on without answering your question,** or had told you not to ask: the change stays. Mark it with one comment above the first line you changed, holding the date and the question: `-- Not confirmed, 2026-11-26: is a deposit of exactly 1000 allowed?` One comment for one question, however many lines the edit touched.
    - **They move on and you had asked nothing:** the change stands. Mark nothing.
+
+## When they give an example
+
+"A member borrows a drill, a week later it is not back, is she late?" is an example, and the compiler can run it. Read `references/scenarios.md`, write the example as a scenario in your temporary folder, run `try`, and show what it prints. Use it:
+
+- when someone gives an example or asks "what happens if";
+- when a line under "What that changes" looks impossible, or worrying, and an example would settle whether it happens;
+- when a rule turns on a boundary, such as exactly 1000 or the due date itself, and nobody said which side it falls.
+
+The report says what the spec does, in the records' own values and the compiler's sentences. Add no account of your own. A scenario that shows the spec doing something other than what they said is a change to make, not a result to explain away.
 
 ## When they change how you work
 
@@ -114,4 +125,5 @@ When someone has said they are done, keep this to one short message.
 ## References
 
 - `references/language.md`: how each Velle construct is written, what the compiler refuses, and which construct says what. It links the other files in that folder.
+- `references/scenarios.md`: how to write a scenario for `velle try`, with every kind of step and what each error looks like.
 - `references/Best-practices.md`: Velle's best practices for a readable spec. Its links and the example files it names belong to Velle's full documentation, which is not in this skill. `references/language.md` covers the constructs it mentions.

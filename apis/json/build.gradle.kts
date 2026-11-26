@@ -16,6 +16,9 @@ repositories {
 
 dependencies {
     api(project(":compiler"))
+    // `velle try` reads its scenario with Jackson's streaming reader alone, the JSON library the
+    // repo already uses (apis/mcp), without the object mapper, so the skill's jar stays small
+    implementation("tools.jackson.core:jackson-core:3.2.1")
     testImplementation(kotlin("test"))
     // the tests run the billing spec, whose amounts are `Money`, in memory and over SQLite
     testImplementation(project(":extensions:finance"))
@@ -25,6 +28,8 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // ScenarioReferenceTest runs every scenario in the skill's reference
+    inputs.dir(rootProject.layout.projectDirectory.dir("skills/velle-design/references"))
 }
 
 kotlin {

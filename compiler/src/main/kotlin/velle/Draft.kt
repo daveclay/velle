@@ -3,8 +3,8 @@ package velle
 import java.io.File
 
 /**
- * A spec file read for the `velle` command: the spec when it validates, or why it does not, said
- * as Markdown. The file is checked here, where it enters; everything after trusts it.
+ * A spec read for the `velle` command, from a file or as text: the spec when it validates, or why
+ * it does not, said as Markdown. The spec is checked here, where it enters; everything after trusts it.
  */
 sealed interface Draft {
 
@@ -17,14 +17,18 @@ sealed interface Draft {
         fun read(path: String): Draft {
             val file = File(path)
             if (!file.isFile) return Refused("There is no file at `$path`.\n")
-            val source = file.readText()
+            return of(path, file.readText())
+        }
+
+        /** A spec given as text, as the authoring MCP server receives it, under [name], the name the answer calls it by. */
+        fun of(name: String, source: String): Draft {
             val diagnostics = try {
                 Validator.validate(source)
             } catch (syntaxError: VelleSyntaxError) {
-                return Refused(refusal(path, listOf("The compiler cannot read it: ${syntaxError.message}")))
+                return Refused(refusal(name, listOf("The compiler cannot read it: ${syntaxError.message}")))
             }
-            if (diagnostics.isNotEmpty()) return Refused(refusal(path, diagnostics.map { diagnostic -> diagnostic.toString() }))
-            return Valid(SpecVersion(path, source))
+            if (diagnostics.isNotEmpty()) return Refused(refusal(name, diagnostics.map { diagnostic -> diagnostic.toString() }))
+            return Valid(SpecVersion(name, source))
         }
 
         private fun refusal(path: String, reasons: List<String>): String = buildString {

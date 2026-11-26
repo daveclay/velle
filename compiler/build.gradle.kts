@@ -1,5 +1,3 @@
-import java.util.zip.ZipFile
-
 plugins {
     kotlin("jvm")
 }
@@ -11,8 +9,9 @@ repositories {
 }
 
 // The libraries the skill's jar carries beside the compiler (OQ174): Velle's own extension type
-// libraries, and no store binding. `:extensions:finance` depends on this project, so it is reached
-// through a configuration of its own that nothing here compiles against, never a normal dependency.
+// libraries, the API layer that `velle try` runs a system through, and no store binding.
+// `:extensions:finance` and `:apis:json` depend on this project, so they are reached through a
+// configuration of their own that nothing here compiles against, never a normal dependency.
 val skillLibraries: Configuration by configurations.creating {
     isCanBeConsumed = false
     isCanBeResolved = true
@@ -24,6 +23,7 @@ dependencies {
     // (Reference §5, extension types): the type library it names
     testImplementation(project(":extensions:finance"))
     skillLibraries(project(":extensions:finance"))
+    skillLibraries(project(":apis:json"))
 }
 
 tasks.test {
@@ -53,29 +53,10 @@ val skillFolder = rootProject.layout.projectDirectory.dir("skills/velle-design")
 val skillJarContents: FileCollection = files(sourceSets.main.map { mainSourceSet -> mainSourceSet.output }) +
     configurations.runtimeClasspath.get() + skillLibraries
 
-/** A service file names one implementation per line; every jar's lines for one service go into one file. */
-fun mergeServiceLines(serviceLines: MutableMap<String, MutableSet<String>>, serviceName: String, text: String) {
-    val implementations = text.lines().map { line -> line.substringBefore('#').trim() }.filter { line -> line.isNotEmpty() }
-    serviceLines.getOrPut(serviceName) { linkedSetOf() }.addAll(implementations)
-}
+apply(from = rootProject.file("gradle/merged-services.gradle.kts"))
 
-fun readServicesFromDirectory(directory: File, serviceLines: MutableMap<String, MutableSet<String>>) {
-    val servicesDirectory = File(directory, "META-INF/services")
-    servicesDirectory.listFiles()?.filter { file -> file.isFile }?.forEach { serviceFile ->
-        mergeServiceLines(serviceLines, serviceFile.name, serviceFile.readText())
-    }
-}
-
-fun readServicesFromJar(jar: File, serviceLines: MutableMap<String, MutableSet<String>>) {
-    ZipFile(jar).use { zip ->
-        zip.entries().asSequence()
-            .filter { entry -> !entry.isDirectory && entry.name.startsWith("META-INF/services/") }
-            .forEach { entry ->
-                val text = zip.getInputStream(entry).bufferedReader().readText()
-                mergeServiceLines(serviceLines, entry.name.removePrefix("META-INF/services/"), text)
-            }
-    }
-}
+@Suppress("UNCHECKED_CAST")
+val writeMergedServices = extra["writeMergedServices"] as (Set<File>, File) -> Unit
 
 val skillServices = tasks.register("skillServices") {
     description = "Merge the META-INF/services files of everything the skill's jar holds, so ServiceLoader finds every type"
@@ -83,17 +64,7 @@ val skillServices = tasks.register("skillServices") {
     val servicesDirectory = layout.buildDirectory.dir("skill-services")
     inputs.files(contents)
     outputs.dir(servicesDirectory)
-    doLast {
-        val serviceLines = sortedMapOf<String, MutableSet<String>>()
-        contents.files.filter { file -> file.isDirectory }.forEach { directory -> readServicesFromDirectory(directory, serviceLines) }
-        contents.files.filter { file -> file.isFile && file.name.endsWith(".jar") }.forEach { jar -> readServicesFromJar(jar, serviceLines) }
-        val outputDirectory = servicesDirectory.get().dir("META-INF/services").asFile
-        outputDirectory.deleteRecursively()
-        outputDirectory.mkdirs()
-        serviceLines.forEach { (serviceName, implementations) ->
-            File(outputDirectory, serviceName).writeText(implementations.joinToString("\n", postfix = "\n"))
-        }
-    }
+    doLast { writeMergedServices(contents.files, servicesDirectory.get().asFile) }
 }
 
 // Run by hand after the wiki page changes, never by the tests: SkillJarTest fails while the copy
@@ -105,12 +76,13 @@ val copyBestPractices = tasks.register<Copy>("copyBestPractices") {
 }
 
 tasks.register<Jar>("skillJar") {
-    description = "Build skills/velle-design/scripts/velle.jar: the compiler, the Kotlin standard library, and extensions/finance"
+    description = "Build skills/velle-design/scripts/velle.jar: the compiler, the Kotlin standard library, extensions/finance, and apis/json"
     dependsOn(skillServices)
     destinationDirectory.set(skillFolder.dir("scripts"))
     archiveFileName.set("velle.jar")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    manifest { attributes("Main-Class" to "velle.CliKt") }
+    // the whole command, `try` included, starts in the API layer (apis/json, velle.api.VelleCommand)
+    manifest { attributes("Main-Class" to "velle.api.VelleCommandKt") }
     from(skillServices)
     from(sourceSets.main.map { mainSourceSet -> mainSourceSet.output }) { exclude("META-INF/services/**") }
     from(skillJarContents.filter { file -> file.isFile }.elements.map { jars -> jars.map { jar -> zipTree(jar) } }) {

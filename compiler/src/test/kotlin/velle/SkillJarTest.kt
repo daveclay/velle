@@ -10,7 +10,8 @@ import kotlin.test.assertTrue
  * The skill's launcher, `skills/velle-design/scripts/velle`, run as a host runs it, over the jar
  * `./gradlew :compiler:skillJar` builds beside it. Each subcommand reads
  * `examples/billing/billing.velle`, whose amounts are `Money`, so a run that validates proves the
- * Kotlin standard library and `extensions/finance` are inside the jar.
+ * Kotlin standard library and `extensions/finance` are inside the jar, and `try` proves the API
+ * layer (`apis/json`) and its JSON reader are.
  */
 class SkillJarTest {
 
@@ -59,6 +60,30 @@ class SkillJarTest {
                 "  In the spec: $billing, line 148, `shape OverdueInvoice = Invoice where balance > 0 and due < today`" in run.output,
             run.output,
         )
+    }
+
+    @Test
+    fun `try runs a scenario from the jar, through the API layer it carries`() {
+        val scenario = Files.createTempFile("scenario", ".json").toFile()
+        scenario.writeText(
+            """[
+                { "commit": "SignUp", "with": { "name": "Alice", "email": "alice@example.org" } },
+                { "find": "Customer", "where": "name == \"Alice\"", "as": "alice" },
+                { "commit": "BillCustomer", "with": { "customer": "alice", "due": "2026-01-15" } },
+                { "find": "Invoice", "where": "customer.name == \"Alice\"", "as": "invoice" },
+                { "commit": "LineItem", "with": { "invoice": "invoice", "description": "Drill", "price": "80.00", "quantity": 0 } },
+                { "pass": "21 days" },
+                { "tick": "Weekly" }
+            ]""",
+        )
+
+        val run = run(launcher, listOf("try", billing, scenario.path))
+
+        assertEquals(0, run.exitCode, run.output)
+        assertTrue("- Customer 1: name \"Alice\", email \"alice@example.org\", signedUpOn 2026-01-01T09:00:00Z, largestPayment 0.00\n" in run.output, run.output)
+        assertTrue("- A LineItem is refused when its quantity is at most 0.\n" in run.output, run.output)
+        assertTrue("## Step 7: the Weekly tick\n\nIt ran at 2026-01-22T09:00:00Z.\n" in run.output, run.output)
+        assertTrue("Step 5 was refused." in run.output, run.output)
     }
 
     @Test

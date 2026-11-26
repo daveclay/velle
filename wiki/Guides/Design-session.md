@@ -132,6 +132,60 @@ The report has no other part, because the edit changes nothing else.
 
 The compiler never reads a comment in the spec, so a report never shows one. The comment above `OverdueInvoice` still says reminders go no more than once a week. So the assistant shows the engineer that comment and proposes new wording. It changes the comment only on the engineer's word, in the same git commit.
 
+### Running an example
+
+The product owner asks: "So an invoice due on the tenth, nobody pays it. When does the reminder go?"
+
+That is an example, and the compiler can run it. The assistant writes it as a scenario, a JSON list of steps, in its temporary folder:
+
+```json
+[
+  { "commit": "SignUp", "with": { "name": "Acme", "email": "billing@acme.example" } },
+  { "find": "Customer", "where": "name == \"Acme\"", "as": "acme" },
+  { "commit": "BillCustomer", "with": { "customer": "acme", "due": "2026-01-10" } },
+  { "find": "Invoice", "where": "customer.name == \"Acme\"", "as": "invoice" },
+  { "commit": "LineItem", "with": { "invoice": "invoice", "description": "Consulting", "quantity": 2, "price": 150 } },
+  { "pass": "14 days" },
+  { "tick": "Weekly" },
+  { "show": "invoice" }
+]
+```
+
+- `commit` commits an [act](Reference-04-State-and-commits) with the fields after `with`.
+- `find` gives a name to a record a rule created, here the `Customer` that `rule AdmitCustomer` makes from a `SignUp` in `examples/billing/changes/00-billing.velle`. A later step uses the name where a record is wanted.
+- `pass` moves the clock forward, and `tick` runs a [schedule](Reference-17-Schedule-triggers).
+- `show` prints a record.
+
+The run starts with no records, on 1 January 2026, so the same scenario prints the same report every time. `velle try billing.velle overdue.json` prints one part per step. Three of them:
+
+```
+## Step 5: commit LineItem with invoice invoice, description "Consulting", quantity 2, price 150
+
+Accepted.
+
+Created:
+- LineItem 3: invoice Invoice 2 (invoice), description "Consulting", price 150.00, quantity 2, amount 300.00
+
+Changed:
+- Invoice 2 (invoice): total 0.00 to 300.00, balance 0.00 to 300.00, status paid to open, lineItems none to LineItem 3
+
+## Step 6: 14 days pass
+
+The clock now reads 2026-01-15T09:00:00Z. No rule runs until a commit or a tick.
+
+Changed:
+- Invoice 2 (invoice): status open to overdue, now an OverdueInvoice, now an ActionableOverdue
+
+## Step 7: the Weekly tick
+
+It ran at 2026-01-15T09:00:00Z.
+
+Created:
+- Reminder 4: invoice Invoice 2 (invoice), sentOn 2026-01-15
+```
+
+So the reminder goes at the first weekly run after the due date. A step the spec refuses prints "Refused" with the compiler's sentence for the [`never`](Reference-21-never) that refused it, and the steps after it still run.
+
 ### A question nobody answers
 
 Suppose the product owner had said "cap a deposit at 1000", and the conversation moved on before anyone said whether exactly 1000 is allowed. The assistant does not hold the conversation up. It writes the reading it chose, and leaves its question as a comment above the change:
@@ -182,7 +236,7 @@ The spec is yours, and it is there to help the two of you understand each other 
 
 One thing stays fixed. The assistant never says what the spec means in its own words. It shows the compiler's sentences or the Velle.
 
-## The three commands
+## The commands
 
 The assistant reaches the compiler through `skills/velle-design/scripts/velle`. You can run the same commands by hand, from any folder. Write the script's path where the table writes `velle`, as in `/path/to/velle/skills/velle-design/scripts/velle validate billing.velle`.
 
@@ -193,10 +247,32 @@ The assistant reaches the compiler through `skills/velle-design/scripts/velle`. 
 | `velle describe billing.velle` | The whole spec as sentences. |
 | `velle describe billing.velle Reminder` | One shape, act, or refinement: its refinements, the rules and the `never`s over it, and the rules elsewhere that create or change it. A name not in the spec prints the names it could be. |
 | `velle describe billing.velle RemindOverdue` | One rule's sentence, and the shape or act it is over. |
+| `velle try billing.velle overdue.json` | What the spec does with an example, step by step. `skills/velle-design/references/scenarios.md` lists every kind of step. |
 
 - Each prints Markdown and changes no file.
-- Each exits with 0 when it did what was asked, 1 when a spec does not validate or a name is not in it, 2 when it was called wrongly, and 3 when the machine cannot run the compiler.
+- Each exits with 0 when it did what was asked, 1 when a spec does not validate, a name is not in it, or a scenario cannot be run, 2 when it was called wrongly, and 3 when the machine cannot run the compiler. A scenario in which the spec refuses a step still exits with 0.
 - With no arguments the script prints how to call it.
+
+## An assistant that cannot run commands
+
+Some assistants cannot run a script but can start an [MCP](GLOSSARY) server on your machine, as many desktop chat apps can. For those, Velle has an authoring server with the same four commands as tools. Build it in a clone of the Velle repository:
+
+```bash
+./gradlew :apis:mcp:authoringJar
+```
+
+It writes `apis/mcp/build/libs/velle-authoring-mcp.jar`. Point your assistant at it where its settings list MCP servers:
+
+```json
+{ "command": "java", "args": ["-jar", "/path/to/velle/apis/mcp/build/libs/velle-authoring-mcp.jar"] }
+```
+
+- The server runs on your machine, needs Java 21, and uses no network. Nothing of your spec leaves the machine.
+- Its tools are `validate`, `compare`, `describe`, and `try`. Each takes the text of a spec, where the script takes a file, and returns what the script prints.
+- It keeps nothing between calls. The spec lives in the conversation, and saving it to a file is yours to do.
+- It also serves the skill's instructions and reference, as the prompt `velle-design` and as resources, for an assistant that does not read skills.
+
+An assistant in a browser tab, which can start no program on your machine, cannot use it.
 
 ## Your team's own best practices
 

@@ -103,6 +103,15 @@ What the builder makes, per model element:
 - `Answers` turns an answer into the tool's result. A refusal is a successful result whose text is the `reason` and whose structured content is the whole answer. An `ApiException` is a result marked as an error, its message and details as the text.
 - `Resources` serves `velle://model`, `api.description` as JSON, and `velle://spec`, `system.source`, when the system has one. A generated system passes its spec's text to the runtime it builds; a `VelleSystem` built from a `Model` alone has none.
 
+### The authoring server
+
+`apis/mcp` holds a second server, apart from `VelleMcp`, for an assistant that is writing a spec ([Running a design session](Design-session)). It serves no running system. `AuthoringMcp` in `apis/mcp/src/main/kotlin/velle/api/mcp/authoring/` has a `main` that speaks MCP over standard input and output, and `./gradlew :apis:mcp:authoringJar` builds it as one jar.
+
+- `AuthoringTools` makes the tools `validate`, `compare`, `describe`, and `try`, each taking the spec as text. `AuthoringCommands` calls the same functions the `velle` command calls after it has read its files, so a tool and the command print the same thing for the same spec.
+- A spec that does not validate, or a name that is not in it, is a successful result with the text. A malformed call is a result marked as an error.
+- `SkillFiles` serves `skills/velle-design/SKILL.md` and each file of its `references/` folder as resources under `velle-design://`, and the prompt `velle-design`. They are packed into the jar when it is built.
+- `try` runs a scenario with `TryCommand` in `apis/json/src/main/kotlin/velle/api/scenario/`: a fresh `VelleSystem` over an empty store, one `VelleApi`, and a clock that only the scenario moves.
+
 ## apis/spring: the starter
 
 `VelleAutoConfiguration` in `apis/spring/src/main/kotlin/velle/api/spring/VelleAutoConfiguration.kt` is one auto-configuration class. Its header:

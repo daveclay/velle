@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D15 decided. D16 and D17 await Dave, and stages 2 and 3 are being built as each recommends (Dave, 2026-11-26: "implement stage 2 and 3"). Stage 1 of the build (§6) is built and has been through five trial sessions, the last two before the skill's latest rewrite: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. 
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D15 decided. D16 and D17 await Dave. Stages 2 and 3 are built as each recommends (Dave, 2026-11-26: "implement stage 2 and 3"): `velle try`, and the authoring MCP server. The file stays until D16 and D17 are answered and the work items in §5 are done or moved. Stage 1 of the build (§6) is built and has been through five trial sessions, the last two before the skill's latest rewrite: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. 
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -402,7 +402,7 @@ Is a scenario a JSON file listing steps, where a step commits an act with the sa
 
 In the trials people gave examples in words: "a member borrows a drill, a week later it is not back, is she late?" The assistant has to turn that into something the compiler runs, and most rules people stated turned on time ("due in 7 days", "every night", "30 days late"). A scenario therefore says more than a list of acts.
 
-Recommendation: yes, JSON, with five kinds of step. A scenario for `skills/velle-design/references/language.md`'s lending example would read:
+Recommendation: yes, JSON, with five kinds of step. A scenario for the spec `lending.velle` in `skills/velle-design/references/scenarios.md` reads:
 
 ```json
 [
@@ -420,12 +420,13 @@ Recommendation: yes, JSON, with five kinds of step. A scenario for `skills/velle
 - `find` names a record a rule created, by a Velle condition that must match exactly one record.
 - `pass` moves the clock forward. `tick` runs a schedule the spec declares.
 - `show` prints a record and which refinements it is in.
+- As built: `as` on a `commit` names the record a kept act leaves. A transient act such as `Borrow` leaves none, so `as` on it is refused with a message, and `find` names what its rule created. A field that starts as a random identifier prints as "a random identifier", so two runs print the same report.
 - The run starts from an empty store at a fixed date and time, so the same scenario prints the same thing every time. `velle try <draft.velle> <scenario.json>` prints, per step, accepted or refused, the compiler's sentence for the `never` that refused it, and the records the rules created or changed.
 
 Costs:
 
 - JSON is not something a product owner reads. They read what `try` prints. The assistant writes the scenario, and the engineer can read it.
-- The skill's jar gains a JSON reader and the API layer's `apis/json` classes, so it grows. D4 expected one jar per tool later; this adds to the one jar for now.
+- The skill's jar gains a JSON reader and the API layer's `apis/json` classes, so it grows: 3.8 MB before, 4.5 MB as built. D4 expected one jar per tool later; this adds to the one jar for now.
 - A scenario is a file a team might want to keep as a test. Nothing here runs kept scenarios again, and `testgen.md`'s generated tests are a separate thing.
 - The alternative is a notation of Velle's own, such as `Borrow { member: alice, tool: drill }` and `8 days pass`, read by the compiler's parser. It would read better beside a spec, and it is a second small language to design, document, and keep in step with the first.
 
@@ -475,8 +476,8 @@ Costs:
 - [ ] Give words to the 16 parts still listed in `compiler/src/test/resources/describe/without-words.md` (38 before 2026-11-26), and to a changed `with` list in the comparison, which still prints as Velle (D2).
 - [ ] Let `velle describe <draft> <Name>` take a field's name, and show for a refinement each `never` and rule that names it (§2, "What the fourth and fifth trial sessions showed").
 - [ ] Run a trial of `SKILL.md` as rewritten after the fifth trial, with turns in which the people answer some questions, since no script so far has anyone answer (D15).
-- [ ] Add `velle try` (D16; §6, stage 2).
-- [ ] Add the authoring MCP server in `apis/mcp/` over the same code as the `velle` command (D17; §6, stage 3).
+- [ ] Try the authoring MCP server from a desktop chat app that cannot run commands. `AuthoringJarTest` speaks to the jar as a process, and no real host has started it (D17).
+- [ ] Try `velle try` in a trial session, since the skill's section "When they give an example" has not been through one (D16).
 
 ## 6. The build
 
@@ -495,10 +496,14 @@ Three stages, each landing on its own. Stage 1 is enough for a design session in
 6. **Repo.** The root `CLAUDE.md` names `skills/` in its list of folders.
 7. **Trial.** Two design sessions in chat. The main one changes an existing spec: it starts from `examples/billing/changes/00-billing.velle` and makes some of the changes listed in `examples/billing/changes/README.md` from a discussion, and its reports can be checked against the reports already in that folder. The second rebuilds part of the billing spec from an empty draft. What they needed and lacked goes into this file before stage 2.
 
-### Stage 2: `velle try`
+### Stage 2: `velle try` (built 2026-11-26)
+
+Built as D16 recommends: the scenario code in `apis/json/src/main/kotlin/velle/api/scenario/`, the command's entry point `velle.api.VelleCommandKt`, pinned by `TryCommandTest`, `ScenarioReferenceTest`, and `SkillJarTest`. The plan it was built from:
 
 The scenario is D16's. `try` runs the scenario over an empty `MemoryStore` with each act committed in turn and prints, per act, accepted or refused with the `never` that refused it (D3). The skill's procedure gains "when the room gives an example, run it". A test per outcome over `examples/billing/billing.velle`.
 
-### Stage 3: the authoring MCP server
+### Stage 3: the authoring MCP server (built 2026-11-26)
+
+Built as D17 recommends: `apis/mcp/src/main/kotlin/velle/api/mcp/authoring/`, the jar from `./gradlew :apis:mcp:authoringJar` (10.8 MB), pinned by `AuthoringToolsTest` and `AuthoringJarTest`. The plan it was built from:
 
 A server in `apis/mcp/`, apart from `VelleMcp`, whose tools are `validate`, `compare`, `describe`, and `try`, calling the same code as `velle.Cli` (D1). A test that the server and the command give the same answer for the same draft. `wiki/Guides/Design-session.md` gains connecting it, and `wiki/Guides/API-layer.md` the server. The settled row moves into the table in the commit that lands this stage, and this file is deleted in it.
