@@ -1,6 +1,6 @@
 # OQ155 — Whether the tables Velle creates declare foreign keys
 
-**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1, D3, and D4 await Dave. On 2026-11-21 Dave cleared his answers to D1 and D2, D2 moved to OQ160, and D4 was added. OQ160 was settled and built on 2026-11-22, so D4 no longer waits on it. Nothing built, and four things are not yet checked (§4).
+**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1 decided 2026-11-26; D3 and D4 await Dave. On 2026-11-21 Dave cleared his answers to D1 and D2, D2 moved to OQ160, and D4 was added. OQ160 was settled and built on 2026-11-22, so D4 no longer waits on it. Nothing built, and four things are not yet checked (§4).
 
 **In plain terms:** When one record points at another, the database could be told so, and it would then refuse to remove a record that others still point at. Velle creates the tables and does not tell the database this today. The question is whether it should.
 
@@ -29,7 +29,7 @@ Three facts shape the answer:
 
 ## 2. What to decide
 
-### D1. The tables Velle creates declare a foreign key for a reference to a shape no rule deletes
+### D1. The tables Velle creates declare a foreign key for a reference to a shape no rule deletes · Decided 2026-11-26
 
 Should `createSchema` declare a foreign key on every column and junction table that holds a reference to one shape, when no rule in the spec deletes records of that shape?
 
@@ -49,6 +49,8 @@ In `examples/pharmacy/pharmacy.velle`, `Interaction` points at `Drug`, and no ru
 - `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `createSchema`: the constraint, for a reference whose shape is outside `Model.deletedShapes` and is not a union.
 - `stores/sql/src/testFixtures/kotlin/velle/sql/SqlStoreConformance.kt`: a test that removing a pointed-at row with SQL is refused, and that every existing scenario still passes.
 - `wiki/Guides/Store-API.md`: which references are constrained.
+
+**Decided:** yes, 2026-11-26. Whether the same foreign key goes on a reference to a shape some rule deletes is still D4.
 
 ### D2. Moved to OQ160
 
@@ -97,7 +99,7 @@ Costs:
 
 ## 3. The build
 
-Not written. Nothing is decided.
+Not written. D1 is decided; D3 and D4 await Dave.
 
 ## 4. Work items
 
