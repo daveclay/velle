@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D15 decided. Stage 1 of the build (§6) is built and has been through five trial sessions, the last two before the skill's latest rewrite: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. Stages 2 and 3 are not started.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D15 decided. D16 and D17 await Dave, and stages 2 and 3 are being built as each recommends (Dave, 2026-11-26: "implement stage 2 and 3"). Stage 1 of the build (§6) is built and has been through five trial sessions, the last two before the skill's latest rewrite: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. 
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -396,6 +396,72 @@ Costs:
 
 **Decided:** yes (Dave, 2026-11-26).
 
+### D16. A scenario for `velle try` is a JSON list of steps in the words the API layer already uses
+
+Is a scenario a JSON file listing steps, where a step commits an act with the same body the REST API takes, lets time pass, runs a schedule, names a record a rule created, or shows a record?
+
+In the trials people gave examples in words: "a member borrows a drill, a week later it is not back, is she late?" The assistant has to turn that into something the compiler runs, and most rules people stated turned on time ("due in 7 days", "every night", "30 days late"). A scenario therefore says more than a list of acts.
+
+Recommendation: yes, JSON, with five kinds of step. A scenario for `skills/velle-design/references/language.md`'s lending example would read:
+
+```json
+[
+  { "commit": "Member", "with": { "name": "Alice", "email": "alice@example.org" }, "as": "alice" },
+  { "commit": "Tool",   "with": { "name": "Drill", "replacementCost": 80 },        "as": "drill" },
+  { "commit": "Borrow", "with": { "member": "alice", "tool": "drill" } },
+  { "find": "Loan", "where": "member.name == \"Alice\"", "as": "loan" },
+  { "pass": "8 days" },
+  { "tick": "Nightly" },
+  { "show": "alice" }
+]
+```
+
+- `commit` commits an act. `with` is the body `VelleApi.commit` takes today (`apis/json`, `wiki/Guides/Serving-a-system.md`), except that a reference is the name an earlier step gave with `as`. `by` names the actor the same way.
+- `find` names a record a rule created, by a Velle condition that must match exactly one record.
+- `pass` moves the clock forward. `tick` runs a schedule the spec declares.
+- `show` prints a record and which refinements it is in.
+- The run starts from an empty store at a fixed date and time, so the same scenario prints the same thing every time. `velle try <draft.velle> <scenario.json>` prints, per step, accepted or refused, the compiler's sentence for the `never` that refused it, and the records the rules created or changed.
+
+Costs:
+
+- JSON is not something a product owner reads. They read what `try` prints. The assistant writes the scenario, and the engineer can read it.
+- The skill's jar gains a JSON reader and the API layer's `apis/json` classes, so it grows. D4 expected one jar per tool later; this adds to the one jar for now.
+- A scenario is a file a team might want to keep as a test. Nothing here runs kept scenarios again, and `testgen.md`'s generated tests are a separate thing.
+- The alternative is a notation of Velle's own, such as `Borrow { member: alice, tool: drill }` and `8 days pass`, read by the compiler's parser. It would read better beside a spec, and it is a second small language to design, document, and keep in step with the first.
+
+#### Proposed changes
+
+- `apis/json`: a scenario runner over `VelleApi` with a clock the scenario moves, and its report as Markdown.
+- The `velle` command gains `try <draft.velle> <scenario.json>`; the module that builds the skill's jar includes `apis/json` and a JSON reader, without `compiler/` coming to depend on `apis/`.
+- `skills/velle-design/SKILL.md`: the commands table gains `try`, and a section on running an example the people give. `skills/velle-design/references/` gains `scenarios.md`.
+- `wiki/Guides/Design-session.md`: the commands table and a part of the walk-through.
+- Tests: one per kind of step and per outcome over `examples/billing/changes/00-billing.velle`, and one against the built jar.
+
+### D17. The authoring MCP server runs on the person's own machine and its tools take the spec as text
+
+Is the authoring server a program the assistant's host starts on the person's machine, whose tools take the text of a spec and give back the same Markdown the `velle` command prints?
+
+D1 gave the server to a host that cannot run commands. Such a host, a desktop chat app for example, can still start an MCP server as a local program and talk to it. It often cannot read or write files, so a tool that takes a path would have nothing to point at.
+
+Recommendation: yes.
+
+- One jar, started by the host as `java -jar velle-authoring-mcp.jar`, speaking MCP over its standard input and output. No network, no hosting, nothing of the team's leaves the machine.
+- Tools `validate`, `compare`, `describe`, and `try`, each taking the spec as text (`compare` takes two, `try` a spec and a scenario) and returning what the `velle` command prints for the same input.
+- The draft lives in the conversation. Saving it to a file is the host's or the person's to do.
+- It carries the skill's procedure and reference as MCP resources and a prompt, so a host without skills still gets them.
+
+Costs:
+
+- It still needs Java 21 on the machine. A host with neither commands nor local programs, such as a chat in a browser, is not served by this. Serving that needs a server Velle or the team hosts, to which specs would be sent, and that is not proposed here.
+- The whole spec travels in every tool call, which costs the assistant's context on a large spec. `describe` with a name keeps answers short, but not requests.
+- The assistant keeps the versions to compare, since the server keeps nothing between calls.
+
+#### Proposed changes
+
+- `apis/mcp`: an authoring server apart from `VelleMcp`, with a `main` and a Gradle task that builds its jar.
+- A test that each tool returns what the `velle` command prints for the same input.
+- `wiki/Guides/Design-session.md`: connecting the server to a host. `wiki/Guides/API-layer.md`: the server. `skills/velle-design/SKILL.md` already names the tools first.
+
 ## 4. Not in this question
 
 - Listening to a meeting's audio. Dave, 2026-11-25: "it is likely sufficient to first capture a design session in an AI chat in velle before considering audio transcription." It gets its own question once a design session in chat has been tried. It adds a speech-to-text service that labels speakers, and the question of when the assistant edits, since it should not edit on every sentence spoken.
@@ -409,9 +475,8 @@ Costs:
 - [ ] Give words to the 16 parts still listed in `compiler/src/test/resources/describe/without-words.md` (38 before 2026-11-26), and to a changed `with` list in the comparison, which still prints as Velle (D2).
 - [ ] Let `velle describe <draft> <Name>` take a field's name, and show for a refinement each `never` and rule that names it (§2, "What the fourth and fifth trial sessions showed").
 - [ ] Run a trial of `SKILL.md` as rewritten after the fifth trial, with turns in which the people answer some questions, since no script so far has anyone answer (D15).
-- [ ] Write the decision on what a scenario for `velle try` says, from what stage 1's trial session needed (§6, stage 2).
-- [ ] Add `velle try` (§6, stage 2).
-- [ ] Add the authoring MCP server in `apis/mcp/` over the same code as `velle.Cli` (§6, stage 3).
+- [ ] Add `velle try` (D16; §6, stage 2).
+- [ ] Add the authoring MCP server in `apis/mcp/` over the same code as the `velle` command (D17; §6, stage 3).
 
 ## 6. The build
 
@@ -432,7 +497,7 @@ Three stages, each landing on its own. Stage 1 is enough for a design session in
 
 ### Stage 2: `velle try`
 
-Waits on a decision, written into this file after stage 1's trial, on what a scenario says. Then `try` runs the scenario over an empty `MemoryStore` with each act committed in turn and prints, per act, accepted or refused with the `never` that refused it (D3). The skill's procedure gains "when the room gives an example, run it". A test per outcome over `examples/billing/billing.velle`.
+The scenario is D16's. `try` runs the scenario over an empty `MemoryStore` with each act committed in turn and prints, per act, accepted or refused with the `never` that refused it (D3). The skill's procedure gains "when the room gives an example, run it". A test per outcome over `examples/billing/billing.velle`.
 
 ### Stage 3: the authoring MCP server
 
