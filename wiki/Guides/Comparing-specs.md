@@ -95,6 +95,8 @@ Each sentence names only what the spec names: a shape, an act, a refinement, a r
 
 Every one of these is a "can" or a "can no longer". The compiler draws a possibility whenever it cannot prove it impossible, so the report never says what will happen. A consequence it cannot prove impossible may still be one the business never sees.
 
+The proofs are the ones the [state-flow diagrams](diagrams#state-flow-diagrams) use to draw an arrow in one direction only. A rule whose own write can only take a record out of its condition, such as a rule that creates the notice its condition says is missing, is never reported as able to cause itself to run.
+
 Each consequence points at the edit that causes it: the one edit when there is one, or the edits that name something the consequence mentions.
 
 ## What happens to a record like this

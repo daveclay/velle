@@ -27,10 +27,19 @@ package velle
  * One fact the rule graph draws as an edge: a commit of [source] (an act's `commit<Act>`, a
  * rule, or a branch of a transient act's dispatch) can change the condition of [rule].
  * [parts] say how (what the source writes, when the rule runs, under which guard), and
- * [crossesBoundary] is set when the rule runs outside the source's envelope. The rule graph
- * draws these and the comparison of two specs compares them.
+ * [crossesBoundary] is set when the rule runs outside the source's envelope. [causesRun] is
+ * false for the one edge drawn although it cannot cause the rule to run: a rule's edge to
+ * itself when its own write can only move its condition away from running it, drawn as
+ * "disarms its own guard". The rule graph draws these and the comparison of two specs
+ * compares those that can cause a run.
  */
-internal data class MayFire(val source: String, val rule: String, val parts: List<String>, val crossesBoundary: Boolean)
+internal data class MayFire(
+    val source: String,
+    val rule: String,
+    val parts: List<String>,
+    val crossesBoundary: Boolean,
+    val causesRun: Boolean = true,
+)
 
 internal object RuleGraphGen {
 
@@ -89,9 +98,10 @@ internal object RuleGraphGen {
                     is CommitKind.Delete -> "deletes ${k.shape}"
                     CommitKind.TimePasses -> continue
                 }
+                val creations = if (k is CommitKind.Create) catalog.creationsOf(rule, k.shape) else emptyList()
                 for (target in model.rules.values) {
-                    if (target === rule) selfEdge(rule, k, kindDesc)
-                    else edge(rule.name, k, kindDesc, target)
+                    if (target === rule) selfEdge(rule, k, kindDesc, creations)
+                    else edge(rule.name, k, kindDesc, target, creations)
                 }
             }
             return lines.distinct()
@@ -171,13 +181,14 @@ internal object RuleGraphGen {
 
         // ── the may-fire edges, pruned by the direction proofs ───────────────
 
-        private fun edge(from: String, k: CommitKind, kindDesc: String?, target: RuleDecl) {
+        /** [creations] are the source rule's creation statements of a created shape; empty for an act arriving. */
+        private fun edge(from: String, k: CommitKind, kindDesc: String?, target: RuleDecl, creations: List<Creation> = emptyList()) {
             val base = model.baseOfExpr(target.condition) ?: return
             if (base in model.transients) return // partition rules are wired through the dispatch diamond
             var guard: String? = guardText(target)
             if (k is CommitKind.Create && k.shape == base) {
                 if (target.leaving) return // a birth cannot cause an exit
-                when (analysis.initTruthRef(target.condition)) {
+                when (conditionAtBirth(target.condition, creations)) {
                     false -> return // provably not a member at birth
                     true -> guard = null // provably fires for every new instance
                     null -> {}
@@ -190,23 +201,38 @@ internal object RuleGraphGen {
                     if (k is CommitKind.Delete && k.shape == base) catalog.deletionTouchesOthers(k, summaryOf(target))
                     else catalog.touches(k, summaryOf(target))
                 if (!touched) return
-                when (analysis.dirRef(target.condition, k)) {
+                when (analysis.dirRef(target.condition, k, creations = creations)) {
                     Dir.TOWARD_TRUE -> if (target.leaving) return
                     Dir.TOWARD_FALSE -> if (!target.leaving) return
-                    else -> {}
+                    Dir.NONE -> return
+                    Dir.UNKNOWN -> {}
                 }
             }
             emit(from, target.name, listOfNotNull(kindDesc, timing(target), guard), dotted = timing(target) != null)
         }
 
-        private fun selfEdge(rule: RuleDecl, k: CommitKind, kindDesc: String) {
+        /**
+         * Whether a rule's condition holds for the record a commit creates: for every creation
+         * statement of the source rule, with the values each gives, or, for an act arriving,
+         * with the `initially` values alone. Null when it differs between creations or is unknown.
+         */
+        private fun conditionAtBirth(condition: RefExpr, creations: List<Creation>): Boolean? {
+            if (creations.isEmpty()) return analysis.initTruthRef(condition)
+            return creations.map { creation -> analysis.initTruthRef(condition, creation.givenValues()) }.distinct().singleOrNull()
+        }
+
+        private fun selfEdge(rule: RuleDecl, k: CommitKind, kindDesc: String, creations: List<Creation>) {
             if (!catalog.touches(k, summaryOf(rule))) return
-            val verb = when (analysis.dirRef(rule.condition, k)) {
+            val direction = analysis.dirRef(rule.condition, k, creations = creations)
+            val verb = when (direction) {
                 Dir.TOWARD_FALSE -> "disarms its own guard"
                 Dir.TOWARD_TRUE -> "re-arms its own condition"
-                else -> "feeds its own condition"
+                Dir.UNKNOWN -> "feeds its own condition"
+                Dir.NONE -> return
             }
-            emit(rule.name, rule.name, listOf(kindDesc, verb), dotted = timing(rule) != null)
+            // the same test [edge] prunes by: a write moving the condition away from running the rule
+            val awayFromRunning = if (rule.leaving) Dir.TOWARD_TRUE else Dir.TOWARD_FALSE
+            emit(rule.name, rule.name, listOf(kindDesc, verb), dotted = timing(rule) != null, causesRun = direction != awayFromRunning)
         }
 
         private fun guardText(rule: RuleDecl): String? {
@@ -229,8 +255,8 @@ internal object RuleGraphGen {
             }
         }
 
-        private fun emit(from: String, to: String, parts: List<String>, dotted: Boolean) {
-            val fact = MayFire(from, to, parts, dotted)
+        private fun emit(from: String, to: String, parts: List<String>, dotted: Boolean, causesRun: Boolean = true) {
+            val fact = MayFire(from, to, parts, dotted, causesRun)
             mayFire.add(fact)
             lines.add(drawn(fact))
         }

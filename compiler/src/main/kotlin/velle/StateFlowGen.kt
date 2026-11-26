@@ -1,5 +1,7 @@
 package velle
 
+import velle.validation.subExpressionsOf
+
 /**
  * State-flow emission (diagrams.md): one section per base
  * shape that has refinements, one Mermaid state diagram per membership *axis*.
@@ -61,6 +63,9 @@ internal object StateFlowGen {
 
 internal fun RefinementDecl.whereExpr(): Expr? = (expr as? RefName)?.where
 
+/** The values a creation statement gives the record's fields, by field name. */
+internal fun Creation.givenValues(): Map<String, Expr> = fields.associate { field -> field.name to field.value }
+
 /**
  * One fact the state-flow diagrams draw as an arrow: a commit of [cause] can move a record of
  * [base] into the refinement [refinement] ([Dir.TOWARD_TRUE]), out of it ([Dir.TOWARD_FALSE]),
@@ -105,7 +110,7 @@ internal object StateFlowFacts {
         return catalog.causes
             .filterNot { cause -> cause.kind is CommitKind.Create && cause.kind.shape == base }
             .filter { cause -> catalog.touches(cause.kind, summary) }
-            .map { cause -> MembershipMove(base, refinement.name, cause, analysis.dir(where, cause.kind, base)) }
+            .map { cause -> MembershipMove(base, refinement.name, cause, analysis.dir(where, cause.kind, base, creations = cause.creations)) }
             .filter { move -> move.direction != Dir.NONE }
     }
 }
@@ -455,9 +460,15 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
 
     // ── direction: which way can this kind move the predicate? ───────────────
 
-    fun dir(e: Expr, k: CommitKind, subject: String, guard: MutableSet<String> = mutableSetOf()): Dir = when (e) {
+    /**
+     * Which way a commit of kind [k] can move [e], read with [subject] as its scope. [creations]
+     * are the creation statements by which a rule's commit of [k] creates its records, read for
+     * the values they give; they are empty when the records come from an act arriving, whose
+     * caller supplies the values, and for any other kind.
+     */
+    fun dir(e: Expr, k: CommitKind, subject: String, guard: MutableSet<String> = mutableSetOf(), creations: List<Creation> = emptyList()): Dir = when (e) {
         is NotExpr -> {
-            val d = dir(e.inner, k, subject, guard)
+            val d = dir(e.inner, k, subject, guard, creations)
             when (d) {
                 Dir.TOWARD_TRUE -> Dir.TOWARD_FALSE
                 Dir.TOWARD_FALSE -> Dir.TOWARD_TRUE
@@ -465,72 +476,145 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
             }
         }
         is Binary -> when (e.op) {
-            "and", "or" -> combineDir(dir(e.left, k, subject, guard), dir(e.right, k, subject, guard))
+            "and", "or" -> combineDir(dir(e.left, k, subject, guard, creations), dir(e.right, k, subject, guard, creations))
             "<", "<=", ">", ">=" -> cmpDir(e, k, subject)
             else -> opaqueDir(e, k, subject)
         }
-        is ExistsExpr -> {
-            if (!touchesExpr(e, k, subject)) Dir.NONE
-            else {
-                val elem = e.shape ?: e.collection?.let { elementShapeOf(it, subject) }
-                // a record of any shape a taken shape or a static union covers makes it exist (Reference §9)
-                if (k is CommitKind.Create && elem != null && model.typeAccepts(elem, k.shape)) Dir.TOWARD_TRUE else Dir.UNKNOWN
-            }
-        }
-        is IsExpr -> isDir(e, k, subject, guard)
+        is ExistsExpr -> existsDir(e, k, subject, guard, creations)
+        is IsExpr -> isDir(e, k, subject, guard, creations)
         else -> opaqueDir(e, k, subject)
+    }
+
+    private fun existsDir(e: ExistsExpr, k: CommitKind, subject: String, guard: MutableSet<String>, creations: List<Creation>): Dir {
+        if (!touchesExpr(e, k, subject)) return Dir.NONE
+        val elementShape = e.shape ?: e.collection?.let { collection -> elementShapeOf(collection, subject) }
+        // a record of any shape a taken shape or a static union covers makes it exist (Reference §9)
+        if (k is CommitKind.Create && elementShape != null && model.typeAccepts(elementShape, k.shape))
+            return creationDir(e.collection?.where, k.shape, creations)
+        val fixedCollection = fixedFilteredCollection(e.collection, k, subject) ?: return Dir.UNKNOWN
+        // the same elements before and after: the exists moves the way the filter moves on each one
+        return dir(fixedCollection.where, k, fixedCollection.elementShape, guard, creations)
+    }
+
+    /**
+     * Which way a creation of a [createdShape] record moves an `exists` over a collection
+     * filtered by [where]. A new element can only make it hold, and does not when [where] is
+     * provably false, at the moment of creation, for every record the rule's [creations] make.
+     * That reading needs [where] to read only the new record's own fields, so that creating it
+     * changes nothing [where] reads of the elements already there.
+     */
+    private fun creationDir(where: Expr?, createdShape: String, creations: List<Creation>): Dir {
+        if (where == null || creations.isEmpty() || !readsOnlyOwnFields(where, createdShape)) return Dir.TOWARD_TRUE
+        val mayHold = creations.any { creation -> initTruth(where, createdShape, creation.givenValues()) != false }
+        return if (mayHold) Dir.TOWARD_TRUE else Dir.NONE
+    }
+
+    private fun readsOnlyOwnFields(where: Expr, shape: String): Boolean {
+        if (mentionsThis(where)) return false
+        val reads = ReadSummary().also { summary -> model.collectExpr(where, shape, summary) }
+        val ownShapes = setOfNotNull(shape, model.baseOf(shape))
+        return !reads.opaque && reads.existsShapes.isEmpty() && reads.collShapes.isEmpty() && reads.collFields.isEmpty() &&
+            reads.fields.all { (owner, _) -> owner in ownShapes }
+    }
+
+    /** An `exists` over [elementShape] records filtered by [where], whose elements a commit cannot change. */
+    private class FixedCollection(val where: Expr, val elementShape: String)
+
+    /**
+     * [collection] as a [FixedCollection] when it is one relationship of [subject], filtered,
+     * and a commit of kind [k] cannot add an element to it, remove one, or re-point one in or
+     * out. Null for every collection this cannot be proven for.
+     */
+    private fun fixedFilteredCollection(collection: CollectionExpr?, k: CommitKind, subject: String): FixedCollection? {
+        val where = collection?.where ?: return null
+        // `this` names the subject, which a read of one element does not see
+        if (mentionsThis(where)) return null
+        val relationship = soleRelationshipOf(collection, subject) ?: return null
+        val elementShape = (relationship.type as? VType.Coll)?.shape?.takeIf { shape -> shape in model.shapes } ?: return null
+        if (canChangeElements(k, subject, relationship, elementShape)) return null
+        return FixedCollection(where, elementShape)
+    }
+
+    /** The one stored or inverse relationship of [subject] that [collection] reads, named bare,
+     *  so that the filter's bare names name the element's fields. Null for anything else. */
+    private fun soleRelationshipOf(collection: CollectionExpr, subject: String): MemberInfo? {
+        val binding = collection.bindings.singleOrNull()?.takeIf { binding -> binding.alias == null } ?: return null
+        val source = binding.source as? PathExpr ?: return null
+        if (source.root == "this" || source.segs.isNotEmpty()) return null
+        val relationship = model.membersOf(subject)[source.root] ?: return null
+        val recorded = relationship.derived == null && (relationship.stored || relationship.inverse != null)
+        return relationship.takeIf { recorded }
+    }
+
+    /** Whether a commit of kind [k] can change which records [relationship] of [subject] holds. */
+    private fun canChangeElements(k: CommitKind, subject: String, relationship: MemberInfo, elementShape: String): Boolean {
+        val referenceField = relationship.inverse?.field
+        val shapesThatMatter = model.basesOf(elementShape) + elementShape + setOfNotNull(model.baseOf(subject), relationship.inverse?.shape)
+        return when (k) {
+            is CommitKind.Create -> k.shape in shapesThatMatter || model.typeAccepts(elementShape, k.shape)
+            is CommitKind.Delete -> k.shape in shapesThatMatter || model.typeAccepts(elementShape, k.shape)
+            // a write of the list itself, or of the reference an inverse is the view of, on any shape
+            is CommitKind.Assign -> k.field == relationship.name || k.field == referenceField
+            CommitKind.TimePasses -> false
+        }
+    }
+
+    private fun mentionsThis(e: Expr): Boolean {
+        if (e is PathExpr) return e.root == "this"
+        val parts = if (e is ListLit) e.items else subExpressionsOf(e)
+        return parts.any { part -> mentionsThis(part) }
     }
 
     private fun combineDir(a: Dir, b: Dir): Dir =
         if (a == Dir.NONE) b else if (b == Dir.NONE) a else if (a == b) a else Dir.UNKNOWN
 
     /** [dir] lifted to refinement expressions (rule conditions, never targets). */
-    fun dirRef(e: RefExpr, k: CommitKind, guard: MutableSet<String> = mutableSetOf()): Dir = when (e) {
+    fun dirRef(e: RefExpr, k: CommitKind, guard: MutableSet<String> = mutableSetOf(), creations: List<Creation> = emptyList()): Dir = when (e) {
         is RefName -> {
             val nameDir = when {
                 e.name in model.refinements ->
                     if (!guard.add(e.name)) Dir.UNKNOWN
-                    else dirRef(model.refinements.getValue(e.name).expr, k, guard)
+                    else dirRef(model.refinements.getValue(e.name).expr, k, guard, creations)
                 else -> Dir.NONE // base-shape membership itself only changes at birth
             }
-            combineDir(nameDir, e.where?.let { dir(it, k, e.name) } ?: Dir.NONE)
+            combineDir(nameDir, e.where?.let { dir(it, k, e.name, creations = creations) } ?: Dir.NONE)
         }
-        is RefNot -> when (val d = dirRef(e.inner, k, guard)) {
+        is RefNot -> when (val d = dirRef(e.inner, k, guard, creations)) {
             Dir.TOWARD_TRUE -> Dir.TOWARD_FALSE
             Dir.TOWARD_FALSE -> Dir.TOWARD_TRUE
             else -> d
         }
-        is RefAnd -> combineDir(dirRef(e.left, k, guard), dirRef(e.right, k, guard))
-        is RefOr -> combineDir(dirRef(e.left, k, guard), dirRef(e.right, k, guard))
+        is RefAnd -> combineDir(dirRef(e.left, k, guard, creations), dirRef(e.right, k, guard, creations))
+        is RefOr -> combineDir(dirRef(e.left, k, guard, creations), dirRef(e.right, k, guard, creations))
     }
 
     /** [initTruth] lifted to refinement expressions: does the condition hold for
-     *  a brand-new instance of its base shape? */
-    fun initTruthRef(e: RefExpr, guard: MutableSet<String> = mutableSetOf()): Boolean? = when (e) {
+     *  a brand-new instance of its base shape, created with the [given] values? */
+    fun initTruthRef(e: RefExpr, given: Map<String, Expr> = emptyMap(), guard: MutableSet<String> = mutableSetOf()): Boolean? = when (e) {
         is RefName -> {
             val nameTruth: Boolean? = when {
                 e.name in model.shapes -> true // a new instance is trivially a member of its own base
                 e.name in model.refinements ->
                     if (!guard.add(e.name)) null
-                    else initTruthRef(model.refinements.getValue(e.name).expr, guard)
+                    else initTruthRef(model.refinements.getValue(e.name).expr, given, guard)
                 else -> null
             }
-            val whereTruth: Boolean? = e.where?.let { initTruth(it, e.name) } ?: true
+            val whereTruth: Boolean? = e.where?.let { initTruth(it, e.name, given) } ?: true
             when {
                 nameTruth == false || whereTruth == false -> false
                 nameTruth == true && whereTruth == true -> true
                 else -> null
             }
         }
-        is RefNot -> initTruthRef(e.inner, guard)?.not()
+        is RefNot -> initTruthRef(e.inner, given, guard)?.not()
         is RefAnd -> {
-            val l = initTruthRef(e.left, guard)
-            val r = initTruthRef(e.right, guard)
+            val l = initTruthRef(e.left, given, guard)
+            val r = initTruthRef(e.right, given, guard)
             if (l == false || r == false) false else if (l == true && r == true) true else null
         }
         is RefOr -> {
-            val l = initTruthRef(e.left, guard)
-            val r = initTruthRef(e.right, guard)
+            val l = initTruthRef(e.left, given, guard)
+            val r = initTruthRef(e.right, given, guard)
             if (l == true || r == true) true else if (l == false && r == false) false else null
         }
     }
@@ -549,7 +633,7 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
         }
     }
 
-    private fun isDir(e: IsExpr, k: CommitKind, subject: String, guard: MutableSet<String>): Dir {
+    private fun isDir(e: IsExpr, k: CommitKind, subject: String, guard: MutableSet<String>, creations: List<Creation>): Dir {
         if (!touchesExpr(e, k, subject)) return Dir.NONE
         val name = e.refinement ?: return Dir.UNKNOWN
         if (name !in model.refinements || !guard.add(name)) return Dir.UNKNOWN
@@ -557,7 +641,7 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
         val refBase = model.baseOf(name) ?: return Dir.UNKNOWN
         // a write that can re-point the subject path breaks the proof
         if (touchesExpr(e.subject, k, subject)) return Dir.UNKNOWN
-        return dir(where, k, refBase, guard)
+        return dir(where, k, refBase, guard, creations)
     }
 
     // ── numeric deltas: which way can this kind move a value? ────────────────
@@ -699,31 +783,29 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
 
     // ── the value at birth: what holds for a brand-new instance ──────────────
 
-    fun initTruth(e: Expr, scope: String): Boolean? = when (e) {
+    /**
+     * Whether [e] holds for a brand-new record of [scope] at the moment it is created: true,
+     * false, or null when the analysis cannot tell. [given] holds the values the creation gives
+     * the record's fields, by field name, as a rule's creation spells them; a field it does not
+     * give has its `initially` value.
+     */
+    fun initTruth(e: Expr, scope: String, given: Map<String, Expr> = emptyMap()): Boolean? = when (e) {
         is BoolLit -> e.value
-        is NotExpr -> initTruth(e.inner, scope)?.not()
+        is NotExpr -> initTruth(e.inner, scope, given)?.not()
         is Binary -> when (e.op) {
             "and" -> {
-                val l = initTruth(e.left, scope)
-                val r = initTruth(e.right, scope)
+                val l = initTruth(e.left, scope, given)
+                val r = initTruth(e.right, scope, given)
                 if (l == false || r == false) false else if (l == true && r == true) true else null
             }
             "or" -> {
-                val l = initTruth(e.left, scope)
-                val r = initTruth(e.right, scope)
+                val l = initTruth(e.left, scope, given)
+                val r = initTruth(e.right, scope, given)
                 if (l == true || r == true) true else if (l == false && r == false) false else null
             }
             "<", "<=", ">", ">=", "==", "!=" -> {
-                val l = initVal(e.left, scope)
-                val r = initVal(e.right, scope)
-                if (l == null || r == null) null else when (e.op) {
-                    "<" -> l < r
-                    "<=" -> l <= r
-                    ">" -> l > r
-                    ">=" -> l >= r
-                    "==" -> l == r
-                    else -> l != r
-                }
+                val newRecord = NewRecord(scope, given)
+                BirthValues.compared(e.op, initVal(e.left, newRecord), initVal(e.right, newRecord))
             }
             else -> null
         }
@@ -736,39 +818,40 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
         else -> null
     }
 
-    private fun initVal(e: Expr, scope: String): Double? = when (e) {
-        is IntLit -> e.value.toDouble()
-        is DecLit -> e.text.toDoubleOrNull()
-        is UnaryMinus -> initVal(e.inner, scope)?.let { -it }
-        is Binary -> {
-            val l = initVal(e.left, scope)
-            val r = initVal(e.right, scope)
-            if (l == null || r == null) null else when (e.op) {
-                "+" -> l + r
-                "-" -> l - r
-                "*" -> l * r
-                "/" -> if (r == 0.0) null else l / r
-                else -> null
-            }
-        }
-        is PathExpr -> if (e.segs.isNotEmpty()) null else {
-            val m = model.membersOf(scope)[e.root]
-            when {
-                m == null -> null
-                m.derived != null && !m.captured -> initVal(m.derived.expr, m.owner)
-                m.stored -> model.shapes[scope]?.members
-                    ?.filterIsInstance<StoredProp>()?.firstOrNull { it.name == e.root }
-                    ?.initially?.let { initVal(it, scope) }
-                else -> null
-            }
-        }
-        is AggCall -> if ((e.name == "sum" || e.name == "count") && birthEmpty(e.collection, scope)) 0.0 else null
+    /** The record being created, whose fields [initVal] reads: of shape [scope], with the [given] values. */
+    private class NewRecord(val scope: String, val given: Map<String, Expr>)
+
+    /** The value of [e] at the moment a record is created. With no [newRecord], [e] is read
+     *  outside the record, as a creation's given value is, and every read of a field is unknown. */
+    private fun initVal(e: Expr, newRecord: NewRecord?): BirthValue? = when (e) {
+        is IntLit -> BirthValue.number(e.value.toDouble())
+        is DecLit -> e.text.toDoubleOrNull()?.let(BirthValue::number)
+        TodayLit -> BirthValue(BirthValueKind.FROM_TODAY, 0.0)
+        NowLit -> BirthValue(BirthValueKind.FROM_NOW, 0.0)
+        is DurationLit -> BirthValues.duration(e)
+        is UnaryMinus -> initVal(e.inner, newRecord)?.let(BirthValues::negated)
+        is Binary -> BirthValues.arithmetic(e.op, initVal(e.left, newRecord), initVal(e.right, newRecord))
+        is PathExpr -> newRecord?.let { record -> fieldAtBirth(e, record) }
+        is AggCall -> if (newRecord != null && (e.name == "sum" || e.name == "count") && birthEmpty(e.collection, newRecord.scope)) BirthValue.number(0.0) else null
         // a registered function over constants folds at compile time through its own body
-        is FunCall -> model.functionScope[e.name]?.let { fn ->
-            val xs = e.args.map { initVal(it, scope) ?: return null }
-            FunctionResolver.foldNumbers(model.registry, fn, xs.map { java.math.BigDecimal(it) })?.toDouble()
+        is FunCall -> model.functionScope[e.name]?.let { function ->
+            val numbers = e.args.map { argument -> initVal(argument, newRecord)?.asNumber() ?: return null }
+            FunctionResolver.foldNumbers(model.registry, function, numbers.map { number -> java.math.BigDecimal(number) })
+                ?.toDouble()?.let(BirthValue::number)
         }
         else -> null
+    }
+
+    /** A field of the record being created: the value the creation gives it, else its `initially`. */
+    private fun fieldAtBirth(path: PathExpr, newRecord: NewRecord): BirthValue? {
+        if (path.segs.isNotEmpty()) return null
+        val member = model.membersOf(newRecord.scope)[path.root] ?: return null
+        if (member.derived != null && !member.captured) return initVal(member.derived.expr, NewRecord(member.owner, newRecord.given))
+        if (!member.stored) return null
+        val givenValue = newRecord.given[path.root]
+        if (givenValue != null) return initVal(givenValue, null)
+        val declared = model.shapes[newRecord.scope]?.members?.filterIsInstance<StoredProp>()?.firstOrNull { field -> field.name == path.root }
+        return declared?.initially?.let { initially -> initVal(initially, newRecord) }
     }
 
     /** Inverse collections are empty at birth — nothing referenced the

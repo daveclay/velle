@@ -20,8 +20,10 @@ internal class SpecFacts(val version: SpecVersion) {
      * The graph draws an act's arrival as `commit<Act>`, or as `env<Act>` once it has passed the
      * act's refusals; both are the act arriving, so both are read as `commit<Act>` here, and a
      * refusal added or removed at the door does not read as every rule the act causes changing.
+     * An edge the graph draws although it cannot cause the rule to run is left out.
      */
     val mayFire: Set<Triple<String, String, Boolean>> = RuleGraphGen.mayFire(model, catalog)
+        .filter { edge -> edge.causesRun }
         .map { edge -> Triple(arrival(edge.source), edge.rule, edge.crossesBoundary) }.toSet()
 
     private fun arrival(source: String): String {

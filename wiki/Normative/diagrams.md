@@ -100,7 +100,7 @@ missing the diagram gets weaker, never wrong. The author-declared state
 partition ([Reference §22](Reference-22-Open-unresolved)) is the future sharpener — it would name the else-state
 and turn proved-disjoint axes into declared ones.
 
-Arrow directions are proven, not guessed, from three sources:
+Arrow directions are proven, not guessed, from five sources:
 
 - **Monotone `exists` atoms.** `exists X for this` can only be satisfied,
   never unsatisfied — v0 has no delete (OQ37) — so a refinement guarded by one
@@ -116,6 +116,27 @@ Arrow directions are proven, not guessed, from three sources:
 - **Time as a commit kind.** A predicate reading `today` gets a "time passes"
   edge in the direction the clock can move it — `due < today` can only be
   satisfied by time, never unsatisfied.
+- **An `exists` over a filtered collection.** Some changes cannot add a
+  record to the collection, remove one, or move one in or out by changing the
+  reference that puts it there. After such a change the collection holds the
+  same records, so the `exists` moves the way its `where` moves on each
+  record. In `examples/payments/payments.velle`, `InGracePeriod = Order where
+  exists (paymentExtensions where endsOn >= today)` can only stop holding as
+  time passes. In `examples/peptides/peptides.velle`, a new
+  PhytotoxicityReport can only put a trial into `HaltedTrial`. A new record
+  of the collection can only make the `exists` hold. A deletion, or a change
+  to the reference that puts a record in the collection, keeps the arrow in
+  both directions.
+- **The values a rule gives the record it creates.** A rule's creation
+  is read for the values it gives the new record's fields. A value is known
+  when it is a constant, or `today` or `now` moved by a constant span of
+  time. A value is compared only with one on the same clock: `today` with
+  `today`, `now` with `now`. A rule that creates a loan with `dueOn: today + 7
+  days` makes a loan that is not due before today. That creation cannot make
+  `exists (loans where dueOn < today)` hold for the loan's member, so it draws
+  no arrow into a refinement that asks for it. Any other value, such as one read from the act, counts as able
+  to make the `where` hold. So does every value of a record that arrives as
+  an act, since the caller chooses it.
 
 Entry and exit decorate the states: `when X` rules as entry actions, `when
 leaving X` as exit actions, `captured` fields as entry captures, `frozen` as a
@@ -161,12 +182,17 @@ semantics:
   envelope to `RemindOverdue` — a payment quiets reminders, never causes
   them), a creation moving a membership toward true cannot fire a `when
   leaving` rule, and a condition provably false at birth drops the birth edge
-  (`commitInvoice` is inert — a new invoice wakes no rule, visibly).
+  (`commitInvoice` is inert — a new invoice wakes no rule, visibly). A record
+  a rule creates is read with the values the rule gives it, so a rule that
+  creates a loan due seven days from today draws no edge to a rule over loans
+  due before today.
 - **Guard-disarm is a labeled self-loop.** A rule whose own write provably
   moves its own condition toward false gets a self-edge reading "disarms its
   own guard" — the canonical-guard pattern ([Reference §13](Reference-13-Exit-triggers)) made visible as
   negative feedback, for both the after-commit disarm and the
-  sweep-with-memory.
+  sweep-with-memory. The self-loop is drawn although the write cannot make
+  the rule run. The [comparison of two specs](Comparing-specs) leaves it out
+  of the rules a change can cause to run.
 
 Conditions too long for an edge label truncate to their refinement head with
 the full predicate in a legend under the fence.

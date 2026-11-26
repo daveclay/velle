@@ -18,8 +18,10 @@ internal sealed interface CommitKind {
     data object TimePasses : CommitKind
 }
 
-/** A commit kind paired with a human-readable origin that can produce it. */
-internal data class Cause(val kind: CommitKind, val label: String)
+/** A commit kind paired with a human-readable origin that can produce it. For a rule's
+ *  creation, [creations] are the rule's creation statements of that shape, read for the values
+ *  they give; empty for every other cause, an act arriving among them. */
+internal data class Cause(val kind: CommitKind, val label: String, val creations: List<Creation> = emptyList())
 
 internal class KindCatalog(private val model: Model) {
 
@@ -29,7 +31,7 @@ internal class KindCatalog(private val model: Model) {
         buildList {
             for (act in model.exposed) add(Cause(CommitKind.Create(act), "commit$act"))
             for (rule in model.rules.values) for (k in producedKinds(rule)) when (k) {
-                is CommitKind.Create -> add(Cause(k, "${rule.name} inserts ${k.shape}"))
+                is CommitKind.Create -> add(Cause(k, "${rule.name} inserts ${k.shape}", creationsOf(rule, k.shape)))
                 is CommitKind.Assign -> add(Cause(k, "${rule.name} writes ${k.shape}.${k.field}"))
                 is CommitKind.Delete -> add(Cause(k, "${rule.name} deletes ${k.shape}"))
                 CommitKind.TimePasses -> {}
@@ -37,6 +39,10 @@ internal class KindCatalog(private val model: Model) {
             add(Cause(CommitKind.TimePasses, "time passes"))
         }.distinct()
     }
+
+    /** The creation statements of [rule]'s body that create a record of [shape]. */
+    fun creationsOf(rule: RuleDecl, shape: String): List<Creation> =
+        rule.creations().filter { creation -> creation.shape == shape }
 
     /** The commit kinds a rule's body performs, at owner-shape granularity. */
     fun producedKinds(rule: RuleDecl): List<CommitKind> {
