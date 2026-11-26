@@ -1,0 +1,39 @@
+#!/bin/sh
+# Runs the Velle compiler this skill carries: velle validate | compare | describe.
+# Exit codes: 0 done, 1 a draft does not validate or a name is not in it, 2 usage,
+# 3 this machine cannot run the compiler (no Java 21 or later, or no jar).
+
+dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+jar="$dir/velle.jar"
+
+if ! command -v java >/dev/null 2>&1; then
+    echo "The Velle compiler needs Java 21 or later, and this machine has no java command."
+    exit 3
+fi
+
+version=$(java -version 2>&1 | sed -n 's/.*version "\([^"]*\)".*/\1/p' | head -n 1)
+major=${version%%.*}
+if [ "$major" = "1" ]; then
+    major=$(echo "$version" | cut -d. -f2)
+fi
+major=${major%%-*}
+major=${major%%+*}
+
+case $major in
+    ''|*[!0-9]*)
+        echo "The Velle compiler needs Java 21 or later, and the version of this machine's java command cannot be read."
+        exit 3
+        ;;
+esac
+
+if [ "$major" -lt 21 ]; then
+    echo "The Velle compiler needs Java 21 or later, and this machine's java command is version $version."
+    exit 3
+fi
+
+if [ ! -f "$jar" ]; then
+    echo "The Velle compiler's jar is missing from $dir. Build it in the Velle repository with ./gradlew :compiler:skillJar."
+    exit 3
+fi
+
+exec java -jar "$jar" "$@"

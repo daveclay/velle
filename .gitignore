@@ -9,3 +9,5 @@ working-docs/examples/*/out/
 target/
 # written by the Kotlin compiler: its session files and error logs
 .kotlin/
+# built by ./gradlew :compiler:skillJar, never checked in
+skills/velle-design/scripts/velle.jar

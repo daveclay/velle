@@ -32,34 +32,46 @@ object Sentences {
      * "its balance". Inside `exists (Reminder where ...)` the fields are the Reminder's, said
      * "whose sentOn", and `this` still means the outer record, "it".
      */
-    class Subject(val possessive: String, val aliases: Set<String> = emptySet()) {
+    class Subject(val possessive: String, val aliases: Set<String> = emptySet(), val vocabulary: Vocabulary = Vocabulary.SHARED) {
+        /** Who the fields are inside `exists (Reminder where ...)`: "whose", in the same vocabulary. */
+        fun inside(): Subject = Subject("whose", vocabulary = vocabulary)
+
         companion object {
             val record = Subject("its")
-            val inner = Subject("whose")
+
+            /** The record a description of a spec ([SpecDescription]) is about, with the description's words. */
+            val described = Subject("its", vocabulary = Vocabulary.DESCRIPTION)
         }
     }
+
+    /**
+     * Which words a sentence may use. [SHARED] are the words the generated cases and the comparison
+     * of two specs use, and their output is pinned. [DESCRIPTION] adds words only `velle describe`
+     * uses so far, so that adding one never changes a comparison report.
+     */
+    enum class Vocabulary { SHARED, DESCRIPTION }
 
     // ── Conditions over records ──────────────────────────────────────────────────
 
     /** A refinement expression as a clause about "it": `OverdueInvoice and not ArchivedInvoice`
      *  is "it is an OverdueInvoice and it is not an ArchivedInvoice". [baseShapes] are the
      *  names of shapes and acts, for which "it is an Invoice" says nothing and is left out. */
-    fun clause(expression: RefExpr, baseShapes: Set<String>): String? = when (expression) {
-        is RefName -> nameClause(expression, baseShapes)
-        is RefNot -> negatedClause(expression.inner, baseShapes)
-        is RefAnd -> joined(clause(expression.left, baseShapes), "and", clause(expression.right, baseShapes))
-        is RefOr -> joined(clause(expression.left, baseShapes), "or", clause(expression.right, baseShapes))
+    fun clause(expression: RefExpr, baseShapes: Set<String>, subject: Subject = Subject.record): String? = when (expression) {
+        is RefName -> nameClause(expression, baseShapes, subject)
+        is RefNot -> negatedClause(expression.inner, baseShapes, subject)
+        is RefAnd -> joined(clause(expression.left, baseShapes, subject), "and", clause(expression.right, baseShapes, subject))
+        is RefOr -> joined(clause(expression.left, baseShapes, subject), "or", clause(expression.right, baseShapes, subject))
     }
 
-    private fun nameClause(expression: RefName, baseShapes: Set<String>): String? {
+    private fun nameClause(expression: RefName, baseShapes: Set<String>, subject: Subject): String? {
         val membership = if (expression.name in baseShapes) null else "it is ${withArticle(expression.name)}"
-        val restriction = expression.where?.let { predicate -> predicate(predicate, Subject.record) ?: return null }
+        val restriction = expression.where?.let { predicate -> predicate(predicate, subject) ?: return null }
         return listOfNotNull(membership, restriction).joinToString(" and ").ifEmpty { "it is ${withArticle(expression.name)}" }
     }
 
-    private fun negatedClause(inner: RefExpr, baseShapes: Set<String>): String? {
+    private fun negatedClause(inner: RefExpr, baseShapes: Set<String>, subject: Subject): String? {
         if (inner is RefName && inner.where == null) return "it is not ${withArticle(inner.name)}"
-        val innerClause = clause(inner, baseShapes) ?: return null
+        val innerClause = clause(inner, baseShapes, subject) ?: return null
         return "it is not the case that $innerClause"
     }
 
@@ -78,7 +90,12 @@ object Sentences {
 
     /** A predicate as a clause: `balance > 0 and due < today` is "its balance is above 0 and
      *  its due is before today". */
-    fun predicate(expression: Expr, subject: Subject): String? = when (expression) {
+    fun predicate(expression: Expr, subject: Subject): String? {
+        if (subject.vocabulary == Vocabulary.DESCRIPTION) DescriptionWords.predicate(expression, subject)?.let { words -> return words }
+        return sharedPredicate(expression, subject)
+    }
+
+    private fun sharedPredicate(expression: Expr, subject: Subject): String? = when (expression) {
         is Binary -> binaryPredicate(expression, subject)
         is NotExpr -> negatedPredicate(expression.inner, subject)
         is IsExpr -> isPredicate(expression, subject)
@@ -162,12 +179,17 @@ object Sentences {
         val binding = collection.bindings.singleOrNull() ?: return null
         val source = binding.source as? PathExpr ?: return null
         if (source.segs.isNotEmpty() || binding.alias != null) return null
-        val restriction = collection.where?.let { inner -> predicate(inner, Subject.inner) ?: return null }
+        val restriction = collection.where?.let { inner -> predicate(inner, subject.inside()) ?: return null }
         return listOfNotNull("there is ${withArticle(source.root)}", restriction).joinToString(" ")
     }
 
     /** A value: a field of the record, a literal, today, or arithmetic over them. */
-    fun value(expression: Expr, subject: Subject): String? = when (expression) {
+    fun value(expression: Expr, subject: Subject): String? {
+        if (subject.vocabulary == Vocabulary.DESCRIPTION) DescriptionWords.value(expression, subject)?.let { words -> return words }
+        return sharedValue(expression, subject)
+    }
+
+    private fun sharedValue(expression: Expr, subject: Subject): String? = when (expression) {
         is PathExpr -> path(expression, subject)
         is IntLit -> expression.value.toString()
         is DecLit -> expression.text

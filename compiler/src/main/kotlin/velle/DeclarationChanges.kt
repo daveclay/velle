@@ -67,6 +67,17 @@ object DeclarationSentences {
             else -> "${presence.label}: ${compared.name?.let { name -> "$name, " } ?: ""}$description."
         }
 
+    /** What the declaration says, in the present tense, for a description of one version of a spec. */
+    fun presentSentence(compared: Compared, description: String): String =
+        when (val declaration = compared.declaration) {
+            is RefinementDecl ->
+                "${Sentences.capitalized(baseArticle(declaration, compared.version))} is ${Sentences.withArticle(declaration.name)} when $description."
+            is NeverDecl -> Sentences.capitalized(prohibitionSentence(declaration, compared.version, null, description))
+            is RuleDecl -> "${declaration.name}: $description."
+            is UsesDecl -> "$description."
+            else -> "${compared.name} is $description."
+        }
+
     fun changedSentence(after: Compared, description: String, descriptionBefore: String): String =
         when (val declaration = after.declaration) {
             is RefinementDecl ->
@@ -98,13 +109,18 @@ object DeclarationSentences {
     /**
      * `never` over an act is a refusal: the act is refused. Over a kept shape it is a
      * constraint on the books: such a record is forbidden. A requirement says the opposite way
-     * round, "unless".
+     * round, "unless". [timing] is "now" or "no longer" for an edit, and null for what a spec says.
      */
-    private fun prohibitionSentence(declaration: NeverDecl, version: SpecVersion, timing: String, description: String): String {
+    private fun prohibitionSentence(declaration: NeverDecl, version: SpecVersion, timing: String?, description: String): String =
+        "${prohibitionOpening(declaration, version, timing)} $description."
+
+    /** The sentence up to what is forbidden: "a LineItem is refused when", "a Fill is forbidden unless". */
+    fun prohibitionOpening(declaration: NeverDecl, version: SpecVersion, timing: String? = null): String {
         val subject = declaration.requirement?.subject ?: Sentences.leftmostName(declaration.target)
         val base = version.baseOf(subject)
         val verdict = if (base in version.acts) "refused" else "forbidden"
         val connective = if (declaration.requirement != null) "unless" else "when"
-        return "${Sentences.withArticle(subject)} is $timing $verdict $connective $description."
+        val verb = listOfNotNull("is", timing, verdict).joinToString(" ")
+        return "${Sentences.withArticle(subject)} $verb $connective"
     }
 }

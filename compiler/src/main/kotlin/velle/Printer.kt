@@ -90,6 +90,9 @@ object Printer {
         }
     }
 
+    /** One statement of a rule's body as written, a `for each` block with its statements. */
+    fun bodyItem(item: BodyItem): String = buildString { body(listOf(item), "") }.trimEnd()
+
     /** `name in <collection>` or `name from <a> to <b>` (Reference §14). */
     fun loopBinding(b: LoopBinding): String = when (val s = b.source) {
         is LoopSource.Over -> "${b.name} in ${expr(s.expr)}"
