@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D12 decided. Stage 1 of the build (§6) is under way: the `velle` command, the jar, and the skill folder are built; the tests on the reference, the wiki guide, and the trial sessions remain.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D12 decided. Stage 1 of the build (§6) is built but for its second trial session: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. Stages 2 and 3 are not started.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -49,11 +49,11 @@ What follows from it: a product owner in claude.ai may not be able to run the sc
 On 2026-11-26 an assistant given only the skill folder and a git repository holding `examples/billing/changes/00-billing.velle` ran a scripted session of twelve turns: two changes to reminders, a discount undone and parked as a question, a change to receipts, and an idea parked. Every edit it wrote validated the first time, it committed one commit per accepted decision, and it wrote both parked questions to a file beside the draft. What it found, and where each went:
 
 - **A consequence nobody asked for was accepted on an unclear "yes".** Dropping `total > 0` from `PaidInvoice` makes every newly opened invoice a paid one, which the report says only as "OpenInvoice can now cause SendReceipt to run" (the same line is in `examples/billing/changes/05-zero-total-receipts.md`). The skill asked one question for the consequence and the change together. `SKILL.md` now asks about each consequence by itself before asking whether the change is right.
-- **The report printed a name that is not in the spec.** "envLineItem can no longer cause SendReceipt to run", under a heading `envLineItem`. It is the rule graph's own name for the arrival of a `LineItem` (`compiler/src/main/kotlin/velle/RuleGraphGen.kt`, `"env$act"`). Work item below; no test pins it yet.
-- **Three sentences of the report are not ones a product owner can read.** "2 generated cases are no longer generated: ..." (`examples/billing/changes/02-discounts.md`, line 24), "SendReceipt could then run for it, with no act or tick causing it." (`05-zero-total-receipts.md`, line 31), and "sentOn is after 7 days before today" (`03-remind-issued.md`, line 11). Work item below.
+- **The report printed a name that is not in the spec.** "envLineItem can no longer cause SendReceipt to run", under a heading `envLineItem`. It was the rule graph's own name for the arrival of a `LineItem`. Fixed: the report says "A new LineItem", pinned by `SpecComparisonTest`, "no report in the billing history names a node of the rule graph".
+- **Three sentences of the report are not ones a product owner can read.** "2 generated cases are no longer generated: ..." (`examples/billing/changes/02-discounts.md`, line 24), "SendReceipt could then run for it, with no act or tick causing it." (`05-zero-total-receipts.md`, line 31), and "sentOn is after 7 days before today" (`03-remind-issued.md`, line 11), as each stood before. All three are reworded, and the reports in that folder show the new sentences.
 - **The comparison of the whole session points consequences at the wrong edits.** That is OQ172 (`working-docs/QUESTIONS.md`), which the session's closing report now depends on.
 - **A spec's comments go stale and nobody confirms the new ones.** The compiler does not read comments, so the read-back never shows them. `SKILL.md` now has the engineer confirm a changed comment.
-- **Describing one shape used a refinement of another without saying what it means.** `describe Reminder` named `ActionableOverdue`, a refinement of `Invoice`, and the assistant had to describe all of `Invoice` to learn it. Work item below.
+- **Describing one shape used a refinement of another without saying what it means.** `describe Reminder` named `ActionableOverdue`, a refinement of `Invoice`, and the assistant had to describe all of `Invoice` to learn it. Fixed: a named description closes with what such refinements mean (`CliDescribeTest`, "describing Reminder closes with what the refinements of Invoice it mentions mean").
 - **Smaller ones, fixed in `SKILL.md`:** the commit's first line (the decision in the speaker's words, where the report's first sentence gave "RemindOverdue changed."), whether the questions file is committed, a word that could be two things in the spec, and what "leave the spec without the rule" means when the rule is already there.
 
 ## 3. What to decide
@@ -299,13 +299,7 @@ Costs:
 ## 5. Work items
 
 - [ ] Upload the skill to claude.ai and run `scripts/velle validate` there, to learn whether its sandbox has Java 21, which no documentation says (§2, "What each host can run").
-- [ ] Add the test that validates every Velle example in `skills/velle-design/references/` with the compiler, and fails when a keyword of the language is missing from them (§6, stage 1).
 - [ ] Give words to the 38 parts listed in `compiler/src/test/resources/describe/without-words.md`, most common form first (D2).
-- [ ] Stop the comparison printing the rule graph's name for an act's arrival, `envLineItem`, and say the act in the spec's name; pin it with a test over the two versions of the trial's ninth turn (§2, "What the first trial session showed").
-- [ ] Give the comparison and the generated cases the words `velle describe` has, remove `Sentences.Vocabulary`, and regenerate the reports in `examples/billing/changes/` and every example's output (D12).
-- [ ] Reword the three sentences of the comparison a product owner cannot read, each pinned in `examples/billing/changes/` (§2, "What the first trial session showed").
-- [ ] Have `velle describe <draft> <Name>` say what each refinement of another shape it mentions means (§2, "What the first trial session showed").
-- [ ] Write `wiki/Guides/Design-session.md`, the GLOSSARY entry for "skill", the `velle compare` spelling in `Comparing-specs.md`, and name `skills/` in the root `CLAUDE.md` (§6, stage 1).
 - [ ] Try the second design session in chat, rebuilding part of the billing spec from an empty draft, and the first again once the skill's fixes are in (§4, §6 stage 1).
 - [ ] Write the decision on what a scenario for `velle try` says, from what stage 1's trial session needed (§6, stage 2).
 - [ ] Add `velle try` (§6, stage 2).
