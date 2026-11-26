@@ -1,6 +1,6 @@
 # OQ184 — How does an author get the number of days between two dates?
 
-**Status:** opened 2026-11-26 from a trial design session (OQ174). D1 and D2 await Dave.
+**Status:** opened 2026-11-26 from a trial design session (OQ174). D1 and D2 are decided. The build is pending.
 
 **In plain terms:** a tool library charges 2 for each day a tool comes back late. Velle can say how long passed between two dates, but only as a span of time, and nothing turns a span into a number. So the fee cannot be multiplied out.
 
@@ -20,7 +20,7 @@
 
 Roster: D1 (the spelling that gives a number), D2 (what a part of a unit becomes).
 
-### D1. A built-in function reads a span of time as a number of days
+### D1. A built-in function reads a span of time as a number of days · Decided 2026-11-26
 
 Does Velle get built-in functions `days`, `weeks`, `hours`, `minutes`, and `seconds`, each taking one `duration` and giving a whole number?
 
@@ -76,7 +76,9 @@ Alternative B adds no name, but "divided by one day" is arithmetic the engineer 
 - An example under `examples/` gains a fee or a count computed with `days(...)`, and a compiler test pins each function.
 - Survey files 37 and 38 leave `working-docs/examples/survey/`: 37's first spelling stays refused and is covered by the diagnostics spec; 38 is a workaround the new spelling replaces and is deleted.
 
-### D2. A part of a unit is dropped
+**Decided:** yes (Dave, 2026-11-26).
+
+### D2. A part of a unit is dropped · Decided 2026-11-26
 
 Is `days(36 hours)` the whole number 1, with the half day dropped?
 
@@ -91,10 +93,21 @@ Costs:
 
 - The five functions of D1 drop the part toward zero. The bullet in `Reference-05-Scalars.md` says so with `days(36 hours)` as the example, and a test pins it for a positive and a negative span.
 
+**Decided:** yes (Dave, 2026-11-26).
+
 ## 3. The build
 
-Written when D1 and D2 are decided.
+In build order, gathering the proposed changes of D1 and D2.
+
+1. Code. `compiler/src/main/kotlin/velle/ext/builtin/BuiltinFunctions.kt` gains `days`, `weeks`, `hours`, `minutes`, and `seconds`, each a `VelleFunction` taking one `duration` and returning an `integer`, the part of a unit dropped toward zero. Each is added to `BuiltinFunctions.all`.
+2. Code. The F2 message for a property declared a number and computed as a duration names `days(...)` as the way to read it as a number.
+3. Regenerate every example's output, and `wiki/Normative/diagnostics.md`.
+4. Wiki. `Reference-10-Predicate-expressions.md`, "Dates and durations": two dates subtract to a duration, and `days(done - planned)` is the number. `Reference-05-Scalars.md`, "The built-in functions": one bullet for the five, with `days(36 hours)` is 1. `checks.md` F2 lists the five beside `abs`, `hour`, and `minute`.
+5. Examples. A system under `examples/` gains a value computed with `days(...)`.
+6. Tests. One test per function, a positive and a negative span with a part to drop, and a spec in `compiler/src/test/resources/diagnostics/` for the F2 message.
+7. Survey. `37-days-between-dates-refused.velle` becomes the diagnostics spec, holding its first spelling only. `38-days-between-dates-workaround.velle` is deleted. Both lines leave the survey README.
+8. Settle. The OQ184 line leaves `QUESTIONS.md`, a row goes at the top of the settled table, and this file is deleted in the same commit.
 
 ## 4. Work items
 
-- [ ] Decide D1 and D2 (Dave).
+- [ ] Build items 1 to 8 of §3.
