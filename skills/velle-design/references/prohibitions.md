@@ -1,6 +1,6 @@
 # Prohibitions, refusals, and who may act
 
-Open this file when deciding how a "must not" is enforced, when a request may be refused and the refusal must be kept, when a transient request is refused for not being answered, and for role gates and visibility. The basics of `never`, `requires`, `unique`, `by`, and `visible to` are in [language.md](language.md), §13 and §14. Every example compiles on its own.
+Open this file when deciding how a "must not" is enforced, when a request may be refused and the refusal must be kept, when a transient request is refused for not being answered, and for role gates and visibility. The basics of `never`, `requires`, `unique`, `by`, and `visible to` are in [language.md](language.md), §13 and §14. Every example marked `velle` compiles on its own; one marked `velle refused` is refused with the messages quoted after it, and one marked `velle advisory` compiles with the advisory quoted after it ([language.md](language.md) says how the quotes are written).
 
 ## Contents
 
@@ -117,14 +117,66 @@ act AssayReading {
 - A key field is a stored value of the shape: a scalar, a reference, or the actor. A derived property, a timestamp, or a collection is refused.
 - A key says at most one, never at least one. An act that names a record by its key also needs `never (Submission where not exists (Entry where key == this.entryKey))`.
 - A filter naming every field of a key is one record: `(Kind where name == this.kindName)` ([expressions.md](expressions.md), §6).
-- If a rule assigns a key field, the key is refused like any prohibition over a field a rule assigns: `[V10] a 'never' reads 'Kind.name', which rule 'ApplyRename' assigns, so it is a guarantee that the rules keep it true, and the compiler cannot yet prove one over every assignment; read a field no rule assigns, or derive 'name' from the records the rule writes`.
+
+**Refused.** If a rule assigns a key field, the key is refused like any prohibition over a field a rule assigns (§5):
+
+```velle refused
+act Kind { name: text unique }
+act Rename { kind: one Kind, name: text }
+
+rule ApplyRename when Rename {
+    kind.name = name
+}
+```
+
+> [V10] a 'never' reads 'Kind.name', which rule 'ApplyRename' assigns, so it is a guarantee that the rules keep it true, and the compiler cannot yet prove one over every assignment; read a field no rule assigns, or derive 'name' from the records the rule writes
 
 ## 5. What a constraint may not do
 
-- **Read the clock.** A constraint over a kept shape that reads `today` or `now` is refused, because the records could age into it with no act to refuse. Message: `[V30] never #1 (Invoice where due < today) over Invoice reads the clock — the books can age into the forbidden state with no act to refuse, and the clock has no caller: state it on a transient request, where the clock is read once at the moment of the act; record the decision as a field the prohibition reads instead of the clock; or retract it`. "An invoice is never unpaid past its due date" is not a prohibition at all: it is the `OverdueInvoice` refinement and a scheduled rule.
-- **Be broken by a rule nobody asked for.** A scheduled rule, or one behind `after commit`, has no caller to receive a refusal. If it creates what a constraint consults, it is refused: `[V29] rule 'CancelUnpaid' creates a 'Cancellation' on Nightly with nobody asking, and the 'never' (Shipment where order is CancelledOrder) reads 'Cancellation', so the firing could be refused at every tick with no caller to tell; condition 'CancelUnpaid' so it cannot create a 'Cancellation' the prohibition forbids, put the books right within the firing, or retract the prohibition`. Deleting what a `never` reads is checked the same way.
-- **Read a field a rule assigns.** That makes it a guarantee, which the compiler cannot yet prove over assignments: `[V10] a 'never' reads 'Account.suspended', which rule 'ApplySuspend' assigns, so it is a guarantee that the rules keep it true, and the compiler cannot yet prove one over every assignment; read a field no rule assigns, or derive 'suspended' from the records the rule writes`. Derive the value from the records the rule creates, or prohibit on fields set at creation.
-- A record that arrived without an act, such as one the engineer loaded, is still checked at the next act that reaches it.
+A constraint may not do three things. A record that arrived without an act, such as one the engineer loaded, is still checked at the next act that reaches it.
+
+**Read the clock.** A constraint over a kept shape that reads `today` or `now` is refused, because the records could age into it with no act to refuse. "An invoice is never unpaid past its due date" is not a prohibition at all: it is the `OverdueInvoice` refinement and a scheduled rule.
+
+```velle refused
+act Invoice { due: Date }
+never (Invoice where due < today)
+```
+
+> [V30] never #1 (Invoice where due < today) over Invoice reads the clock — the books can age into the forbidden state with no act to refuse, and the clock has no caller: state it on a transient request, where the clock is read once at the moment of the act; record the decision as a field the prohibition reads instead of the clock; or retract it
+
+**Be broken by a rule nobody asked for.** A scheduled rule, or one behind `after commit`, has no caller to receive a refusal. If it creates what a constraint consults, it is refused. Deleting what a `never` reads is checked the same way.
+
+```velle refused
+act Order { total: decimal, paid: boolean }
+shape Cancellation { order: one Order }
+shape CancelledOrder = Order where exists Cancellation for this
+act Shipment { order: one Order }
+
+never (Shipment where order is CancelledOrder)
+
+shape UnpaidOrder = Order where not paid and not exists Cancellation for this
+
+rule CancelUnpaid when UnpaidOrder on Nightly {
+    Cancellation from { order: this }
+}
+```
+
+> [V29] rule 'CancelUnpaid' creates a 'Cancellation' on Nightly with nobody asking, and the 'never' (Shipment where order is CancelledOrder) reads 'Cancellation', so the firing could be refused at every tick with no caller to tell; condition 'CancelUnpaid' so it cannot create a 'Cancellation' the prohibition forbids, put the books right within the firing, or retract the prohibition
+
+**Read a field a rule assigns.** That makes it a guarantee, which the compiler cannot yet prove over assignments. Derive the value from the records the rule creates, or prohibit on fields set at creation.
+
+```velle refused
+act Account { balance: decimal, suspended: boolean }
+act Suspend { account: one Account }
+
+rule ApplySuspend when Suspend {
+    account.suspended = true
+}
+
+never (Account where balance >= 0 and suspended)
+```
+
+> [V10] a 'never' reads 'Account.suspended', which rule 'ApplySuspend' assigns, so it is a guarantee that the rules keep it true, and the compiler cannot yet prove one over every assignment; read a field no rule assigns, or derive 'suspended' from the records the rule writes
 
 ## 6. A refusal kept as a record
 
@@ -195,7 +247,26 @@ rule RecordDecline when (ProcessorVerdict where outcome in ["declined", "error"]
 }
 ```
 
-Anything else is refused. A word no answer names is refused by name: `[V18] a 'Review' whose 'outcome' is "error" can arrive and no rule or 'never' answers it, and it is transient, so it would be ignored with no record that it arrived; the answers name "approved" and "declined" of the three words of 'Outcome'. Answer "error" in a rule, or refuse it with 'never (Review where outcome == "error")'`. To refuse for several reasons, write one rule on the opposite condition whose reason field is an `if`.
+Anything else is refused. To refuse for several reasons, write one rule on the opposite condition whose reason field is an `if`. A word no answer names is refused by name:
+
+```velle refused
+Outcome is one of "approved", "declined", "error"
+
+act Charge { amount: decimal }
+transient act Review { charge: one Charge, outcome: Outcome }
+shape Approval { charge: one Charge }
+shape Decline { charge: one Charge }
+
+rule RecordApproval when (Review where outcome == "approved") {
+    Approval from { charge: charge }
+}
+
+rule RecordDecline when (Review where outcome == "declined") {
+    Decline from { charge: charge }
+}
+```
+
+> [V18] a 'Review' whose 'outcome' is "error" can arrive and no rule or 'never' answers it, and it is transient, so it would be ignored with no record that it arrived; the answers name "approved" and "declined" of the three words of 'Outcome'. Answer "error" in a rule, or refuse it with 'never (Review where outcome == "error")'
 
 ## 8. Who may commit an act
 
@@ -249,7 +320,29 @@ rule LogQuarantine when Quarantine by Staff? {
 - The first administrator, where hiring needs one, is created by the engineer outside the spec.
 - A role gate draws a contention advisory today. It does not block the spec.
 
-**Refused.** An optional actor on an act, `act Recall by Staff? { ... }`, does not parse. A field named like the bound actor is refused until `as` names the actor. `act Refund by Manager` with `act Staff` gives ``[F2] 'Refund by Manager' — the actor's shape is a `shape`, never an act: an act is an input, and the person who commits one is a record; declare 'Staff' as a shape and create its records with a rule``.
+**Refused.** An optional actor on an act does not parse:
+
+```velle refused
+shape Staff { name: text }
+act Recall by Staff? { reference: text }
+```
+
+> an act's actor is never absent: an act declared `by` takes one at every commit, and an act without `by` has none, found LIDENT('by')
+
+A field named like the bound actor is refused until `as` names the actor:
+
+```velle refused
+shape Staff { name: text, visible to anyone }
+act Recall by Staff {
+    reference: text
+    actor: text
+    visible to anyone
+}
+```
+
+> [F3] 'Recall' declares a field 'actor' and binds its actor under that name by default — name the actor: `act Recall by Staff as <name>`
+
+An actor whose shape is an act is refused too; the spelling and the message are in [language.md](language.md), §14.
 
 ## 9. Who may see a record
 
@@ -287,4 +380,16 @@ shape Product {
 - The clause goes on a base shape. A refinement is seen by whoever sees its base. A transient act is never read and needs none.
 - Visibility applies only when data is read: a query returns what the viewer may see, a fetch of a hidden record returns nothing, hidden fields come back absent. No rule, derived property, or prohibition depends on who is reading; a `never` may read a field the actor cannot see.
 
-**Refused.** Once a spec has any `by` or `visible to`, a readable shape with no clause and no default gives ``[V32] 'Refund' declares no visibility, and this spec has authorization — say who may see it: a `visible to <Shape> [where ...]` clause in its body, `visible to anyone` for a public one, or a spec-wide `visible to <Shape>` at the top of the spec``.
+**Refused.** Once a spec has any `by` or `visible to`, a readable shape with no clause and no default:
+
+```velle refused
+shape Staff {
+    name: text
+    role: text
+    visible to anyone
+}
+shape Manager = Staff where role == "manager"
+act Refund by Manager { amount: decimal }
+```
+
+> [V32] 'Refund' declares no visibility, and this spec has authorization — say who may see it: a `visible to <Shape> [where ...]` clause in its body, `visible to anyone` for a public one, or a spec-wide `visible to <Shape>` at the top of the spec

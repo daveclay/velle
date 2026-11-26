@@ -1,6 +1,6 @@
 # Relationships in depth
 
-Open this file for collections a rule changes, deleting a record others point at, parts that arrive with an act, a field that holds either of two shapes, a field several shapes share, and values found along a chain of records. The basics of `one` and `many` are in [language.md](language.md), §6. Every example compiles on its own.
+Open this file for collections a rule changes, deleting a record others point at, parts that arrive with an act, a field that holds either of two shapes, a field several shapes share, and values found along a chain of records. The basics of `one` and `many` are in [language.md](language.md), §6. Every example marked `velle` compiles on its own; one marked `velle refused` is refused with the messages quoted after it, and one marked `velle advisory` compiles with the advisory quoted after it ([language.md](language.md) says how the quotes are written).
 
 ## Contents
 
@@ -75,7 +75,20 @@ rule ApplyReassignment when ReassignInvoices {
 - The statement writes `customer` once on each invoice in the act's collection. The invoices leave the old customer's `invoices` by themselves.
 - A path may go through one `many` and stop: `invoices.customer` is allowed, `invoices.customer.name` is not.
 - The compiler prints a contention advisory for this rule: every commit that writes an invoice's customer takes turns. It does not block the spec ([time-and-repetition.md](time-and-repetition.md), §6).
-- Inside `for each`, assignments are refused: ``[V34] rule 'Tag' assigns inside `for each` — a block creates records; to write one field of every member of a collection, assign through the collection (`this.n = ...` on the collection path)``.
+- Inside `for each`, assignments are refused:
+
+```velle refused
+act Item { label: text, n: integer }
+act Batch { items: many Item, n: integer }
+
+rule Tag when Batch {
+    for each item in items {
+        this.n = 1
+    }
+}
+```
+
+> [V34] rule 'Tag' assigns inside `for each` — a block creates records; to write one field of every member of a collection, assign through the collection (`this.n = ...` on the collection path)
 
 ## 3. Deleting a record others point at
 
@@ -127,7 +140,25 @@ Other rules for `delete`:
 - Nothing is left behind: no tombstone, no `is deleted` test. To remember a deletion, create a record for it, copying the fields you need.
 - Delete records of current state, such as a customer or a listing. Keep records of things that happened.
 
-**Refused.** A rule conditioned on `is not held` that also points a required link at the same shape: `[V24] rule 'ApplyReplace' deletes a 'Employee' ('delete departing') on the condition 'departing is not held', and rule 'ApplyReplace' can point 'Shop.manager' at a 'Employee' in the same commit. The condition is read before the rules run, so it cannot see that reference: refuse the request with 'never (ReplaceManager where departing is held)', which is read when the commit ends, and drop the condition`.
+**Refused.** A rule conditioned on `is not held` that also points a required link at the same shape:
+
+```velle refused
+act Employee { name: text }
+act Shop { manager: one Employee }
+transient act ReplaceManager { shop: one Shop, departing: one Employee, successor: one Employee }
+shape Refusal { note: text }
+
+rule ApplyReplace when (ReplaceManager where departing is not held) {
+    shop.manager = successor
+    delete departing
+}
+
+rule RefuseReplace when (ReplaceManager where departing is held) {
+    Refusal from { note: "held" }
+}
+```
+
+> [V24] rule 'ApplyReplace' deletes a 'Employee' ('delete departing') on the condition 'departing is not held', and rule 'ApplyReplace' can point 'Shop.manager' at a 'Employee' in the same commit. The condition is read before the rules run, so it cannot see that reference: refuse the request with 'never (ReplaceManager where departing is held)', which is read when the commit ends, and drop the condition
 
 ## 4. Parts that arrive with an act: `with`
 
@@ -227,7 +258,33 @@ rule NotifyAuthor when Comment {
 - A rule cannot create a union, and `and` across two base shapes is always empty.
 - `or` between refinements of two shapes, `shape Notable = LongPost or Captioned`, can be a rule's condition but not a field's type.
 
-**Refused.** Reading a field each shape declares for itself without narrowing: `[F1] 'views' is declared on 'Post' and 'Photo' separately, so it is not a member of 'Content'; read it after narrowing, 'if this is Post then this.views else ...', or declare 'views' once on a shape they take with 'is'`. Creating one: `[F1] rule 'Make' creates 'Content', which has no records of its own: a record of it is a Post or a Photo; create one of them`.
+**Refused.** Reading a field each shape declares for itself without narrowing:
+
+```velle refused
+act Post { body: text, views: integer }
+act Photo { caption: text, views: integer }
+
+shape Content = Post or Photo {
+    seen: integer = views
+}
+```
+
+> [F1] 'views' is declared on 'Post' and 'Photo' separately, so it is not a member of 'Content'; read it after narrowing, 'if this is Post then this.views else ...', or declare 'views' once on a shape they take with 'is'
+
+Creating a union:
+
+```velle refused
+act Post { body: text }
+act Photo { caption: text }
+shape Content = Post or Photo
+act Ping { note: text }
+
+rule Make when Ping {
+    Content from { }
+}
+```
+
+> [F1] rule 'Make' creates 'Content', which has no records of its own: a record of it is a Post or a Photo; create one of them
 
 ## 7. A field several shapes share: `is`
 
@@ -260,7 +317,23 @@ shape Prolific = Contribution where count(author.contributions) > 10
 - `Content = Post or Photo` now shares `author`, so `target.author` reads without narrowing.
 - An act cannot be taken by other shapes; declare the shared shape with `shape`.
 
-**Refused.** A field both declared and taken: `[F3] 'SiteVisit' declares 'due' and takes it from 'Dated'; keep one of the two`. A taken shape declared as an act: `[F3] 'Dated' is declared an act, and 'SiteVisit' is Dated. A shape other shapes take has no records of its own, so it cannot be committed; declare it 'shape Dated'`.
+**Refused.** A field both declared and taken:
+
+```velle refused
+shape Dated { due: Date }
+act SiteVisit is Dated { due: Date, note: text }
+```
+
+> [F3] 'SiteVisit' declares 'due' and takes it from 'Dated'; keep one of the two
+
+A taken shape declared as an act:
+
+```velle refused
+act Dated { due: Date }
+act SiteVisit is Dated { note: text }
+```
+
+> [F3] 'Dated' is declared an act, and 'SiteVisit' is Dated. A shape other shapes take has no records of its own, so it cannot be committed; declare it 'shape Dated'
 
 ## 8. Walks: values along a chain
 
@@ -290,4 +363,18 @@ never (Member where this in upline) tolerates contention
 - `walk recruits` follows a derived collection. `for 2 steps` cuts it off. A walk's set is filtered in parentheses, `(walk recruits where tier == "gold")`, and counted through a named property; `count(walk recruits where ...)` does not parse.
 - The `never` says nobody is in their own upline. A walk reads every record it can reach, so the compiler warns unless the declaration says `tolerates contention` ([time-and-repetition.md](time-and-repetition.md), §6). A `never` over a walk is for a relationship no rule assigns.
 
-**Refused.** `walk recruits until gold` over a `many` gives ``[F2] 'walk recruits until gold' — 'until' walks a `one`: through the `many` 'recruits' two records at the same distance may both satisfy the condition, and "the nearest" has no single answer; walk a `one`, or declare the set with `walk recruits` and select from it with first(... by ...)``.
+**Refused.** `until` over a `many`:
+
+```velle refused
+Tier is one of "basic", "gold"
+
+act Member {
+    referrer: one Member?
+    tier: Tier
+    gold: boolean = tier == "gold"
+    recruits: many Member = (Member where referrer == this)
+    nearestGold: one Member? = walk recruits until gold
+}
+```
+
+> [F2] 'walk recruits until gold' — 'until' walks a `one`: through the `many` 'recruits' two records at the same distance may both satisfy the condition, and "the nearest" has no single answer; walk a `one`, or declare the set with `walk recruits` and select from it with first(... by ...)

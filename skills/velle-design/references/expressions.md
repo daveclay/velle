@@ -1,6 +1,6 @@
 # Conditions and formulas
 
-Open this file when a condition after `where`, inside `never (...)`, or a formula after `=` needs more than a plain comparison. A condition is a formula whose value is `true` or `false`, so everything here works in both places. Every example compiles on its own.
+Open this file when a condition after `where`, inside `never (...)`, or a formula after `=` needs more than a plain comparison. A condition is a formula whose value is `true` or `false`, so everything here works in both places. Every example marked `velle` compiles on its own; one marked `velle refused` is refused with the messages quoted after it, and one marked `velle advisory` compiles with the advisory quoted after it ([language.md](language.md) says how the quotes are written).
 
 ## Contents
 
@@ -43,10 +43,34 @@ shape Unexplained = Invoice where note is empty
 - `contains`, `starts with`, `ends with` test text and are case-sensitive. `contains` also asks whether a `many` of values holds a value.
 - `like` takes a pattern: `%` any run of characters, `_` one character, `\` escapes either.
 - `matches` takes a regular expression the whole text must match. A backslash in a text is written twice, so the expression `\.` is `"\\."`. A malformed expression is refused when the spec compiles.
-- A comparison never reads a text as a number or date. `value > limit` with `value: text` and `limit: decimal` gives `[F2] 'value > limit' — compares the text 'value' with a decimal; a text is not compared as a decimal. Write number(value), which is absent when the text is not a number, or declare 'value' as a decimal on a shape of its own`. A `Date` beside a `DateTime` is refused the same way.
+- A comparison never reads a text as a number or date, as the first refusal below shows. A `Date` beside a `DateTime` is refused the same way.
 - Words declared with `is one of` compare with `==`, `!=`, `in` only.
 
-**Refused.** A collection beside one value: `inheritedBy == this` gives `[F2] 'inheritedBy == this' — compares the collection 'inheritedBy' with a record; a collection is not compared with one value. Write 'this in inheritedBy' to ask whether it is one of them`, and `tags == name` gives the same message ending `Write 'name in tags'`.
+**Refused.** A text compared with a number:
+
+```velle refused
+act Reading { value: text, limit: decimal }
+shape High = Reading where value > limit
+```
+
+> [F2] 'value > limit' — compares the text 'value' with a decimal; a text is not compared as a decimal. Write number(value), which is absent when the text is not a number, or declare 'value' as a decimal on a shape of its own
+
+A collection beside one value:
+
+```velle refused
+act Member {
+    name: text
+    heir: one Member?
+    tags: many text
+    inheritedBy: many Member = (Member where heir == this)
+}
+shape SelfHeir = Member where inheritedBy == this
+shape SelfTagged = Member where tags == name
+```
+
+> [F2] 'inheritedBy == this' — compares the collection 'inheritedBy' with a record; a collection is not compared with one value. Write 'this in inheritedBy' to ask whether it is one of them
+
+> [F2] 'tags == name' — compares the collection 'tags' with a text; a collection is not compared with one value. Write 'name in tags' to ask whether it is one of them
 
 ## 2. Tests with `is`
 
@@ -62,7 +86,16 @@ shape Unexplained = Invoice where note is empty
 
 - A membership test needs the record and the refinement to share a base shape, or the named shape to be part of the record's union ([relationships.md](relationships.md)). Otherwise it is refused, not quietly false.
 - A membership test **narrows**: after `x is ArchivedInvoice` earlier in an `and` chain, or in the `then` branch of an `if`, the rest may read `ArchivedInvoice`'s own properties through `x`.
-- `is held` takes one record of a kept shape. `seller.name is held` gives `[F2] 'seller.name is held' — 'is held' tests one record of a kept shape, and 'seller.name' is not one`.
+- `is held` takes one record of a kept shape:
+
+```velle refused
+act Seller { name: text }
+act Payout { seller: one Seller, amount: integer }
+act Listing { seller: one Seller, title: text }
+shape HeldListing = Listing where seller.name is held
+```
+
+> [F2] 'seller.name is held' — 'is held' tests one record of a kept shape, and 'seller.name' is not one
 
 ## 3. Related records: `exists`
 
@@ -79,9 +112,19 @@ shape BigReferrer = Customer where exists (Referral where referrer == this and r
 ```
 
 - `exists Receipt for this` asks whether any `Receipt` points at this record. `for` picks the one field of `Receipt` whose type matches.
-- When two fields match, as `referrer` and `referee` do, write the general form with `where` and name the field. `exists Referral for this` there gives `[V13] exists Referral for ... — 'for' matches 2 fields of 'Referral' (needs exactly one; name the field or use the where-filtered form)`.
+- When two fields match, as `referrer` and `referee` do, write the general form with `where` and name the field.
 - The general form also adds conditions on the related record.
 - Inside the nested `where`, bare names are fields of `Referral`. `this` is still the customer.
+
+**Refused.** `for` when two fields match:
+
+```velle refused
+act Customer { name: text }
+act Referral { referrer: one Customer, referee: one Customer }
+shape Referred = Customer where exists Referral for this
+```
+
+> [V13] exists Referral for ... — 'for' matches 2 fields of 'Referral' (needs exactly one; name the field or use the where-filtered form)
 
 ## 4. Counting, adding up, largest and smallest
 
@@ -125,7 +168,17 @@ act Visit {
 - An equality shows a value present only when the other side cannot be absent. `!=` and `not in` show nothing.
 - An absent value equals no present value and is in nothing.
 
-**Refused.** `customer.name` with `customer: one Customer?` gives `[V11] 'customer.name' reads through 'customer', which may be absent; test 'customer is some' first, or write 'customer?.name' to read absent when it is`.
+**Refused.** A plain `.` through a value that may be absent:
+
+```velle refused
+act Customer { name: text }
+act Invoice {
+    customer: one Customer?
+    customerName: text = customer.name
+}
+```
+
+> [V11] 'customer.name' reads through 'customer', which may be absent; test 'customer is some' first, or write 'customer?.name' to read absent when it is
 
 ## 6. Picking one record: `latest`, `first`, `(Shape for x)`, keys
 
@@ -166,12 +219,55 @@ act Summary {
 - A filter that names every field of a key, `(Plot where key == this.plotKey)`, is one record or absent, with no `by`. Here the `never` refuses a key no plot has, so the rule always finds one.
 - Two records committed in one transaction have the same commit timestamp. To tell them apart, order by a field the business supplies, such as `sequence`.
 
-**Refused.**
+**Refused.** A selection with no order:
 
-- `latest(payments).amount` gives `latest(...) requires 'by <property>' — the ordering datum is the author's statement, never implicit`.
-- `(Customer for customerEmail)` with a text after `for` gives `[F2] '(Customer for customerEmail)' — the subject after 'for' is a record, and 'customerEmail' is a text; to find the record by a value, select it: first(Customer where <field> == customerEmail by <field>)`.
-- `opened: Date initially first(patient.visits by seenOn).seenOn` gives `[F2] 'Chart.opened' is declared a Date and may start absent: 'first(patient.visits by seenOn)' may match nothing; declare it 'opened: Date?', or start it where a test shows the selection matches, such as 'exists (patient.visits)'`.
-- `?.` directly after a selection is an advisory, not a refusal: the plain dot already reads absent.
+```velle refused
+act Invoice {
+    total: decimal
+    lastAmount: decimal? = latest(payments).amount
+}
+act Payment { invoice: one Invoice, amount: decimal, receivedOn: DateTime }
+```
+
+> latest(...) requires 'by <property>' — the ordering datum is the author's statement, never implicit, found RPAREN(')')
+
+A text after `for`:
+
+```velle refused
+act Customer { email: text unique }
+act Order {
+    customerEmail: text
+    customer: one Customer? = (Customer for customerEmail)
+}
+```
+
+> [F2] '(Customer for customerEmail)' — the subject after 'for' is a record, and 'customerEmail' is a text; to find the record by a value, select it: first(Customer where <field> == customerEmail by <field>)
+
+A required starting value through a selection that may match nothing:
+
+```velle refused
+act Patient { name: text }
+act Visit { patient: one Patient, seenOn: Date }
+act Chart {
+    patient: one Patient
+    opened: Date initially first(patient.visits by seenOn).seenOn
+}
+```
+
+> [F2] 'Chart.opened' is declared a Date and may start absent: 'first(patient.visits by seenOn)' may match nothing; declare it 'opened: Date?', or start it where a test shows the selection matches, such as 'exists (patient.visits)'
+
+`?.` directly after a selection is an advisory, not a refusal: the plain dot already reads absent.
+
+```velle advisory
+act Invoice { total: decimal }
+act Payment { invoice: one Invoice, amount: decimal, receivedOn: DateTime }
+act Summary {
+    invoice: one Invoice
+    firstAmount: decimal? = first(invoice.payments by receivedOn)?.amount
+}
+```
+
+> [A10] 'first(invoice.payments by receivedOn)?.amount' — the '?' after 'first(invoice.payments by receivedOn)' adds nothing: a read through a selection is absent when the selection matched nothing; write 'first(invoice.payments by receivedOn).amount'
 
 ## 7. Naming a level with `as`
 
@@ -200,8 +296,21 @@ act Report {
 - `if p then a else b` always has `else`, and chains with `else if`. Each branch reaches to the end of the text: `if p then 1 else q == 2` is `if p then 1 else (q == 2)`.
 - In the `then` branch, the tests in `p` narrow as they do in an `and` chain. Over a union of two shapes, the `else` branch of `x is A` is narrowed to the other shape.
 - A condition is a `boolean` value wherever a value is written: `onTime: boolean = paidOn <= dueBy`, or `flagged: quantity > 100` in a `from` block.
-- A comparison used as an operand is parenthesized: `ok: boolean = (a < b) == expected`. Without the parentheses it does not parse: `expected LIDENT, found EQ('==')`.
+- A comparison used as an operand is parenthesized: `ok: boolean = (a < b) == expected`.
 - `not` binds tightest, then `and`, then `or`.
+
+**Refused.** A comparison used as an operand without parentheses does not parse:
+
+```velle refused
+act Check {
+    a: integer
+    b: integer
+    expected: boolean
+    ok: boolean = a < b == expected
+}
+```
+
+> expected LIDENT, found EQ('==')
 
 ## 9. Dates, times, and durations
 

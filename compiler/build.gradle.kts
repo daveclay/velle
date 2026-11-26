@@ -30,6 +30,8 @@ tasks.test {
     useJUnitPlatform()
     // SkillJarTest runs skills/velle-design/scripts/velle, which runs the jar
     dependsOn("skillJar")
+    // SkillReferenceTest checks the skill's language reference, so an edit to it reruns the tests
+    inputs.dir(rootProject.layout.projectDirectory.dir("skills/velle-design/references"))
 }
 
 kotlin {

@@ -1,6 +1,6 @@
 # Time, repetition, and running totals
 
-Open this file for rules on a schedule or behind `after commit`, for making a rule run once per record, for values a rule keeps by adding to them, for reads that make commits take turns, and for choosing how to represent a status. The basics of `on` and `after commit` are in [language.md](language.md), §11. Every example compiles on its own.
+Open this file for rules on a schedule or behind `after commit`, for making a rule run once per record, for values a rule keeps by adding to them, for reads that make commits take turns, and for choosing how to represent a status. The basics of `on` and `after commit` are in [language.md](language.md), §11. Every example marked `velle` compiles on its own; one marked `velle refused` is refused with the messages quoted after it, and one marked `velle advisory` compiles with the advisory quoted after it ([language.md](language.md) says how the quotes are written).
 
 ## Contents
 
@@ -37,7 +37,20 @@ rule RestoreService when (Member where suspended and balance >= 0) on Nightly {
 - If one member's firing fails, the others still land. The failed member still matches, so the next tick picks it up.
 - A rule `on commit` fires for each record whose membership changed at that commit. With `on commit, Nightly` it does both.
 - A commit-triggered rule reacts to every change; a scheduled rule reacts to what is still true when it runs. A balance that dips below zero at 09:00 and recovers at 17:00 is never seen by the nightly rule. Which is right is a business choice.
-- A rule whose subject is a transient act may not run on a schedule or `after commit`. `rule P when Ping on Daily` gives `[V17] rule 'P' — transient act 'Ping' is gone before any 'after commit' firing or tick runs; handle it at its commit, and hang asynchronous work off a durable intent the handling rule creates`.
+- A rule whose subject is a transient act may not run on a schedule or `after commit`.
+
+**Refused.** A transient act's rule on a schedule:
+
+```velle refused
+transient act Ping { note: text }
+shape Pong { note: text }
+
+rule P when Ping on Daily {
+    Pong from { note: note }
+}
+```
+
+> [V17] rule 'P' — transient act 'Ping' is gone before any 'after commit' firing or tick runs; handle it at its commit, and hang asynchronous work off a durable intent the handling rule creates
 
 ## 2. Run-once guards
 
@@ -83,7 +96,26 @@ rule ApplyDeposit when UnappliedDeposit after commit, Hourly {
 | customer, ever | `AccountFlag where not exists (FlagNotification where customer == this.customer)` |
 | invoice, at most every three days | `OverdueInvoice where not exists (Reminder where invoice == this and sentOn > today - 3 days)` |
 
-**Refused.** A guarded rule whose body does not make its guard false: `[V2] rule 'ApplyDeposit' never leaves its trigger state, so it would fire again for the same record; its body must assign 'applied' to make its own condition false`.
+**Refused.** A guarded rule whose body does not make its guard false:
+
+```velle refused
+act Account { balance: decimal }
+
+act Deposit {
+    account: one Account
+    amount: decimal
+    applied: boolean initially false
+}
+
+shape DepositNote { deposit: one Deposit }
+shape UnappliedDeposit = Deposit where not applied
+
+rule ApplyDeposit when UnappliedDeposit after commit, Hourly {
+    DepositNote from { deposit: this }
+}
+```
+
+> [V2] rule 'ApplyDeposit' never leaves its trigger state, so it would fire again for the same record; its body must assign 'applied' to make its own condition false
 
 ## 3. `after commit`: work outside the request's transaction
 
@@ -115,10 +147,39 @@ rule ResolveCharge when UnresolvedCharge after commit, Hourly {
 - A rule whose effect the business does not mind losing, such as an analytics ping, declares `tolerates loss` in its header: `rule PingAnalytics when Visit tolerates loss { ... }`.
 - A rule behind `after commit` or on a schedule may not declare `by` for the actor; it reads the actor a kept act stored, `this.actor` ([prohibitions.md](prohibitions.md), §8).
 
-**Refused.**
+**Refused.** `after commit` with no guard:
 
-- `after commit` with no guard: `[V4] rule 'Confirm' fires 'after commit', in a transaction of its own, so a firing can be lost between the commit and the rule, and nothing would find it; trigger the rule on a guard, a condition its body makes false by creating a record or setting a field, and add a backup schedule beside 'after commit'`.
-- A guard but no backup: `[V4] rule 'Apply' fires 'after commit' with a guard but no backup schedule, so a lost firing would never be retried; add a schedule beside it, 'after commit, Hourly'`.
+```velle refused
+act Order { total: decimal }
+shape Confirmation { order: one Order, sentOn: DateTime }
+
+rule Confirm when Order after commit {
+    Confirmation from { order: this, sentOn: now }
+}
+```
+
+> [V4] rule 'Confirm' fires 'after commit', in a transaction of its own, so a firing can be lost between the commit and the rule, and nothing would find it; trigger the rule on a guard, a condition its body makes false by creating a record or setting a field, and add a backup schedule beside 'after commit'
+
+A guard but no backup:
+
+```velle refused
+act Account { balance: decimal }
+
+act Deposit {
+    account: one Account
+    amount: decimal
+    applied: boolean initially false
+}
+
+shape UnappliedDeposit = Deposit where not applied
+
+rule Apply when UnappliedDeposit after commit {
+    account.balance = account.balance + amount
+    this.applied = true
+}
+```
+
+> [V4] rule 'Apply' fires 'after commit' with a guard but no backup schedule, so a lost firing would never be retried; add a schedule beside it, 'after commit, Hourly'
 
 ## 4. Running totals and `tolerates`
 
@@ -163,7 +224,18 @@ rule CountVisit when Visit on commit, Hourly {
 - `largest` uses `max`, which gives the same answer however often it runs. It needs nothing.
 - Write `tolerates` only for a hazard the rule meets. The compiler does not always catch one that covers nothing.
 
-**Refused.** `[V8] 'Account.balance' is computed from its own value by rule 'ApplyDeposit', which can fire more than once for one record, so the same record could be folded in twice; guard the rule so it fires once per record, derive 'balance' from the records instead, add a scheduled rule that recomputes it, or declare 'balance' with 'tolerates duplication'`.
+**Refused.** A running total folded by a rule with a backup schedule, unguarded:
+
+```velle refused
+act Account { balance: decimal }
+act Deposit { account: one Account, amount: decimal }
+
+rule ApplyDeposit when Deposit on commit, Hourly {
+    account.balance = account.balance + amount
+}
+```
+
+> [V8] 'Account.balance' is computed from its own value by rule 'ApplyDeposit', which can fire more than once for one record, so the same record could be folded in twice; guard the rule so it fires once per record, derive 'balance' from the records instead, add a scheduled rule that recomputes it, or declare 'balance' with 'tolerates duplication'
 
 ## 5. A running value in the order the business means
 
@@ -189,7 +261,21 @@ shape Standing = Account where exists Payment for this {
 - `streakAfter` reads itself one step back. A late payment slots into place by `paidOn`, and every later streak re-derives.
 - Two payments on one date tie. If the result depends on which comes first, order by a further field the business supplies.
 
-**Refused.** `<=` in `previous` gives `[V14] 'Payment.streakAfter' reads itself on its 'previous', so the chain through 'previous' must end. 'previous' picks by 'paidOn <= this.paidOn', which can pick a record with the same 'paidOn', so the chain can come back to this record; write 'paidOn < this.paidOn'`.
+**Refused.** `<=` in `previous`:
+
+```velle refused
+act Account { name: text }
+
+act Payment {
+    account: one Account
+    onTime: boolean
+    paidOn: Date
+    previous: one Payment? = latest(Payment where account == this.account and paidOn <= this.paidOn by paidOn)
+    streakAfter: integer = if not onTime then 0 else if previous is some then previous.streakAfter + 1 else 1
+}
+```
+
+> [V14] 'Payment.streakAfter' reads itself on its 'previous', so the chain through 'previous' must end. 'previous' picks by 'paidOn <= this.paidOn', which can pick a record with the same 'paidOn', so the chain can come back to this record; write 'paidOn < this.paidOn'
 
 ## 6. Commits that take turns: `tolerates contention`
 
@@ -207,7 +293,15 @@ never (Booking where count(Booking where slot == this.slot) > 4)
 
 - The waitlist holds twenty names at most, whoever they are. Two people joining at once must be decided one after the other. `tolerates contention` says the wait is the requirement, and the warning stops.
 - The cap on bookings is per slot, so the read is tied to the commit's own slot and no warning arises.
-- Without the clause the advisory reads: `[A5] every commit touching Waitlist joins a single queue. `Waitlist` reads every Waitlist and correlates to no key (never #1), so any two such commits conflict. State the policy:` followed by the ways out: tie the read to the commit, move the rule to a schedule, or declare `tolerates contention`.
+- Without the clause the compiler advises, and goes on to name the ways out: tie the read to the commit, move the rule to a schedule, or declare `tolerates contention`.
+
+```velle advisory
+act Waitlist { slot: DateTime, name: text }
+
+never (Waitlist where count(Waitlist) > 20)
+```
+
+> [A5] every commit touching Waitlist joins a single queue. `Waitlist` reads every Waitlist and correlates to no key (never #1), so any two such commits conflict. State the policy: ...
 - The clause goes at the end of a `never` or `requires`, or in a rule's header after the trigger: `rule ... when ... on commit tolerates contention { ... }`.
 - The advisory appears often, for example on role gates and on reads through a reference that has no key. It never blocks a spec. Adding `tolerates contention` is a business decision; ask before writing it.
 

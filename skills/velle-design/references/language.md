@@ -2,7 +2,7 @@
 
 Velle is a language for writing down how a business works: what it keeps, what arrives from outside, what follows when things change, and what is never allowed. A spec is one `.velle` file. The compiler reads the whole spec as one unit, refuses anything whose meaning is undefined, and proves what it can about the rest. This file teaches each construct in the order an author meets it.
 
-Every example compiles on its own. Compiler messages are quoted as printed, minus the pointer into the full documentation that some end with. Besides refusals the compiler can print advisories: findings about a spec that compiles, which never block it. The most frequent, a contention advisory marked `[A5]`, appears on many ordinary specs, role gates among them ([time-and-repetition.md](time-and-repetition.md), §6).
+Every example compiles on its own. A block marked `velle refused` is a spelling the compiler refuses, and the lines quoted after it are every message it prints, minus the pointers into the full documentation that some carry and, for a spelling that does not parse, the line and column. A block marked `velle advisory` compiles, and the line after it quotes the advisory it draws; a quote ending in `...` is the start of a longer message. Besides refusals the compiler can print advisories: findings about a spec that compiles, which never block it. The most frequent, a contention advisory marked `[A5]`, appears on many ordinary specs, role gates among them ([time-and-repetition.md](time-and-repetition.md), §6).
 
 ## Contents
 
@@ -140,16 +140,50 @@ never (Order where length(cardNumber) < 12)
 
 **Every transient request gets an answer.** A transient act that nothing answers in some situation would vanish without trace, so the compiler requires an answer for every arrival. A rule or `never` over the bare act answers all. Two answers with opposite conditions, `P` and `not P`, answer all. Answers that test a field of fixed words (§4) with `==` or `in` answer all when they name every word.
 
-**Refused.** A transient act answered only in part, `rule RecordPayment when (SubmitPayment where amount > 0) { ... }` and nothing else:
+**Refused.** A transient act answered only in part:
+
+```velle refused
+act Invoice { total: decimal }
+transient act SubmitPayment { invoice: one Invoice, amount: decimal }
+shape Payment { invoice: one Invoice, amount: decimal }
+
+rule RecordPayment when (SubmitPayment where amount > 0) {
+    Payment from { invoice: invoice, amount: amount }
+}
+```
 
 > [V18] a 'SubmitPayment' can arrive that no rule or 'never' answers, and it is transient, so an unanswered one would be ignored with no record that it arrived. The compiler sees every 'SubmitPayment' answered when a rule or a 'never' is written over the bare 'SubmitPayment', or when two answers have conditions that are each other's opposite, 'P' and 'not P'; add a rule over 'SubmitPayment' with no condition, refuse the rest with 'never (SubmitPayment where not P)', or write one rule on the opposite condition whose reason is a conditional value
 
 Accepted: `never (SubmitPayment where amount <= 0)` and `rule RecordPayment when SubmitPayment`, as in §1. Keeping the refusal as a record instead is in [prohibitions.md](prohibitions.md).
 
-**Also refused.**
+**Also refused.** A rule over a shape nothing creates:
 
-- A rule over a shape nothing creates. With `shape Invoice { due: Date }` and no rule creating invoices, `rule Remind when Invoice { ... }` gives `[V3] rule 'Remind' can never fire — no act declaration, rule effect, or tick in the spec can affect its condition`. Make it an `act`, or write the rule that creates it.
-- An assignment in a shape body, `customer.email = corrected`, does not parse: `expected COLON, found DOT('.')`. Assignments belong in rules.
+```velle refused
+shape Invoice { due: Date }
+shape Reminder { invoice: one Invoice, sentOn: Date }
+
+rule Remind when Invoice {
+    Reminder from { invoice: this, sentOn: today }
+}
+```
+
+> [V3] rule 'Remind' can never fire — no act declaration, rule effect, or tick in the spec can affect its condition
+
+Make it an `act`, or write the rule that creates it.
+
+An assignment in a shape or act body does not parse. Assignments belong in rules.
+
+```velle refused
+shape Customer { email: text }
+
+act CorrectEmail {
+    customer: one Customer
+    corrected: text
+    customer.email = corrected
+}
+```
+
+> expected COLON, found DOT('.')
 
 ## 4. Field types
 
@@ -187,12 +221,46 @@ act Invoice {
 - `notes: many text tolerates duplication` keeps every value in the order given, repeats included.
 - `"INV-${number}"` is a text built from other values. An absent piece makes the whole text absent, so `poLabel` is `text?`.
 
-**Refused.**
+**Refused.** `+` between texts. Write `"${first} ${last}"`.
 
-- `full: text = first + " " + last` gives `[F2] 'first + " "' — '+' is not defined on a text; a text made from other values is a text literal with pieces, "${first} "`. Write `"${first} ${last}"`.
-- `status == "payed"` gives `[F2] '"payed"' — 'Status' rejects this constant: "payed" is not one of "open", "paid", "void"`.
-- `priority >= "normal"` gives `[F2] 'priority >= "normal"' — the words of 'Priority' have no order, so '>=' is not defined on them; compare with '==', '!=', or 'in'`. Write `priority in ["normal", "high"]`, or derive a number with `if`.
-- `customer: Customer` gives ``[F1] 'Invoice.customer': 'Customer' is a shape; a field holding a record is `one Customer` or `many Customer` ``.
+```velle refused
+act Person {
+    first: text
+    last: text
+    full: text = first + " " + last
+}
+```
+
+> [F2] 'first + " "' — '+' is not defined on a text; a text made from other values is a text literal with pieces, "${first} "
+
+A word the type does not have:
+
+```velle refused
+Status is one of "open", "paid", "void"
+act Invoice { status: Status }
+shape Settled = Invoice where status == "payed"
+```
+
+> [F2] '"payed"' — 'Status' rejects this constant: "payed" is not one of "open", "paid", "void"
+
+An order between words. Write `priority in ["normal", "high"]`, or derive a number with `if`.
+
+```velle refused
+Priority is one of "low", "normal", "high"
+act Ticket { priority: Priority }
+shape Pressing = Ticket where priority >= "normal"
+```
+
+> [F2] 'priority >= "normal"' — the words of 'Priority' have no order, so '>=' is not defined on them; compare with '==', '!=', or 'in'
+
+A shape's name as a field's type:
+
+```velle refused
+act Customer { name: text }
+act Invoice { customer: Customer }
+```
+
+> [F1] 'Invoice.customer': 'Customer' is a shape; a field holding a record is `one Customer` or `many Customer`
 
 **Types an engineer adds.** A type such as `Money`, or a function, may come from a library the system is built with. The spec writes it like any other type, `price: Money`, with no declaration, and may do with it only what the library declares. When two libraries register one name, or the spec wants another name, a line at the top picks or renames it: `uses velle.finance.Money`, `uses velle.finance.Money as Cash`, `uses velle.finance.roundToCents as cents`. An added type is one value, never a concept with parts: an amount and its currency are two fields of a shape. A spec that uses one compiles only where its library is present.
 
@@ -222,7 +290,26 @@ rule OpenInvoice when BillCustomer {
 - Every record has an `id` without declaring it. It supports `==` only and has no order. A business number is a field of its own.
 - `issued: boolean = false` would be a formula that is always false (§7). A stored starting value is `initially`.
 
-**Refused.** `profile.updatedAt = now` gives `[F3] rule 'ApplyTouch' assigns Profile.updatedAt — a timestamp field (commit metadata) is never assignable`. A field named `id` gives `[F3] 'Customer.id' — 'id' is reserved`.
+**Refused.** Assigning a timestamp:
+
+```velle refused
+act Profile { name: text, updatedAt: timestamp on update }
+act Touch { profile: one Profile }
+
+rule ApplyTouch when Touch {
+    profile.updatedAt = now
+}
+```
+
+> [F3] rule 'ApplyTouch' assigns Profile.updatedAt — a timestamp field (commit metadata) is never assignable
+
+A field named `id`:
+
+```velle refused
+act Customer { id: text, name: text }
+```
+
+> [F3] 'Customer.id' — 'id' is reserved
 
 ## 6. Relationships: `one` and `many`
 
@@ -253,10 +340,24 @@ act Student {
 - A link with data of its own, such as a grade, is a shape with a `one` field to each end.
 - A required `one` link **holds** its target: the target cannot be deleted while the link exists. `seller: one Seller? initially required` must be given at creation and goes absent if the seller is deleted.
 
-**Refused.**
+**Refused.** Both sides of one relationship declared:
 
-- Both sides, `invoices: many Invoice` on `Customer` beside `customer: one Customer` on `Invoice`, give ``[V19] 'Customer.invoices: many Invoice' and 'Invoice.customer: one Customer' declare both sides — two owners of one edge set, or two distinct relationships; drop one side (the inverse is inferred), or make the collection a derived view (`invoices: many Invoice = (...)`)``.
-- A link to a refinement, `invoice: one OpenInvoice`, gives `[F2] 'Reminder.invoice' — relationships target base shapes, not refinements: a field type is fixed at the write, a membership drifts after it. State the condition on the act that creates 'Reminder': 'Reminder requires invoice to be OpenInvoice', or a gate refinement`.
+```velle refused
+act Customer { name: text, invoices: many Invoice }
+act Invoice { customer: one Customer }
+```
+
+> [V19] 'Customer.invoices: many Invoice' and 'Invoice.customer: one Customer' declare both sides — two owners of one edge set, or two distinct relationships; drop one side (the inverse is inferred), or make the collection a derived view (`invoices: many Invoice = (...)`)
+
+A link to a refinement:
+
+```velle refused
+act Invoice { balance: decimal }
+shape OpenInvoice = Invoice where balance > 0
+act Reminder { invoice: one OpenInvoice }
+```
+
+> [F2] 'Reminder.invoice' — relationships target base shapes, not refinements: a field type is fixed at the write, a membership drifts after it. State the condition on the act that creates 'Reminder': 'Reminder requires invoice to be OpenInvoice', or a gate refinement
 
 ## 7. Derived properties: `=`
 
@@ -290,11 +391,41 @@ act Payment {
 - `if p then a else b` always has `else`. Chain with `else if`.
 - A value up a chain of records, "everyone above me", is a walk: `upline: many Member = walk referrer` ([relationships.md](relationships.md)).
 
-**Refused.**
+**Refused.** Assigning a derived property. Commit the record the formula reads, such as a write-off payment.
 
-- `invoice.balance = 0` in a rule gives `[F3] rule 'ApplyWriteOff' assigns Invoice.balance — a derived property is never assignable`. Commit the record the formula reads, such as a write-off payment.
-- `label: text = if balance > 0 then "owing"` gives `expected 'else'`.
-- `label: text = customer.nickname` with `nickname: text?` gives `[F2] 'Invoice.label' is declared a text and may be absent; declare it 'label: text?', or test the value with 'is some' first`.
+```velle refused
+act Invoice { total: decimal, balance: decimal = total }
+act WriteOff { invoice: one Invoice }
+
+rule ApplyWriteOff when WriteOff {
+    invoice.balance = 0
+}
+```
+
+> [F3] rule 'ApplyWriteOff' assigns Invoice.balance — a derived property is never assignable
+
+An `if` without `else`:
+
+```velle refused
+act Invoice {
+    balance: decimal
+    label: text = if balance > 0 then "owing"
+}
+```
+
+> expected 'else', found RBRACE('}')
+
+A required property from a value that may be absent:
+
+```velle refused
+act Customer { nickname: text? }
+act Invoice {
+    customer: one Customer
+    label: text = customer.nickname
+}
+```
+
+> [F2] 'Invoice.label' is declared a text and may be absent; declare it 'label: text?', or test the value with 'is some' first
 
 ## 8. Refinements: a named condition
 
@@ -326,10 +457,33 @@ shape ActionableOverdue = OverdueInvoice and not ArchivedInvoice
 - `and`, `or`, `not` compose refinements. `not` binds tightest, then `and`, then `or`.
 - A refinement's own properties are read only where the record is known to be a member: after `x is ArchivedInvoice` earlier in the same `and` chain or `if`, or in a rule over the refinement.
 
-**Refused.**
+**Refused.** `=` in a condition. Write `Invoice where paid`.
 
-- `Invoice where paid = true` gives `expected a declaration (shape/act/rule/never/requires/visible/uses), found ASSIGN('=')`. Write `Invoice where paid`.
-- A rule writing a frozen field while the record may be a member, `rule ApplyDueChange when ChangeDueDate { invoice.due = newDue }`, gives `[V5] rule 'ApplyDueChange' writes Invoice.due, frozen by 'IssuedInvoice' — the trigger does not provably exclude membership; partition the act`. Split the request into the changes that may apply and those that are refused, as in [prohibitions.md](prohibitions.md), "A refusal kept as a record".
+```velle refused
+act Invoice { paid: boolean }
+shape PaidInvoice = Invoice where paid = true
+```
+
+> expected a declaration (shape/act/rule/never/requires/visible/uses), found ASSIGN('=')
+
+A rule writing a frozen field while the record may be a member. Split the request into the changes that may apply and those that are refused, as in [prohibitions.md](prohibitions.md), "A refusal kept as a record".
+
+```velle refused
+act Invoice { due: Date }
+act Issuance { invoice: one Invoice }
+
+shape IssuedInvoice = Invoice where exists Issuance for this {
+    frozen due
+}
+
+transient act ChangeDueDate { invoice: one Invoice, newDue: Date }
+
+rule ApplyDueChange when ChangeDueDate {
+    invoice.due = newDue
+}
+```
+
+> [V5] rule 'ApplyDueChange' writes Invoice.due, frozen by 'IssuedInvoice' — the trigger does not provably exclude membership; partition the act
 
 ## 9. Conditions
 
@@ -355,11 +509,41 @@ A condition is a yes-or-no question about one record, written after `where`, ins
 - `.` through an optional value needs a test that shows it present. `?.` reads absent instead.
 - `today - 7 days` and `now + 2 hours` move a date or moment.
 
-**Refused.**
+**Refused.** A selection with no order:
 
-- `latest(payments).amount` gives `latest(...) requires 'by <property>' — the ordering datum is the author's statement, never implicit`.
-- `customer.name` with `customer: one Customer?` gives `[V11] 'customer.name' reads through 'customer', which may be absent; test 'customer is some' first, or write 'customer?.name' to read absent when it is`.
-- `(Customer for customerEmail)` gives `[F2] '(Customer for customerEmail)' — the subject after 'for' is a record, and 'customerEmail' is a text; to find the record by a value, select it: first(Customer where <field> == customerEmail by <field>)`.
+```velle refused
+act Invoice {
+    total: decimal
+    lastAmount: decimal? = latest(payments).amount
+}
+act Payment { invoice: one Invoice, amount: decimal, receivedOn: DateTime }
+```
+
+> latest(...) requires 'by <property>' — the ordering datum is the author's statement, never implicit, found RPAREN(')')
+
+A plain `.` through a value that may be absent:
+
+```velle refused
+act Customer { name: text }
+act Invoice {
+    customer: one Customer?
+    customerName: text = customer.name
+}
+```
+
+> [V11] 'customer.name' reads through 'customer', which may be absent; test 'customer is some' first, or write 'customer?.name' to read absent when it is
+
+A value after `for`, where a record belongs:
+
+```velle refused
+act Customer { email: text unique }
+act Order {
+    customerEmail: text
+    customer: one Customer? = (Customer for customerEmail)
+}
+```
+
+> [F2] '(Customer for customerEmail)' — the subject after 'for' is a record, and 'customerEmail' is a text; to find the record by a value, select it: first(Customer where <field> == customerEmail by <field>)
 
 ## 10. Rules and what their bodies do
 
@@ -402,12 +586,63 @@ rule MakeCopies when PrintCopies {
 - `for each number from 1 to copies { ... }` runs once per number; `for each line in lines { ... }` once per element. A block holds creations and blocks only.
 - Statements run in any order unless one reads another's result. `then` on its own line between two statements forces an order.
 
-**Refused.**
+**Refused.** A creation that leaves a field without a value:
 
-- `Reminder from { invoice: this }` gives `[F4] rule 'Remind' — 'Reminder.sentOn' has no value (from-mapping is totality-checked)`.
-- Two rules on `CorrectEmail` both assigning `customer.email` give `[V1] rules 'ApplyEmailCorrection' and 'NormalizeEmail' both assign Customer.email and their triggers are not provably disjoint`. Write one assignment with the whole intent, `customer.email = lowercase(corrected)`.
-- `delete invoice.lineItems` gives `[V23] rule 'ApplyWipe' deletes 'invoice.lineItems', which goes through a collection; a delete removes one record, so write a rule whose subject is each record to delete, and it fires once per record`.
-- Without the `never`, `delete customer` gives `[V24] rule 'ApplyClose' deletes a 'Customer' ('delete customer'), and 'Invoice.customer: one Customer' holds the record it points at, so a 'Customer' cannot be deleted while a 'Invoice' points at it: refuse the request with 'never (CloseCustomer where customer is held)', condition the rule on 'customer is not held', delete the 'Invoice' in the same rule, or declare the reference 'customer: one Customer? initially required' so it goes absent when the 'Customer' is deleted`.
+```velle refused
+act Invoice { total: decimal }
+shape Reminder { invoice: one Invoice, sentOn: Date }
+
+rule Remind when Invoice {
+    Reminder from { invoice: this }
+}
+```
+
+> [F4] rule 'Remind' — 'Reminder.sentOn' has no value (from-mapping is totality-checked)
+
+Two rules assigning one field. Write one assignment with the whole intent, `customer.email = lowercase(corrected)`.
+
+```velle refused
+act Customer { email: text }
+act CorrectEmail { customer: one Customer, corrected: text }
+
+rule ApplyEmailCorrection when CorrectEmail {
+    customer.email = corrected
+}
+
+rule NormalizeEmail when CorrectEmail {
+    customer.email = lowercase(corrected)
+}
+```
+
+> [V1] rules 'ApplyEmailCorrection' and 'NormalizeEmail' both assign Customer.email and their triggers are not provably disjoint
+
+Deleting through a collection:
+
+```velle refused
+act Invoice { total: decimal }
+act LineItem { invoice: one Invoice, amount: decimal }
+transient act Wipe { invoice: one Invoice }
+
+rule ApplyWipe when Wipe {
+    delete invoice.lineItems
+}
+```
+
+> [V23] rule 'ApplyWipe' deletes 'invoice.lineItems', which goes through a collection; a delete removes one record, so write a rule whose subject is each record to delete, and it fires once per record
+
+Deleting a record others hold, without the `never`:
+
+```velle refused
+act Customer { name: text }
+act Invoice { customer: one Customer, total: decimal }
+transient act CloseCustomer { customer: one Customer }
+
+rule ApplyClose when CloseCustomer {
+    delete customer
+}
+```
+
+> [V24] rule 'ApplyClose' deletes a 'Customer' ('delete customer'), and 'Invoice.customer: one Customer' holds the record it points at, so a 'Customer' cannot be deleted while a 'Invoice' points at it: refuse the request with 'never (CloseCustomer where customer is held)', condition the rule on 'customer is not held', delete the 'Invoice' in the same rule, or declare the reference 'customer: one Customer? initially required' so it goes absent when the 'Customer' is deleted
 
 ## 11. When a rule fires
 
@@ -439,10 +674,32 @@ rule EmailReceipt when UnemailedInvoice after commit, Hourly {
 - `on commit, Daily` fires at the commit and again at each tick.
 - `after commit, Hourly` runs the effects in a transaction of their own once the triggering one is saved, with an hourly backup. Use it for work that must not hold up or undo the request, such as sending email. It needs a guard, a condition its body makes false: here `not exists ReceiptEmail for this`.
 
-**Refused.**
+**Refused.** A condition that reads the clock, with no schedule:
 
-- `rule RemindOverdue when OverdueInvoice { ... }` with no schedule gives `[V3] rule 'RemindOverdue' — its condition depends on the passage of time, which no act commit changes: entry by aging is unobserved. Add a schedule to 'on', or this rule under-fires`.
-- `rule SendReceipt when Invoice after commit { ... }` gives `[V4] rule 'SendReceipt' fires 'after commit', in a transaction of its own, so a firing can be lost between the commit and the rule, and nothing would find it; trigger the rule on a guard, a condition its body makes false by creating a record or setting a field, and add a backup schedule beside 'after commit'`.
+```velle refused
+act Invoice { due: Date, balance: decimal }
+shape OverdueInvoice = Invoice where balance > 0 and due < today
+shape Reminder { invoice: one Invoice, sentOn: Date }
+
+rule RemindOverdue when OverdueInvoice {
+    Reminder from { invoice: this, sentOn: today }
+}
+```
+
+> [V3] rule 'RemindOverdue' — its condition depends on the passage of time, which no act commit changes: entry by aging is unobserved. Add a schedule to 'on', or this rule under-fires
+
+`after commit` with no guard and no backup schedule:
+
+```velle refused
+act Invoice { total: decimal }
+shape Receipt { invoice: one Invoice, sentOn: DateTime }
+
+rule SendReceipt when Invoice after commit {
+    Receipt from { invoice: this, sentOn: now }
+}
+```
+
+> [V4] rule 'SendReceipt' fires 'after commit', in a transaction of its own, so a firing can be lost between the commit and the rule, and nothing would find it; trigger the rule on a guard, a condition its body makes false by creating a record or setting a field, and add a backup schedule beside 'after commit'
 
 ## 12. Leaving a state, and deletion
 
@@ -469,7 +726,18 @@ rule NoteUnarchival when leaving ArchivedInvoice {
 - A `when deleted` body may not create a record pointing at the deleted one. Copy the fields it needs.
 - "No longer delinquent" is `when leaving Delinquent`, not `when Compliant`: a brand-new record enters `Compliant` too.
 
-**Refused.** `rule Gone when leaving Invoice { ... }` over a bare shape gives `[V3] rule 'Gone' can never fire — 'Invoice' is a bare shape with no predicate to flip, and 'when leaving' never fires at deletion; a record leaves a bare shape only by being deleted. Did you mean 'when deleted Invoice'?`
+**Refused.** `when leaving` over a bare shape:
+
+```velle refused
+act Invoice { due: Date }
+shape Farewell { noticedOn: DateTime }
+
+rule Gone when leaving Invoice {
+    Farewell from { noticedOn: now }
+}
+```
+
+> [V3] rule 'Gone' can never fire — 'Invoice' is a bare shape with no predicate to flip, and 'when leaving' never fires at deletion; a record leaves a bare shape only by being deleted. Did you mean 'when deleted Invoice'?
 
 ## 13. Prohibitions: `never`, `requires`, `unique`
 
@@ -502,11 +770,40 @@ Invoice requires approver to be Manager
 - Over a transient act a prohibition is a **refusal**: the request is turned away and nothing is kept, as `never (SubmitPayment where amount <= 0)` in §1. Over a kept shape or act it is a **constraint**: any act or scheduled rule that would leave the records in that state is rejected. Over state only rules produce it is a **guarantee**, which the compiler must prove the rules never break.
 - It holds at the end of each transaction, not at every step inside one.
 
-**Refused.**
+**Refused.** A constraint over a kept shape that reads the clock. Write it over the request, `never (BillCustomer where due < today)`.
 
-- `never (Invoice where due < today)` gives `[V30] never #1 (Invoice where due < today) over Invoice reads the clock — the books can age into the forbidden state with no act to refuse, and the clock has no caller: state it on a transient request, where the clock is read once at the moment of the act; record the decision as a field the prohibition reads instead of the clock; or retract it`. Write it over the request, `never (BillCustomer where due < today)`.
-- `never (Account where balance >= 0 and suspended)` beside a rule that sets `suspended` gives `[V10] a 'never' reads 'Account.suspended', which rule 'ApplySuspend' assigns, so it is a guarantee that the rules keep it true, and the compiler cannot yet prove one over every assignment; read a field no rule assigns, or derive 'suspended' from the records the rule writes`.
-- `never (Approve where actor to be Manager)` gives `'to be' spells membership only in the predicate of a 'requires' declaration; write 'is' here`.
+```velle refused
+act Invoice { due: Date }
+never (Invoice where due < today)
+```
+
+> [V30] never #1 (Invoice where due < today) over Invoice reads the clock — the books can age into the forbidden state with no act to refuse, and the clock has no caller: state it on a transient request, where the clock is read once at the moment of the act; record the decision as a field the prohibition reads instead of the clock; or retract it
+
+A `never` over a field a rule assigns:
+
+```velle refused
+act Account { balance: decimal, suspended: boolean }
+act Suspend { account: one Account }
+
+rule ApplySuspend when Suspend {
+    account.suspended = true
+}
+
+never (Account where balance >= 0 and suspended)
+```
+
+> [V10] a 'never' reads 'Account.suspended', which rule 'ApplySuspend' assigns, so it is a guarantee that the rules keep it true, and the compiler cannot yet prove one over every assignment; read a field no rule assigns, or derive 'suspended' from the records the rule writes
+
+`to be` outside a `requires`:
+
+```velle refused
+shape Staff { name: text, role: text }
+shape Manager = Staff where role == "manager"
+act Approve by Staff { note: text }
+never (Approve where actor to be Manager)
+```
+
+> 'to be' spells membership only in the predicate of a 'requires' declaration; write 'is' here, found LIDENT('to')
 
 ## 14. Who may commit, who may see: `by` and `visible to`
 
@@ -537,7 +834,33 @@ shape Product {
 - Once a spec has any `by` or `visible to`, every shape and kept act must say who sees it, itself or through the default. Visibility applies only to reads; no rule or prohibition depends on the reader.
 - The first manager, where hiring needs one, is created by the engineer outside the spec.
 
-**Refused.** With `act Staff`, `act Refund by Manager` gives ``[F2] 'Refund by Manager' — the actor's shape is a `shape`, never an act: an act is an input, and the person who commits one is a record; declare 'Staff' as a shape and create its records with a rule``. With no visibility anywhere, ``[V32] 'Refund' declares no visibility, and this spec has authorization — say who may see it: a `visible to <Shape> [where ...]` clause in its body, `visible to anyone` for a public one, or a spec-wide `visible to <Shape>` at the top of the spec``.
+**Refused.** An actor that is an act. The same spec draws the visibility message below for `Staff` and `Refund` too.
+
+```velle refused
+act Staff { name: text, role: text }
+shape Manager = Staff where role == "manager"
+act Refund by Manager { amount: decimal }
+```
+
+> [F2] 'Refund by Manager' — the actor's shape is a `shape`, never an act: an act is an input, and the person who commits one is a record; declare 'Staff' as a shape and create its records with a rule
+
+> [V32] 'Staff' declares no visibility, and this spec has authorization — say who may see it: a `visible to <Shape> [where ...]` clause in its body, `visible to anyone` for a public one, or a spec-wide `visible to <Shape>` at the top of the spec
+
+> [V32] 'Refund' declares no visibility, and this spec has authorization — say who may see it: a `visible to <Shape> [where ...]` clause in its body, `visible to anyone` for a public one, or a spec-wide `visible to <Shape>` at the top of the spec
+
+A kept act with no visibility, in a spec with authorization:
+
+```velle refused
+shape Staff {
+    name: text
+    role: text
+    visible to anyone
+}
+shape Manager = Staff where role == "manager"
+act Refund by Manager { amount: decimal }
+```
+
+> [V32] 'Refund' declares no visibility, and this spec has authorization — say who may see it: a `visible to <Shape> [where ...]` clause in its body, `visible to anyone` for a public one, or a spec-wide `visible to <Shape>` at the top of the spec
 
 Rules that read the actor, and gates that read the data, are in [prohibitions.md](prohibitions.md).
 
