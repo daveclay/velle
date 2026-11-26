@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D11 decided. D12 awaits Dave. Stage 1 of the build (§6) is under way: the `velle` command, the jar, and the skill folder are built; the tests on the reference, the wiki guide, and the trial sessions remain.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D12 decided. Stage 1 of the build (§6) is under way: the `velle` command, the jar, and the skill folder are built; the tests on the reference, the wiki guide, and the trial sessions remain.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -253,7 +253,7 @@ Costs:
 
 **Decided:** yes, 2026-11-26.
 
-### D12. The comparison says a rule in the same words `describe` does
+### D12. The comparison says a rule in the same words `describe` does · Decided 2026-11-26
 
 Does `velle compare` take up the words `velle describe` gained, so a product owner reads one rule the same way in both?
 
@@ -287,6 +287,8 @@ Costs:
 - `Sentences.Vocabulary` is removed from `compiler/src/main/kotlin/velle/Sentences.kt`, and `DescriptionWords` folds into `Sentences`.
 - `examples/billing/changes/*.md` and every example's `output/` are regenerated.
 
+**Decided:** yes, 2026-11-26.
+
 ## 4. Not in this question
 
 - Listening to a meeting's audio. Dave, 2026-11-25: "it is likely sufficient to first capture a design session in an AI chat in velle before considering audio transcription." It gets its own question once a design session in chat has been tried. It adds a speech-to-text service that labels speakers, and the question of when the assistant edits, since it should not edit on every sentence spoken.
@@ -300,6 +302,7 @@ Costs:
 - [ ] Add the test that validates every Velle example in `skills/velle-design/references/` with the compiler, and fails when a keyword of the language is missing from them (§6, stage 1).
 - [ ] Give words to the 38 parts listed in `compiler/src/test/resources/describe/without-words.md`, most common form first (D2).
 - [ ] Stop the comparison printing the rule graph's name for an act's arrival, `envLineItem`, and say the act in the spec's name; pin it with a test over the two versions of the trial's ninth turn (§2, "What the first trial session showed").
+- [ ] Give the comparison and the generated cases the words `velle describe` has, remove `Sentences.Vocabulary`, and regenerate the reports in `examples/billing/changes/` and every example's output (D12).
 - [ ] Reword the three sentences of the comparison a product owner cannot read, each pinned in `examples/billing/changes/` (§2, "What the first trial session showed").
 - [ ] Have `velle describe <draft> <Name>` say what each refinement of another shape it mentions means (§2, "What the first trial session showed").
 - [ ] Write `wiki/Guides/Design-session.md`, the GLOSSARY entry for "skill", the `velle compare` spelling in `Comparing-specs.md`, and name `skills/` in the root `CLAUDE.md` (§6, stage 1).
