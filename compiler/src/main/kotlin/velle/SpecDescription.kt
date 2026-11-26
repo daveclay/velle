@@ -19,7 +19,7 @@ data class Description(val fileName: String, val focus: String?, val sections: L
 
 /** The sections of a description, in the order a reader meets them. */
 private enum class Section {
-    WORDS, KEPT, REQUESTS, RULES, RULES_FROM_ELSEWHERE, PROHIBITIONS;
+    WORDS, KEPT, REQUESTS, RULES, RULES_FROM_ELSEWHERE, PROHIBITIONS, REFINEMENTS_MENTIONED;
 
     fun heading(focus: String?): String = when (this) {
         WORDS -> "Words and types the spec uses"
@@ -28,6 +28,7 @@ private enum class Section {
         RULES -> "What the rules do"
         RULES_FROM_ELSEWHERE -> "What rules over other records do to ${focus ?: "it"}"
         PROHIBITIONS -> "What is never allowed"
+        REFINEMENTS_MENTIONED -> "What the refinements of other shapes it mentions mean"
     }
 }
 
@@ -63,8 +64,27 @@ object SpecDescription {
         val fromElsewhere = placed.filter { declaration -> declaration.section == Section.RULES && declaration.subject != focus }
             .filter { declaration -> RuleWrites.of(declaration.compared.declaration as RuleDecl, version).contains(focus) }
             .map { declaration -> Placed(declaration.compared, Section.RULES_FROM_ELSEWHERE, declaration.subject) }
-        return about + fromElsewhere
+        val described = about + fromElsewhere
+        return described + mentionedRefinements(described, placed, focus, version)
     }
+
+    /**
+     * The refinements of other shapes that the described declarations name, and the refinements
+     * those are made from, so a reader of one part of a spec learns what each name it meets means.
+     */
+    private fun mentionedRefinements(described: List<Placed>, placed: List<Placed>, focus: String, version: SpecVersion): List<Placed> {
+        val refinements = placed.filter { declaration -> declaration.compared.declaration is RefinementDecl }
+            .associateBy { declaration -> (declaration.compared.declaration as RefinementDecl).name }
+        val named = described.flatMap { declaration -> namesIn(declaration.compared.printed) }.filter { name -> name in refinements }
+        val withTheirParts = named + named.flatMap { name -> version.refinementsReadBy(name) }
+        return withTheirParts.distinct().mapNotNull { name -> refinements[name] }
+            .filter { refinement -> refinement.subject != focus }
+            .sortedBy { refinement -> refinement.compared.located.line }
+            .map { refinement -> Placed(refinement.compared, Section.REFINEMENTS_MENTIONED, refinement.subject) }
+    }
+
+    private fun namesIn(velle: String): List<String> =
+        Regex("\\b[A-Z][A-Za-z0-9]*\\b").findAll(velle).map { match -> match.value }.distinct().toList()
 
     private fun placed(compared: Compared): Placed {
         val version = compared.version

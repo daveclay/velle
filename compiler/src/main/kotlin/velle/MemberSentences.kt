@@ -15,7 +15,7 @@ data class MemberOwner(val name: String, val base: String, val refinement: Boole
  */
 object MemberSentences {
 
-    private val subject = Subject.described
+    private val subject = Subject.record
 
     fun said(member: Member, owner: MemberOwner): String? = when (member) {
         is StoredProp -> stored(member, owner)
@@ -49,6 +49,19 @@ object MemberSentences {
     }
 
     private fun stored(member: StoredProp, owner: MemberOwner): String? {
+        val kind = storedKind(member) ?: return null
+        val unique = if (member.unique) ", and no two ${owner.base} records have the same one" else ""
+        val transient = if (member.transient) ", and is not kept" else ""
+        val verb = if (member.type.many()) "are" else "is"
+        return "Its ${member.name} $verb $kind$unique$transient."
+    }
+
+    /**
+     * What a stored field holds and how it starts: "one Seller, which must be given when it is
+     * created and may be absent later", "a Money, starting as 0". The comparison of two specs says
+     * a field in the same words. Null when there are no words for the field.
+     */
+    fun storedKind(member: StoredProp): String? {
         if (member.visible.isNotEmpty()) return null
         val keepsRepeats = member.tolerates == "duplication" && (member.type as? ScalarType)?.many == true
         if (member.tolerates != null && !keepsRepeats) return null
@@ -56,12 +69,9 @@ object MemberSentences {
             val initialWords = Sentences.value(initial, subject) ?: return null
             ", starting as $initialWords"
         } ?: ""
-        val unique = if (member.unique) ", and no two ${owner.base} records have the same one" else ""
-        val transient = if (member.transient) ", and is not kept" else ""
-        val verb = if (member.type.many()) "are" else "is"
         val type = if (member.initiallyRequired) requiredAtCreation(member.type) else typeWords(member.type)
         val repeats = if (keepsRepeats) ", kept in the order given, repeats included" else ""
-        return "Its ${member.name} $verb $type$repeats$starting$unique$transient."
+        return "$type$repeats$starting"
     }
 
     private fun TypeRef.many(): Boolean = when (this) {
@@ -101,7 +111,7 @@ object MemberSentences {
      * A derived field's value. An `if ... then ... else` is said only here, at the top of the field,
      * where "X when C, otherwise Y" cannot be read as part of a larger value.
      */
-    private fun workedOut(expression: Expr): String? {
+    fun workedOut(expression: Expr): String? {
         if (expression !is IfExpr) return Sentences.value(expression, subject)
         val condition = Sentences.predicate(expression.condition, subject) ?: return null
         val chosen = Sentences.value(expression.thenExpr, subject) ?: return null

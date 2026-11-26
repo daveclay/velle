@@ -12,7 +12,8 @@ The
 repo holds the compiler and runtime
 (`compiler/`), stores (`stores/`), the API layer (`apis/`), the console
 (`console/`), extension
-libraries (`extensions/`), the example systems (`examples/`), the
+libraries (`extensions/`), the skill an AI assistant loads to run a design
+session (`skills/`), the example systems (`examples/`), the
 documentation (`wiki/`), and the working documents (`working-docs/`).
 
 Each of `compiler/`, `wiki/`, `examples/`, and `apis/` has its own

@@ -28,5 +28,5 @@ It says which kind of record, never which records or how many.
 
 - An Invoice becomes a PaidInvoice by this change alone when its balance is at most 0 and its total is not above 0.
   In the spec: 05-zero-total-receipts.velle, line 87, `shape PaidInvoice = Invoice where balance <= 0`
-- SendReceipt could then run for it, with no act or tick causing it.
+- SendReceipt could then run for it, though nothing happened to the Invoice itself: the change to the spec is what made it a PaidInvoice.
   In the spec: 05-zero-total-receipts.velle, line 87, `shape PaidInvoice = Invoice where balance <= 0`

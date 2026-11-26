@@ -1,12 +1,18 @@
 # Comparing specs
 
-`velle.CompareKt` reads two versions of a spec and says what changed between them. It writes in the names the spec gives things and in everyday words, not as changed lines of text. Each sentence points at the line of the spec it comes from. A product owner can read the report to see which business rules changed. When they decide against a change, they can tell the engineer exactly where in the spec to undo it.
+`velle compare` reads two versions of a spec and says what changed between them. It writes in the names the spec gives things and in everyday words, not as changed lines of text. Each sentence points at the line of the spec it comes from. A product owner can read the report to see which business rules changed. When they decide against a change, they can tell the engineer exactly where in the spec to undo it.
 
 ## The situation
 
 A spec changes in a pull request. The changed lines of the `.velle` file say what was typed, not what it does to the business. Deleting one `never` can let a line item clear an overdue invoice, and nobody edited the invoice. Moving a section to the end of the file changes many lines and nothing the system does. A reviewer needs to hear the first and not the second.
 
 ## Running it
+
+```
+velle compare before/billing.velle after/billing.velle
+```
+
+The same comparison runs from the compiler's classes as `velle.CompareKt`:
 
 ```
 java -cp <the compiler and the spec's libraries> velle.CompareKt before/billing.velle after/billing.velle
@@ -54,7 +60,7 @@ The third says what the edit does to a record like the ones the system keeps:
 - An Invoice becomes an ActionableOverdue by this change alone when it is an OverdueInvoice,
   it is not an IssuedInvoice, and it is an ArchivedInvoice.
 - At the next Weekly tick, RemindOverdue runs for it if it is an ActionableOverdue and there is no
-  Reminder whose invoice is it and whose sentOn is after 7 days before today.
+  Reminder whose invoice is it and whose sentOn is later than 7 days ago.
 - An Invoice stops being an ActionableOverdue by this change alone when it is an OverdueInvoice,
   it is not an ArchivedInvoice, and it is an IssuedInvoice.
 - At the next Weekly tick, RemindOverdue no longer runs for it.
@@ -76,7 +82,7 @@ A construct the report has no words for yet is printed as Velle, with a line say
 
 ## What that changes
 
-The compiler works out facts from a spec to draw its [diagrams](diagrams) and write its [generated cases](testgen). The report compares those facts between the two versions:
+Each sentence names only what the spec names: a shape, an act, a refinement, a rule. The compiler works out facts from a spec to draw its [diagrams](diagrams) and write its [generated cases](testgen). The report compares those facts between the two versions:
 
 | Fact | A sentence it gives |
 |---|---|
@@ -85,7 +91,7 @@ The compiler works out facts from a spec to draw its [diagrams](diagrams) and wr
 | Which prohibitions are checked when the act arrives, before any rule runs | "Whether a LineItem is refused when its quantity is at most 0 is now checked when it arrives, before any rule runs." |
 | What an act's work waits its turn behind | "A new SubmitPayment now waits its turn behind other work on the same SubmitPayment.invoice." |
 | The compiler's advisories | "The compiler now advises: ..." |
-| The generated cases | "2 generated cases are no longer generated: ..." |
+| The generated cases | "The compiler no longer writes 2 of the example tests it writes from the spec. They checked that a LineItem whose price is below 0.00 is refused, and that a LineItem whose price is 0.00 is accepted." |
 
 Every one of these is a "can" or a "can no longer". The compiler draws a possibility whenever it cannot prove it impossible, so the report never says what will happen. A consequence it cannot prove impossible may still be one the business never sees.
 
@@ -95,7 +101,13 @@ Each consequence points at the edit that causes it: the one edit when there is o
 
 When a refinement's condition changes, a record that meets the new condition and not the old one becomes a member by the change alone, with no act and no tick. A record that meets the old condition and not the new one stops being a member. The report writes both conditions down.
 
-A rule on a schedule runs at its next tick for every record that is a member then ([§16](Reference-16-Sweeps)). So the report says what that rule does with such a record. Any other rule over the refinement could run for it, and the report says "could". When a constraint is added over a kept shape, a record stored before the change could break it, and its next change could be refused.
+A rule on a schedule runs at its next tick for every record that is a member then ([§16](Reference-16-Sweeps)). So the report says what that rule does with such a record. Any other rule over the refinement could run for it, and the report says "could". It also says that nothing happened to the record itself, since the change to the spec is what moved it:
+
+```
+- SendReceipt could then run for it, though nothing happened to the Invoice itself: the change to the spec is what made it a PaidInvoice.
+```
+
+That sentence is from `examples/billing/changes/05-zero-total-receipts.md`, where `PaidInvoice` stops requiring a total above 0. When a constraint is added over a kept shape, a record stored before the change could break it, and its next change could be refused.
 
 This part describes one record of a kind. It never says which records a running system holds, or how many.
 

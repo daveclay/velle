@@ -8,7 +8,7 @@ Where the report has no words for a change yet, it shows the Velle instead and s
 
 - An Invoice is now an ActionableOverdue when it is an OverdueInvoice and it is an IssuedInvoice and it is not an ArchivedInvoice. Before: when it is an OverdueInvoice and it is not an ArchivedInvoice.
   In the spec: 03-remind-issued.velle, line 121, `shape ActionableOverdue = OverdueInvoice and IssuedInvoice and not ArchivedInvoice`
-- RemindOverdue changed. Now: at each Weekly tick, for every Invoice of which it is true that it is an ActionableOverdue and there is no Reminder whose invoice is it and whose sentOn is after 14 days before today, it creates a Reminder with invoice set to it, sentOn set to today. Before: at each Weekly tick, for every Invoice of which it is true that it is an ActionableOverdue and there is no Reminder whose invoice is it and whose sentOn is after 7 days before today, it creates a Reminder with invoice set to it, sentOn set to today.
+- RemindOverdue changed. Now: at each Weekly tick, for every Invoice of which it is true that it is an ActionableOverdue and there is no Reminder whose invoice is it and whose sentOn is later than 14 days ago, it creates a Reminder with invoice set to it, sentOn set to today. Before: at each Weekly tick, for every Invoice of which it is true that it is an ActionableOverdue and there is no Reminder whose invoice is it and whose sentOn is later than 7 days ago, it creates a Reminder with invoice set to it, sentOn set to today.
   In the spec: 03-remind-issued.velle, line 128, `rule RemindOverdue`
 
 ## What that changes

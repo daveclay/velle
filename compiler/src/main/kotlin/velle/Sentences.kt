@@ -2,9 +2,9 @@ package velle
 
 /**
  * Velle written as sentences a product owner reads: the names the spec gives things, spelled
- * as the spec spells them, and everyday words. The generated cases ([SpecGen]) and the
- * comparison of two specs ([SpecComparison]) read their words from here, so a condition is
- * said the same way in both.
+ * as the spec spells them, and everyday words. The description of a spec ([SpecDescription])
+ * and the comparison of two specs ([SpecComparison]) read their words from here, so a
+ * condition is said the same way in both.
  *
  * Every function returns null for a form it has no words for. The caller then prints the
  * Velle and says so; it never drops the form.
@@ -30,26 +30,17 @@ object Sentences {
     /**
      * Who a clause is about. At the top of a condition the record is "it", and its fields are
      * "its balance". Inside `exists (Reminder where ...)` the fields are the Reminder's, said
-     * "whose sentOn", and `this` still means the outer record, "it".
+     * "whose sentOn", and `this` still means the outer record, "it". A name in [aliases] is
+     * said as written: a rule's actor, `actor`.
      */
-    class Subject(val possessive: String, val aliases: Set<String> = emptySet(), val vocabulary: Vocabulary = Vocabulary.SHARED) {
-        /** Who the fields are inside `exists (Reminder where ...)`: "whose", in the same vocabulary. */
-        fun inside(): Subject = Subject("whose", vocabulary = vocabulary)
+    class Subject(val possessive: String, val aliases: Set<String> = emptySet()) {
+        /** Who the fields are inside `exists (Reminder where ...)`: "whose". */
+        fun inside(): Subject = Subject("whose")
 
         companion object {
             val record = Subject("its")
-
-            /** The record a description of a spec ([SpecDescription]) is about, with the description's words. */
-            val described = Subject("its", vocabulary = Vocabulary.DESCRIPTION)
         }
     }
-
-    /**
-     * Which words a sentence may use. [SHARED] are the words the generated cases and the comparison
-     * of two specs use, and their output is pinned. [DESCRIPTION] adds words only `velle describe`
-     * uses so far, so that adding one never changes a comparison report.
-     */
-    enum class Vocabulary { SHARED, DESCRIPTION }
 
     // ── Conditions over records ──────────────────────────────────────────────────
 
@@ -90,41 +81,74 @@ object Sentences {
 
     /** A predicate as a clause: `balance > 0 and due < today` is "its balance is above 0 and
      *  its due is before today". */
-    fun predicate(expression: Expr, subject: Subject): String? {
-        if (subject.vocabulary == Vocabulary.DESCRIPTION) DescriptionWords.predicate(expression, subject)?.let { words -> return words }
-        return sharedPredicate(expression, subject)
-    }
-
-    private fun sharedPredicate(expression: Expr, subject: Subject): String? = when (expression) {
+    fun predicate(expression: Expr, subject: Subject): String? = when (expression) {
         is Binary -> binaryPredicate(expression, subject)
         is NotExpr -> negatedPredicate(expression.inner, subject)
         is IsExpr -> isPredicate(expression, subject)
         is ExistsExpr -> existsPredicate(expression, subject)
         is BoolLit -> if (expression.value) "always" else "never"
+        is PathExpr -> nameCondition(expression, subject, holds = true)
         else -> null
+    }
+
+    /** A bare name used as a condition: a true-or-false field, "its locked is true", or a refinement, "it is a HitExperiment". */
+    private fun nameCondition(name: PathExpr, subject: Subject, holds: Boolean): String? {
+        if (name.root in subject.aliases) return null
+        val isRefinement = name.root.first().isUpperCase() && name.segs.isEmpty()
+        if (isRefinement) {
+            val who = if (subject.possessive == "whose") "that" else "it"
+            return "$who ${if (holds) "is" else "is not"} ${withArticle(name.root)}"
+        }
+        return "${path(name, subject)} is ${if (holds) "true" else "false"}"
     }
 
     private fun binaryPredicate(expression: Binary, subject: Subject): String? = when (expression.op) {
         "and" -> joined(predicate(expression.left, subject), "and", predicate(expression.right, subject))
         "or" -> joined(predicate(expression.left, subject), "or", predicate(expression.right, subject))
         in comparisonOperators -> comparison(expression, subject)
+        "contains", "in" -> membership(expression, subject)
         else -> null
+    }
+
+    /** `tags contains "honors"`, `status in ["a", "b"]`, `this in lineage`. */
+    private fun membership(expression: Binary, subject: Subject): String? {
+        val left = value(expression.left, subject) ?: return null
+        val right = expression.right
+        if (expression.op == "contains") return value(right, subject)?.let { item -> "$left includes $item" }
+        if (right is ListLit) {
+            val items = right.items.map { item -> value(item, subject) ?: return null }
+            return "$left is one of ${items.joinToString(", ")}"
+        }
+        return value(right, subject)?.let { collection -> "$left is among $collection" }
     }
 
     private val comparisonOperators = setOf("<", "<=", ">", ">=", "==", "!=")
 
     private fun comparison(expression: Binary, subject: Subject): String? {
-        if (isConstant(expression.left) && !isConstant(expression.right)) return comparison(mirrored(expression), subject)
+        val leftFirst = isConstant(expression.left) && !isConstant(expression.right) ||
+            isClockOffset(expression.left) && !isClockOffset(expression.right)
+        if (leftFirst) return comparison(mirrored(expression), subject)
         val left = value(expression.left, subject) ?: return null
         val right = value(expression.right, subject) ?: return null
-        val words = when {
-            expression.op == "==" -> return "$left is $right"
-            expression.op == "!=" -> return "$left is not $right"
-            readsTheClock(expression.left) || readsTheClock(expression.right) -> timeComparisonWords(expression.op)
-            else -> comparisonWords(expression.op)
-        }
+        if (expression.op == "==") return "$left is $right"
+        if (expression.op == "!=") return "$left is not $right"
+        if (isClockOffset(expression.right)) return relativeMoment(left, expression.op, right)
+        val words = if (readsTheClock(expression.left) || readsTheClock(expression.right)) timeComparisonWords(expression.op) else comparisonWords(expression.op)
         return "$left is $words $right"
     }
+
+    /** A moment against one some time from now: "its sentOn is later than 7 days ago", "its due is 3 days from today or earlier". */
+    private fun relativeMoment(left: String, operator: String, moment: String): String = when (operator) {
+        ">" -> "$left is later than $moment"
+        "<" -> "$left is earlier than $moment"
+        ">=" -> "$left is $moment or later"
+        else -> "$left is $moment or earlier"
+    }
+
+    /** `today - 7 days`, `now + 1 hours`: a moment some time from the clock. */
+    private fun isClockOffset(expression: Expr): Boolean =
+        expression is Binary && (expression.left == TodayLit || expression.left == NowLit) && expression.right is DurationLit &&
+            (expression.op == "-" || expression.op == "+")
 
     /** `0 < total` read the way a person says it: `total > 0`. */
     private fun mirrored(expression: Binary): Binary {
@@ -142,6 +166,10 @@ object Sentences {
     }
 
     private fun negatedPredicate(inner: Expr, subject: Subject): String? {
+        if (inner is PathExpr) return nameCondition(inner, subject, holds = false)
+        if (inner is ExistsExpr && inner.collection != null && isRelationship(inner.collection)) {
+            return records(inner.collection, subject)?.absence()
+        }
         if (inner is IsExpr && inner.kind == "refinement") {
             val described = value(inner.subject, subject) ?: return null
             return "$described is not ${withArticle(inner.refinement ?: return null)}"
@@ -176,21 +204,19 @@ object Sentences {
             return "there is ${withArticle(expression.shape)} for $owner"
         }
         val collection = expression.collection ?: return null
-        val binding = collection.bindings.singleOrNull() ?: return null
-        val source = binding.source as? PathExpr ?: return null
-        if (source.segs.isNotEmpty() || binding.alias != null) return null
-        val restriction = collection.where?.let { inner -> predicate(inner, subject.inside()) ?: return null }
-        return listOfNotNull("there is ${withArticle(source.root)}", restriction).joinToString(" ")
+        val records = records(collection, subject) ?: return null
+        return if (isRelationship(collection)) records.existence() else records.existenceOfAShape()
+    }
+
+    /** `exists (fills where ...)` is over the record's own relationship; `exists (Reminder where ...)` is over a shape. */
+    private fun isRelationship(collection: CollectionExpr): Boolean {
+        val source = collection.bindings.singleOrNull()?.source as? PathExpr ?: return false
+        return !source.root.first().isUpperCase() || source.segs.isNotEmpty()
     }
 
     /** A value: a field of the record, a literal, today, or arithmetic over them. */
-    fun value(expression: Expr, subject: Subject): String? {
-        if (subject.vocabulary == Vocabulary.DESCRIPTION) DescriptionWords.value(expression, subject)?.let { words -> return words }
-        return sharedValue(expression, subject)
-    }
-
-    private fun sharedValue(expression: Expr, subject: Subject): String? = when (expression) {
-        is PathExpr -> path(expression, subject)
+    fun value(expression: Expr, subject: Subject): String? = when (expression) {
+        is PathExpr -> if (expression == PathExpr("randomUUID")) "a new random identifier" else path(expression, subject)
         is IntLit -> expression.value.toString()
         is DecLit -> expression.text
         is TextLit -> "\"${expression.value}\""
@@ -200,10 +226,37 @@ object Sentences {
         TodayLit -> "today"
         NowLit -> "now"
         is UnaryMinus -> value(expression.inner, subject)?.let { inner -> "minus $inner" }
-        is Binary -> arithmetic(expression, subject)
+        is Binary -> arithmetic(expression, subject) ?: whether(expression, subject)
+        is NotExpr, is IsExpr, is ExistsExpr -> whether(expression, subject)
         is AggCall -> aggregate(expression, subject)
         is FunCall -> functionCall(expression, subject)
+        is SetExpr -> records(expression.collection, subject)?.every()
+        is Access -> value(expression.target, subject)?.let { target -> "the ${expression.segs.joinToString("'s ") { segment -> segment.name }} of $target" }
+        is SingularFor -> value(expression.forExpr, subject)?.let { owner -> "the ${expression.shape} for $owner" }
+        is Interpolation -> text(expression, subject)
+        is WalkExpr -> walk(expression)
         else -> null
+    }
+
+    /** A condition used as a value, as a field set to whether something holds: "whether its paidOn is at most its dueBy". */
+    private fun whether(expression: Expr, subject: Subject): String? = predicate(expression, subject)?.let { condition -> "whether $condition" }
+
+    /** `"refill for ${drug.name}"` is the text "refill for [its drug's name]". */
+    private fun text(expression: Interpolation, subject: Subject): String? {
+        val parts = expression.parts.map { part ->
+            when (part) {
+                is TextRun -> part.text
+                is TextPiece -> "[" + (value(part.expr, subject) ?: return null) + "]"
+            }
+        }
+        return "the text \"${parts.joinToString("")}\""
+    }
+
+    /** `walk referrer` is every record reached by following referrer step by step; `walk ... until` has no words yet. */
+    private fun walk(expression: WalkExpr): String? {
+        if (expression.until != null) return null
+        val limit = expression.steps?.let { steps -> ", at most $steps steps away" } ?: ""
+        return "every record reached from it by following ${expression.rel} step by step$limit"
     }
 
     private fun path(expression: PathExpr, subject: Subject): String {
@@ -221,6 +274,7 @@ object Sentences {
     private fun arithmetic(expression: Binary, subject: Subject): String? {
         val left = value(expression.left, subject) ?: return null
         val right = value(expression.right, subject) ?: return null
+        if (isClockOffset(expression)) return if (expression.op == "-") "$right ago" else "$right from $left"
         if (readsTheClock(expression.left) && expression.right is DurationLit) {
             return when (expression.op) {
                 "-" -> "$right before $left"
@@ -236,16 +290,61 @@ object Sentences {
     }
 
     private fun aggregate(expression: AggCall, subject: Subject): String? {
-        if (expression.keyLookup || expression.orderBy.isNotEmpty()) return null
-        val collection = expression.collection
-        val binding = collection.bindings.singleOrNull() ?: return null
-        if (collection.where != null || binding.alias != null) return null
-        val over = value(binding.source, subject) ?: return null
+        if (expression.keyLookup) return null
+        val records = records(expression.collection, subject) ?: return null
+        val order = expression.orderBy.joinToString(", then ")
         return when (expression.name) {
-            "count" -> "the number of $over"
-            "sum", "max", "min" -> expression.field?.let { field -> "the ${expression.name} of $field over $over" }
+            "count" -> "the number of ${records.all()}"
+            "sum", "max", "min" -> expression.field?.let { field -> "the ${expression.name} of $field over ${records.all()}" }
+            "latest", "first" -> if (order.isEmpty()) null else "the ${expression.name} of ${records.all()} by $order"
             else -> null
         }
+    }
+
+    // ── Collections ──────────────────────────────────────────────────────────────
+
+    /**
+     * The records of a collection with one source and no `as`, in words: [singular] and [plural] name
+     * them, "DelinquencyFlag" and "DelinquencyFlag records", or "its fills" for both; [filter] narrows
+     * them, "whose member is it" or "that is a CompletedAssay", or is empty. [ofTheRecord] is true
+     * when they are reached from the record, as its fills are.
+     */
+    private class Records(val singular: String, val plural: String, val filter: String, val ofTheRecord: Boolean) {
+        private val pluralFilter = filter.replace("that is a", "that are a").replace("that is not", "that are not")
+
+        private fun narrowed(noun: String, narrowing: String) = if (narrowing.isEmpty()) noun else "$noun $narrowing"
+
+        fun all(): String = narrowed(plural, pluralFilter)
+
+        fun every(): String = if (ofTheRecord) narrowed("those of $plural", pluralFilter) else narrowed("every $singular", filter)
+
+        fun existence(): String = if (filter.isEmpty()) "$plural has at least one" else "at least one of $plural is one $filter"
+
+        fun absence(): String = if (filter.isEmpty()) "$plural has none" else "none of $plural is one $filter"
+
+        /** `exists (Reminder where ...)`: "there is a Reminder whose ...". Its negation is "there is no Reminder whose ...". */
+        fun existenceOfAShape(): String = narrowed("there is ${withArticle(singular)}", filter)
+    }
+
+    private fun records(collection: CollectionExpr, subject: Subject): Records? {
+        val binding = collection.bindings.singleOrNull() ?: return null
+        if (binding.alias != null) return null
+        val filter = collection.where?.let { where -> predicate(where, subject.inside()) ?: return null } ?: ""
+        return when (val source = binding.source) {
+            is ShapeForSource -> {
+                val owner = value(source.forExpr, subject) ?: return null
+                Records("${source.shape} for $owner", "${source.shape} records for $owner", filter, ofTheRecord = false)
+            }
+            is PathExpr -> pathRecords(source, filter, subject)
+            else -> null
+        }
+    }
+
+    private fun pathRecords(source: PathExpr, filter: String, subject: Subject): Records? {
+        val isShape = source.root.first().isUpperCase() && source.segs.isEmpty() && source.root !in subject.aliases
+        if (isShape) return Records(source.root, "${source.root} records", filter, ofTheRecord = false)
+        val described = path(source, subject)
+        return Records(described, described, filter, ofTheRecord = true)
     }
 
     private fun functionCall(expression: FunCall, subject: Subject): String? {

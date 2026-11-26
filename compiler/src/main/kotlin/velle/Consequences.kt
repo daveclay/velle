@@ -15,9 +15,19 @@ internal class SpecFacts(val version: SpecVersion) {
 
     val moves: Set<MembershipMove> = StateFlowFacts.moves(model, catalog).toSet()
 
-    /** (source, rule, runs outside the source's envelope): the rule graph's edges without their labels. */
+    /**
+     * (source, rule, runs outside the source's envelope): the rule graph's edges without their labels.
+     * The graph draws an act's arrival as `commit<Act>`, or as `env<Act>` once it has passed the
+     * act's refusals; both are the act arriving, so both are read as `commit<Act>` here, and a
+     * refusal added or removed at the door does not read as every rule the act causes changing.
+     */
     val mayFire: Set<Triple<String, String, Boolean>> = RuleGraphGen.mayFire(model, catalog)
-        .map { edge -> Triple(edge.source, edge.rule, edge.crossesBoundary) }.toSet()
+        .map { edge -> Triple(arrival(edge.source), edge.rule, edge.crossesBoundary) }.toSet()
+
+    private fun arrival(source: String): String {
+        val act = source.removePrefix("env")
+        return if (source.startsWith("env") && act in model.exposed) "commit$act" else source
+    }
 
     /** The prohibitions checked once, when the act arrives, before any rule runs. */
     val checkedAtTheDoor: Set<NeverDecl> = Validator(model).doorNevers.map { index -> model.nevers[index] }.toSet()
@@ -157,20 +167,32 @@ internal object Consequences {
         (after.advisories - before.advisories).map { advisory -> Consequence("", "The compiler now advises: $advisory", namesIn(advisory)) } +
             (before.advisories - after.advisories).map { advisory -> Consequence("", "The compiler no longer advises: $advisory", namesIn(advisory)) }
 
+    /**
+     * The example tests the compiler writes from the spec ([SpecGen]), said as what each one checks:
+     * "that a LineItem whose price is below 0.00 is refused". A test that is no longer written is not
+     * a rule that stops holding; the sentence says it is about the tests.
+     */
     private fun generatedCases(before: SpecFacts, after: SpecFacts): List<Consequence> {
-        val gone = before.generatedCases - after.generatedCases
-        val new = after.generatedCases - before.generatedCases
+        val gone = (before.generatedCases - after.generatedCases).sorted()
+        val new = (after.generatedCases - before.generatedCases).sorted()
         return listOfNotNull(
             gone.takeIf { cases -> cases.isNotEmpty() }?.let { cases ->
-                Consequence("", "${count(cases.size)} no longer generated: ${cases.joinToString("; ")}.", cases.flatMap(::namesIn).toSet())
+                val opening = if (cases.size == 1) "The compiler no longer writes 1 of the example tests it writes from the spec. It checked"
+                else "The compiler no longer writes ${cases.size} of the example tests it writes from the spec. They checked"
+                Consequence("", "$opening ${checks(cases)}.", cases.flatMap(::namesIn).toSet())
             },
             new.takeIf { cases -> cases.isNotEmpty() }?.let { cases ->
-                Consequence("", "${count(cases.size)} now generated: ${cases.joinToString("; ")}.", cases.flatMap(::namesIn).toSet())
+                val opening = if (cases.size == 1) "The compiler now writes 1 more example test from the spec. It checks"
+                else "The compiler now writes ${cases.size} more example tests from the spec. They check"
+                Consequence("", "$opening ${checks(cases)}.", cases.flatMap(::namesIn).toSet())
             },
         )
     }
 
-    private fun count(cases: Int): String = if (cases == 1) "1 generated case is" else "$cases generated cases are"
+    private fun checks(cases: List<String>): String {
+        val checked = cases.map { case -> GeneratedCaseWords.checked(case) }
+        return if (checked.size == 1) checked.single() else checked.dropLast(1).joinToString(", ") + ", and " + checked.last()
+    }
 
     private fun namesIn(text: String): Set<String> = Regex("\\b[A-Z][A-Za-z0-9]*\\b").findAll(text).map { match -> match.value }.toSet()
 }

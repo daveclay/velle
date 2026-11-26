@@ -36,11 +36,11 @@ class DeclarationLines(private val writtenLines: List<String>, private val first
     fun written(line: Int): String = writtenLines.getOrElse(line - 1) { "" }.trim()
 }
 
-/** Each kind of declaration said part by part, in the words of a description ([Subject.described]). */
+/** Each kind of declaration said part by part, in the words of [Sentences]. */
 class DescribedDeclarations(private val compared: Compared, private val lines: DeclarationLines) {
 
     private val version = compared.version
-    private val subject = Subject.described
+    private val subject = Subject.record
 
     fun described(): DescribedDeclaration = when (val declaration = compared.declaration) {
         is ShapeDecl -> shape(declaration)
@@ -164,7 +164,7 @@ class DescribedDeclarations(private val compared: Compared, private val lines: D
 
     private fun rule(declaration: RuleDecl): DescribedDeclaration {
         val timing = RuleSentences.timing(declaration, version, subject)
-        val bodySubject = declaration.by?.let { actor -> Subject("its", setOf(actor.name), Sentences.Vocabulary.DESCRIPTION) } ?: subject
+        val bodySubject = declaration.by?.let { actor -> Subject("its", setOf(actor.name)) } ?: subject
         val effects = declaration.body.map { item -> item to RuleSentences.effect(item, bodySubject) }
         val saidEffects = effects.mapNotNull { itemAndEffect -> itemAndEffect.second }
         val allSaid = declaration.by == null && effects.isNotEmpty() && saidEffects.size == effects.size

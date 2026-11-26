@@ -11,7 +11,7 @@ import kotlin.test.assertNull
  */
 class FormsWithoutWordsTest {
 
-    private val subject = Sentences.Subject.described
+    private val subject = Sentences.Subject.record
 
     private fun formOf(condition: String): String? = FormsWithoutWords.ofCondition(Parser.parsePredicate(condition), subject)
 

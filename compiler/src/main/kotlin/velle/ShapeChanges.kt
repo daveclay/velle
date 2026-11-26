@@ -7,8 +7,9 @@ object ShapeChanges {
         val fields = shape.members.filterNot { member -> member is ActorProp }
             .map { member -> fieldPhrase(member) ?: return null }
         val actor = shape.actor?.let { actor -> ", made by ${Sentences.withArticle(actor.shape)}" } ?: ""
-        if (shape.takes.isNotEmpty() || shape.with.isNotEmpty()) return null
-        val withFields = if (fields.isEmpty()) "" else ", with " + fields.joinToString(", ")
+        if (shape.with.isNotEmpty()) return null
+        val taken = shape.takes.map { taken -> "every field $taken declares" }
+        val withFields = if (taken.isEmpty() && fields.isEmpty()) "" else ", with " + (taken + fields).joinToString(", ")
         return kindPhrase(shape) + actor + withFields
     }
 
@@ -18,29 +19,20 @@ object ShapeChanges {
         else -> "a record the system keeps"
     }
 
-    /** One field: `total (worked out as the sum of amount over its lineItems)`. */
+    /** One field: `total (worked out as the sum of amount over its lineItems)`, in the words of [MemberSentences]. */
     fun fieldPhrase(member: Member): String? = when (member) {
         is StoredProp -> storedPhrase(member)
-        is DerivedProp -> Sentences.value(member.expr, Sentences.Subject.record)
-            ?.let { worked -> "${member.name} (worked out as $worked)" }
+        is DerivedProp -> if (member.visible.isNotEmpty()) null else MemberSentences.workedOut(member.expr)?.let { worked -> "${member.name} (worked out as $worked)" }
         is TimestampProp -> "${member.name} (the time it was ${if (member.on == "create") "created" else "last changed"})"
         else -> null
     }
 
     private fun storedPhrase(member: StoredProp): String? {
-        if (member.visible.isNotEmpty() || member.tolerates != null || member.declaredOn != null) return null
-        val starting = member.initially?.let { initial ->
-            val initialWords = Sentences.value(initial, Sentences.Subject.record) ?: return null
-            ", starting as $initialWords"
-        } ?: ""
+        if (member.declaredOn != null) return null
+        val kind = MemberSentences.storedKind(member) ?: return null
         val unique = if (member.unique) ", no two the same" else ""
         val transient = if (member.transient) ", not kept" else ""
-        return "${member.name} (${typePhrase(member.type)}$starting$unique$transient)"
-    }
-
-    fun typePhrase(type: TypeRef): String = when (type) {
-        is ScalarType -> (if (type.many) "any number of " else "") + type.name + if (type.optional) ", may be absent" else ""
-        is RelType -> (if (type.many) "any number of " else "one ") + type.shape + if (type.optional) ", may be absent" else ""
+        return "${member.name} ($kind$unique$transient)"
     }
 
     /** A changed shape: one edit per field added, removed, or changed, or the whole shape as Velle

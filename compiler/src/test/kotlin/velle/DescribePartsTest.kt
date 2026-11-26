@@ -9,8 +9,7 @@ import kotlin.test.assertTrue
  * `velle describe` falls back to Velle at the smallest part it has no words for, and says the rest:
  * a field (`Product` in `examples/vendors/vendors.velle`), a line of a rule's body (`QuoteRequest`
  * in `examples/orders/orders.velle`), and a part of a condition (`CloseAccount`'s prohibition in
- * `examples/moderation/moderation.velle`). The words it adds for that are its own: the comparison of
- * two specs still shows a changed `if ... then ... else` field as Velle.
+ * `examples/moderation/moderation.velle`). The comparison of two specs says a field in the same words.
  */
 class DescribePartsTest {
 
@@ -116,7 +115,7 @@ class DescribePartsTest {
     }
 
     @Test
-    fun `the comparison of two specs keeps its own words, so a changed if-then-else field is still shown as Velle`() {
+    fun `the comparison of two specs says a changed if-then-else field in the words describe uses`() {
         val billing = File("../examples/billing/billing.velle").readText()
         val statusLine = "    status: Status = if balance <= 0 then \"paid\" else if due < today then \"overdue\" else \"open\""
         assertTrue(statusLine in billing, "billing.velle no longer holds: $statusLine")
@@ -125,6 +124,10 @@ class DescribePartsTest {
 
         val report = SpecComparison.report(SpecVersion("before.velle", billing), SpecVersion("after.velle", edited))
 
-        assertTrue("- Invoice changed, and this report has no words for it yet. The Velle:" in report, report)
+        assertTrue(
+            "- Invoice's field is now status (worked out as \"paid\" when its balance is at most 0, otherwise \"open\"). " +
+                "Before: status (worked out as \"paid\" when its balance is at most 0, otherwise \"overdue\" when its due is before today, otherwise \"open\")." in report,
+            report,
+        )
     }
 }

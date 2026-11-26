@@ -55,19 +55,19 @@ object HypotheticalRecords {
         val movement = if (entering) "becomes" else "stops being"
         val clauses = conditions.map { condition -> Sentences.clause(condition, version.baseShapes) ?: "`${Printer.refExpr(condition)}` holds" }
         val membership = RecordChange(base, "$record $movement ${Sentences.withArticle(refinement)} by this change alone when ${listed(clauses)}.", pointer)
-        val rules = rulesReading(refinement, version).mapNotNull { (rule, through) -> ruleOutcome(rule, refinement, through, entering, version) }
+        val rules = rulesReading(refinement, version).mapNotNull { (rule, through) -> ruleOutcome(rule, base, refinement, through, entering, version) }
         return listOf(membership) + rules.map { sentence -> RecordChange(base, sentence, pointer) }
     }
 
     /** What a rule over the refinement does with a record that entered or left it by the change alone.
      *  [through] is the refinement the rule names that is made from [refinement], or null when it names [refinement] itself. */
-    private fun ruleOutcome(rule: RuleDecl, refinement: String, through: String?, entering: Boolean, version: SpecVersion): String? {
+    private fun ruleOutcome(rule: RuleDecl, base: String, refinement: String, through: String?, entering: Boolean, version: SpecVersion): String? {
         val madeFrom = through?.let { composite -> ", since $composite is made from $refinement" } ?: ""
         val sweepOnly = rule.preposition == "on" && "commit" !in rule.triggers && rule.trigger == Trigger.ENTRY
         return if (sweepOnly) {
             sweepOutcome(rule, through == null, entering, madeFrom, version)
         } else {
-            commitOutcome(rule, entering, madeFrom)
+            commitOutcome(rule, base, refinement, through, entering)
         }
     }
 
@@ -82,11 +82,17 @@ object HypotheticalRecords {
         return "$ticks, ${rule.name} runs for it$condition."
     }
 
-    /** Any other rule looks for a record entering or leaving at a commit, and none made this one. */
-    private fun commitOutcome(rule: RuleDecl, entering: Boolean, madeFrom: String): String? {
+    /**
+     * Any other rule looks for a record entering or leaving at a commit, and none made this one: the
+     * change to the spec moved it. Whether the rule then runs for it is not settled, so the sentence
+     * says it could.
+     */
+    private fun commitOutcome(rule: RuleDecl, base: String, refinement: String, through: String?, entering: Boolean): String? {
         val firesOnThisMove = if (entering) rule.trigger == Trigger.ENTRY else rule.trigger.onPredicateExit
         if (!firesOnThisMove) return null
-        return "${rule.name} could then run for it, with no act or tick causing it$madeFrom."
+        val move = if (entering) "made it ${Sentences.withArticle(refinement)}" else "made it stop being ${Sentences.withArticle(refinement)}"
+        val madeFrom = through?.let { composite -> ", and $composite is made from $refinement" } ?: ""
+        return "${rule.name} could then run for it, though nothing happened to the $base itself: the change to the spec is what $move$madeFrom."
     }
 
     /** The rules whose condition reads [refinement], each with the refinement it reads it through, or null

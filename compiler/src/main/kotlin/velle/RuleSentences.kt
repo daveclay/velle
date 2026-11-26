@@ -71,20 +71,12 @@ object RuleSentences {
         data class Said(val clause: String) : Condition
     }
 
-    /**
-     * The rule's condition in words. The shared words treat a condition with no words as the base
-     * shape alone, and so leave it out of the sentence; the comparison of two specs has always said
-     * a rule that way, and its reports are pinned. A description says no sentence instead.
-     */
+    /** The rule's condition in words. A condition with no words gives the rule no sentence, so its Velle is shown; it is never left out. */
     private fun condition(rule: RuleDecl, version: SpecVersion, subject: Subject): Condition {
         val condition = rule.condition
         if (condition is RefName && condition.where == null && condition.name in version.baseShapes) return Condition.BaseAlone
-        val clause = Sentences.clause(condition, version.baseShapes, subject)
-        return when {
-            clause != null -> Condition.Said(clause)
-            subject.vocabulary == Sentences.Vocabulary.SHARED -> Condition.BaseAlone
-            else -> Condition.Unsaid
-        }
+        val clause = Sentences.clause(condition, version.baseShapes, subject) ?: return Condition.Unsaid
+        return Condition.Said(clause)
     }
 
     /** One line of a rule's body as what the rule does: "creates a Receipt with ...". Null when there are no words for it. */
@@ -101,10 +93,7 @@ object RuleSentences {
 
     private fun creation(item: Creation, subject: Subject): String? {
         if (item.alias != null) return null
-        val owner = item.forExpr?.let { owner ->
-            if (subject.vocabulary == Sentences.Vocabulary.SHARED) return null
-            " for " + (Sentences.value(owner, subject) ?: return null)
-        } ?: ""
+        val owner = item.forExpr?.let { owner -> " for " + (Sentences.value(owner, subject) ?: return null) } ?: ""
         val fields = item.fields.map { field ->
             val value = Sentences.value(field.value, subject) ?: return null
             "${field.name} set to $value"

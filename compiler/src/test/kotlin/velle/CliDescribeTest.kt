@@ -79,6 +79,7 @@ class CliDescribeTest {
                 "## What the system keeps", "### Invoice",
                 "## What the rules do", "### Invoice",
                 "## What rules over other records do to Invoice", "### BillCustomer", "### ChangeDueDate",
+                "## What the refinements of other shapes it mentions mean", "### ChangeDueDate",
             ),
             text.lines().filter { line -> line.startsWith("#") && !line.startsWith("# ") },
         )
@@ -111,7 +112,7 @@ class CliDescribeTest {
         )
         assertTrue(
             "- RemindOverdue: at each Weekly tick, for every Invoice of which it is true that it is an ActionableOverdue " +
-                "and there is no Reminder whose invoice is it and whose sentOn is after 7 days before today, " +
+                "and there is no Reminder whose invoice is it and whose sentOn is later than 7 days ago, " +
                 "it creates a Reminder with invoice set to it, sentOn set to today.\n" +
                 pointer(158, "rule RemindOverdue") in text,
             text,
@@ -142,6 +143,26 @@ class CliDescribeTest {
         assertTrue("- TrackLargestPayment: when a Payment is created, it sets its invoice's customer's largestPayment" in fromElsewhere, fromElsewhere)
         assertTrue("- ApplyEmailCorrection: when a CorrectEmail arrives, it sets its customer's email to its corrected." in fromElsewhere, fromElsewhere)
         assertTrue("- AdmitCustomer: when a SignUp arrives, it creates a Customer" in fromElsewhere, fromElsewhere)
+    }
+
+    @Test
+    fun `describing Reminder closes with what the refinements of Invoice it mentions mean`() {
+        val text = describe("Reminder").text
+        val closing = text.substringAfter("## What the refinements of other shapes it mentions mean\n")
+
+        assertTrue("- RemindOverdue: at each Weekly tick, for every Invoice of which it is true that it is an ActionableOverdue" in text, text)
+        assertTrue(
+            closing.startsWith(
+                "\n### Invoice\n\n" +
+                    "- An Invoice is an OverdueInvoice when its balance is above 0 and its due is before today.\n" +
+                    pointer(148, "shape OverdueInvoice = Invoice where balance > 0 and due < today") + "\n" +
+                    "- An Invoice is an ActionableOverdue when it is an OverdueInvoice and it is not an ArchivedInvoice.\n" +
+                    pointer(151, "shape ActionableOverdue = OverdueInvoice and not ArchivedInvoice") + "\n" +
+                    "- An Invoice is an ArchivedInvoice when there is an ArchiveRequest for it and there is no UnarchiveRequest for it.\n",
+            ),
+            text,
+        )
+        assertTrue("PaidInvoice" !in closing, "a refinement the description does not mention is left out: $text")
     }
 
     @Test

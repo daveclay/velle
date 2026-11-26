@@ -21,5 +21,5 @@ that can now happen or can no longer happen; none says what will happen.
 
 ### The spec as a whole
 
-- 2 generated cases are no longer generated: never - a LineItem where price below 0.00 is refused; never - a LineItem with price 0.00 is accepted.
+- The compiler no longer writes 2 of the example tests it writes from the spec. They checked that a LineItem whose price is below 0.00 is refused, and that a LineItem whose price is 0.00 is accepted.
   In the spec: 01-tidy.velle, line 58, `never (LineItem where price < 0)`
