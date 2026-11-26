@@ -18,7 +18,7 @@ So the product owner trusts the compiler, not the assistant. If the assistant wr
 
 - **Java 21 or later.** The skill runs the compiler from a jar file. `java -version` says which Java a machine has.
 - **No network.** The compiler runs on the machine where the assistant runs its commands, and reads only the spec.
-- **git, if you want history.** When the spec is in a git repository, the assistant offers to make one git commit per accepted decision. The message holds the decision in the words of the person who made it, the compiler's account of the edit, and the discussion. Without git the session works the same and keeps no history. Only the end-of-session report, every change at once, says what the session did.
+- **git, if you want history.** When the spec is in a git repository and you ask for it, the assistant makes one git commit per accepted decision. The message holds the decision in the words of the person who made it, the compiler's account of the edit, and the discussion. Without git the session works the same and keeps no history. Only the end-of-session report, every change at once, says what the session did.
 
 ## Building the skill folder
 
@@ -62,7 +62,7 @@ The assistant runs `velle validate billing.velle`, which prints:
 `billing.velle` validates.
 ```
 
-It copies the spec as it stands to a temporary folder outside your folders, to compare against at the end. It reads Velle's best practices, and the team's own, if there is a `best-practices.md` beside the spec. If the spec is in a git repository, it asks whether to make a git commit for each accepted decision. Then it asks what you came to change.
+It copies the spec as it stands to a temporary folder outside your folders, to compare against at the end. It reads Velle's best practices, and the team's own, if there is a `best-practices.md` beside the spec. If the spec is in a git repository, it says once that it can make a git commit for each accepted decision, and does so only when you ask. Then it starts from whatever you say first.
 
 ### Reading what the spec says
 
@@ -118,7 +118,7 @@ In the same reply, under the report, the assistant quotes each line of "What tha
 
 ### Accepting a change
 
-The product owner says yes. If you agreed to git commits, the assistant commits the spec. The message's first line is the decision in the product owner's words, "Only issued invoices get reminders". Its body holds the report's "What was edited" part and the quoted discussion. The assistant never creates a branch and never pushes.
+The product owner says yes. If you asked for git commits, the assistant commits the spec. The message's first line is the decision in the product owner's words, "Only issued invoices get reminders". Its body holds the report's "What was edited" part and the quoted discussion. The assistant never creates a branch and never pushes.
 
 The next decision follows the same steps. The product owner says: "Wait two weeks between reminders." The assistant changes `today - 7 days` to `today - 14 days` in `rule RemindOverdue` ([§11](Reference-11-rule-when-on)), and the report's "What was edited" part says:
 
@@ -169,6 +169,16 @@ The spec keeps its refusal on that point until a later session answers the quest
 ### Ending
 
 At the end the assistant runs `velle compare` from the copy it kept at the start to the spec, and shows every change of the session at once. It asks about each change still marked `-- Not confirmed`. It lists the questions still open in `billing.questions.md`. It says whether the spec validates and what it committed. Pushing, merging, and opening a review are left to you.
+
+## You decide how the session runs
+
+The spec is yours, and it is there to help the two of you understand each other while you talk. The assistant does not ask how you want to work before it starts. What this page shows is what it does when you have said nothing.
+
+- Read the Velle whenever you like, and ask the assistant to show it. An engineer may follow the spec as it changes, and a product owner may look at it too.
+- Tell the assistant to ask less, to make several changes at once, or to hold its report until the end. It marks a change whose report nobody saw as `-- Not confirmed`.
+- An engineer working alone uses it the same way, usually faster and in Velle's own terms.
+
+One thing stays fixed. The assistant never says what the spec means in its own words. It shows the compiler's sentences or the Velle.
 
 ## The three commands
 

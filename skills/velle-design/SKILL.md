@@ -8,7 +8,9 @@ compatibility: Requires Java 21 or later and a POSIX shell to run scripts/velle.
 
 A Velle spec records how a business works: what it keeps, what may happen to it, what follows, and what is never allowed. In a design session a product owner and an engineer talk through those rules and you write what they decide into the spec.
 
-One rule governs everything below. **The product owner confirms what the compiler says the spec means, never what you say it means.** After every change you run the compiler, show its sentences word for word, and ask whether that is what they meant. You do not summarize a rule in your own words, because nobody could then tell whether your words and the spec agree.
+The spec is theirs. It is there to help two people understand each other while they talk, and it is not something you hand over at the end. Either of them may read it at any point, the engineer most of all. They decide how the session runs: how fast, how much is read back, when something counts as agreed. What follows is how you work when they have not said otherwise. Do not open with a list of questions about how they want to work. Start from what they say.
+
+One rule does not bend. **The product owner confirms what the compiler says the spec means, never what you say it means.** After every change you run the compiler, show its sentences word for word, and ask whether that is what they meant. You do not summarize a rule in your own words, because nobody could then tell whether your words and the spec agree.
 
 ## The commands
 
@@ -28,13 +30,12 @@ Every command prints Markdown and changes no file. A command exits with 0 when i
 
 ## Before the first change
 
-1. **Find the draft.** Ask which `.velle` file the session works on. Most sessions change a spec that already exists. A system's first session starts from a new, empty file, and you ask where to put it. Work on the file where it is. Never copy it elsewhere in the team's folders, create a branch, or push. How a team keeps and reviews its spec is the team's choice.
+1. **Find the draft.** Use the `.velle` file they name, or the only one in the folder. Ask only when you cannot tell. Most sessions change a spec that already exists. A system's first session starts from a new, empty file. Work on the file where it is. Never copy it elsewhere in the team's folders, create a branch, or push. How a team keeps and reviews its spec is the team's choice.
 2. **Check it validates.** Run `validate`. If an existing spec does not validate, show what the compiler says and ask the engineer how to proceed before changing anything.
 3. **Keep the starting version.** Copy the draft as it stands to a temporary folder outside the team's folders. You compare against it at the end.
 4. **Read the best practices.** Read `references/Best-practices.md`. Then look for a file named `best-practices.md` in the same folder as the draft. It holds the team's own best practices. Follow both, and where they disagree follow the team's.
-5. **Say what will be kept.** If the draft is in a git repository, say that you can commit each accepted decision with the words that led to it, and ask whether to do so. If it is not, or git is not available, say once that the session will keep no history, and carry on. A session never needs git.
-6. **Ask who is in the session.** A product owner and an engineer in a meeting get everything below as written. An engineer working alone gets the shorter loop under "When an engineer works alone". If you cannot tell, ask.
-7. **Show where things stand.** For an existing spec, ask what they came to change and run `describe` with that name, so everyone starts from what the spec says today. Describe the whole spec only when asked, or when it is short.
+5. **Mention commits once, and do not ask.** If the draft is in a git repository, say in one line that you can commit each accepted decision with the words that led to it, whenever they want that. Commit only once someone says to. A session never needs git.
+6. **Start from what they say.** When they name something the spec already has, run `describe` with that name, so everyone starts from what the spec says today. Describe the whole spec only when asked, or when it is short.
 
 ## For each change
 
@@ -55,20 +56,7 @@ Every command prints Markdown and changes no file. A command exits with 0 when i
    - **Rejected:** restore the saved version. Ask what they meant instead, unless they have already said to leave it or to park it.
    - **Partly right:** restore the saved version and make the corrected change as a new edit.
    - **No answer, and they move on:** do not hold the conversation up, and do not lose the decision. Keep the change in the draft, and mark it there with a comment on the line above what you changed, or where a removed line stood: `-- Not confirmed, 2026-11-26: "Only issued invoices get reminders"`, with the date and the decision in the words of the person who made it. Say in one line at the top of your next reply that it is in but not yet confirmed. You ask about it again at the end of the session, and remove the comment when it is confirmed or undone.
-8. **Keep a record, if they agreed to commits.** Commit the draft and the questions file, and nothing else. The first line of the message is the decision in the words of the person who made it, shortened to fit one line: "Only issued invoices get reminders". The body holds the report's "What was edited" part as printed, then the quoted discussion, with any question about a line and its answer. For a change not yet confirmed, the body says so and holds the lines you quoted under "This also follows". When a question is parked and the draft did not change, commit the questions file alone, with a first line that starts "Parked:" and gives the question. Never create a branch and never push. Without git there is nothing to do here.
-
-## When an engineer works alone
-
-An engineer also uses this skill without a product owner, to write a spec or tune one in a quick exchange. The compiler's report still follows every edit, because it is how the engineer sees what an edit did to rules they did not touch. What changes:
-
-- Show Velle code freely, and take instructions given in Velle's own terms.
-- Make several changes in one go when the engineer asks for them together, then show one report for all of them.
-- After each edit show the `compare` report as printed, with the lines under "What that changes" that the engineer did not mention quoted beneath it. Ask nothing. The engineer says so when something is wrong. Do still ask about a line a business would likely not want.
-- Mark nothing as not confirmed. What the engineer does not object to stands.
-- Anything that turns on what the business means still goes to the engineer as a question. If they cannot answer for the business, it goes in the questions file.
-- Commit when the engineer says to, with their instruction as the first line.
-
-Saving the version before each edit, validating, raising new advisories, the best practices, and the end of the session are the same.
+8. **Keep a record, if they asked for commits.** Commit the draft and the questions file, and nothing else. The first line of the message is the decision in the words of the person who made it, shortened to fit one line: "Only issued invoices get reminders". The body holds the report's "What was edited" part as printed, then the quoted discussion, with any question about a line and its answer. For a change not yet confirmed, the body says so and holds the lines you quoted under "This also follows". When a question is parked and the draft did not change, commit the questions file alone, with a first line that starts "Parked:" and gives the question. Never create a branch and never push. Without git there is nothing to do here.
 
 ## Explaining what the report names
 
@@ -76,7 +64,8 @@ The report names rules and refinements, and a product owner may not know what on
 
 ## Speaking with the product owner
 
-- Show the compiler's sentences. Do not show Velle code unless someone asks to see it. The report quotes lines of the spec beside its sentences, and that is fine.
+- Lead with the compiler's sentences, and show the Velle whenever it helps them talk. The engineer may be reading the spec as it changes, and the product owner may want to look at it too. Showing Velle is never a substitute for the compiler's sentences about it.
+- When they tell you how they want to work, do that: fewer questions, several changes at once, the Velle and no report, a report only at the end. If skipping a read-back means nobody has seen the compiler's sentences for a change, mark it `-- Not confirmed` as in step 7.
 - Where the compiler has no words for a construct it prints the Velle and says so. Show it as printed. Ask the engineer to explain it. Do not translate it yourself.
 - Use the names the spec uses. If they say "late invoice" and the spec says `OverdueInvoice`, ask whether those are the same thing before using either. When a word they use could be two things in the spec, such as "issued" where the spec has both an `IssuedInvoice` and an `issuedOn`, ask which they mean.
 - The report can print something that is not a name in the spec or that reads as nonsense. Show it as printed, say that you cannot tell what it refers to, and ask the engineer alone. Do not guess at it.
