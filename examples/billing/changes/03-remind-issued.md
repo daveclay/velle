@@ -13,8 +13,8 @@ Where the report has no words for a change yet, it shows the Velle instead and s
 
 ## What that changes
 
-What the compiler derives from the edits for declarations nobody edited. Each is something
-that can now happen or can no longer happen; none says what will happen.
+What the compiler works out from the edits, beyond what each edit says on its own. Each is
+something that can now happen or can no longer happen; none says what will happen.
 
 ### Issuance
 

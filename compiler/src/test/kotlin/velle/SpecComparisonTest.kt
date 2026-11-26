@@ -171,6 +171,22 @@ class SpecComparisonTest {
     }
 
     @Test
+    fun `a first comparison, from an empty spec, says each declaration is new and an act's parts in words`() {
+        val orders = File("../examples/orders/orders.velle").readText()
+        val report = SpecComparison.report(SpecVersion("empty.velle", ""), SpecVersion("orders.velle", orders))
+
+        assertTrue(
+            "- New: Order, a request someone makes, kept as a record, with customer (one Customer), placedOn (a Date), " +
+                "cardNumber (a text, not kept), cardholder (a text, not kept), total (worked out as the sum of quantity over its orderLines), " +
+                "and its orderLines can arrive with it as new records in the same request, each able to bring its customizations the same way." in report,
+            report,
+        )
+        assertTrue("- ProductInFamily is new, and this report has no words for it yet. The Velle:" in report, report)
+        assertTrue(" changed, and this report has no words" !in report, report)
+        assertTrue("What the compiler works out from the edits, beyond what each edit says on its own." in report, report)
+    }
+
+    @Test
     fun `no report in the billing history names a node of the rule graph`() {
         val changes = File("../examples/billing/changes")
         val versions = changes.listFiles { file -> file.extension == "velle" }!!.sortedBy { file -> file.name }

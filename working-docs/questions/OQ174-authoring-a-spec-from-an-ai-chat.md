@@ -61,11 +61,11 @@ On 2026-11-26 an assistant given only the skill folder and a git repository hold
 On 2026-11-26, with the skill as revised after the first trial: the billing session again, and a new invoicing spec written from an empty file in a folder without git. In the third, every edit validated the first time, eight validations in all, and the vague sentences ("only the accounts team may record a payment") were parked as questions with no rule written.
 
 - **Asking about each consequence by itself was too slow.** In the second session the assistant fell a turn behind, held an agreed change back when the people moved on, and ended with no decision in the spec. `SKILL.md` now reads a change back in one reply with one closing question, and asks about a single line only when a business would likely not want it. What happens to a change nobody confirms is D13.
-- **The assistant explained a rule in its own words** to make "OpenInvoice can now cause SendReceipt to run" answerable. `SKILL.md` now has it quote `velle describe`. A rule's name is refused by `velle describe` today. Work item below.
-- **A new act with a `with` list has no words in the comparison**, so the product owner confirmed the new `Invoice` without reading it in words. It is the most common form in `compiler/src/test/resources/describe/without-words.md`, already a work item.
+- **The assistant explained a rule in its own words** to make "OpenInvoice can now cause SendReceipt to run" answerable. `SKILL.md` now has it quote `velle describe`. `velle describe` takes a rule's name for this (`CliDescribeTest`, "describing a rule by name gives its sentence, its place in the spec, and the shape it is over").
+- **A new act with a `with` list has no words in the comparison**, so the product owner confirmed the new `Invoice` without reading it in words. A new act with a `with` list now has words (`SpecComparisonTest`, "a first comparison, from an empty spec, says each declaration is new and an act's parts in words").
 - **The report said something that cannot happen:** "A new Payment can now make an Invoice become an OverdueInvoice", where payments are above zero. That is OQ182 (`working-docs/QUESTIONS.md`).
 - **The read-back does not say what values a field can now take.** Removing `never (LineItem where price < 0)` lets a total go below zero, and the report names only the rules and refinements a line item can now reach (`examples/billing/changes/02-discounts.md`). The product owner noticed the total unaided. Nothing is planned for it here.
-- **In a first session the report's heading reads oddly.** "What the compiler derives from the edits for declarations nobody edited" stands over a spec in which everything is new. Work item below.
+- **In a first session the report's heading reads oddly.** "What the compiler derives from the edits for declarations nobody edited" stood over a spec in which everything is new. It now reads "What the compiler works out from the edits, beyond what each edit says on its own" (`compiler/src/main/kotlin/velle/ComparisonReport.kt`).
 - **The third trial barely tested the reference.** `references/language.md` opens with almost the same invoicing system the script described, so the assistant copied it. Work item below.
 - **A role gate has a cost the reference does not state:** the first `by` in a spec makes the compiler ask who may see every kind of record. `references/language.md` §14 and §15 now say so.
 - **Smaller ones, fixed in `SKILL.md`:** who decides when only one person speaks, how a turn with several decisions is split, the choices that are the engineer's, parking a question as a commit, and what an entry in the questions file holds.
@@ -366,10 +366,8 @@ So `SKILL.md` has no second loop and asks nobody who is present. It opens by say
 ## 5. Work items
 
 - [ ] Upload the skill to claude.ai and run `scripts/velle validate` there, to learn whether its sandbox has Java 21, which no documentation says (§2, "What each host can run").
-- [ ] Give words to the 38 parts listed in `compiler/src/test/resources/describe/without-words.md`, most common form first (D2).
+- [ ] Give words to the 16 parts still listed in `compiler/src/test/resources/describe/without-words.md` (38 before 2026-11-26), and to a changed `with` list in the comparison, which still prints as Velle (D2).
 - [ ] Try a design session on a domain the reference does not use as its example, such as bookings or a pharmacy, from an empty draft (§2, "What the second and third trial sessions showed").
-- [ ] Let `velle describe <draft> <Name>` take a rule's name (§2, same section).
-- [ ] Reword the comparison's heading over "What that changes" so it reads rightly when every declaration is new (§2, same section).
 - [ ] Run a trial session on `SKILL.md` as rewritten after the third trial and after D14, with people who set their own pace: one meeting, and one engineer working quickly alone. Neither has been through a trial.
 - [ ] Write the decision on what a scenario for `velle try` says, from what stage 1's trial session needed (§6, stage 2).
 - [ ] Add `velle try` (§6, stage 2).

@@ -48,7 +48,7 @@ class DescribedDeclarations(private val compared: Compared, private val lines: D
         is RuleDecl -> rule(declaration)
         is NeverDecl -> prohibition(declaration)
         is EnumDecl, is UsesDecl -> whole(DeclarationSentences.described(compared))
-        is VisibilityDefault -> whole(null, "a `visible to` line for the whole spec")
+        is VisibilityDefault -> whole(DeclarationSentences.described(compared), "a `visible to` line for the whole spec")
     }
 
     private fun whole(description: String?, form: String = "`${compared.pointer.declaration}`"): DescribedDeclaration {
@@ -68,11 +68,18 @@ class DescribedDeclarations(private val compared: Compared, private val lines: D
             else -> "a record the system keeps"
         }
         val takes = declaration.takes.map { taken -> Phrase.Said("It has every field $taken declares.") }
-        val with = if (declaration.with.isEmpty()) emptyList() else listOf(unsaid(Printer.print(declaration).substringAfterLast("} "), compared.located.line, "an act's `with` list"))
+        val with = arrivingPhrases(declaration)
         val owner = MemberOwner(declaration.name, declaration.name, refinement = false)
         val ownMembers = declaration.members.filter { member -> member.declaredOn() == null }
         val members = ownMembers.map { member -> memberPhrase(member, owner) }
         return DescribedDeclaration(compared.pointer, label(), Phrase.Said("${declaration.name} is $kind."), takes + with + members)
+    }
+
+    private fun arrivingPhrases(declaration: ShapeDecl): List<Phrase> {
+        if (declaration.with.isEmpty()) return emptyList()
+        val clauses = MemberSentences.arriving(declaration)
+            ?: return listOf(unsaid(Printer.print(declaration).substringAfterLast("} "), compared.located.line, "an act's `with` list"))
+        return clauses.map { clause -> Phrase.Said(Sentences.capitalized(clause) + ".") }
     }
 
     private fun Member.declaredOn(): String? = when (this) {
@@ -164,8 +171,8 @@ class DescribedDeclarations(private val compared: Compared, private val lines: D
 
     private fun rule(declaration: RuleDecl): DescribedDeclaration {
         val timing = RuleSentences.timing(declaration, version, subject)
-        val bodySubject = declaration.by?.let { actor -> Subject("its", setOf(actor.name)) } ?: subject
-        val effects = declaration.body.map { item -> item to RuleSentences.effect(item, bodySubject) }
+        val bodySubject = declaration.by?.let { actor -> Subject("its", mapOf(actor.name to actor.name)) } ?: subject
+        val effects = declaration.body.zip(RuleSentences.effects(declaration.body, bodySubject))
         val saidEffects = effects.mapNotNull { itemAndEffect -> itemAndEffect.second }
         val allSaid = declaration.by == null && effects.isNotEmpty() && saidEffects.size == effects.size
         if (timing != null && allSaid) {

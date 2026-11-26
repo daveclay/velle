@@ -47,7 +47,7 @@ object DeclarationSentences {
         is ShapeDecl -> ShapeChanges.described(declaration)
         is EnumDecl -> "one of the words " + declaration.words.joinToString(", ") { word -> "\"$word\"" }
         is UsesDecl -> "${declaration.name} is taken from ${declaration.qualified.substringBeforeLast('.')}"
-        is VisibilityDefault -> null
+        is VisibilityDefault -> MemberSentences.shownTo(declaration.clause)?.let { viewers -> "a record is shown to $viewers, unless its shape says who it is shown to" }
     }
 
     fun addedSentence(compared: Compared, description: String): String =
@@ -75,6 +75,7 @@ object DeclarationSentences {
             is NeverDecl -> Sentences.capitalized(prohibitionSentence(declaration, compared.version, null, description))
             is RuleDecl -> "${declaration.name}: $description."
             is UsesDecl -> "$description."
+            is VisibilityDefault -> "${Sentences.capitalized(description)}."
             else -> "${compared.name} is $description."
         }
 

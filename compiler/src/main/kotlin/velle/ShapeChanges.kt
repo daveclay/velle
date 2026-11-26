@@ -4,13 +4,16 @@ package velle
 object ShapeChanges {
 
     fun described(shape: ShapeDecl): String? {
-        val fields = shape.members.filterNot { member -> member is ActorProp }
+        val fields = shape.members.filterNot { member -> member is ActorProp || member is VisibleClause }
             .map { member -> fieldPhrase(member) ?: return null }
+        val shown = shape.members.filterIsInstance<VisibleClause>().map { clause -> MemberSentences.shownTo(clause) ?: return null }
         val actor = shape.actor?.let { actor -> ", made by ${Sentences.withArticle(actor.shape)}" } ?: ""
-        if (shape.with.isNotEmpty()) return null
+        val arriving = MemberSentences.arriving(shape) ?: return null
         val taken = shape.takes.map { taken -> "every field $taken declares" }
         val withFields = if (taken.isEmpty() && fields.isEmpty()) "" else ", with " + (taken + fields).joinToString(", ")
-        return kindPhrase(shape) + actor + withFields
+        val parts = arriving.joinToString("") { clause -> ", and $clause" }
+        val shownTo = shown.joinToString("") { viewers -> ", and it is shown to $viewers" }
+        return kindPhrase(shape) + actor + withFields + parts + shownTo
     }
 
     private fun kindPhrase(shape: ShapeDecl): String = when {
@@ -22,17 +25,26 @@ object ShapeChanges {
     /** One field: `total (worked out as the sum of amount over its lineItems)`, in the words of [MemberSentences]. */
     fun fieldPhrase(member: Member): String? = when (member) {
         is StoredProp -> storedPhrase(member)
-        is DerivedProp -> if (member.visible.isNotEmpty()) null else MemberSentences.workedOut(member.expr)?.let { worked -> "${member.name} (worked out as $worked)" }
-        is TimestampProp -> "${member.name} (the time it was ${if (member.on == "create") "created" else "last changed"})"
+        is DerivedProp -> fieldShown(member.visible)?.let { shown ->
+            MemberSentences.workedOut(member.expr)?.let { worked -> "${member.name} (worked out as $worked$shown)" }
+        }
+        is TimestampProp -> fieldShown(member.visible)?.let { shown -> "${member.name} (the time it was ${if (member.on == "create") "created" else "last changed"}$shown)" }
         else -> null
+    }
+
+    /** ", shown only to an Administrator of those who see the record", or nothing for a field with no `visible to`. */
+    private fun fieldShown(visible: List<VisibleClause>): String? {
+        if (visible.isEmpty()) return ""
+        return MemberSentences.fieldViewers(visible)?.let { viewers -> ", shown only to $viewers of those who see the record" }
     }
 
     private fun storedPhrase(member: StoredProp): String? {
         if (member.declaredOn != null) return null
         val kind = MemberSentences.storedKind(member) ?: return null
+        val shown = fieldShown(member.visible) ?: return null
         val unique = if (member.unique) ", no two the same" else ""
         val transient = if (member.transient) ", not kept" else ""
-        return "${member.name} ($kind$unique$transient)"
+        return "${member.name} ($kind$unique$transient$shown)"
     }
 
     /** A changed shape: one edit per field added, removed, or changed, or the whole shape as Velle

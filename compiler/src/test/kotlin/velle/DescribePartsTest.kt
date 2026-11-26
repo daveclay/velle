@@ -7,9 +7,9 @@ import kotlin.test.assertTrue
 
 /**
  * `velle describe` falls back to Velle at the smallest part it has no words for, and says the rest:
- * a field (`Product` in `examples/vendors/vendors.velle`), a line of a rule's body (`QuoteRequest`
- * in `examples/orders/orders.velle`), and a part of a condition (`CloseAccount`'s prohibition in
- * `examples/moderation/moderation.velle`). The comparison of two specs says a field in the same words.
+ * a field (`Member` in `examples/membership/membership.velle`), a line of a rule's body
+ * (`RecordCatalogue` in `examples/orders/orders.velle`), and a part of a condition (`ProductInFamily`
+ * in `examples/orders/orders.velle`). The comparison of two specs says a field in the same words.
  */
 class DescribePartsTest {
 
@@ -17,57 +17,107 @@ class DescribePartsTest {
 
     @Test
     fun `a field with no words is shown as Velle on its own, with its line, and the other fields are said`() {
-        val vendors = "../examples/vendors/vendors.velle"
-        val product = described(vendors, "Product").substringAfter("- Product is a record the system keeps.\n")
+        val membership = "../examples/membership/membership.velle"
+        val member = described(membership, "Member").substringAfter("- Member is a record the system keeps.\n")
 
         assertTrue(
-            product.startsWith(
-                "  In the spec: $vendors, line 81, `shape Product`\n" +
-                    "  - Its vendor is one Vendor.\n" +
+            member.startsWith(
+                "  In the spec: $membership, line 38, `shape Member`\n" +
                     "  - Its name is a text.\n" +
-                    "  - Its price is a decimal.\n" +
-                    "  - There are no words for this part yet. The Velle, line 85:\n" +
+                    "  - Its signupEmail is a text.\n" +
+                    "  - Its plan is one Plan.\n" +
+                    "  - Its referredBy is one Member, and may be absent.\n" +
+                    "  - Its joinedOn is the time it was created.\n" +
+                    "  - Its lastChangedOn is the time it was last changed.\n" +
+                    "  - Its balance is a decimal, starting as 0.\n" +
+                    "  - Its lowestBalance is a decimal, starting as 0.\n" +
+                    "  - There are no words for this part yet. The Velle, line 47:\n" +
                     "    ```velle\n" +
-                    "    cost: decimal visible to Administrator\n" +
+                    "    visitCount: long initially 0 tolerates duplication\n" +
                     "    ```\n",
             ),
-            product,
+            member,
         )
     }
 
     @Test
     fun `a body line of a rule with no words is shown as Velle, and the rule's timing is still said`() {
         val orders = "../examples/orders/orders.velle"
-        val text = described(orders, "PriceRequest")
+        val text = described(orders, "CatalogueUpdate")
 
         assertTrue(
-            "- QuoteRequest: when a PriceRequest arrives, it does the following.\n" +
-                "  In the spec: $orders, line 120, `rule QuoteRequest when PriceRequest`\n" +
-                "  - There are no words for this part yet. The Velle, line 121:\n" +
+            "- RecordCatalogue: when a CatalogueUpdate arrives, it does the following.\n" +
+                "  In the spec: $orders, line 174, `rule RecordCatalogue when CatalogueUpdate`\n" +
+                "  - There are no words for this part yet. The Velle, line 175:\n" +
                 "    ```velle\n" +
-                "    Quote from { customer: customer } as quote\n" +
-                "    ```\n" +
-                "  - There are no words for this part yet. The Velle, line 122:\n" +
-                "    ```velle\n" +
-                "    for each item in requestedItems {\n" in text,
+                "    for each change in changes {\n" in text,
             text,
         )
     }
 
     @Test
     fun `a part of a condition with no words is shown as Velle under the sentence that opens it`() {
-        val moderation = "../examples/moderation/moderation.velle"
-        val text = described(moderation, "CloseAccount")
+        val orders = "../examples/orders/orders.velle"
+        val text = described(orders, "Product")
 
         assertTrue(
-            "- A CloseAccount is refused when this holds:\n" +
-                "  In the spec: $moderation, line 221, `never (CloseAccount where seller is held)`\n" +
-                "  - There are no words for this part yet. The Velle, line 221:\n" +
+            "- A Product is a ProductInFamily when this holds:\n" +
+                "  In the spec: $orders, line 40, `shape ProductInFamily = Product where exists (SkuFamily where this.sku matches skuPattern)`\n" +
+                "  - There are no words for this part yet. The Velle, line 40:\n" +
                 "    ```velle\n" +
-                "    seller is held\n" +
+                "    exists (SkuFamily where this.sku matches skuPattern)\n" +
                 "    ```\n" in text,
             text,
         )
+    }
+
+    @Test
+    fun `who a record and its fields are shown to is said`() {
+        val vendors = "../examples/vendors/vendors.velle"
+        val text = described(vendors, "Product")
+
+        assertTrue("- A record is shown to every Staff, unless its shape says who it is shown to.\n" in Cli.run(listOf("describe", vendors)).text)
+        assertTrue(
+            "  - Its cost is a decimal. Of those it is shown to, only an Administrator is shown its cost.\n" +
+                "  - Its margin is worked out as its price minus its cost. Of those it is shown to, only an Administrator is shown its margin.\n" +
+                "  - It is shown to a Staff when there is a VendorAssignment whose staff is that Staff and whose vendor is its vendor.\n" +
+                "  - It is shown to every Administrator.\n" in text,
+            text,
+        )
+    }
+
+    @Test
+    fun `the parts an act arrives with are said, for a collection and for a one field`() {
+        val orders = described("../examples/orders/orders.velle", "Order")
+        val batches = described("../examples/batches/batches.velle", "PeptideBatch")
+
+        assertTrue("  - Its orderLines can arrive with it as new records in the same request, each able to bring its customizations the same way.\n" in orders, orders)
+        assertTrue(
+            "  - Its origin can arrive with it as a new record in the same request, in place of naming one already kept, " +
+                "and an origin arriving that way can bring its components the same way.\n" in batches,
+            batches,
+        )
+    }
+
+    @Test
+    fun `a rule's for each block and a record it names with as are said`() {
+        val text = described("../examples/orders/orders.velle", "PriceRequest")
+
+        assertTrue(
+            "- QuoteRequest: when a PriceRequest arrives, it creates a Quote with customer set to its customer, " +
+                "then creates a QuoteLine with quote set to the new Quote, product set to the item's product, quantity set to the item's quantity, " +
+                "unitPrice set to the item's product's unitPrice, for each item of its requestedItems.\n" in text,
+            text,
+        )
+    }
+
+    @Test
+    fun `is held and a collection named with as are said`() {
+        val closeAccount = described("../examples/moderation/moderation.velle", "CloseAccount")
+        val booking = described("../examples/bookings/bookings.velle", "StandingBooking")
+
+        assertTrue("- A CloseAccount is refused when a record points at its seller through a link that cannot be left empty.\n" in closeAccount, closeAccount)
+        assertTrue("- A StandingBooking is forbidden when there is a StandingBooking whose slot is its slot and that is not it.\n" in booking, booking)
     }
 
     @Test

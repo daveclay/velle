@@ -30,12 +30,16 @@ object Sentences {
     /**
      * Who a clause is about. At the top of a condition the record is "it", and its fields are
      * "its balance". Inside `exists (Reminder where ...)` the fields are the Reminder's, said
-     * "whose sentOn", and `this` still means the outer record, "it". A name in [aliases] is
-     * said as written: a rule's actor, `actor`.
+     * "whose sentOn", and `this` still means the outer record, "it". [aliases] maps a name bound
+     * outside the record to the words it is said as: a rule's actor, `actor` to "actor", or the
+     * viewer of a `visible to` clause, `actor` to "that Staff".
      */
-    class Subject(val possessive: String, val aliases: Set<String> = emptySet()) {
-        /** Who the fields are inside `exists (Reminder where ...)`: "whose". */
-        fun inside(): Subject = Subject("whose")
+    class Subject(val possessive: String, val aliases: Map<String, String> = emptyMap()) {
+        /** Who the fields are inside `exists (Reminder where ...)`: "whose", with the same names bound. */
+        fun inside(): Subject = Subject("whose", aliases)
+
+        /** The same subject with [name] bound, said as [words]. */
+        fun with(name: String, words: String): Subject = Subject(possessive, aliases + (name to words))
 
         companion object {
             val record = Subject("its")
@@ -170,6 +174,10 @@ object Sentences {
         if (inner is ExistsExpr && inner.collection != null && isRelationship(inner.collection)) {
             return records(inner.collection, subject)?.absence()
         }
+        if (inner is IsExpr && inner.kind == "held") {
+            val described = value(inner.subject, subject) ?: return null
+            return "no record points at $described through a link that cannot be left empty"
+        }
         if (inner is IsExpr && inner.kind == "refinement") {
             val described = value(inner.subject, subject) ?: return null
             return "$described is not ${withArticle(inner.refinement ?: return null)}"
@@ -194,6 +202,7 @@ object Sentences {
             "empty" -> "$described has none"
             "notEmpty" -> "$described has at least one"
             "refinement" -> "$described is ${withArticle(expression.refinement ?: return null)}"
+            "held" -> "a record points at $described through a link that cannot be left empty"
             else -> null
         }
     }
@@ -260,9 +269,10 @@ object Sentences {
     }
 
     private fun path(expression: PathExpr, subject: Subject): String {
+        if (expression.root == FILTERED_RECORD) return "that"
         val root = when {
             expression.root == "this" -> "it"
-            expression.root in subject.aliases -> expression.root
+            expression.root in subject.aliases -> subject.aliases.getValue(expression.root)
             else -> "${subject.possessive} ${expression.root}"
         }
         if (expression.segs.isEmpty()) return root
@@ -328,8 +338,8 @@ object Sentences {
 
     private fun records(collection: CollectionExpr, subject: Subject): Records? {
         val binding = collection.bindings.singleOrNull() ?: return null
-        if (binding.alias != null) return null
-        val filter = collection.where?.let { where -> predicate(where, subject.inside()) ?: return null } ?: ""
+        val where = binding.alias?.let { alias -> collection.where?.let { filter -> withoutAlias(filter, alias) ?: return null } } ?: collection.where
+        val filter = where?.let { condition -> predicate(condition, subject.inside()) ?: return null } ?: ""
         return when (val source = binding.source) {
             is ShapeForSource -> {
                 val owner = value(source.forExpr, subject) ?: return null
@@ -339,6 +349,28 @@ object Sentences {
             else -> null
         }
     }
+
+    /**
+     * The name a single collection binds with `as`, `other` in `exists (StandingBooking as other where
+     * other.slot == this.slot)`, names the record the filter is about, so `other.slot` is its `slot`,
+     * said "whose slot", and `other` alone is "that". Null when the name is read inside a value that
+     * has no rewriting here, such as a nested collection, where it would name a record further out.
+     */
+    private fun withoutAlias(expression: Expr, alias: String): Expr? = when (expression) {
+        is PathExpr -> when {
+            expression.root != alias -> expression
+            expression.segs.isEmpty() -> PathExpr(FILTERED_RECORD)
+            else -> PathExpr(expression.segs.first().name, expression.segs.drop(1))
+        }
+        is Binary -> withoutAlias(expression.left, alias)?.let { left -> withoutAlias(expression.right, alias)?.let { right -> Binary(expression.op, left, right) } }
+        is NotExpr -> withoutAlias(expression.inner, alias)?.let { inner -> NotExpr(inner) }
+        is IsExpr -> withoutAlias(expression.subject, alias)?.let { inner -> expression.copy(subject = inner) }
+        is IntLit, is DecLit, is TextLit, is BoolLit, is DurationLit, NoneLit, TodayLit, NowLit -> expression
+        else -> null
+    }
+
+    /** The record a collection's filter is about, written by [withoutAlias] where the spec wrote its `as` name alone. */
+    private const val FILTERED_RECORD = "\u0000the filtered record"
 
     private fun pathRecords(source: PathExpr, filter: String, subject: Subject): Records? {
         val isShape = source.root.first().isUpperCase() && source.segs.isEmpty() && source.root !in subject.aliases

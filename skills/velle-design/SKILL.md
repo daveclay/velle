@@ -25,6 +25,7 @@ Reach the compiler one of two ways. Use the first that is available.
 | `velle compare <before.velle> <after.velle>` | What was edited, what that changes for rules nobody edited, and what it does to a record, each sentence pointing at a line of the spec. Both files must validate. |
 | `velle describe <draft.velle>` | The whole spec as sentences. |
 | `velle describe <draft.velle> <Name>` | One shape or act, with its refinements, the rules and prohibitions over it, and the rules elsewhere that create or change it. The name of a refinement works too. |
+| `velle describe <draft.velle> <RuleName>` | That one rule's sentence, and the shape or act it is over. |
 
 Every command prints Markdown and changes no file. A command exits with 0 when it did what was asked, 1 when a draft does not validate or a name is not in it, 2 when it was called wrongly, and 3 when the machine cannot run the compiler.
 
@@ -60,7 +61,7 @@ Every command prints Markdown and changes no file. A command exits with 0 when i
 
 ## Explaining what the report names
 
-The report names rules and refinements, and a product owner may not know what one does. Never explain one in your own words. Run `describe` with the name of the shape or act it belongs to and quote the compiler's sentence for it.
+The report names rules and refinements, and a product owner may not know what one does. Never explain one in your own words. Run `describe` with that name and quote the compiler's sentence for it.
 
 ## Speaking with the product owner
 

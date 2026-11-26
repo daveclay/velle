@@ -8,7 +8,7 @@ object RuleSentences {
     fun described(rule: RuleDecl, version: SpecVersion): String? {
         if (rule.by != null) return null
         val timing = timing(rule, version) ?: return null
-        val effects = rule.body.map { item -> effect(item) ?: return null }
+        val effects = effects(rule.body, Subject.record).map { effect -> effect ?: return null }
         if (effects.isEmpty()) return null
         return "$timing, it " + effects.joinToString(", then ")
     }
@@ -79,9 +79,29 @@ object RuleSentences {
         return Condition.Said(clause)
     }
 
+    /**
+     * Each line of a rule's body as what the rule does, or null for a line with no words. A record a
+     * line creates and names with `as` is "the new Quote" in the lines after it, or "the Quote it
+     * created as quote" when the body names two of one shape.
+     */
+    fun effects(body: List<BodyItem>, subject: Subject): List<String?> {
+        val named = body.filterIsInstance<Creation>().filter { creation -> creation.alias != null }
+        val repeatedShapes = named.groupBy { creation -> creation.shape }.filterValues { creations -> creations.size > 1 }.keys
+        var scope = subject
+        return body.map { item ->
+            val effect = effect(item, scope)
+            if (item is Creation && item.alias != null) scope = scope.with(item.alias, createdWords(item, item.shape in repeatedShapes))
+            effect
+        }
+    }
+
+    private fun createdWords(creation: Creation, shapeRepeats: Boolean): String =
+        if (shapeRepeats) "the ${creation.shape} it created as ${creation.alias}" else "the new ${creation.shape}"
+
     /** One line of a rule's body as what the rule does: "creates a Receipt with ...". Null when there are no words for it. */
     fun effect(item: BodyItem, subject: Subject = Subject.record): String? = when (item) {
         is Creation -> creation(item, subject)
+        is ForEach -> forEach(item, subject)
         is Assignment -> {
             val target = Sentences.value(item.target, subject)
             val value = Sentences.value(item.value, subject)
@@ -91,8 +111,29 @@ object RuleSentences {
         else -> null
     }
 
+    /**
+     * `for each item in requestedItems { QuoteLine from { ... } }`: "creates a QuoteLine with product set to
+     * the item's product, for each item of its requestedItems". Null for a block holding another block.
+     */
+    private fun forEach(block: ForEach, subject: Subject): String? {
+        if (block.body.any { item -> item is ForEach }) return null
+        val sources = block.bindings.map { binding -> loopSource(binding, subject) ?: return null }
+        val inside = block.bindings.fold(subject) { scope, binding -> scope.with(binding.name, "the ${binding.name}") }
+        val effects = effects(block.body, inside).map { effect -> effect ?: return null }
+        if (effects.isEmpty()) return null
+        return effects.joinToString(", then ") + ", for each " + sources.joinToString(" and each ")
+    }
+
+    private fun loopSource(binding: LoopBinding, subject: Subject): String? = when (val source = binding.source) {
+        is LoopSource.Over -> Sentences.value(source.expr, subject)?.let { records -> "${binding.name} of $records" }
+        is LoopSource.Range -> {
+            val from = Sentences.value(source.from, subject)
+            val to = Sentences.value(source.to, subject)
+            if (from == null || to == null) null else "${binding.name} from $from to $to"
+        }
+    }
+
     private fun creation(item: Creation, subject: Subject): String? {
-        if (item.alias != null) return null
         val owner = item.forExpr?.let { owner -> " for " + (Sentences.value(owner, subject) ?: return null) } ?: ""
         val fields = item.fields.map { field ->
             val value = Sentences.value(field.value, subject) ?: return null

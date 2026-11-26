@@ -50,7 +50,7 @@ object Cli {
         "",
         "`validate` says whether the draft validates, and if not, why.",
         "`compare` says what changed from one version of a spec to another. Both must validate.",
-        "`describe` says what the draft says, or with a Name, what it says about that shape or act.",
+        "`describe` says what the draft says, or with a Name, what it says about that shape, act, refinement, or rule.",
         "",
         "Each prints Markdown and changes no file.",
         "",
@@ -106,10 +106,21 @@ object Cli {
         if (name == null) return CommandOutcome.done(DescriptionReport.rendered(SpecDescription.of(version)))
         val focusNames = SpecDescription.focusNames(version)
         if (name in focusNames) return CommandOutcome.done(DescriptionReport.rendered(SpecDescription.of(version, name)))
+        val ruleNames = SpecDescription.ruleNames(version)
+        if (name in ruleNames) return CommandOutcome.done(DescriptionReport.rendered(SpecDescription.ofRule(version, name, ruleOpening(path, name, version))))
         val base = focusNames.entries.firstOrNull { baseAndRefinements -> name in baseAndRefinements.value }?.key
-            ?: return CommandOutcome.refused(unknownName(path, name, focusNames))
+            ?: return CommandOutcome.refused(unknownName(path, name, focusNames, ruleNames))
         val opening = "$name is a refinement of $base, so this describes $base and everything about it."
         return CommandOutcome.done(DescriptionReport.rendered(SpecDescription.of(version, base, opening)))
+    }
+
+    /** "SendReceipt is a rule over PaidInvoice, a refinement of Invoice. `velle describe billing.velle Invoice` says everything about Invoice." */
+    private fun ruleOpening(path: String, ruleName: String, version: SpecVersion): String {
+        val rule = version.declarations.map { located -> located.decl }.filterIsInstance<RuleDecl>().first { declaration -> declaration.name == ruleName }
+        val over = Sentences.leftmostName(rule.condition)
+        val base = version.baseOf(over)
+        val overWords = if (over == base) over else "$over, a refinement of $base"
+        return "$ruleName is a rule over $overWords. `velle describe $path $base` says everything about $base."
     }
 
     /** A message as one item of a Markdown list, its later lines kept inside the item. */
@@ -118,13 +129,18 @@ object Cli {
         return (listOf("- " + messageLines.first()) + messageLines.drop(1).map { line -> "  " + line.trim() }).joinToString("\n")
     }
 
-    private fun unknownName(path: String, name: String, focusNames: Map<String, List<String>>): String = buildString {
-        appendLine("`$name` is not the name of a shape, an act, or a refinement in `$path`. The names it could be,")
+    private fun unknownName(path: String, name: String, focusNames: Map<String, List<String>>, ruleNames: List<String>): String = buildString {
+        appendLine("`$name` is not the name of a shape, an act, a refinement, or a rule in `$path`. The names it could be,")
         appendLine("each shape or act with its refinements under it:")
         appendLine()
         focusNames.forEach { (base, refinements) ->
             appendLine("- $base")
             refinements.forEach { refinement -> appendLine("  - $refinement") }
         }
+        if (ruleNames.isEmpty()) return@buildString
+        appendLine()
+        appendLine("and the rules:")
+        appendLine()
+        ruleNames.forEach { ruleName -> appendLine("- $ruleName") }
     }
 }

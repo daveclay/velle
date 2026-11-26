@@ -62,8 +62,8 @@ object ComparisonReport {
     }
 
     private val CONSEQUENCE_LIMITS = listOf(
-        "What the compiler derives from the edits for declarations nobody edited. Each is something",
-        "that can now happen or can no longer happen; none says what will happen.",
+        "What the compiler works out from the edits, beyond what each edit says on its own. Each is",
+        "something that can now happen or can no longer happen; none says what will happen.",
     ).joinToString("\n")
 
     private fun StringBuilder.appendConsequence(consequence: Consequence, edits: List<Edit>) {
@@ -91,7 +91,12 @@ object ComparisonReport {
             appendLine("  ${edit.pointer.rendered()}")
             return
         }
-        appendLine("- ${edit.subject.ifEmpty { "A declaration" }} changed, and this report has no words for it yet. The Velle:")
+        val what = when {
+            edit.velleBefore == null -> "is new"
+            edit.velleAfter == null -> "was removed"
+            else -> "changed"
+        }
+        appendLine("- ${edit.subject.ifEmpty { "A declaration" }} $what, and this report has no words for it yet. The Velle:")
         appendLine("  ${edit.pointer.rendered()}")
         edit.velleBefore?.let { velle -> appendVelle("Before", velle) }
         edit.velleAfter?.let { velle -> appendVelle("Now", velle) }

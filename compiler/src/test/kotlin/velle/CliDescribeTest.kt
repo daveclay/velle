@@ -12,6 +12,8 @@ class CliDescribeTest {
 
     private val billing = "../examples/billing/billing.velle"
 
+    private val sendReceiptSentence = "- SendReceipt: when it becomes true of an Invoice that it is a PaidInvoice, it creates a Receipt with invoice set to it, sentOn set to now."
+
     private fun describe(vararg arguments: String): CommandOutcome = Cli.run(listOf("describe", billing) + arguments)
 
     private fun pointer(line: Int, declaration: String) = "  In the spec: $billing, line $line, `$declaration`"
@@ -191,7 +193,7 @@ class CliDescribeTest {
         assertEquals(CommandOutcome.REFUSED, outcome.exitCode, outcome.text)
         assertTrue(
             outcome.text.startsWith(
-                "`Invoce` is not the name of a shape, an act, or a refinement in `$billing`. The names it could be,\n" +
+                "`Invoce` is not the name of a shape, an act, a refinement, or a rule in `$billing`. The names it could be,\n" +
                     "each shape or act with its refinements under it:\n\n",
             ),
             outcome.text,
@@ -202,6 +204,29 @@ class CliDescribeTest {
         )
         assertTrue("- ChangeDueDate\n  - ApplicableDueChange\n  - RefusedDueChange\n" in outcome.text, outcome.text)
         assertTrue("- SubmitPayment\n" in outcome.text, outcome.text)
+        assertTrue("\nand the rules:\n\n- AdmitCustomer\n" in outcome.text, outcome.text)
+        assertTrue("- SendReceipt\n" in outcome.text, outcome.text)
+    }
+
+    @Test
+    fun `describing a rule by name gives its sentence, its place in the spec, and the shape it is over`() {
+        val outcome = describe("SendReceipt")
+
+        assertEquals(CommandOutcome.DONE, outcome.exitCode, outcome.text)
+        assertTrue(outcome.text.startsWith("# What $billing says about SendReceipt\n"), outcome.text)
+        assertTrue(
+            "\nSendReceipt is a rule over PaidInvoice, a refinement of Invoice. `velle describe $billing Invoice` says everything about Invoice.\n" in outcome.text,
+            outcome.text,
+        )
+        val bullets = outcome.text.lines().filter { line -> line.startsWith("- ") || line.startsWith("  In the spec") }
+        assertEquals(listOf(sendReceiptSentence, pointer(124, "rule SendReceipt when PaidInvoice")), bullets, outcome.text)
+    }
+
+    @Test
+    fun `a rule over a shape itself names that shape`() {
+        val outcome = describe("OpenInvoice")
+
+        assertTrue("\nOpenInvoice is a rule over BillCustomer. `velle describe $billing BillCustomer` says everything about BillCustomer.\n" in outcome.text, outcome.text)
     }
 
     @Test

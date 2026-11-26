@@ -190,6 +190,7 @@ The assistant reaches the compiler through `skills/velle-design/scripts/velle`. 
 | `velle compare before.velle billing.velle` | What was edited, what that changes for rules nobody edited, and what it does to a record, each sentence with the line of the spec it comes from. Both files must validate. |
 | `velle describe billing.velle` | The whole spec as sentences. |
 | `velle describe billing.velle Reminder` | One shape, act, or refinement: its refinements, the rules and the `never`s over it, and the rules elsewhere that create or change it. A name not in the spec prints the names it could be. |
+| `velle describe billing.velle RemindOverdue` | One rule's sentence, and the shape or act it is over. |
 
 - Each prints Markdown and changes no file.
 - Each exits with 0 when it did what was asked, 1 when a spec does not validate or a name is not in it, 2 when it was called wrongly, and 3 when the machine cannot run the compiler.

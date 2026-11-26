@@ -20,12 +20,12 @@ object MemberSentences {
     fun said(member: Member, owner: MemberOwner): String? = when (member) {
         is StoredProp -> stored(member, owner)
         is DerivedProp -> derived(member, owner)
-        is TimestampProp -> if (member.visible.isNotEmpty()) null else "Its ${member.name} is the time it was ${if (member.on == "create") "created" else "last changed"}."
+        is TimestampProp -> fieldShown(member.name, member.visible)?.let { shown -> "Its ${member.name} is the time it was ${if (member.on == "create") "created" else "last changed"}.$shown" }
         is ActorProp -> actor(member)
         is FrozenClause -> frozen(member, owner)
         UndeletableClause -> if (owner.refinement) "While it is ${Sentences.withArticle(owner.name)}, it cannot be deleted." else "It cannot be deleted."
         is UniqueKey -> "No two ${owner.base} records have the same ${member.fields.joinToString(" and ")}."
-        is VisibleClause -> null
+        is VisibleClause -> shownTo(member)?.let { viewers -> "It is shown to $viewers." }
     }
 
     /** What keeps a body line from having words, for the work list of forms. */
@@ -50,10 +50,65 @@ object MemberSentences {
 
     private fun stored(member: StoredProp, owner: MemberOwner): String? {
         val kind = storedKind(member) ?: return null
+        val shown = fieldShown(member.name, member.visible) ?: return null
         val unique = if (member.unique) ", and no two ${owner.base} records have the same one" else ""
         val transient = if (member.transient) ", and is not kept" else ""
         val verb = if (member.type.many()) "are" else "is"
-        return "Its ${member.name} $verb $kind$unique$transient."
+        return "Its ${member.name} $verb $kind$unique$transient.$shown"
+    }
+
+    /** " Of those it is shown to, only an Administrator is shown its cost.", or nothing for a field with no `visible to`. */
+    private fun fieldShown(field: String, visible: List<VisibleClause>): String? {
+        if (visible.isEmpty()) return ""
+        val viewers = fieldViewers(visible) ?: return null
+        return " Of those it is shown to, only $viewers is shown its $field."
+    }
+
+    /**
+     * Who a field's `visible to` lets see it, among those the record is shown to: "an Administrator",
+     * "an Administrator or a Pharmacist". Null for `anyone` or a clause with `where`, which have no words yet.
+     */
+    fun fieldViewers(visible: List<VisibleClause>): String? {
+        if (visible.any { clause -> clause.anyone || clause.where != null }) return null
+        return visible.joinToString(" or ") { clause -> Sentences.withArticle(clause.shape!!) }
+    }
+
+    /**
+     * Who a record-level `visible to` shows the record to: "anyone", "every Pharmacist", or "a Staff when
+     * there is a VendorAssignment whose staff is that Staff and whose vendor is its vendor". Several clauses
+     * on one shape add up. Null when the condition has no words.
+     */
+    fun shownTo(clause: VisibleClause): String? {
+        val viewer = clause.shape ?: return "anyone"
+        val condition = clause.where ?: return "every $viewer"
+        val viewerSubject = Subject("its", mapOf(clause.name to "that $viewer"))
+        val words = Sentences.predicate(condition, viewerSubject) ?: return null
+        return "${Sentences.withArticle(viewer)} when $words"
+    }
+
+    /**
+     * An act's `with` list as clauses, one per entry: "its orderLines can arrive with it as new records
+     * in the same request", "its origin can arrive with it as a new record in the same request, in place
+     * of naming one already kept". Null when an entry has parts of parts, which have no words yet.
+     */
+    fun arriving(shape: ShapeDecl): List<String>? = shape.with.map { entry -> arrivingEntry(entry, shape) ?: return null }
+
+    private fun arrivingEntry(entry: WithEntry, shape: ShapeDecl): String? {
+        if (entry.children.any { child -> child.children.isNotEmpty() }) return null
+        val isOneField = shape.members.any { member -> member is StoredProp && member.name == entry.name && member.type is RelType && !member.type.many }
+        val kept = when {
+            shape.transient && isOneField -> "as a new record read with the request and not kept"
+            shape.transient -> "as values read with the request and not kept"
+            isOneField -> "as a new record in the same request, in place of naming one already kept"
+            else -> "as new records in the same request"
+        }
+        val children = entry.children.joinToString(" and ") { child -> child.name }
+        val bringing = when {
+            children.isEmpty() -> ""
+            isOneField -> ", and ${Sentences.withArticle(entry.name)} arriving that way can bring its $children the same way"
+            else -> ", each able to bring its $children the same way"
+        }
+        return "its ${entry.name} can arrive with it $kept$bringing"
     }
 
     /**
@@ -62,7 +117,6 @@ object MemberSentences {
      * a field in the same words. Null when there are no words for the field.
      */
     fun storedKind(member: StoredProp): String? {
-        if (member.visible.isNotEmpty()) return null
         val keepsRepeats = member.tolerates == "duplication" && (member.type as? ScalarType)?.many == true
         if (member.tolerates != null && !keepsRepeats) return null
         val starting = member.initially?.let { initial ->
@@ -100,10 +154,11 @@ object MemberSentences {
     private fun absent(optional: Boolean): String = if (optional) ", and may be absent" else ""
 
     private fun derived(member: DerivedProp, owner: MemberOwner): String? {
-        if (member.visible.isNotEmpty()) return null
+        val shown = fieldShown(member.name, member.visible) ?: return null
         val worked = workedOut(member.expr) ?: return null
         val verb = if (member.type?.many() == true || member.expr is SetExpr || member.expr is WalkExpr) "are" else "is"
-        if (!member.captured) return "Its ${member.name} $verb worked out as $worked."
+        if (!member.captured) return "Its ${member.name} $verb worked out as $worked.$shown"
+        if (shown.isNotEmpty()) return null
         return "When it becomes ${Sentences.withArticle(owner.name)}, it records its ${member.name} as $worked at that moment."
     }
 

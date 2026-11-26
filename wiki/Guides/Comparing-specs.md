@@ -39,7 +39,7 @@ The report has three parts. The first says what was edited:
   In the spec: after/billing.velle, line 151, `shape ActionableOverdue = OverdueInvoice and not IssuedInvoice`
 ```
 
-The second says what the edit changes for declarations nobody edited:
+The second says what the edit changes beyond what it says on its own, such as a rule nobody edited that an act can no longer cause:
 
 ```
 ## What that changes

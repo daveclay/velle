@@ -59,6 +59,19 @@ object SpecDescription {
         }
     }
 
+    /** The names of the spec's rules, in the order the spec gives them. A `never` has no name, so it cannot be asked for. */
+    fun ruleNames(version: SpecVersion): List<String> =
+        version.declarations.map { located -> located.decl }.filterIsInstance<RuleDecl>().map { rule -> rule.name }
+
+    /** What the spec says in one rule, [ruleName], with [opening] said before it. */
+    fun ofRule(version: SpecVersion, ruleName: String, opening: String): Description {
+        val rule = version.declarations.map { located -> Compared(located, version) }
+            .filter { declaration -> (declaration.declaration as? RuleDecl)?.name == ruleName }
+            .map { declaration -> placed(declaration) }
+        val sections = listOfNotNull(describedSection(Section.RULES, ruleName, rule, version))
+        return Description(version.fileName, ruleName, sections, opening)
+    }
+
     private fun focused(placed: List<Placed>, focus: String, version: SpecVersion): List<Placed> {
         val about = placed.filter { declaration -> declaration.subject == focus }
         val fromElsewhere = placed.filter { declaration -> declaration.section == Section.RULES && declaration.subject != focus }
