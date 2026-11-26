@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D14 decided. Stage 1 of the build (§6) is built but for its second trial session: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. Stages 2 and 3 are not started.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D15 decided. Stage 1 of the build (§6) is built but for its second trial session: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. Stages 2 and 3 are not started.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -69,6 +69,20 @@ On 2026-11-26, with the skill as revised after the first trial: the billing sess
 - **The third trial barely tested the reference.** `references/language.md` opens with almost the same invoicing system the script described, so the assistant copied it. Work item below.
 - **A role gate has a cost the reference does not state:** the first `by` in a spec makes the compiler ask who may see every kind of record. `references/language.md` §14 and §15 now say so.
 - **Smaller ones, fixed in `SKILL.md`:** who decides when only one person speaks, how a turn with several decisions is split, the choices that are the engineer's, parking a question as a commit, and what an entry in the questions file holds.
+
+### What the fourth and fifth trial sessions showed
+
+On 2026-11-26, with the skill as it stood after D14: a meeting on a tool lending library written from an empty file (the product owner never answers a read-back, and the engineer says "you're asking us too much"), and an engineer alone giving terse instructions on a copy of `examples/membership/membership.velle`, starting with "don't ask me things". The compiler findings have OQ tags of their own in `working-docs/QUESTIONS.md`; this list is what they showed about the skill.
+
+- **Every change ended marked `-- Not confirmed`,** nine in the meeting and seven for the engineer alone, because nobody ever answered the closing question. A mark on everything tells the next reader nothing. That is D15.
+- **The skill's rules could not all be followed in one reply.** One read-back per decision, a closing question per read-back, and "ask one question at a time" gave three questions in one reply, about 70 lines to record two records and a uniqueness rule. `SKILL.md` now makes one edit and one report per turn of the conversation and asks at most one question.
+- **Half the lines under "What that changes" could not happen,** six of twelve in the meeting's last report, and the skill told the assistant to put the most worrying one to the product owner. `SKILL.md` now says those lines are what the compiler could not rule out, shows them, and sends one that looks impossible to the engineer.
+- **An exact instruction from an engineer was treated as needing confirmation.** `SKILL.md` now says it needs none.
+- **"Don't ask me things" met "never guess".** For "cap a deposit at 1000" the assistant chose a reading silently. `SKILL.md` now has it choose, say the other reading in one line, and leave a `-- Not confirmed` comment holding the question.
+- **A decided rule could not be written:** "a late fee of 2 a day" needs the number of days between two dates. `SKILL.md` now has a place for a thing decided and not yet sayable.
+- **"Never your own words" was not followable as written.** A question's context, the choice between two spellings, and what the spec lacks all need the assistant's words. The rule is now "nobody takes your word for what the spec means".
+- **`velle describe` takes no field name,** and for a refinement it does not show a `never` that names the refinement. Work items below.
+- **Both trials validated most edits the first time,** 7 of 9 in the meeting and all of the engineer's, though the engineer's edits copied constructs already in the spec.
 
 ## 3. What to decide
 
@@ -356,6 +370,32 @@ Costs:
 
 So `SKILL.md` has no second loop and asks nobody who is present. It opens by saying the spec is theirs and that they decide how the session runs, shows Velle whenever it helps, and follows what they say about pace and read-backs. It no longer asks up front whether to commit: it mentions once that it can, and commits when asked, which narrows how D7 is carried out without changing what a commit holds. D2 stands as the one thing that does not bend: the assistant never says what the spec means in its own words.
 
+### D15. The assistant stops asking whether each change is right, and marks only a change it had a question about · Decided 2026-11-26
+
+After a change, does the assistant show the compiler's report and ask nothing unless it has a real question, and write a `-- Not confirmed` comment only when a question it had went unanswered?
+
+D2 had the product owner say yes to the compiler's sentences after every change, and D13 marked every change nobody said yes to. In the fourth and fifth trials nobody ever said yes, every change ended marked, and the engineer in the script said "you're asking us too much" (§2, "What the fourth and fifth trial sessions showed"). D14's answer, that the people decide how a session runs, points the same way.
+
+Recommendation: yes.
+
+- The report follows every change, as printed. The people have the compiler's sentences in front of them and say so when one is wrong.
+- The assistant asks at most one question per reply: when a line of the report says something a business would plainly not want, or when it had to choose between two readings of what was said.
+- A change stays marked only when that question was not answered, or the people had said not to ask. The comment holds the question: `-- Not confirmed, 2026-11-26: is a deposit of exactly 1000 allowed?`
+- At the end the assistant lists the marks that remain, in one message.
+
+Costs:
+
+- D2 weakens from "the product owner confirms the compiler's sentences" to "the product owner is shown them". A product owner who does not read the report has confirmed nothing, and nothing in the spec says so.
+- Which changes get a question is the assistant's judgment, so two sessions on the same discussion may leave different marks.
+- The alternative, keeping the question after every change, is what the trials ran, and the people's first instruction was to stop it.
+
+#### Proposed changes
+
+- `skills/velle-design/SKILL.md`, "For each change" steps 6 and 7, "When they change how you work", and "Ending the session". Written as recommended, ahead of the answer.
+- `wiki/Guides/Design-session.md`, the sections "A change and its read-back", "A change nobody answers", and "Ending", once this is answered.
+
+**Decided:** yes (Dave, 2026-11-26).
+
 ## 4. Not in this question
 
 - Listening to a meeting's audio. Dave, 2026-11-25: "it is likely sufficient to first capture a design session in an AI chat in velle before considering audio transcription." It gets its own question once a design session in chat has been tried. It adds a speech-to-text service that labels speakers, and the question of when the assistant edits, since it should not edit on every sentence spoken.
@@ -367,8 +407,8 @@ So `SKILL.md` has no second loop and asks nobody who is present. It opens by say
 
 - [ ] Upload the skill to claude.ai and run `scripts/velle validate` there, to learn whether its sandbox has Java 21, which no documentation says (§2, "What each host can run").
 - [ ] Give words to the 16 parts still listed in `compiler/src/test/resources/describe/without-words.md` (38 before 2026-11-26), and to a changed `with` list in the comparison, which still prints as Velle (D2).
-- [ ] Try a design session on a domain the reference does not use as its example, such as bookings or a pharmacy, from an empty draft (§2, "What the second and third trial sessions showed").
-- [ ] Run a trial session on `SKILL.md` as rewritten after the third trial and after D14, with people who set their own pace: one meeting, and one engineer working quickly alone. Neither has been through a trial.
+- [ ] Let `velle describe <draft> <Name>` take a field's name, and show for a refinement each `never` and rule that names it (§2, "What the fourth and fifth trial sessions showed").
+- [ ] Run a trial of `SKILL.md` as rewritten after the fifth trial, with turns in which the people answer some questions, since no script so far has anyone answer (D15).
 - [ ] Write the decision on what a scenario for `velle try` says, from what stage 1's trial session needed (§6, stage 2).
 - [ ] Add `velle try` (§6, stage 2).
 - [ ] Add the authoring MCP server in `apis/mcp/` over the same code as `velle.Cli` (§6, stage 3).

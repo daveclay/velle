@@ -1,6 +1,6 @@
 # Running a design session
 
-A design session is a conversation in which a product owner and an engineer decide their system's business rules, and an AI assistant writes each decision into the spec. After every change the assistant runs the compiler and shows them the compiler's own sentences about what changed. The product owner confirms those sentences, never the assistant's summary of them. Velle ships what the assistant needs as a [skill](GLOSSARY), the folder `skills/velle-design/` in the Velle repository. After reading this page you can put the skill into your assistant, run a session on a spec, and know what the assistant will and will not do.
+A design session is a conversation in which people decide their system's business rules, and an AI assistant writes each decision into the spec. Often it is a product owner and an engineer in a meeting, and often an engineer alone. After every change the assistant runs the compiler and shows the compiler's own sentences about what changed. Nobody has to take the assistant's word for what the spec means. Velle ships what the assistant needs as a [skill](GLOSSARY), the folder `skills/velle-design/` in the Velle repository. After reading this page you can put the skill into your assistant, run a session on a spec, and know what the assistant will and will not do.
 
 [Using a system from an AI chat](AI-chat) is about an assistant reading records and committing acts in a running system. This page is about an assistant helping you write the spec in the first place.
 
@@ -10,7 +10,7 @@ The billing team keeps its invoicing rules in a spec, `billing.velle`. The produ
 
 ## What the product owner is asked to trust
 
-The assistant never restates a rule in its own words. After each change it shows the compiler's report as printed, and asks whether that is what was meant. It may ask a question in its own words, but it points at a sentence of the report only by quoting it.
+After each change the assistant shows the compiler's report as printed. When someone asks what a rule means, it quotes the compiler. Its own words are for a question, for a choice it made between two ways of writing something, and for what the spec does not have yet.
 
 So the product owner trusts the compiler, not the assistant. If the assistant wrote something other than what was agreed, the compiler's sentences say so. The engineer can still read the Velle, and every sentence of a report names the line of the spec it comes from.
 
@@ -114,11 +114,13 @@ The third part says what the edit does to a record like the ones the system keep
 
 [Comparing specs](Comparing-specs) explains each part.
 
-In the same reply, under the report, the assistant quotes each line of "What that changes" that names a rule or a record nobody mentioned. Here the one such line names `Issuance`, the record the spec keeps when an invoice is issued, so it is what the product owner asked for. The assistant ends with one question: do they want this change, with what follows from it? It asks about a single line first only when that line says something a business would likely not want.
+The lines under "What that changes" are what the compiler could not rule out. Each says something can now happen, not that it will. Here the one such line names `Issuance`, the record the spec keeps when an invoice is issued, so it is what the product owner asked for.
 
-### Accepting a change
+The assistant does not ask whether each change is right. You have the compiler's sentences in front of you, and you say so when one is wrong. It asks a question, one at most, only when a line of the report says something a business would plainly not want, or when what was said could be read two ways.
 
-The product owner says yes. If you asked for git commits, the assistant commits the spec. The message's first line is the decision in the product owner's words, "Only issued invoices get reminders". Its body holds the report's "What was edited" part and the quoted discussion. The assistant never creates a branch and never pushes.
+### The next change
+
+The product owner reads the report and moves on, so the change stands. If you asked for git commits, the assistant commits the spec. The message's first line is the decision in the product owner's words, "Only issued invoices get reminders". Its body holds the report's "What was edited" part and the quoted discussion. The assistant never creates a branch and never pushes.
 
 The next decision follows the same steps. The product owner says: "Wait two weeks between reminders." The assistant changes `today - 7 days` to `today - 14 days` in `rule RemindOverdue` ([§11](Reference-11-rule-when-on)), and the report's "What was edited" part says:
 
@@ -126,19 +128,19 @@ The next decision follows the same steps. The product owner says: "Wait two week
 - RemindOverdue changed. Now: at each Weekly tick, for every Invoice of which it is true that it is an ActionableOverdue and there is no Reminder whose invoice is it and whose sentOn is later than 14 days ago, it creates a Reminder with invoice set to it, sentOn set to today. Before: at each Weekly tick, for every Invoice of which it is true that it is an ActionableOverdue and there is no Reminder whose invoice is it and whose sentOn is later than 7 days ago, it creates a Reminder with invoice set to it, sentOn set to today.
 ```
 
-The report has no other part, because the edit changes nothing else. The product owner accepts it.
+The report has no other part, because the edit changes nothing else.
 
-The compiler never reads a comment in the spec, so a report never shows one. The comment above `OverdueInvoice` still says reminders go no more than once a week. So, after the change is accepted, the assistant shows the engineer that comment and proposes new wording. It changes the comment only on the engineer's word, in the same git commit.
+The compiler never reads a comment in the spec, so a report never shows one. The comment above `OverdueInvoice` still says reminders go no more than once a week. So the assistant shows the engineer that comment and proposes new wording. It changes the comment only on the engineer's word, in the same git commit.
 
-### A change nobody answers
+### A question nobody answers
 
-People in a meeting often state a decision, glance at the report, and talk about the next thing. The assistant does not hold the conversation up, and does not drop the decision. It keeps the change in the spec and writes a comment on the line above it:
+Suppose the product owner had said "cap a deposit at 1000", and the conversation moved on before anyone said whether exactly 1000 is allowed. The assistant does not hold the conversation up. It writes the reading it chose, and leaves its question as a comment above the change:
 
 ```velle
--- Not confirmed, 2026-11-26: "Wait two weeks between reminders"
+-- Not confirmed, 2026-11-26: is a deposit of exactly 1000 allowed?
 ```
 
-Its next reply starts by saying that the change is in but not yet confirmed. At the end of the session it asks about each such change, and removes the comment from one that is confirmed. One that is rejected is undone as a change of its own, with its own read-back. If the session stops early, the comments stay in the spec for its next reader.
+It does the same when you have told it not to ask questions. The comment is removed when the question is answered. At the end of the session the assistant lists the comments that remain, and any still there stay in the spec for its next reader.
 
 ### A change undone and parked as a question
 
@@ -156,7 +158,7 @@ and, under "What that changes":
 - A new LineItem can now make an Invoice stop being an OverdueInvoice.
 ```
 
-Nobody asked for that consequence, and a business might not want it, so the assistant quotes it and asks about that line alone. The product owner sees what it implies: "Hold on. Could a discount push an invoice's total below zero? I don't know what we'd want then. Undo that. We need to ask finance."
+A business might not want that, so the assistant quotes the line and asks about it. The product owner sees what it implies: "Hold on. Could a discount push an invoice's total below zero? I don't know what we'd want then. Undo that. We need to ask finance."
 
 The assistant puts back the saved version, runs `velle validate` to show the spec validates again, and makes no git commit. It writes the open question into `billing.questions.md`, a file beside the spec named after it:
 
@@ -168,14 +170,14 @@ The spec keeps its refusal on that point until a later session answers the quest
 
 ### Ending
 
-At the end the assistant runs `velle compare` from the copy it kept at the start to the spec, and shows every change of the session at once. It asks about each change still marked `-- Not confirmed`. It lists the questions still open in `billing.questions.md`. It says whether the spec validates and what it committed. Pushing, merging, and opening a review are left to you.
+At the end the assistant runs `velle compare` from the copy it kept at the start to the spec, and shows every change of the session at once. It lists the `-- Not confirmed` comments that remain, each with its question. It lists the questions still open in `billing.questions.md`. It says whether the spec validates and what it committed. Pushing, merging, and opening a review are left to you.
 
 ## You decide how the session runs
 
 The spec is yours, and it is there to help the two of you understand each other while you talk. The assistant does not ask how you want to work before it starts. What this page shows is what it does when you have said nothing.
 
 - Read the Velle whenever you like, and ask the assistant to show it. An engineer may follow the spec as it changes, and a product owner may look at it too.
-- Tell the assistant to ask less, to make several changes at once, or to hold its report until the end. It marks a change whose report nobody saw as `-- Not confirmed`.
+- Tell the assistant to ask less, to make several changes at once, or to hold its report until the end. A question it would have asked becomes a `-- Not confirmed` comment.
 - An engineer working alone uses it the same way, usually faster and in Velle's own terms.
 
 One thing stays fixed. The assistant never says what the spec means in its own words. It shows the compiler's sentences or the Velle.
@@ -206,7 +208,8 @@ A rule already in the spec that does not follow a best practice is not rewritten
 
 - Create a git branch, push, merge, or open a review.
 - Copy the spec into another of your folders. It works on the file where it is, and keeps its saved versions in a temporary folder.
-- Write a guess into the spec. Anything that turns on what the business means becomes a question to you, or a line in the questions file.
+- Write a guess into the spec unmarked. Anything that turns on what the business means becomes a question to you, a `-- Not confirmed` comment that holds the question, or a line in the questions file.
+- Write something close when Velle cannot say what you decided. It tells you, and records the decision in the questions file.
 - Rewrite a rule already in the spec to meet a best practice without asking.
 - Change a comment of yours without the engineer's word. The only comment it writes unasked is `-- Not confirmed`, which it removes itself.
 - Write Velle when it cannot run the compiler. It tells you why and stops.
