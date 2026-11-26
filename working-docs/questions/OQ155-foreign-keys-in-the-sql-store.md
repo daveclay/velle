@@ -1,6 +1,6 @@
 # OQ155 — Whether the tables Velle creates declare foreign keys
 
-**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1 and D3 decided 2026-11-26; D4 awaits Dave. On 2026-11-21 Dave cleared his answers to D1 and D2, D2 moved to OQ160, and D4 was added. OQ160 was settled and built on 2026-11-22, so D4 no longer waits on it. Nothing built, and four things are not yet checked (§4).
+**Status:** opened 2026-11-20 from Dave's note while deciding OQ153 D4. D1, D3, and D4 decided 2026-11-26; the plan is in §3, build pending. On 2026-11-21 Dave cleared his answers to D1 and D2, D2 moved to OQ160, and D4 was added. OQ160 was settled and built on 2026-11-22, so D4 no longer waits on it. Nothing built, and four things are not yet checked (§4).
 
 **In plain terms:** When one record points at another, the database could be told so, and it would then refuse to remove a record that others still point at. Velle creates the tables and does not tell the database this today. The question is whether it should.
 
@@ -69,7 +69,7 @@ Costs:
 
 **Decided:** yes for now, 2026-11-26.
 
-### D4. A reference to a shape some rule deletes declares the same foreign key as D1's
+### D4. A reference to a shape some rule deletes declares the same foreign key as D1's · Decided 2026-11-26
 
 If OQ160 decides that the store empties every reference to a record before removing it (`working-docs/QUESTIONS.md` OQ160, D3 and D4), should every reference to one shape declare the plain foreign key of D1, whether or not a rule deletes that shape?
 
@@ -99,9 +99,19 @@ Costs:
 - `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `createSchema`: D1's foreign key on every reference to one shape, with no test of `Model.deletedShapes`.
 - `wiki/Guides/Store-API.md`: every single-shape reference is constrained; a union reference is not.
 
+**Decided:** yes, 2026-11-26.
+
 ## 3. The build
 
-Not written. D1 and D3 are decided; D4 awaits Dave.
+D4 widens D1, so the constraint goes on every reference to one shape and `createSchema` does not consult `Model.deletedShapes`. D3 changes nothing: `CREATE TABLE IF NOT EXISTS` already leaves an existing table alone.
+
+In build order:
+
+1. The four checks in §4, each a test in `stores/sql/src/testFixtures/kotlin/velle/sql/SqlStoreConformance.kt` or the SQLite store's tests, run against the constraint before it is relied on. A check that fails changes the code in step 2 (a deferred constraint, `PRAGMA foreign_keys = ON` per connection, a reordered write) and is written into this section before the build goes on.
+2. `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `createSchema` (line 447): a foreign key to the target shape's table on every column holding a reference to one shape, and on the member column of every junction table whose members are of one shape. No foreign key on a union reference.
+3. `stores/sql/src/testFixtures/kotlin/velle/sql/SqlStoreConformance.kt`: a test that removing a pointed-at row with SQL is refused, a test that a rule deleting a pointed-at record still commits (the `Seller` and `Listing` case of `examples/moderation/moderation.velle`), and every existing scenario passing on SQLite and PostgreSQL.
+4. `wiki/Guides/Store-API.md`, "What a store must do": every single-shape reference is constrained by the database, a union reference is not, and a database created before this change keeps the tables it has.
+5. The settled row in `working-docs/QUESTIONS.md` and the deletion of this file, in the build commit.
 
 ## 4. Work items
 
@@ -109,3 +119,6 @@ Not written. D1 and D3 are decided; D4 awaits Dave.
 - [ ] Check, with a test, that SQLite enforces the constraint on the connections the store takes; SQLite ignores foreign keys unless each connection turns them on.
 - [ ] Check which other paths remove or re-key rows (OQ27 erasure, seeds, capture tables) and would meet the constraint.
 - [ ] Check, with a test, that no statement is refused by a foreign key in a commit that deletes a record and also assigns a field of a record pointing at it.
+- [ ] Declare the foreign key in `createSchema` on every single-shape reference column and junction member column (§3 step 2).
+- [ ] Add the conformance tests of §3 step 3 and run them on SQLite and PostgreSQL.
+- [ ] Write the constrained and unconstrained references into `wiki/Guides/Store-API.md` (§3 step 4).
