@@ -1,0 +1,22 @@
+-- A payment is never zero or less, and an invoice is overdue when it is past due and the
+-- payments do not cover the total. A payment can only move an invoice toward paid.
+-- The comparison of this spec with the same spec without OverdueInvoice says
+-- "A new Payment can now make an Invoice become an OverdueInvoice", which cannot happen.
+act Customer { name: text }
+
+act Invoice {
+    customer: one Customer
+    dueDate: Date
+    total: decimal
+}
+
+act Payment {
+    invoice: one Invoice
+    amount: decimal
+}
+
+never (Payment where amount <= 0)
+
+shape PaidInvoice = Invoice where sum(payments, amount) >= total
+
+shape OverdueInvoice = Invoice where dueDate < today and not PaidInvoice

@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D12 decided. Stage 1 of the build (§6) is built but for its second trial session: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. Stages 2 and 3 are not started.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D12 decided. D13 awaits Dave. Stage 1 of the build (§6) is built but for its second trial session: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. Stages 2 and 3 are not started.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -55,6 +55,20 @@ On 2026-11-26 an assistant given only the skill folder and a git repository hold
 - **A spec's comments go stale and nobody confirms the new ones.** The compiler does not read comments, so the read-back never shows them. `SKILL.md` now has the engineer confirm a changed comment.
 - **Describing one shape used a refinement of another without saying what it means.** `describe Reminder` named `ActionableOverdue`, a refinement of `Invoice`, and the assistant had to describe all of `Invoice` to learn it. Fixed: a named description closes with what such refinements mean (`CliDescribeTest`, "describing Reminder closes with what the refinements of Invoice it mentions mean").
 - **Smaller ones, fixed in `SKILL.md`:** the commit's first line (the decision in the speaker's words, where the report's first sentence gave "RemindOverdue changed."), whether the questions file is committed, a word that could be two things in the spec, and what "leave the spec without the rule" means when the rule is already there.
+
+### What the second and third trial sessions showed
+
+On 2026-11-26, with the skill as revised after the first trial: the billing session again, and a new invoicing spec written from an empty file in a folder without git. In the third, every edit validated the first time, eight validations in all, and the vague sentences ("only the accounts team may record a payment") were parked as questions with no rule written.
+
+- **Asking about each consequence by itself was too slow.** In the second session the assistant fell a turn behind, held an agreed change back when the people moved on, and ended with no decision in the spec. `SKILL.md` now reads a change back in one reply with one closing question, and asks about a single line only when a business would likely not want it. What happens to a change nobody confirms is D13.
+- **The assistant explained a rule in its own words** to make "OpenInvoice can now cause SendReceipt to run" answerable. `SKILL.md` now has it quote `velle describe`. A rule's name is refused by `velle describe` today. Work item below.
+- **A new act with a `with` list has no words in the comparison**, so the product owner confirmed the new `Invoice` without reading it in words. It is the most common form in `compiler/src/test/resources/describe/without-words.md`, already a work item.
+- **The report said something that cannot happen:** "A new Payment can now make an Invoice become an OverdueInvoice", where payments are above zero. That is OQ182 (`working-docs/QUESTIONS.md`).
+- **The read-back does not say what values a field can now take.** Removing `never (LineItem where price < 0)` lets a total go below zero, and the report names only the rules and refinements a line item can now reach (`examples/billing/changes/02-discounts.md`). The product owner noticed the total unaided. Nothing is planned for it here.
+- **In a first session the report's heading reads oddly.** "What the compiler derives from the edits for declarations nobody edited" stands over a spec in which everything is new. Work item below.
+- **The third trial barely tested the reference.** `references/language.md` opens with almost the same invoicing system the script described, so the assistant copied it. Work item below.
+- **A role gate has a cost the reference does not state:** the first `by` in a spec makes the compiler ask who may see every kind of record. Work item below.
+- **Smaller ones, fixed in `SKILL.md`:** who decides when only one person speaks, how a turn with several decisions is split, the choices that are the engineer's, parking a question as a commit, and what an entry in the questions file holds.
 
 ## 3. What to decide
 
@@ -289,6 +303,24 @@ Costs:
 
 **Decided:** yes, 2026-11-26.
 
+### D13. A change that was read back and never confirmed stays in the spec, marked, and is confirmed at the end of the session
+
+When the assistant has shown the read-back of a change and the people move on to the next topic without saying yes or no, does the change stay in the draft, recorded as shown and not confirmed, to be asked about again when the session ends?
+
+Two trial sessions on 2026-11-26 met this at almost every change: people say what they want, glance at the report, and talk about the next thing. Under the rule "nothing stands until confirmed", the assistant held an agreed change back, never made the next one, and the session ended with no decision in the spec. Under "moving on is a yes", D2 is given up, because nobody confirmed the compiler's sentences.
+
+Recommendation: yes, the change stays, marked. The assistant says in one line that it is in and not confirmed, writes it in the questions file with the lines of the report it quoted, and commits it with a message that says so. The session's closing report (the comparison from the starting version) is where each such change is confirmed or undone.
+
+Costs:
+
+- For the length of the session, the draft holds changes no product owner confirmed. A session that ends abruptly leaves them in, marked only in the questions file and the commit messages. D2's promise becomes "confirmed by the end of the session", not "confirmed before the next change".
+- A change undone at the end is undone on top of everything made after it, as a new change with its own read-back, and a later change may have depended on it.
+- The alternative, undoing an unconfirmed change when they move on, keeps D2 whole and loses decisions people believe they made.
+
+#### Proposed changes
+
+- `skills/velle-design/SKILL.md`, "For each change", step 7 "No answer, and they move on", and "Ending the session", step 2. Both are written as recommended, ahead of the answer.
+
 ## 4. Not in this question
 
 - Listening to a meeting's audio. Dave, 2026-11-25: "it is likely sufficient to first capture a design session in an AI chat in velle before considering audio transcription." It gets its own question once a design session in chat has been tried. It adds a speech-to-text service that labels speakers, and the question of when the assistant edits, since it should not edit on every sentence spoken.
@@ -300,7 +332,10 @@ Costs:
 
 - [ ] Upload the skill to claude.ai and run `scripts/velle validate` there, to learn whether its sandbox has Java 21, which no documentation says (§2, "What each host can run").
 - [ ] Give words to the 38 parts listed in `compiler/src/test/resources/describe/without-words.md`, most common form first (D2).
-- [ ] Try the second design session in chat, rebuilding part of the billing spec from an empty draft, and the first again once the skill's fixes are in (§4, §6 stage 1).
+- [ ] Try a design session on a domain the reference does not use as its example, such as bookings or a pharmacy, from an empty draft (§2, "What the second and third trial sessions showed").
+- [ ] Let `velle describe <draft> <Name>` take a rule's name (§2, same section).
+- [ ] Reword the comparison's heading over "What that changes" so it reads rightly when every declaration is new (§2, same section).
+- [ ] Say in `skills/velle-design/references/language.md` that the first `by` in a spec makes the compiler ask who may see each kind of record, with the refusal it prints (§2, same section).
 - [ ] Write the decision on what a scenario for `velle try` says, from what stage 1's trial session needed (§6, stage 2).
 - [ ] Add `velle try` (§6, stage 2).
 - [ ] Add the authoring MCP server in `apis/mcp/` over the same code as `velle.Cli` (§6, stage 3).
