@@ -1,6 +1,6 @@
 # Running a design session
 
-A design session is a conversation in which people decide their system's business rules, and an AI assistant writes each decision into the spec. Often it is a product owner and an engineer in a meeting, and often an engineer alone. After every change the assistant runs the compiler and shows the compiler's own sentences about what changed. Nobody has to take the assistant's word for what the spec means. Velle ships what the assistant needs as a [skill](GLOSSARY), the folder `skills/velle-design/` in the Velle repository. After reading this page you can put the skill into your assistant, run a session on a spec, and know what the assistant will and will not do.
+A design session is a conversation in which people decide their system's business rules, and an AI assistant writes each decision into the spec. Often it is a product owner and an engineer in a meeting, and often an engineer alone. After every change the assistant runs the compiler and shows the compiler's own sentences about what changed. Nobody has to take the assistant's word for what the spec means. Velle ships what the assistant needs as a [skill](GLOSSARY), the folder `skills/velle-design/` in the Velle repository. After reading this page you can run a session on a spec and know what the assistant will and will not do. [Setting up a design session](Design-session-setup) covers installing it.
 
 [Using a system from an AI chat](AI-chat) is about an assistant reading records and committing acts in a running system. This page is about an assistant helping you write the spec in the first place.
 
@@ -14,41 +14,9 @@ After each change the assistant shows the compiler's report as printed. When som
 
 So the product owner trusts the compiler, not the assistant. If the assistant wrote something other than what was agreed, the compiler's sentences say so. The engineer can still read the Velle, and every sentence of a report names the line of the spec it comes from.
 
-## What the machine needs
+## Before the first session
 
-- **Java 21 or later.** The skill runs the compiler from a jar file. `java -version` says which Java a machine has.
-- **No network.** The compiler runs on the machine where the assistant runs its commands, and reads only the spec.
-- **git, if you want history.** When the spec is in a git repository and you ask for it, the assistant makes one git commit per accepted decision. The message holds the decision in the words of the person who made it, the compiler's account of the edit, and the discussion. Without git the session works the same and keeps no history. Only the end-of-session report, every change at once, says what the session did.
-
-## Building the skill folder
-
-The compiler's jar is not checked in to the repository. Build it once in a clone of the Velle repository:
-
-```bash
-./gradlew :compiler:skill
-```
-
-- It writes the jar to `skills/velle-design/scripts/velle.jar`.
-- It copies the [Best practices](Best-practices) page into `skills/velle-design/references/`, so the skill carries the best practices of the compiler it runs.
-
-Run it again after you update your clone, so the skill runs the same compiler as the repository.
-
-## Getting the skill into your assistant
-
-The skill is the whole `skills/velle-design/` folder: `SKILL.md`, which tells the assistant what to do, the `scripts/` folder with the compiler, and the `references/` folder on how Velle is written. Build it first, so the folder holds the jar.
-
-**Claude Code** looks for skills in `.claude/skills/` at the root of a project, and in `~/.claude/skills/` for every project of yours. Link the folder there, so a rebuild reaches the assistant:
-
-```bash
-mkdir -p .claude/skills
-ln -s /path/to/velle/skills/velle-design .claude/skills/velle-design
-```
-
-A copy of the folder works too, but has to be copied again after each rebuild. Claude Code then uses the skill when you ask it to work on a Velle spec.
-
-**claude.ai** takes a skill as a ZIP file of the folder, uploaded where its settings add skills, with code execution turned on. The skill needs Java 21 where the assistant runs its code. When that place has no Java, the assistant says so at the first command and the session cannot run there. Use an assistant on a machine that has Java.
-
-**Another assistant that reads skills as folders with a `SKILL.md` in them** takes the folder wherever it looks for skills. Its own documentation says where.
+[Setting up a design session](Design-session-setup) says what runs on whose machine, how to build the skill, and how to connect it to your assistant. This page assumes that is done.
 
 ## A session on the billing spec
 
@@ -253,27 +221,6 @@ The assistant reaches the compiler through `skills/velle-design/scripts/velle`. 
 - Each exits with 0 when it did what was asked, 1 when a spec does not validate, a name is not in it, or a scenario cannot be run, 2 when it was called wrongly, and 3 when the machine cannot run the compiler. A scenario in which the spec refuses a step still exits with 0.
 - With no arguments the script prints how to call it.
 
-## An assistant that cannot run commands
-
-Some assistants cannot run a script but can start an [MCP](GLOSSARY) server on your machine, as many desktop chat apps can. For those, Velle has an authoring server with the same four commands as tools. Build it in a clone of the Velle repository:
-
-```bash
-./gradlew :apis:mcp:authoringJar
-```
-
-It writes `apis/mcp/build/libs/velle-authoring-mcp.jar`. Point your assistant at it where its settings list MCP servers:
-
-```json
-{ "command": "java", "args": ["-jar", "/path/to/velle/apis/mcp/build/libs/velle-authoring-mcp.jar"] }
-```
-
-- The server runs on your machine, needs Java 21, and uses no network. Nothing of your spec leaves the machine.
-- Its tools are `validate`, `compare`, `describe`, and `try`. Each takes the text of a spec, where the script takes a file, and returns what the script prints.
-- It keeps nothing between calls. The spec lives in the conversation, and saving it to a file is yours to do.
-- It also serves the skill's instructions and reference, as the prompt `velle-design` and as resources, for an assistant that does not read skills.
-
-An assistant in a browser tab, which can start no program on your machine, cannot use it.
-
 ## Your team's own best practices
 
 The assistant follows Velle's [Best practices](Best-practices) in everything it writes. A team writes its own in a file named `best-practices.md` in the same folder as the spec. Where the two disagree, the team's file wins.
@@ -290,21 +237,9 @@ A rule already in the spec that does not follow a best practice is not rewritten
 - Change a comment of yours without the engineer's word. The only comment it writes unasked is `-- Not confirmed`, which it removes itself.
 - Write Velle when it cannot run the compiler. It tells you why and stops.
 
-## When it does not work
-
-- **"The Velle compiler needs Java 21 or later".** The machine has no `java` command, or an older one. Install Java 21 or later.
-- **"The Velle compiler's jar is missing".** The skill folder was not built. Run `./gradlew :compiler:skill` in the Velle repository. If you copied the folder rather than linking it, copy it once more.
-- **The spec names a type no library registers.** The skill's jar carries the compiler and Velle's own [extension type](Extension-types) library, `velle.finance`, and nothing else. A spec whose `Order` has a field `price: Euro`, with `Euro` from a library of your own, is refused:
-
-  ```
-  - [F1] 'Order.price': no builtin or registered type is named 'Euro' (Reference §5)
-  ```
-
-  The skill cannot validate such a spec. Check it where the system is built, with its libraries on the classpath ([Extension types](Extension-types)).
-- **On claude.ai, the assistant cannot run anything.** Code execution is off, or the place where it runs code has no Java 21. Turn code execution on in the settings. If Java is what is missing, use an assistant on a machine that has it.
-
 ## Related pages
 
+- [Setting up a design session](Design-session-setup), what to build and how to connect it.
 - [Comparing specs](Comparing-specs), the report every read-back shows.
 - [Best practices](Best-practices), the ones the skill carries.
 - [Using a system from an AI chat](AI-chat), an assistant using a running system.

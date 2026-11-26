@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D16 decided. D17 awaits Dave. Stages 2 and 3 are built, stage 3 as D17 recommends (Dave, 2026-11-26: "implement stage 2 and 3"): `velle try`, and the authoring MCP server. The file stays until D17 is answered and the work items in §5 are done or moved. Stage 1 of the build (§6) is built and has been through five trial sessions, the last two before the skill's latest rewrite: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. 
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D17 decided. All three stages of the build are built. The file stays until the work items in §5 are done or moved. Stage 1 of the build (§6) is built and has been through five trial sessions, the last two before the skill's latest rewrite: the `velle` command, the jar, the skill folder with its reference under test, and `wiki/Guides/Design-session.md`. 
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -440,7 +440,7 @@ Costs:
 
 **Decided:** yes (Dave, 2026-11-26). He reads the scenario as the acts' data in the form a REST API might take, which `try` checks against the spec. The names in place of store keys and the four other kinds of step were put to him before he answered.
 
-### D17. The authoring MCP server runs on the person's own machine and its tools take the spec as text
+### D17. The authoring MCP server runs on the person's own machine and its tools take the spec as text · Decided 2026-11-26
 
 Is the authoring server a program the assistant's host starts on the person's machine, whose tools take the text of a spec and give back the same Markdown the `velle` command prints?
 
@@ -464,6 +464,8 @@ Costs:
 - `apis/mcp`: an authoring server apart from `VelleMcp`, with a `main` and a Gradle task that builds its jar.
 - A test that each tool returns what the `velle` command prints for the same input.
 - `wiki/Guides/Design-session.md`: connecting the server to a host. `wiki/Guides/API-layer.md`: the server. `skills/velle-design/SKILL.md` already names the tools first.
+
+**Decided:** yes (Dave, 2026-11-26). He asked that the wiki say how to set up each way of running a session, as infrastructure documentation. That is `wiki/Guides/Design-session-setup.md`: what runs where, and the steps to build, connect, and check each setup.
 
 ## 4. Not in this question
 

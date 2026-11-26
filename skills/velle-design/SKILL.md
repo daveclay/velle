@@ -16,7 +16,7 @@ One rule does not bend. **Nobody takes your word for what the spec means.** Afte
 
 Reach the compiler one of two ways. Use the first that is available.
 
-1. Tools named `validate`, `compare`, `describe`, and `try` from a connected Velle authoring server. They take the text of a spec where the script takes a file, and print the same thing.
+1. Tools named `validate`, `compare`, `describe`, and `try` from a connected Velle authoring server. They take the text of a spec where the script takes a file, and print the same thing. If you have those tools and cannot read or write files, the draft and every saved version of it live in the conversation: wherever this page says to save, copy, or keep a file, keep the text, and give the people the whole spec and the open questions as text when they ask or the session ends.
 2. The script in this skill: `scripts/velle <subcommand> ...`. It needs Java 21 or later. If it reports that Java or its jar is missing, tell the people exactly that and stop. Do not write Velle without a compiler to check it.
 
 | Command | What it prints |
