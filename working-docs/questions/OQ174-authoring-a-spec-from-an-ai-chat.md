@@ -1,6 +1,6 @@
 # OQ174 — How an AI assistant helps a product owner and an engineer write a spec during a design discussion
 
-**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D11 decided. The build plan (§6) awaits Dave's review. Nothing built.
+**Status:** opened 2026-11-25 as a one-line question, kept apart from OQ173 (settled table, `working-docs/QUESTIONS.md`), which serves a running system; given this file the same day from Dave's chat. D1 to D11 decided. D12 awaits Dave. Stage 1 of the build (§6) is under way: the `velle` command, the jar, and the skill folder are built; the tests on the reference, the wiki guide, and the trial sessions remain.
 
 **In plain terms:** a product owner and an engineer talk through how their business works, and an AI assistant listening in writes what they decide into a Velle spec as they go. After each change the assistant reads back what the spec now says, in words the compiler wrote, so the product owner can confirm it. The first version works in an AI chat. Listening to a live meeting's audio comes later.
 
@@ -241,6 +241,40 @@ Costs:
 
 **Decided:** yes, 2026-11-26.
 
+### D12. The comparison says a rule in the same words `describe` does
+
+Does `velle compare` take up the words `velle describe` gained, so a product owner reads one rule the same way in both?
+
+`velle describe` was given words the comparison does not have, kept apart so that no checked-in comparison report changed (`Sentences.Vocabulary` in `compiler/src/main/kotlin/velle/Sentences.kt`, `SHARED` and `DESCRIPTION`). From `examples/billing/billing.velle`:
+
+```velle
+Status is one of "paid", "overdue", "open"       -- a type whose values are these three words
+
+shape Invoice {                                   -- a record the system keeps
+    customer: one Customer                        -- a reference to one Customer record
+    due: Date                                     -- a stored date
+    total: Money = sum(lineItems, amount)         -- worked out at each read from the invoice's line items
+    balance: Money = total - sum(payments, amount) -- worked out at each read from total and the payments
+    status: Status = if balance <= 0 then "paid" else if due < today then "overdue" else "open"
+                                                  -- worked out at each read, one of the three words
+}
+```
+
+`velle describe` says of the last field: "Its status is worked out as "paid" when its balance is at most 0, otherwise "overdue" when its due is before today, otherwise "open"." When an edit changes that field, `velle compare` has no words for it and shows the Velle (`DescribePartsTest`, "the comparison of two specs keeps its own words, so a changed if-then-else field is still shown as Velle"). So in one design session the product owner hears the rule in words when asking what the spec says, and is shown code when confirming a change to it, which is the moment D2 exists for.
+
+Recommendation: yes, one set of words.
+
+Costs:
+
+- The comparison's output changes, so the reports in `examples/billing/changes/` are regenerated, and `wiki/Guides/Comparing-specs.md` is checked against them.
+- The generated cases read the same words (`SpecGen`), so every example's generated test names and `SPEC_INDEX` change wherever a new word applies, and every example is regenerated.
+- A wording chosen for a description of a spec as it stands must also read well inside "is now ..., before: ...". Each new word is checked in both places before it is shared, and one that reads badly in a comparison stays apart.
+
+#### Proposed changes
+
+- `Sentences.Vocabulary` is removed from `compiler/src/main/kotlin/velle/Sentences.kt`, and `DescriptionWords` folds into `Sentences`.
+- `examples/billing/changes/*.md` and every example's `output/` are regenerated.
+
 ## 4. Not in this question
 
 - Listening to a meeting's audio. Dave, 2026-11-25: "it is likely sufficient to first capture a design session in an AI chat in velle before considering audio transcription." It gets its own question once a design session in chat has been tried. It adds a speech-to-text service that labels speakers, and the question of when the assistant edits, since it should not edit on every sentence spoken.
@@ -251,11 +285,9 @@ Costs:
 ## 5. Work items
 
 - [ ] Upload the skill to claude.ai and run `scripts/velle validate` there, to learn whether its sandbox has Java 21, which no documentation says (§2, "What each host can run").
-- [ ] List the forms in `examples/` for which `Sentences` has no words, each one a gap a product owner would see as Velle (D2, D3).
-- [ ] Add `velle.Cli` with `validate`, `compare`, and `describe`, `describe` taking an optional name (D9), and make `Compare.kt` the `compare` subcommand (§6, stage 1).
-- [ ] Add the Gradle task that builds the self-contained jar with `extensions/finance` and copies it and `wiki/Guides/Best-practices.md` into the skill folder (§6, stage 1).
-- [ ] Write `skills/velle-design/`: `SKILL.md`, which tells the assistant to follow the best practices page and a team's own `best-practices.md` beside the draft, `scripts/velle`, `references/` (§6, stage 1).
-- [ ] Add the test that fails when `references/` and `wiki/Reference/` disagree, or the copy of the best practices page differs from `wiki/Guides/Best-practices.md` (§6, stage 1).
+- [ ] Add the test that validates every Velle example in `skills/velle-design/references/` with the compiler, and fails when a keyword of the language is missing from them (§6, stage 1).
+- [ ] Give words to the 38 parts listed in `compiler/src/test/resources/describe/without-words.md`, most common form first (D2).
+- [ ] Write `wiki/Guides/Design-session.md`, the GLOSSARY entry for "skill", the `velle compare` spelling in `Comparing-specs.md`, and name `skills/` in the root `CLAUDE.md` (§6, stage 1).
 - [ ] Try two design sessions in chat, before any audio work: one changing `examples/billing/changes/00-billing.velle` toward the changes in `examples/billing/changes/README.md`, and one rebuilding part of the billing spec from an empty draft (§4, §6 stage 1).
 - [ ] Write the decision on what a scenario for `velle try` says, from what stage 1's trial session needed (§6, stage 2).
 - [ ] Add `velle try` (§6, stage 2).
