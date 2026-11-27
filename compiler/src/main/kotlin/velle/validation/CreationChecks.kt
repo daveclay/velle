@@ -111,11 +111,13 @@ internal fun Validator.typeMatchedFields(shape: String, expr: Expr, scope: Strin
     return model.typeMatchedFields(shape, exprShape)
 }
 
-/** The shape of the one record a path names; null for any other expression. */
-private fun Validator.instanceShapeOf(expression: Expr, scope: String): String? = when (expression) {
-    is PathExpr -> {
-        if (expression.root == "this" && expression.segs.isEmpty()) model.baseOf(thisScope ?: scope)
-        else model.pathElementShape(expression, scope, scopeByAlias, thisScope ?: scope)
-    }
-    else -> null
+/** The shape of the one record after `for`, placed as the condition's reads place it
+ *  (`Model.forRecordShape`), and read as the shape a field could be typed with: a refinement
+ *  as its base shape, or as the static union it is drawn from (Reference §9). Null when the
+ *  record cannot be placed. */
+private fun Validator.instanceShapeOf(expression: Expr, scope: String): String? {
+    val thisShape = thisScope ?: scope
+    if (expression == PathExpr("this")) return model.viewScopeOf(thisShape)
+    val recordShape = model.forRecordShape(expression, scope, scopeByAlias, thisShape) ?: return null
+    return model.viewScopeOf(recordShape) ?: recordShape
 }

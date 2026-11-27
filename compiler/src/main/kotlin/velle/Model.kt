@@ -1101,7 +1101,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     /** The shape of the one record after `for`: a path's end, the shape a `(Shape for ...)` finds,
      *  the element `latest` or `first` picks, and a field read after either; null for anything else. */
-    private fun forRecordShape(forExpr: Expr, subject: String, aliases: Map<String, String>, root: String): String? = when (forExpr) {
+    internal fun forRecordShape(forExpr: Expr, subject: String, aliases: Map<String, String>, root: String): String? = when (forExpr) {
         is PathExpr -> pathElementShape(forExpr, subject, aliases, root)
         is SingularFor -> forExpr.shape
         is AggCall -> pickedElementShape(forExpr, subject, aliases, root)

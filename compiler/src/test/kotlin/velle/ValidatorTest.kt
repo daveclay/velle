@@ -740,6 +740,77 @@ class ValidatorTest {
         assertTrue(codes(src).contains("V13"), "got: ${diags(src)}")
     }
 
+    private val membersTaggedAndLending = """
+        act Member {
+            name: text
+            tags: many text
+        }
+
+        act Loan {
+            member: one Member
+            dueOn: Date
+        }
+    """.trimIndent()
+
+    private fun forMatchProblems(refinement: String): List<String> =
+        diags(membersTaggedAndLending + "\n\n" + refinement).filter { diagnostic -> diagnostic.code == "V13" }.map { diagnostic -> diagnostic.message }
+
+    @Test
+    fun `V13 - the loans for a text, as a collection source, match no field of the loan`() {
+        val problems = forMatchProblems("shape LabelledMember = Member where count(tags as tag where count(Loan for tag) > 0) > 0")
+
+        assertEquals(listOf("'Loan for tag' — 'for' matches 0 fields of 'Loan' (needs exactly one; name the field or use the where-filtered form)"), problems)
+    }
+
+    @Test
+    fun `V13 - the loans for a loan, as a collection source, match no field of the loan`() {
+        val problems = forMatchProblems("shape LoanOfLoan = Member where count(Loan for (Loan for this)) > 0")
+
+        assertEquals(listOf("'Loan for (Loan for this)' — 'for' matches 0 fields of 'Loan' (needs exactly one; name the field or use the where-filtered form)"), problems)
+    }
+
+    @Test
+    fun `V13 - the latest loan for a loan matches no field of the loan`() {
+        val problems = forMatchProblems("shape LoanOfLoan = Member where latest(Loan for (Loan for this) by dueOn) is some")
+
+        assertEquals(listOf("'Loan for (Loan for this)' — 'for' matches 0 fields of 'Loan' (needs exactly one; name the field or use the where-filtered form)"), problems)
+    }
+
+    @Test
+    fun `V13 - the late loans for a loan match no field of the loan`() {
+        val problems = forMatchProblems("shape LoanOfLoan = Member where exists (Loan for (Loan for this) where dueOn < today)")
+
+        assertEquals(listOf("'Loan for (Loan for this)' — 'for' matches 0 fields of 'Loan' (needs exactly one; name the field or use the where-filtered form)"), problems)
+    }
+
+    @Test
+    fun `V13 - the one loan for a loan matches no field of the loan`() {
+        val problems = forMatchProblems("shape LoanOfLoan = Member where (Loan for (Loan for this)) is some")
+
+        assertEquals(listOf("'(Loan for (Loan for this))' — 'for' matches 0 fields of 'Loan' (needs exactly one; name the field or use the where-filtered form)"), problems)
+    }
+
+    @Test
+    fun `V13 - the loans for a member, as a collection source, need one field of the loan to take the member`() {
+        val src = """
+            act Customer {
+                name: text
+            }
+
+            act Referral {
+                referrer: one Customer
+                referee: one Customer
+            }
+
+            shape Referrer = Customer where count(Referral for this) > 0
+        """.trimIndent()
+
+        assertEquals(
+            listOf("'Referral for this' — 'for' matches 2 fields of 'Referral' (needs exactly one; name the field or use the where-filtered form)"),
+            diags(src).filter { diagnostic -> diagnostic.code == "V13" }.map { diagnostic -> diagnostic.message },
+        )
+    }
+
     // ── V12 (refinement slice): (Refinement for expr) singularity proofs ─────
 
     /** Reference §20's episodes pattern — the flagship whole-spec singularity proof. */

@@ -1,7 +1,9 @@
 package velle
 
+import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -225,6 +227,43 @@ class UnionStressTest {
                 assertTrue("views < 0" in refused.reason, refused.reason)
                 assertEquals(1, sys.idsOf("Post").size, prohibition)
             }
+        }
+    }
+
+    private val borrowers = """
+        act Member { name: text }
+
+        act Library { name: text }
+
+        shape Borrower = Member or Library
+
+        act Loan {
+            member: one Borrower
+            dueOn: Date
+        }
+
+        act Hold { holder: one Borrower }
+
+        shape HoldWithLoan = Hold where exists Loan for holder
+
+        shape BorrowerWithLoan = Borrower where exists Loan for this
+    """.trimIndent()
+
+    @Test
+    fun `the loans for this over a union find the records of the field that takes every operand`() {
+        val sys = system(borrowers)
+        sys.scope {
+            val memberWithLoan = sys.mustCommit("Member", mapOf("name" to "ada"))
+            val libraryWithLoan = sys.mustCommit("Library", mapOf("name" to "central"))
+            val memberWithoutLoan = sys.mustCommit("Member", mapOf("name" to "bea"))
+            val libraryWithoutLoan = sys.mustCommit("Library", mapOf("name" to "branch"))
+            sys.mustCommit("Loan", mapOf("member" to memberWithLoan, "dueOn" to LocalDate.of(2026, 2, 1)))
+            sys.mustCommit("Loan", mapOf("member" to libraryWithLoan, "dueOn" to LocalDate.of(2026, 2, 1)))
+
+            assertTrue(sys.isMember(memberWithLoan, "BorrowerWithLoan"), "a member with a loan is a BorrowerWithLoan")
+            assertTrue(sys.isMember(libraryWithLoan, "BorrowerWithLoan"), "a library with a loan is a BorrowerWithLoan")
+            assertFalse(sys.isMember(memberWithoutLoan, "BorrowerWithLoan"), "a member with no loan is not a BorrowerWithLoan")
+            assertFalse(sys.isMember(libraryWithoutLoan, "BorrowerWithLoan"), "a library with no loan is not a BorrowerWithLoan")
         }
     }
 
