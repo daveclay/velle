@@ -15,6 +15,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
+import kotlin.math.sign
 import kotlin.reflect.KClass
 
 /**
@@ -30,6 +31,7 @@ object BuiltinFunctions {
         Lowercase, Uppercase, Trim, Length, Abs,
         Year, Month, Day, DayOfWeek, Hour, Minute,
         Weeks, Days, Hours, Minutes, Seconds,
+        WeeksStarted, DaysStarted, HoursStarted, MinutesStarted,
         Max, Min,
         ReadNumber, ReadDate, ReadDateTime, ReadRegex,
     )
@@ -120,23 +122,43 @@ object Hour : TimePart("hour", { it.hour })
 object Minute : TimePart("minute", { it.minute })
 
 /**
- * A span of time read as a whole number of one unit: the part of a unit is dropped
- * toward zero, so `days(36 hours)` is 1 and `days(-36 hours)` is -1. A duration holds
- * whole seconds and no calendar unit, so every unit has a fixed length in seconds.
+ * A span of time read as a count of one unit. A duration holds whole seconds and no
+ * calendar unit, so every unit has a fixed length in seconds.
  */
-sealed class SpanInUnits(name: String, wholeUnits: (Duration) -> Long) : BuiltinFunction(name) {
+sealed class SpanInUnits(name: String, unitCount: (Duration) -> Long) : BuiltinFunction(name) {
     override val signatures = listOf(Signature(
         parameters = listOf(Parameter("span", Accepts.Is(DurationType::class), takes = "a duration")),
         result = Returns.Is(IntegerType::class),
-        apply = { _, args -> BigDecimal(wholeUnits(args[0].value as Duration)) },
+        apply = { _, args -> BigDecimal(unitCount(args[0].value as Duration)) },
     ))
 }
 
-object Weeks : SpanInUnits("weeks", { span -> span.toDays() / 7 })
-object Days : SpanInUnits("days", { span -> span.toDays() })
-object Hours : SpanInUnits("hours", { span -> span.toHours() })
-object Minutes : SpanInUnits("minutes", { span -> span.toMinutes() })
-object Seconds : SpanInUnits("seconds", { span -> span.toSeconds() })
+/** The whole units in a span, the part of a unit dropped toward zero: `days(36 hours)` is 1 and `days(-36 hours)` is -1. */
+private fun wholeUnits(span: Duration, unit: Duration): Long = span.seconds / unit.seconds
+
+/** The units a span has begun, a part of a unit counted as a whole one away from zero: `daysStarted(36 hours)` is 2 and `daysStarted(-36 hours)` is -2. */
+private fun unitsBegun(span: Duration, unit: Duration): Long {
+    val secondsPastWholeUnits = span.seconds % unit.seconds
+    return wholeUnits(span, unit) + secondsPastWholeUnits.sign
+}
+
+private val WEEK: Duration = Duration.ofDays(7)
+private val DAY: Duration = Duration.ofDays(1)
+private val HOUR: Duration = Duration.ofHours(1)
+private val MINUTE: Duration = Duration.ofMinutes(1)
+private val SECOND: Duration = Duration.ofSeconds(1)
+
+object Weeks : SpanInUnits("weeks", { span -> wholeUnits(span, WEEK) })
+object Days : SpanInUnits("days", { span -> wholeUnits(span, DAY) })
+object Hours : SpanInUnits("hours", { span -> wholeUnits(span, HOUR) })
+object Minutes : SpanInUnits("minutes", { span -> wholeUnits(span, MINUTE) })
+object Seconds : SpanInUnits("seconds", { span -> wholeUnits(span, SECOND) })
+
+/** No `secondsStarted`: a duration holds whole seconds, so it would be `seconds`. */
+object WeeksStarted : SpanInUnits("weeksStarted", { span -> unitsBegun(span, WEEK) })
+object DaysStarted : SpanInUnits("daysStarted", { span -> unitsBegun(span, DAY) })
+object HoursStarted : SpanInUnits("hoursStarted", { span -> unitsBegun(span, HOUR) })
+object MinutesStarted : SpanInUnits("minutesStarted", { span -> unitsBegun(span, MINUTE) })
 
 /**
  * `max`/`min` over anything [Ordered]: two or more values of one type, or one
