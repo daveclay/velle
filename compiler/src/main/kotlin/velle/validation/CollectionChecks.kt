@@ -109,6 +109,11 @@ private fun Validator.readShapeForBinding(source: ShapeForSource, scope: String)
 /** A binding over a path: a `many` of values has no members to filter, sum, or order by (Reference §5):
  *  it is counted bare, or filtered by naming each value, `(options as o where ...)`. */
 private fun Validator.readPathBinding(source: PathExpr, binding: Binding, read: CollectionRead, scope: String): BindingReading {
+    if (namesUndeclaredShape(source, scope)) {
+        diagnostics.add(Diagnostic("F1", "unknown shape '${source.root}'"))
+        return BindingReading.Refused
+    }
+    val diagnosticCountBeforePath = diagnostics.size
     resolvePath(source, scope)
     val valueCollection = scalarTypeOf(source, scope) as? VType.CollS
     if (valueCollection != null && binding.alias != null && read.namesEachValue(binding))
@@ -119,7 +124,19 @@ private fun Validator.readPathBinding(source: PathExpr, binding: Binding, read: 
             "`(${Printer.expr(source)} as value where ...)`, but not filtered by a member, summed, or ordered (Reference §5)"))
         return BindingReading.Refused
     }
-    return BindingReading.Records(sourceElementShape(source, scope))
+    val elementShape = sourceElementShape(source, scope)
+    // a path already refused reaches no records, so its filter and selectors are not read on the subject
+    if (elementShape == null && diagnostics.size > diagnosticCountBeforePath) return BindingReading.Refused
+    return BindingReading.Records(elementShape)
+}
+
+/** A capitalised source that is no shape, alias, or member in scope, `(Counselling where fill == this)`,
+ *  is a shape the spec does not declare (Reference §10). */
+private fun Validator.namesUndeclaredShape(source: PathExpr, scope: String): Boolean {
+    val root = source.root
+    if (source.segs.isNotEmpty() || !root.first().isUpperCase()) return false
+    if (root in scopeByAlias || root in scalarTypeByAlias || root == ruleActor?.name || narrowedPrefix(source) != null) return false
+    return root !in model.membersOf(scope)
 }
 
 /** The shape of the records a path source holds. A narrowed prefix (`origin is Composition and
