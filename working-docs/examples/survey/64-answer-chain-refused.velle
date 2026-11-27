@@ -1,0 +1,62 @@
+-- A request answered by a chain of cases, one rule per case: 401, 429, 404, 405, 200.
+-- The five refinements cover every Request between them, each case defined as "not the
+-- cases before it". REFUSED today, V18: "a 'Request' can arrive that no rule or 'never'
+-- answers, and it is transient ...". V18 proves a bare-act answer or one pair of opposite
+-- conditions, not a chain. The workaround is 64-answer-chain-workaround.velle. OQ54 §1.
+
+-- The compiler makes Method a type whose only values are these three words.
+Method is one of "GET", "POST", "DELETE"
+
+-- A kept act: an operator publishes a route, and the route is a record.
+act Route {
+    path: text                -- the exact path served, such as "/orders"
+    method: Method            -- a word outside the three is refused when the route arrives
+}
+
+-- A constraint on the books: the compiler checks it in every commit that adds a Route.
+never (Route where count(Route where path == this.path and method == this.method) > 1)
+
+-- A kept act: an operator registers a caller and its allowance.
+act Caller {
+    token: text unique        -- a key: a second Caller with the same token is refused
+    perMinute: integer        -- how many requests this caller may make in one minute
+}
+
+-- A transient act: decided inside its own commit and never stored.
+transient act Request {
+    method: Method            -- the generated input type takes only the three words
+    path: text                -- compared with Route.path below
+    token: text               -- compared with Caller.token below
+}
+
+-- What the gateway said. A shape has no door of its own: only the rule Respond creates one.
+shape Answer {
+    path: text                       -- copied from the request, which is gone after its commit
+    token: text                      -- copied so the allowance can count this caller's answers
+    status: integer                  -- 200, 401, 404, 405, or 429
+    answeredAt: timestamp on create  -- the runtime fills this when the record is created
+}
+
+-- Refinements of Request. Each is evaluated once, at the request's commit.
+shape Unauthorized = Request where not exists (Caller where token == this.token)
+shape Known        = Request where exists (Caller where token == this.token)
+-- Reads the clock and the answers of the last minute. `first(... by token)` reads the one Caller with this token.
+shape Throttled    = Known where count(Answer where token == this.token and answeredAt > now - 1 minutes) >= first(Caller where token == this.token by token).perMinute
+shape Admitted     = Known where not (this is Throttled)
+shape NotFound     = Admitted where not exists (Route where path == this.path)
+shape WrongMethod  = Admitted where exists (Route where path == this.path) and not exists (Route where path == this.path and method == this.method)
+
+-- Served is the last case: admitted, and a route has this path and this method.
+shape Served       = Admitted where exists (Route where path == this.path and method == this.method)
+
+-- One rule per case, as a product owner says it. Each fires for the requests in its refinement.
+rule Refuse401 when Unauthorized { Answer from { path: path, token: token, status: 401 } }
+rule Refuse429 when Throttled    { Answer from { path: path, token: token, status: 429 } }
+rule Refuse404 when NotFound     { Answer from { path: path, token: token, status: 404 } }
+rule Refuse405 when WrongMethod  { Answer from { path: path, token: token, status: 405 } }
+rule Serve     when Served       { Answer from { path: path, token: token, status: 200 } }
+
+-- A scheduled rule: at each tick of EveryMinute, one commit per Answer older than a minute.
+rule Forget when (Answer where answeredAt < now - 1 minutes) on EveryMinute {
+    delete this               -- the record is removed, so the store holds one minute of answers
+}

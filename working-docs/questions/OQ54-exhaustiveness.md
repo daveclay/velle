@@ -57,6 +57,8 @@ error: a PlaceBid can arrive that no rule responds to.
 
 What v0 has (`checks.md` V18): coverage is proven when some answer is the bare act shape, or two answers' predicates are syntactic complements; everything else, per-reason enumerations included, is rejected, and the prescribed idiom is one complement rule whose reason is a conditional value. The pharmacy pass lived inside that slice: a derived boolean on the act (`dispensable`) as the partition key, and a third answer chained off the refusal record instead of a third partition.
 
+A second instance, found 2026-11-27 while writing a gateway that answers each request with a status. The cases form a chain in which the first case that holds wins: no such caller, over its allowance, no such path, wrong method, served. Each refinement is defined as not the ones before it, so the five cover every request by construction, and a product owner names one rule per case. `working-docs/examples/survey/64-answer-chain-refused.velle` writes the rules `Refuse401`, `Refuse429`, `Refuse404`, `Refuse405`, and `Serve` that way and V18 refuses it. `working-docs/examples/survey/64-answer-chain-workaround.velle` is what validates: the one rule `Respond` over the bare `Request`, with the five cases as branches of one `if`. Unlike the auction above, nothing here is uncovered; the engine has only to follow `Known` and `Admitted`, each written as the opposite of the case before it.
+
 **The item:** grow V18 beyond the complement slice once the engine exists. A closure's parts owe no coverage of their own; the act's answer covers what it carries (`checks.md` V18).
 
 ### D1. Whether rules over every kind of a transient act's parts answer the act

@@ -1,0 +1,63 @@
+-- A request answered by a chain of cases, first case that holds wins, in the one spelling
+-- V18 accepts today: one rule over the bare Request whose status is a conditional value.
+-- Validates. The five cases a product owner names become branches of one `if`. OQ54 §1.
+
+-- The compiler makes Method a type whose only values are these three words.
+Method is one of "GET", "POST", "DELETE"
+
+-- A kept act: an operator publishes a route, and the route is a record.
+act Route {
+    path: text                -- the exact path served, such as "/orders"
+    method: Method            -- a word outside the three is refused when the route arrives
+}
+
+-- A constraint on the books: the compiler checks it in every commit that adds a Route.
+never (Route where count(Route where path == this.path and method == this.method) > 1)
+
+-- A kept act: an operator registers a caller and its allowance.
+act Caller {
+    token: text unique        -- a key: a second Caller with the same token is refused
+    perMinute: integer        -- how many requests this caller may make in one minute
+}
+
+-- A transient act: decided inside its own commit and never stored.
+transient act Request {
+    method: Method            -- the generated input type takes only the three words
+    path: text                -- compared with Route.path below
+    token: text               -- compared with Caller.token below
+}
+
+-- What the gateway said. A shape has no door of its own: only the rule Respond creates one.
+shape Answer {
+    path: text                       -- copied from the request, which is gone after its commit
+    token: text                      -- copied so the allowance can count this caller's answers
+    status: integer                  -- 200, 401, 404, 405, or 429
+    answeredAt: timestamp on create  -- the runtime fills this when the record is created
+}
+
+-- Refinements of Request. Each is evaluated once, at the request's commit.
+shape Unauthorized = Request where not exists (Caller where token == this.token)
+shape Known        = Request where exists (Caller where token == this.token)
+-- Reads the clock and the answers of the last minute. `first(... by token)` reads the one Caller with this token.
+shape Throttled    = Known where count(Answer where token == this.token and answeredAt > now - 1 minutes) >= first(Caller where token == this.token by token).perMinute
+shape Admitted     = Known where not (this is Throttled)
+shape NotFound     = Admitted where not exists (Route where path == this.path)
+shape WrongMethod  = Admitted where exists (Route where path == this.path) and not exists (Route where path == this.path and method == this.method)
+
+-- One rule over the bare Request, so the compiler sees every request answered (checks V18).
+rule Respond when Request {
+    Answer from {
+        path: path,           -- read off the request
+        token: token,         -- read off the request
+        status: if this is Unauthorized then 401      -- the first branch that holds gives the value
+                else if this is Throttled then 429
+                else if this is NotFound then 404
+                else if this is WrongMethod then 405
+                else 200
+    }
+}
+
+-- A scheduled rule: at each tick of EveryMinute, one commit per Answer older than a minute.
+rule Forget when (Answer where answeredAt < now - 1 minutes) on EveryMinute {
+    delete this               -- the record is removed, so the store holds one minute of answers
+}
