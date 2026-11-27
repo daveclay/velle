@@ -1,6 +1,9 @@
 package velle.validation
 
 import velle.*
+import velle.spec.operandsOf
+import velle.spec.collectionOf
+import velle.spec.subExpressionsOf
 
 // ── V33: a creation's `as` name (Reference §14; OQ63 §6.2.1) ─────────────
 //

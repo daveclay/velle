@@ -1,6 +1,7 @@
 package velle
 
 import velle.Sentences.Subject
+import velle.spec.partsOf
 
 /**
  * The form a part with no words is held back by, named for a reader of the work list in

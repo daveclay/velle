@@ -1,8 +1,8 @@
-package velle.validation
+package velle.spec
 
 import velle.*
 
-// ── the parts of an expression, for the checks that walk one ──────────────
+// ── The parts of an expression ───────────────────────────────────────────────
 //
 // An expression reads its operands directly, and a form that holds a
 // collection, `exists (...)`, an aggregate, or a filter, also reads that
@@ -12,14 +12,14 @@ import velle.*
 // [collectionOf] apart.
 
 /** The expressions [expression] reads directly, outside any collection it holds, in reading order. */
-internal fun operandsOf(expression: Expr): List<Expr> = when (expression) {
+fun operandsOf(expression: Expr): List<Expr> = when (expression) {
     is ExistsExpr -> listOfNotNull(expression.forExpr)
     is WalkExpr -> listOfNotNull(expression.until)
     else -> partsOf(expression)
 }
 
 /** The collection [expression] holds: an `exists (...)`'s, an aggregate's, or a filter's; null for any other form. */
-internal fun collectionOf(expression: Expr): CollectionExpr? = when (expression) {
+fun collectionOf(expression: Expr): CollectionExpr? = when (expression) {
     is ExistsExpr -> expression.collection
     is AggCall -> expression.collection
     is SetExpr -> expression.collection
@@ -27,9 +27,24 @@ internal fun collectionOf(expression: Expr): CollectionExpr? = when (expression)
 }
 
 /** A collection's binding sources, then its `where`. */
-internal fun sourcesAndFilterOf(collection: CollectionExpr): List<Expr> =
+fun sourcesAndFilterOf(collection: CollectionExpr): List<Expr> =
     collection.bindings.map { binding -> binding.source } + listOfNotNull(collection.where)
 
 /** Every expression [expression] reads directly, its operands first and then its collection's sources and `where`. */
-internal fun subExpressionsOf(expression: Expr): List<Expr> =
+fun subExpressionsOf(expression: Expr): List<Expr> =
     operandsOf(expression) + collectionOf(expression)?.let(::sourcesAndFilterOf).orEmpty()
+
+/** The expressions directly inside [expression], for every form that holds no collection of its own. */
+fun partsOf(expression: Expr): List<Expr> = when (expression) {
+    is UnaryMinus -> listOf(expression.inner)
+    is Binary -> listOf(expression.left, expression.right)
+    is NotExpr -> listOf(expression.inner)
+    is IfExpr -> listOf(expression.condition, expression.thenExpr, expression.elseExpr)
+    is Interpolation -> expression.pieces
+    is IsExpr -> listOf(expression.subject)
+    is FunCall -> expression.args
+    is SingularFor -> listOf(expression.forExpr)
+    is ShapeForSource -> listOf(expression.forExpr)
+    is Access -> listOf(expression.target)
+    else -> emptyList()
+}

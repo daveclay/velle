@@ -2,6 +2,9 @@ package velle.validation
 
 import velle.*
 import velle.spec.Scope
+import velle.spec.operandsOf
+import velle.spec.collectionOf
+import velle.spec.subExpressionsOf
 
 // ── V37: transient fields of a kept act (Reference §4, "Transient fields of a
 // kept act") ────────────────────────────────────────────────────────────────

@@ -1,5 +1,7 @@
 package velle
 
+import velle.spec.subExpressionsOf
+
 /**
  * One level of a body in an order every `as` name bound at that level is
  * bound before it is read (Reference §15: a read orders the two statements).
@@ -39,18 +41,7 @@ internal fun rootsOf(expr: Expr): List<String> {
 }
 
 private fun collectRoots(expr: Expr, roots: MutableList<String>) {
-    for (child in childrenOf(expr)) collectRoots(child, roots)
+    for (child in subExpressionsOf(expr)) collectRoots(child, roots)
     if (expr is PathExpr) roots.add(expr.root)
 }
 
-/** The expressions [expr] reads directly, in reading order: [partsOf] for the forms without a collection of their own. */
-private fun childrenOf(expr: Expr): List<Expr> = when (expr) {
-    is ExistsExpr -> listOfNotNull(expr.forExpr) + expr.collection?.let(::collectionParts).orEmpty()
-    is AggCall -> collectionParts(expr.collection)
-    is SetExpr -> collectionParts(expr.collection)
-    is WalkExpr -> listOfNotNull(expr.until)
-    else -> partsOf(expr)
-}
-
-private fun collectionParts(collection: CollectionExpr): List<Expr> =
-    collection.bindings.map { binding -> binding.source } + listOfNotNull(collection.where)

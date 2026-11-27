@@ -2,6 +2,7 @@ package velle.validation
 
 import velle.*
 import velle.spec.partsJoinedByAnd
+import velle.spec.partsOf
 
 // ── A2 (advisory): an `initially` that reads the records pointing at its own record ──
 //

@@ -1,7 +1,7 @@
 package velle
 
-import velle.validation.subExpressionsOf
 import velle.spec.partsJoinedByAnd
+import velle.spec.subExpressionsOf
 
 /**
  * State-flow emission (diagrams.md): one section per base

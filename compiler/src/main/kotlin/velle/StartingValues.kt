@@ -1,5 +1,7 @@
 package velle
 
+import velle.spec.partsOf
+
 /**
  * The order in which a new record's `initially` values are computed (Reference §5): each after
  * every other `initially` field of the same record that it reads, directly or through a derived
@@ -73,17 +75,3 @@ internal fun ownMemberOf(path: PathExpr, subjectLevel: Boolean): String? = when 
     else -> null
 }
 
-/** The expressions directly inside [expr], for every form that holds no collection of its own. */
-internal fun partsOf(expr: Expr): List<Expr> = when (expr) {
-    is UnaryMinus -> listOf(expr.inner)
-    is Binary -> listOf(expr.left, expr.right)
-    is NotExpr -> listOf(expr.inner)
-    is IfExpr -> listOf(expr.condition, expr.thenExpr, expr.elseExpr)
-    is Interpolation -> expr.pieces
-    is IsExpr -> listOf(expr.subject)
-    is FunCall -> expr.args
-    is SingularFor -> listOf(expr.forExpr)
-    is ShapeForSource -> listOf(expr.forExpr)
-    is Access -> listOf(expr.target)
-    else -> emptyList()
-}
