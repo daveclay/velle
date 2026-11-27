@@ -144,6 +144,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         dueBy = system.get(id, "dueBy") as LocalDate,
         paidOn = system.get(id, "paidOn") as LocalDate,
         onTime = system.get(id, "onTime") as Boolean,
+        daysLate = (system.get(id, "daysLate") as BigDecimal).intValueExact(),
         previous = (system.get(id, "previous") as Long?)?.let { system.refFor(it) },
         streakAfter = (system.get(id, "streakAfter") as BigDecimal).intValueExact(),
     )
@@ -284,8 +285,8 @@ never (Member where referrer == this)
 
 -- ── Monthly dues and the on-time streak ──────────────────────────────────────
 
--- Dues arrive month by month. Whether a payment was on time is read off its
--- own dates, and the streak — consecutive on-time payments — is DERIVED
+-- Dues arrive month by month. Whether a payment was on time, and how many
+-- days late it was, is read off its own dates, and the streak — consecutive on-time payments — is DERIVED
 -- HISTORY, not a stored counter: each payment knows the streak as of itself,
 -- by asking its predecessor. The order comes from `paidOn`, a business datum,
 -- so a payment that arrives late (posted today, dated last month) slots into
@@ -296,13 +297,15 @@ never (Member where referrer == this)
 -- velle: the predecessor recurrence — a derived to-one `previous` whose
 -- selector picks a strictly earlier record by a datum fixed at creation, so
 -- the chain ends (checks.md V14); `streakAfter` as readable history; the
--- current value as a selector read
+-- current value as a selector read; `days(paidOn - dueBy)` reads the span
+-- between two dates as a whole number of days
 act DuesPayment {
     member: one Member
     coveredMonth: text
     dueBy: Date
     paidOn: Date
     onTime = paidOn <= dueBy
+    daysLate: integer = if onTime then 0 else days(paidOn - dueBy)
     previous: one DuesPayment? =
         latest(DuesPayment where member == this.member and paidOn < this.paidOn by paidOn)
     streakAfter: integer =
@@ -526,6 +529,7 @@ data class DuesPayment(
     val dueBy: LocalDate,
     val paidOn: LocalDate,
     val onTime: Boolean,
+    val daysLate: Int,
     val previous: Ref<DuesPayment>?,
     val streakAfter: Int,
 ) : Ref<DuesPayment> {
@@ -661,6 +665,7 @@ class DuesPaymentFields(path: List<String> = emptyList()) : Fields(path) {
     val dueBy: DateField get() = DateField(fieldPath + "dueBy")
     val paidOn: DateField get() = DateField(fieldPath + "paidOn")
     val onTime: BoolField get() = BoolField(fieldPath + "onTime")
+    val daysLate: NumField get() = NumField(fieldPath + "daysLate")
     val previous: DuesPaymentFields get() = DuesPaymentFields(fieldPath + "previous")
     val streakAfter: NumField get() = NumField(fieldPath + "streakAfter")
 }

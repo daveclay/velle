@@ -11,6 +11,7 @@ import velle.ext.Signature
 import velle.ext.Signed
 import velle.ext.VelleFunction
 import java.math.BigDecimal
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
@@ -28,6 +29,7 @@ object BuiltinFunctions {
     val all: List<VelleFunction> = listOf(
         Lowercase, Uppercase, Trim, Length, Abs,
         Year, Month, Day, DayOfWeek, Hour, Minute,
+        Weeks, Days, Hours, Minutes, Seconds,
         Max, Min,
         ReadNumber, ReadDate, ReadDateTime, ReadRegex,
     )
@@ -116,6 +118,25 @@ sealed class TimePart(name: String, part: (java.time.LocalTime) -> Int) : Builti
 
 object Hour : TimePart("hour", { it.hour })
 object Minute : TimePart("minute", { it.minute })
+
+/**
+ * A span of time read as a whole number of one unit: the part of a unit is dropped
+ * toward zero, so `days(36 hours)` is 1 and `days(-36 hours)` is -1. A duration holds
+ * whole seconds and no calendar unit, so every unit has a fixed length in seconds.
+ */
+sealed class SpanInUnits(name: String, wholeUnits: (Duration) -> Long) : BuiltinFunction(name) {
+    override val signatures = listOf(Signature(
+        parameters = listOf(Parameter("span", Accepts.Is(DurationType::class), takes = "a duration")),
+        result = Returns.Is(IntegerType::class),
+        apply = { _, args -> BigDecimal(wholeUnits(args[0].value as Duration)) },
+    ))
+}
+
+object Weeks : SpanInUnits("weeks", { span -> span.toDays() / 7 })
+object Days : SpanInUnits("days", { span -> span.toDays() })
+object Hours : SpanInUnits("hours", { span -> span.toHours() })
+object Minutes : SpanInUnits("minutes", { span -> span.toMinutes() })
+object Seconds : SpanInUnits("seconds", { span -> span.toSeconds() })
 
 /**
  * `max`/`min` over anything [Ordered]: two or more values of one type, or one

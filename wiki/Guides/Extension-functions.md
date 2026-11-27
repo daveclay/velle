@@ -136,7 +136,7 @@ A body that reaches a store of its own, opening a connection and running a query
 
 ## The builtin functions
 
-`lowercase`, `uppercase`, `trim`, `length`, `number`, `date`, `datetime`, `regex`, `abs`, `year`, `month`, `day`, `dayOfWeek`, `hour`, `minute`, `max` and `min` are registered functions in the `velle` namespace, implemented through the same interface, and their names are reserved: a library that reads a number written another way, `1.234,56`, registers it under a name of its own, `acme.euroNumber`. From `compiler/src/main/kotlin/velle/ext/builtin/BuiltinFunctions.kt`:
+`lowercase`, `uppercase`, `trim`, `length`, `number`, `date`, `datetime`, `regex`, `abs`, `year`, `month`, `day`, `dayOfWeek`, `hour`, `minute`, `weeks`, `days`, `hours`, `minutes`, `seconds`, `max` and `min` are registered functions in the `velle` namespace, implemented through the same interface, and their names are reserved: a library that reads a number written another way, `1.234,56`, registers it under a name of its own, `acme.euroNumber`. From `compiler/src/main/kotlin/velle/ext/builtin/BuiltinFunctions.kt`:
 
 ```kotlin
 object Abs : BuiltinFunction("abs") {

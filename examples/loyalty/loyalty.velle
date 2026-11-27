@@ -62,8 +62,8 @@ never (Member where referrer == this)
 
 -- ── Monthly dues and the on-time streak ──────────────────────────────────────
 
--- Dues arrive month by month. Whether a payment was on time is read off its
--- own dates, and the streak — consecutive on-time payments — is DERIVED
+-- Dues arrive month by month. Whether a payment was on time, and how many
+-- days late it was, is read off its own dates, and the streak — consecutive on-time payments — is DERIVED
 -- HISTORY, not a stored counter: each payment knows the streak as of itself,
 -- by asking its predecessor. The order comes from `paidOn`, a business datum,
 -- so a payment that arrives late (posted today, dated last month) slots into
@@ -74,13 +74,15 @@ never (Member where referrer == this)
 -- velle: the predecessor recurrence — a derived to-one `previous` whose
 -- selector picks a strictly earlier record by a datum fixed at creation, so
 -- the chain ends (checks.md V14); `streakAfter` as readable history; the
--- current value as a selector read
+-- current value as a selector read; `days(paidOn - dueBy)` reads the span
+-- between two dates as a whole number of days
 act DuesPayment {
     member: one Member
     coveredMonth: text
     dueBy: Date
     paidOn: Date
     onTime = paidOn <= dueBy
+    daysLate: integer = if onTime then 0 else days(paidOn - dueBy)
     previous: one DuesPayment? =
         latest(DuesPayment where member == this.member and paidOn < this.paidOn by paidOn)
     streakAfter: integer =

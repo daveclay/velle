@@ -1,0 +1,6 @@
+-- A number of days declared an integer and computed as two dates subtracted, `returnedOn - dueOn`, which is a duration; the number of days in it is `days(returnedOn - dueOn)`.
+act Return {
+    dueOn: Date
+    returnedOn: Date
+    daysLate: integer = returnedOn - dueOn
+}

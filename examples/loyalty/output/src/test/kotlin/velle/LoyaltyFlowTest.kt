@@ -74,6 +74,16 @@ open class LoyaltyFlowTest {
     }
 
     @Test
+    fun `a late payment counts the days between its due date and the day it was paid`() {
+        val grace = member("Grace")
+        dues(grace, "January", dueBy = LocalDate.of(2026, 1, 31), paidOn = LocalDate.of(2026, 1, 10))
+        dues(grace, "February", dueBy = LocalDate.of(2026, 2, 28), paidOn = LocalDate.of(2026, 3, 2))
+        val chain = sys.duesPayments().filter { sys.read(it).member == grace }.sortedBy { sys.read(it).paidOn }
+        // paid early is 0 days late, never a negative count; 28 February to 2 March is 2 days
+        assertEquals(listOf(0, 2), chain.map { sys.read(it).daysLate })
+    }
+
+    @Test
     fun `the referral chain bottoms out at the founder`() {
         val founder = member("Founder")
         val scout = member("Scout", referrer = founder)

@@ -91,8 +91,9 @@ private fun Validator.refuseNoneWhereRequired(declaration: Declaration) {
 private fun Validator.checkActualType(declaration: Declaration, actual: VType, value: Expr, scope: String) {
     val actualBare = ExprTypes.bare(actual)
     if (!declaration.kindCheckedElsewhere && !declaredAccepts(declaration.declaredBare, actualBare)) {
-        diagnostics.add(Diagnostic("F2", declaration.wording.mismatch(declaration.site, declaration.field, model.words(declaration.declared),
-            model.words(actualBare), model.spell(actualBare))))
+        val refusal = declaration.wording.mismatch(declaration.site, declaration.field, model.words(declaration.declared),
+            model.words(actualBare), model.spell(actualBare))
+        diagnostics.add(Diagnostic("F2", refusal + readAsNumberHint(declaration.declaredBare, actualBare, value)))
         return
     }
     // a text literal with an optional piece has its own sentence (checkInterpolationDeclaration); in a
@@ -100,6 +101,10 @@ private fun Validator.checkActualType(declaration: Declaration, actual: VType, v
     if (actual !is VType.Optional || declaration.declared is VType.Optional || value is Interpolation) return
     checkRequiredMayBeAbsent(declaration, value, scope)
 }
+
+/** A number given a duration is told how to read the duration as a number (Reference §5). */
+private fun readAsNumberHint(declared: VType, actual: VType, value: Expr): String =
+    if (declared is VType.Num && actual == VType.DurationT) ", such as 'days(${Printer.expr(value)})' (Reference §5)" else ""
 
 /** A required declaration given a value that may be absent: refused when the absence is declared, or
  *  when the site refuses a selection no test shows to match; otherwise perhaps advised (A9). */
