@@ -1,0 +1,22 @@
+-- A refusal, a `never` over the transient act `Borrow`, that reads `Loan.returnedOn`, which rule
+-- TakeBackTool assigns: the compiler cannot yet check it.
+act Tool { name: text }
+
+transient act Borrow { tool: one Tool }
+
+shape Loan {
+    tool: one Tool
+    returnedOn: Date?
+}
+
+rule LendTool when Borrow {
+    Loan from { tool: tool, returnedOn: none }
+}
+
+transient act ReturnTool { loan: one Loan }
+
+rule TakeBackTool when ReturnTool {
+    loan.returnedOn = today
+}
+
+never (Borrow where exists (tool.loans where returnedOn is none))
