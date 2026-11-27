@@ -1,6 +1,5 @@
--- An act with a `timestamp on create` field. Reference §5 "What the compiler
--- checks" and checks V21 say a timestamp on an act is refused. The compiler
--- accepts it.
+-- An act with a `timestamp on create` field. The compiler accepts it, as checks V21
+-- says. No test commits a Payment and reads the moment back.
 
 act Payment {
     amount: decimal

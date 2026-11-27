@@ -34,9 +34,9 @@ commitAct(actInstance):
   2. begin transaction T
   3. C0 := apply the act commit — insert the instance with the committer's fields
      and, for an act declared `by`, the actor the binding handed in, under the
-     name the clause binds (an act declares no `initially` or `timestamp`
-     fields — V21; those clauses are evaluated at rule-created instances'
-     creation commits, inside process)
+     name the clause binds; an `initially` field the committer left out and
+     a `timestamp` field are filled here (V21), as they are for a
+     rule-created instance at its creation commit, inside process)
   4. process(C0)                                   -- may recurse, growing T
   5. transaction-end `never` check over settled post-state, the door set skipped (§21)   [S5]
   6. any error in 3–5 → roll back T entirely; report the error to the caller;

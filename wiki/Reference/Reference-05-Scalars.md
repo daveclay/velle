@@ -207,7 +207,7 @@ sequence: integer initially if exists (Chart where patient == this.patient) then
 
 The first chart of a patient starts at 1, the next at 2. `count(Chart where patient == this.patient)` in an `initially` is the number of earlier charts and does not count the new one.
 
-`initially` is not allowed on an `act`, whose every stored field the committer supplies. A system-kept value belongs on the `shape` a rule creates from the act ([§22](Reference-22-Open-unresolved), "External input").
+On an `act`, a field with `initially` is one the committer may leave out. `act Listing { title: text  isDraft: boolean initially true }` in `examples/moderation/moderation.velle` is committed with a title alone, and the listing starts as a draft. A committer who gives `isDraft` a value has that value kept.
 
 ## Generated values
 
@@ -261,7 +261,6 @@ An act declared `by` carries one more system-filled property: the actor who comm
 - **Rejects** a required field whose `initially` reads through a selection, `first`, `latest`, or `(Shape for expr)`, unless a test shows the selection matches. The message names the selection and the test to write ([checks.md, F2](checks#f2--type-checking)).
 - **Rejects** two `initially` values that read each other, directly or through a derived property, and an `initially` that reads its own field. The message names each field ([checks.md, V14](checks#v14--well-foundedness-coarse)).
 - **Warns** when an `initially` reads the collection of records that point at the record being created, since that collection is empty every time. The message names the collection ([checks.md, A2](checks#a2--dead-machinery)).
-- **Rejects** `initially` or `timestamp` on an act, naming the field and where it should move ([checks.md, V21](checks#v21--act-field-forms)).
 - **Rejects** a declared field named `id` ([checks.md, F1](checks#f1--name-resolution-and-casing)).
 
 ## Related pages
