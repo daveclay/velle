@@ -2,7 +2,7 @@
 
 **Status:** opened 2026-11-27 while building OQ207, as a one-line question about what the V34 message should advise. Given a file on 2026-11-27 because the message cannot be fixed until the language question is answered. D1 awaits Dave.
 
-**In plain terms:** "Flag every late loan of this member" and "count one more renewal on each of this member's loans" are ordinary things for a business to say. Velle can write one field on every member of a collection with the same value. It has no direct way to write only some of the members, or to give each member a value worked out from that member. The only spelling that works today makes the author keep an extra record per member.
+**In plain terms:** "Flag every late loan of this member" and "count one more renewal on each of this member's loans" are ordinary things for a business to say. Velle can write one field on every member of a collection with the same value. It can write only some of the members when the shape names them as a collection of its own. It has no direct way to give each member a value worked out from that member; the only spelling that works for that today makes the author keep an extra record per member.
 
 **See:** Reference §6 "Committing and assigning collections" (the one spelling for writing through a collection) · Reference §12 (an assignment's left side is a fixed path) · Reference §14 "Creating one record per element (`for each`)" (a block holds creations and blocks only) · `checks.md` V34, V1, V17 · `compiler/src/main/kotlin/velle/validation/ForEachCheck.kt` (`checkBlockStatementKind`, where the V34 message is written) · OQ207, settled, which made the message name `items.n = 1` when that spelling exists · OQ64, settled 2026-10-23, where Dave decided a block holds "creations and nested blocks only"
 
@@ -25,7 +25,7 @@ act Loan {
 
 **The one spelling that exists writes every member, with one value.** `member.loans.flagged = true` in a rule writes `flagged` on every loan of the member (Reference §6). The value on the right is worked out once, from the rule's subject.
 
-**Writing some members has no spelling.** `working-docs/examples/survey/57-write-some-members-filter-on-left-refused.velle`:
+**Writing some members cannot be said in the rule alone.** `working-docs/examples/survey/57-write-some-members-filter-on-left-refused.velle`:
 
 ```
 transient act FlagLate { member: one Member }
@@ -34,6 +34,23 @@ rule Flag when FlagLate {
     (member.loans where dueOn < today).flagged = true    -- the parser refuses: a filter cannot stand on the left
 }
 ```
+
+**Writing some members works when the shape names them** (Dave's question, 2026-11-27). `working-docs/examples/survey/61-write-some-members-derived-collection-accepted.velle`:
+
+```
+act Member {
+    name: text
+    overdue: many Loan = (loans where dueOn < today)     -- a derived collection: the member's late loans
+}
+
+transient act FlagLate { member: one Member }
+
+rule Flag when FlagLate {
+    member.overdue.flagged = true                        -- writes `flagged` on each late loan only
+}
+```
+
+It validates. I ran it once with `velle try`: of a member's two loans, the late one was flagged and the other was not. No test pins that run yet (work item below). `checks.md` V20 says a derived collection is never the target of a whole-collection assignment; a write of one field through it is accepted. The filter must be one the member shape can state, so a filter that reads the request, such as "loans due before the date this request names", has no such spelling.
 
 **A value that differs per member has no spelling.** `working-docs/examples/survey/58-write-each-member-own-value-refused.velle`:
 
@@ -45,7 +62,7 @@ rule Extend when Renew {
 }
 ```
 
-**Inside `for each`, where each member has a name, an assignment is refused.** V34 refuses `loan.renewals = loan.renewals + 1` inside `for each loan in member.loans`. The catalogue specs are `compiler/src/test/resources/diagnostics/V34-assigns-inside-for-each.velle` and `V34-assigns-inside-for-each-over-filter.velle`. For these two cases the message advises "write the assignment in the rule, outside the block, through the path to the collection", which is the spelling files 57 and 58 show does not exist. That is the fault OQ207 left behind.
+**Inside `for each`, where each member has a name, an assignment is refused.** V34 refuses `loan.renewals = loan.renewals + 1` inside `for each loan in member.loans`. The catalogue specs are `compiler/src/test/resources/diagnostics/V34-assigns-inside-for-each.velle` and `V34-assigns-inside-for-each-over-filter.velle`. For these two cases the message advises "write the assignment in the rule, outside the block, through the path to the collection", which is the spelling files 57 and 58 show does not exist. For the filter, the advice should name file 61's spelling. That is the fault OQ207 left behind.
 
 **What works: keep a record per member, and let a rule on that record write.** `working-docs/examples/survey/59-write-each-member-kept-record-workaround.velle`:
 
@@ -96,7 +113,7 @@ I recommend yes, within these limits, so that every field is still written at mo
 - The block is not inside another block. Inside two blocks one record could be met several times with different values, and the field would have no defined value.
 - The left side is `name.field`, one stored field of the named record. The right side may read the name.
 
-On 2026-10-23, in OQ64, you chose "creations and nested blocks only" because assignment already had its one spelling, the write through a collection. Files 57 and 58 show that spelling does not cover these two cases. This decision would change that answer for the cases above and nothing else.
+On 2026-10-23, in OQ64, you chose "creations and nested blocks only" because assignment already had its one spelling, the write through a collection. File 58 shows that spelling does not cover a value per member, and file 61 shows it covers a filter only when the shape can state the filter. This decision would change that answer for the cases above and nothing else.
 
 Costs of yes:
 
@@ -107,8 +124,9 @@ Costs of yes:
 
 Costs of no:
 
-- An author keeps a record per member per request, as in file 59, whether or not the business wants that record. Where the business does want it, as a ledger of renewals, file 59 is the better spec anyway.
-- The V34 message for these two cases would advise file 59's spelling in words: create a record per member in the block, and write the field in a rule on that record.
+- For a filter the shape can state, nothing is lost: the author names the collection on the shape, as in file 61, and the name says what the filter means.
+- For a value per member, or a filter that reads the request, an author keeps a record per member per request, as in file 59, whether or not the business wants that record. Where the business does want it, as a ledger of renewals, file 59 is the better spec anyway.
+- The V34 message would advise file 61's spelling for a filter, and file 59's spelling in words for a value per member: create a record per member in the block, and write the field in a rule on that record.
 
 Not offered, and why:
 
@@ -123,7 +141,7 @@ Not offered, and why:
 - `wiki/Reference/Reference-06-Relationships.md`, "Write one field on every member": one sentence pointing at the block for some members or a value per member.
 - `wiki/Normative/checks.md` V34 and `wiki/Normative/grammar.md`.
 - `compiler/src/test/resources/diagnostics/`: the two V34 assignment specs are replaced by specs for the limits, and `wiki/Normative/diagnostics.md` is regenerated.
-- Survey files 57 to 60 leave `working-docs/examples/survey/` as the `implement` skill §4 says.
+- Survey files 57 to 61 leave `working-docs/examples/survey/` as the `implement` skill §4 says.
 
 ## 3. The build
 
@@ -132,5 +150,7 @@ Written when D1 is decided.
 ## 4. Work items
 
 - [ ] Pin with a compiler test what file 59 does at runtime: two `Renew` requests leave the late loan with `renewals` 2 and the other loan with 0.
+- [ ] Pin with a compiler test what file 61 does at runtime: only the late loan is flagged.
 - [ ] Run the rule over the member itself from §1 and record whether it fires at a member's second `Renewal`.
+- [ ] Whatever D1 decides: make the V34 message for an assignment over a filter name the derived-collection spelling of file 61.
 - [ ] After D1: reword the V34 message for an assignment over a filter and for a value that reads the block's name, so that it names a spelling that exists.

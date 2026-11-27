@@ -150,3 +150,4 @@ what to expect:
 | `58-write-each-member-own-value-refused` | `member.loans.renewals = member.loans.renewals + 1` | `[F2] rule 'Extend' assigns 'Loan.renewals' — declared an integer, given a many of decimal; assign an integer` (OQ214) |
 | `59-write-each-member-kept-record-workaround` | `for each loan in (member.loans where dueOn < today) { RenewalOfLoan from { loan: loan } }` beside `rule Count when RenewalOfLoan { loan.renewals = loan.renewals + 1 }` | passes; one kept RenewalOfLoan per late loan per request (OQ214) |
 | `60-write-each-member-transient-record-refused` | file 59 with `transient act RenewLoan` | `[V17] rule 'Spread' creates transient act 'RenewLoan'` (OQ214) |
+| `61-write-some-members-derived-collection-accepted` | `overdue: many Loan = (loans where dueOn < today)` on Member beside `member.overdue.flagged = true` | passes; only the late loans are written, so a filter has a spelling through a derived collection (OQ214) |

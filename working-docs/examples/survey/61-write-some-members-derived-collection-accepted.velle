@@ -1,0 +1,21 @@
+-- "Flag every late loan of this member", written through a derived collection. Member
+-- names its late loans as `overdue`, and the rule writes `flagged` through that name.
+-- It validates, and only the late loans are written. The filter that cannot stand on
+-- the left of an assignment (file 57) can stand in a derived collection.
+act Member {
+    name: text
+    overdue: many Loan = (loans where dueOn < today)
+}
+
+act Loan {
+    member: one Member
+    dueOn: Date
+    renewals: integer initially 0
+    flagged: boolean initially false
+}
+
+transient act FlagLate { member: one Member }
+
+rule Flag when FlagLate {
+    member.overdue.flagged = true
+}
