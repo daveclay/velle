@@ -532,7 +532,9 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
         val source = collection.bindings.singleOrNull()?.takeIf { binding -> binding.alias == null }?.source ?: return null
         val relationship = soleRelationshipOf(source, subject)
         if (relationship != null) {
-            val elementShape = (relationship.type as? VType.Coll)?.shape?.takeIf { shape -> shape in model.shapes } ?: return null
+            // a static union's records are fixed by declarations, as a shape's are (Reference §9)
+            val elementShape = (relationship.type as? VType.Coll)?.shape
+                ?.takeIf { shape -> shape in model.shapes || model.isStaticUnion(shape) } ?: return null
             if (canChangeElements(k, subject, relationship, elementShape)) return null
             return FixedCollection(where, elementShape)
         }

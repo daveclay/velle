@@ -1257,16 +1257,23 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
         return out
     }
 
+    /** The base shapes whose records [name] holds; a name the spec does not declare stands for itself. */
+    private fun basesOrSelf(name: String): Set<String> =
+        if (namesShapeOrRefinement(name)) basesOf(name) else setOf(name)
+
     private fun andConjuncts(e: Expr): List<Expr> =
         if (e is Binary && e.op == "and") andConjuncts(e.left) + andConjuncts(e.right) else listOf(e)
 
     private fun record(scope: String, m: MemberInfo, s: ReadSummary) {
-        if (m.stored) s.fields.add(m.owner to m.name)
+        // a read lands on records of a base shape, the shape a write or a new record names:
+        // a field declared on a taken shape is read on the takers [scope] can be (Reference §9)
+        val readBases = (basesOrSelf(scope) intersect basesOrSelf(m.owner)).ifEmpty { setOf(m.owner) }
+        if (m.stored) readBases.forEach { base -> s.fields.add(base to m.name) }
         // an inferred inverse is the declared side read from the other end: which records it
         // holds is the reference field each of them stores (Reference §6)
-        m.inverse?.let { declaredSide -> s.fields.add(declaredSide.shape to declaredSide.field) }
-        if (m.timestamp) s.collFields.add(m.owner to m.name)
-        (m.type as? VType.Coll)?.let { s.collShapes.add(it.shape) }
+        m.inverse?.let { declaredSide -> basesOrSelf(declaredSide.shape).forEach { base -> s.fields.add(base to declaredSide.field) } }
+        if (m.timestamp) readBases.forEach { base -> s.collFields.add(base to m.name) }
+        (m.type as? VType.Coll)?.let { collection -> s.collShapes.addAll(basesOrSelf(collection.shape)) }
         m.derived?.let { d ->
             val key = m.owner to m.name
             if (s.derivedSeen.add(key)) collectExpr(d.expr, m.owner, s)
@@ -1407,8 +1414,9 @@ const val VALUE_ALIAS = "<value>"
 
 /** [includesHeldReads] is false for the one question that sets them aside: which reads make a `never` a guarantee (checks.md V10). */
 class ReadSummary(val includesHeldReads: Boolean = true) {
-    /** (owner shape, stored field) pairs the predicate/expression reads; reading an inferred
-     *  inverse reads the reference field on its declared side */
+    /** (base shape, stored field) pairs the predicate/expression reads, a field taken with `is`
+     *  under each shape that takes it; reading an inferred inverse reads the reference field on
+     *  its declared side */
     val fields = mutableSetOf<Pair<String, String>>()
     /** shapes whose existence/instances are consulted (exists, selectors, for-queries) */
     val existsShapes = mutableSetOf<String>()

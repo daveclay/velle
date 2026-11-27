@@ -298,6 +298,66 @@ class ComparisonDirectionTest {
         }
     }
 
+    // ── a field declared once on a shape that Loan and Rental take with `is` ──
+
+    private val sharedBorrowing = """
+        act Member { name: text }
+
+        shape Borrowing {
+            member: one Member
+            dueOn: Date
+        }
+
+        act Loan is Borrowing { title: text }
+
+        act Rental is Borrowing { fee: integer }
+
+        transient act Transfer {
+            loan: one Loan
+            receiver: one Member
+        }
+
+        rule MoveLoan when Transfer {
+            loan.member = receiver
+        }
+
+        shape MemberWithLateBorrowing = Member where exists (borrowings where dueOn < today)
+
+        shape LoanOfLateMember = Loan where member.name == "late"
+    """.trimIndent()
+
+    @Test
+    fun `a rule moving a loan whose member is declared on a taken shape moves members both ways`() {
+        val consequences = consequencesOf(sharedBorrowing)
+
+        assertSays("MoveLoan setting Loan's member can now make a Member become a MemberWithLateBorrowing.", consequences)
+        assertSays("MoveLoan setting Loan's member can now make a Member stop being a MemberWithLateBorrowing.", consequences)
+    }
+
+    @Test
+    fun `a new loan or rental, each taking its member from a taken shape, can make a member one with a late borrowing`() {
+        val consequences = consequencesOf(sharedBorrowing)
+
+        assertSays("A new Loan can now make a Member become a MemberWithLateBorrowing.", consequences)
+        assertSays("A new Rental can now make a Member become a MemberWithLateBorrowing.", consequences)
+    }
+
+    @Test
+    fun `a rule moving a loan whose member is declared on a taken shape moves the loan both ways`() {
+        val consequences = consequencesOf(sharedBorrowing)
+
+        assertSays("MoveLoan setting Loan's member can now make a Loan become a LoanOfLateMember.", consequences)
+        assertSays("MoveLoan setting Loan's member can now make a Loan stop being a LoanOfLateMember.", consequences)
+    }
+
+    @Test
+    fun `time passing moves a member into one with a late borrowing and never out, as when loan declares the field`() {
+        val consequences = consequencesOf(sharedBorrowing)
+
+        assertSays("Time passing can now make a Member become a MemberWithLateBorrowing.", consequences)
+        assertDoesNotSay("Time passing can now make a Member stop being a MemberWithLateBorrowing.", consequences)
+    }
+
     // ── a rule's creation is read for the values it gives the record ─────────
 
     private fun lending(dueOn: String) = """

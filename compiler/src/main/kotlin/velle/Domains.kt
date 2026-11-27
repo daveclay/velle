@@ -269,7 +269,8 @@ class DomainAnalysis(private val model: Model) {
             )
         }
         model.shapes[w.base]?.members?.filterIsInstance<StoredProp>()
-            ?.filter { (it.type as? RelType)?.let { t -> !t.many && model.baseOf(t.shape) == eventBase } == true }
+            // a reference typed with a union or a taken shape points at each of its bases (Reference §9)
+            ?.filter { (it.type as? RelType)?.let { t -> !t.many && model.namesShapeOrRefinement(t.shape) && eventBase in model.basesOf(t.shape) } == true }
             ?.forEach { subjects.add(Anchor.Corr(eventAnchor, it.name)) }
         if (subjects.isEmpty()) subjects.add(Anchor.Unknown)
         return subjects

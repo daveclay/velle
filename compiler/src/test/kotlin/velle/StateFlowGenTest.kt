@@ -136,6 +136,41 @@ class StateFlowGenTest {
         assertFalse("MemberWithLateLoan --> out : time passes" in member, member)
     }
 
+    @Test
+    fun `a rule moving a loan whose member is declared on a taken shape draws the member moving both ways`() {
+        val member = memberStateFlow(
+            """
+            act Member { name: text }
+
+            shape Borrowing {
+                member: one Member
+                dueOn: Date
+            }
+
+            act Loan is Borrowing { title: text }
+
+            act Rental is Borrowing { fee: integer }
+
+            transient act Transfer {
+                loan: one Loan
+                receiver: one Member
+            }
+
+            rule MoveLoan when Transfer {
+                loan.member = receiver
+            }
+
+            shape MemberWithLateBorrowing = Member where exists (borrowings where dueOn < today)
+            """.trimIndent()
+        )
+
+        assertTrue("out --> MemberWithLateBorrowing : MoveLoan writes Loan.member — may flip" in member, member)
+        assertTrue("MemberWithLateBorrowing --> out : MoveLoan writes Loan.member — may flip" in member, member)
+        assertTrue("out --> MemberWithLateBorrowing : commitLoan" in member, member)
+        assertTrue("out --> MemberWithLateBorrowing : commitRental" in member, member)
+        assertFalse("MemberWithLateBorrowing --> out : time passes" in member, member)
+    }
+
     private fun memberStateFlow(spec: String): String =
         DiagramGen.generate(spec, "Library").substringAfter("## State flow").substringAfter("### Member").substringBefore("\n### ")
 }
