@@ -246,16 +246,17 @@ internal class ActInput(private val system: VelleSystem) {
                 if (prop.name !in skipRequired && prop.requiredAtCreation()) return null
                 continue
             }
-            converted[prop.name] = convert(raw, prop.type) ?: return null
+            converted[prop.name] = convert(raw, prop.type, "${decl.name}.${prop.name}") ?: return null
         }
         val known = storedProps.map { prop -> prop.name }.toSet()
         if (supplied.keys.any { name -> name !in known }) return null // timestamps/id/derived/unknown
         return converted
     }
 
-    private fun convert(raw: Any, type: TypeRef): Value? = when (type) {
+    /** [raw] as a value of [type], for the field [fieldName] (`Shape.field`). */
+    private fun convert(raw: Any, type: TypeRef, fieldName: String): Value? = when (type) {
         is RelType -> if (type.many) convertReferenceList(raw, type) else convertReference(raw, type)
-        is ScalarType -> if (type.many) convertScalarList(raw, type) else convertScalar(raw, type.name)
+        is ScalarType -> if (type.many) convertScalarList(raw, type, fieldName) else convertScalar(raw, type.name, fieldName)
     }
 
     private fun convertReference(raw: Any, type: RelType): Value? =
@@ -267,9 +268,9 @@ internal class ActInput(private val system: VelleSystem) {
         return Value.VColl(handles, type.shape)
     }
 
-    private fun convertScalarList(raw: Any, type: ScalarType): Value? {
+    private fun convertScalarList(raw: Any, type: ScalarType, fieldName: String): Value? {
         val elements = raw as? List<*> ?: return null
-        val values = elements.map { element -> element?.let { present -> convertScalar(present, type.name) } ?: return null }
+        val values = elements.map { element -> element?.let { present -> convertScalar(present, type.name, fieldName) } ?: return null }
         return Value.VVals(values, ordered = type.ordered)
     }
 
@@ -282,18 +283,23 @@ internal class ActInput(private val system: VelleSystem) {
         return model.typeAccepts(declared, instance.shape)
     }
 
-    private fun convertScalar(raw: Any, name: String): Value? = when (name) {
+    private fun convertScalar(raw: Any, name: String, fieldName: String): Value? = when (name) {
         "text" -> (raw as? String)?.let { text -> Value.VText(text) }
         "boolean" -> (raw as? Boolean)?.let { truth -> Value.VBool(truth) }
         "Date" -> (raw as? LocalDate)?.let { date -> Value.VDate(date) }
         "DateTime" -> (raw as? Instant)?.let { instant -> Value.VDateTime(instant) }
         "uuid" -> (raw as? UUID)?.let { uuid -> Value.VUuid(uuid) }
-        "duration" -> (raw as? java.time.Duration)?.let { duration -> Value.VDuration.ofJava(duration) }
+        "duration" -> (raw as? java.time.Duration)?.let { duration -> convertDuration(duration, fieldName) }
         "time" -> (raw as? java.time.LocalTime)?.let { timeOfDay -> Value.VTime(timeOfDay) }
         "bytes" -> (raw as? ByteArray)?.let { bytes -> Value.VBytes(bytes) }
         in TypeRegistry.NUMBER_NAMES -> runCatching { Value.num(raw) }.getOrNull()
         else -> convertExtension(raw, name)
     }
+
+    /** A `duration` holds whole seconds (Reference §5): a span with a part of a second is refused, naming [fieldName]. */
+    private fun convertDuration(duration: java.time.Duration, fieldName: String): Value =
+        Value.VDuration.ofWholeSeconds(duration)
+            ?: throw InputRefusal("type: " + Value.VDuration.partOfASecond(fieldName, duration))
 
     /** An extension type (Reference §5; OQ65): the value is the type's own class and
      *  passes its `validate`; anything else is a type-level refusal at the boundary. */

@@ -379,4 +379,13 @@ class VelleGraphQLTest {
         assertNull(VelleGraphQL.graphQL(api).graphQLSchema.mutationType.getFieldDefinition("tick"))
         assertNotNull(VelleGraphQL.graphQL(api, ticks = true).graphQLSchema.mutationType.getFieldDefinition("tick"))
     }
+
+    @Test
+    fun `a span with a part of a second is refused as data naming the field`() {
+        // examples/enrollment/enrollment.velle: act Course { title: text, capacity: integer, term: duration, ... }
+        val e = engine("enrollment")
+        val refused = e.run("""mutation { course(input: {title: "Algebra", capacity: 30, term: "PT1.5S"}) { accepted reason } }""")
+        assertEquals(false, refused.at("course", "accepted"))
+        assertEquals("type: 'Course.term' holds whole seconds; PT1.5S has a part of a second", refused.at("course", "reason"))
+    }
 }

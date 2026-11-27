@@ -390,7 +390,11 @@ class BytesField(path: List<String>) : ScalarField<ByteArray>(path) {
 
 /** A `duration` member (Reference §5): ordered, like a number. */
 class DurationField(path: List<String>) : ScalarField<java.time.Duration>(path) {
-    override fun lit(v: java.time.Duration): Expr = ValueLit(Value.VDuration.ofJava(v))
+    /** A span with a part of a second is refused: no stored `duration` holds one, so the comparison would answer about a different span. */
+    override fun lit(v: java.time.Duration): Expr = ValueLit(
+        Value.VDuration.ofWholeSeconds(v)
+            ?: throw IllegalArgumentException(Value.VDuration.partOfASecond(fieldPath.joinToString("."), v)),
+    )
 }
 
 class BoolField(path: List<String>) : Fields(path) {

@@ -721,7 +721,8 @@ class Evaluator(private val system: VelleSystem) {
             is java.time.LocalDate -> Value.VDate(raw)
             is java.time.Instant -> Value.VDateTime(raw)
             is UUID -> Value.VUuid(raw)
-            is java.time.Duration -> Value.VDuration.ofJava(raw)
+            is java.time.Duration -> Value.VDuration.ofWholeSeconds(raw)
+                ?: throw VelleRuntimeError("a function returned $raw, which has a part of a second; a duration holds whole seconds")
             is java.time.LocalTime -> Value.VTime(raw)
             is ByteArray -> Value.VBytes(raw)
             else -> throw VelleRuntimeError("a function returned $raw, which is not a value of ${type?.name ?: "a builtin type"}")
@@ -1041,14 +1042,14 @@ class Evaluator(private val system: VelleSystem) {
         if (l is Value.VDuration && r is Value.VDuration)
             return Value.VDuration.ofSeconds(if (op == "+") l.seconds() + r.seconds() else l.seconds() - r.seconds())
         if (op == "-" && l is Value.VDateTime && r is Value.VDateTime)
-            return Value.VDuration.ofSeconds(java.time.Duration.between(r.v, l.v).seconds)
+            return Value.VDuration.ofJava(java.time.Duration.between(r.v, l.v))
         if (op == "-" && l is Value.VDate && r is Value.VDate)
             return Value.VDuration(java.time.temporal.ChronoUnit.DAYS.between(r.v, l.v), "days")
         // a time of day moved by a span wraps past midnight, as a clock does; two times differ by a span
         if (l is Value.VTime && r is Value.VDuration)
             return Value.VTime(l.v.plusSeconds(if (op == "+") r.seconds() else -r.seconds()))
         if (op == "-" && l is Value.VTime && r is Value.VTime)
-            return Value.VDuration.ofSeconds(java.time.Duration.between(r.v, l.v).seconds)
+            return Value.VDuration.ofJava(java.time.Duration.between(r.v, l.v))
         if (r is Value.VDuration) {
             val sign = if (op == "+") 1L else -1L
             return when (l) {
