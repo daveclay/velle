@@ -336,6 +336,7 @@ shape Late = Shift where due + grace < today
 - On a `Date`, `+ 1 days` is the next calendar date; moving a `Date` by part of a day fails when it runs. On a `DateTime` a duration is exact clock time. A `time` wraps past midnight.
 - Two `DateTime`s, two `Date`s, or two `time`s subtract to a duration. Durations add and subtract. A duration is not multiplied or divided; `2 * days(returnedOn - dueOn)` reads it as a number first.
 - `weeks`, `days`, `hours`, `minutes`, `seconds` read a duration as a whole number of that unit, the part of a unit dropped toward zero: `days(36 hours)` is 1. `days(returnedOn - dueOn)` is the number of days between two dates.
+- `weeksStarted`, `daysStarted`, `hoursStarted`, `minutesStarted` count each unit a duration has begun as a whole one: `daysStarted(36 hours)` is 2, `daysStarted(24 hours)` is 1. A span before zero counts away from zero, `daysStarted(-36 hours)` is -2. `2 * daysStarted(returnedAt - dueAt)` charges 2 for each started day.
 - `year`, `month`, `day`, `dayOfWeek` read a `Date` or `DateTime`; `hour`, `minute` read a `time` or `DateTime`. `dayOfWeek` counts Monday as 1. `abs(due - today)` is the distance either way.
 - `today` is the date in the system's one time zone, set at deployment.
 
@@ -358,6 +359,7 @@ shape Late = Shift where due + grace < today
 | `abs` | one number or duration, without its sign |
 | `year`, `month`, `day`, `dayOfWeek`, `hour`, `minute` | one part of a date, moment, or time, as a whole number |
 | `weeks`, `days`, `hours`, `minutes`, `seconds` | one duration, as a whole number of that unit, the part of a unit dropped |
+| `weeksStarted`, `daysStarted`, `hoursStarted`, `minutesStarted` | one duration, as the number of that unit it has begun, a part of a unit counted as a whole one |
 | `%` | the remainder of two numbers, `n % 2 == 0` |
 | `randomUUID` | only after `initially` |
 

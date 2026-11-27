@@ -14,7 +14,9 @@ import kotlin.test.assertTrue
  * The functions of Reference §5 that read a span of time as a whole number of
  * one unit: `days`, `weeks`, `hours`, `minutes`, and `seconds`. The part of a
  * unit is dropped toward zero, so `days(36 hours)` is 1 and `days(-36 hours)`
- * is -1.
+ * is -1. Beside them `weeksStarted`, `daysStarted`, `hoursStarted`, and
+ * `minutesStarted` count a unit that has begun as a whole one, away from zero,
+ * so `daysStarted(36 hours)` is 2 and `daysStarted(-36 hours)` is -2.
  */
 class SpanFunctionsTest {
 
@@ -28,6 +30,14 @@ class SpanFunctionsTest {
             inMinutes: integer = minutes(span)
             inSeconds: integer = seconds(span)
             notedDays: integer? = days(notedSpan)
+            weeksBegun: integer = weeksStarted(span)
+            daysBegun: integer = daysStarted(span)
+            hoursBegun: integer = hoursStarted(span)
+            minutesBegun: integer = minutesStarted(span)
+            notedWeeksBegun: integer? = weeksStarted(notedSpan)
+            notedDaysBegun: integer? = daysStarted(notedSpan)
+            notedHoursBegun: integer? = hoursStarted(notedSpan)
+            notedMinutesBegun: integer? = minutesStarted(notedSpan)
         }
         act Return {
             dueOn: Date
@@ -110,6 +120,97 @@ class SpanFunctionsTest {
         }
     }
 
+    /** The unit's count for each span, read off one property of the act `Span`. */
+    private fun assertStartedUnits(property: String, expectedBySpan: List<Pair<Duration, Long>>) {
+        for ((span, expectedCount) in expectedBySpan)
+            assertEquals(BigDecimal(expectedCount), readOf(span, property), "$property of $span")
+    }
+
+    @Test
+    fun `weeksStarted counts a begun week as a whole one, away from zero`() {
+        assertStartedUnits("weeksBegun", listOf(
+            Duration.ofDays(10) to 2L,
+            Duration.ofDays(14) to 2L,
+            Duration.ZERO to 0L,
+            Duration.ofSeconds(1) to 1L,
+            Duration.ofDays(-10) to -2L,
+        ))
+    }
+
+    @Test
+    fun `daysStarted counts a begun day as a whole one, away from zero`() {
+        assertStartedUnits("daysBegun", listOf(
+            Duration.ofHours(36) to 2L,
+            Duration.ofHours(24) to 1L,
+            Duration.ZERO to 0L,
+            Duration.ofSeconds(1) to 1L,
+            Duration.ofHours(-36) to -2L,
+        ))
+    }
+
+    @Test
+    fun `hoursStarted counts a begun hour as a whole one, away from zero`() {
+        assertStartedUnits("hoursBegun", listOf(
+            Duration.ofMinutes(90) to 2L,
+            Duration.ofMinutes(120) to 2L,
+            Duration.ZERO to 0L,
+            Duration.ofSeconds(1) to 1L,
+            Duration.ofMinutes(-90) to -2L,
+        ))
+    }
+
+    @Test
+    fun `minutesStarted counts a begun minute as a whole one, away from zero`() {
+        assertStartedUnits("minutesBegun", listOf(
+            Duration.ofSeconds(90) to 2L,
+            Duration.ofSeconds(120) to 2L,
+            Duration.ZERO to 0L,
+            Duration.ofSeconds(1) to 1L,
+            Duration.ofSeconds(-90) to -2L,
+        ))
+    }
+
+    @Test
+    fun `an absent span gives an absent count of begun units`() {
+        val sys = system()
+        sys.scope {
+            val withoutNotedSpan = sys.span(Duration.ofDays(1))
+            for (property in listOf("notedWeeksBegun", "notedDaysBegun", "notedHoursBegun", "notedMinutesBegun"))
+                assertNull(sys.get(withoutNotedSpan, property), property)
+            val withNotedSpan = sys.span(Duration.ofDays(1), notedSpan = Duration.ofHours(36))
+            assertEquals(BigDecimal(1), sys.get(withNotedSpan, "notedWeeksBegun"))
+            assertEquals(BigDecimal(2), sys.get(withNotedSpan, "notedDaysBegun"))
+            assertEquals(BigDecimal(36), sys.get(withNotedSpan, "notedHoursBegun"))
+            assertEquals(BigDecimal(2160), sys.get(withNotedSpan, "notedMinutesBegun"))
+        }
+    }
+
+    @Test
+    fun `a late fee is 2 for each day begun between the due moment and the return`() {
+        val declarations = Parser.parse(
+            """
+            act Return {
+                dueAt: DateTime
+                returnedAt: DateTime
+                daysLate: integer = daysStarted(returnedAt - dueAt)
+                lateFee: decimal = 2 * daysLate
+            }
+            """.trimIndent()
+        )
+        val diagnostics = Validator.validate(declarations)
+        check(diagnostics.isEmpty()) { diagnostics.toString() }
+        val sys = VelleSystem(Model(declarations))
+        sys.scope {
+            val fields = mapOf(
+                "dueAt" to Instant.parse("2026-01-10T09:00:00Z"),
+                "returnedAt" to Instant.parse("2026-01-11T21:00:00Z"),
+            )
+            val returned = assertIs<CommitResult.Accepted>(sys.commit("Return", fields), "refused").id
+            assertEquals(BigDecimal(2), sys.get(returned, "daysLate"))
+            assertEquals(0, BigDecimal(4).compareTo(sys.get(returned, "lateFee") as BigDecimal))
+        }
+    }
+
     @Test
     fun `hours of two moments subtracted drops the part of an hour`() {
         val sys = system()
@@ -139,6 +240,16 @@ class SpanFunctionsTest {
         assertEquals(listOf("[F2] 'days(3)' — 'days' takes a duration, but '3' is a number"), number.map { it.toString() })
         val date = diagnosticsOf("daysLate: integer = days(dueOn)")
         assertEquals(listOf("[F2] 'days(dueOn)' — 'days' takes a duration, but 'dueOn' is a Date"), date.map { it.toString() })
+    }
+
+    @Test
+    fun `each function counting begun units takes a duration and refuses a number or a date`() {
+        for (function in listOf("weeksStarted", "daysStarted", "hoursStarted", "minutesStarted")) {
+            val number = diagnosticsOf("unitsLate: integer = $function(3)")
+            assertEquals(listOf("[F2] '$function(3)' — '$function' takes a duration, but '3' is a number"), number.map { it.toString() })
+            val date = diagnosticsOf("unitsLate: integer = $function(dueOn)")
+            assertEquals(listOf("[F2] '$function(dueOn)' — '$function' takes a duration, but 'dueOn' is a Date"), date.map { it.toString() })
+        }
     }
 
     @Test
