@@ -55,7 +55,7 @@ A membership test is legal when the left side and the named refinement share a b
 
 ## Testing for related records with `exists`
 
-`exists Receipt for this` asks whether any `Receipt` points at the current record, and `not exists AccountFlagResolved for this` that none does. `for` picks the field on `Receipt` whose type matches the subject.
+`exists Receipt for this` asks whether any `Receipt` points at the current record, and `not exists AccountFlagResolved for this` that none does. `for` picks the field on `Receipt` whose type matches the subject. When the subject is drawn from a static union ([§9](Reference-09-Composing-refinements)), as in `shape BorrowerWithLoan = Borrower where exists Loan for this` with `Borrower = Member or Library`, `for` picks the field typed with that union, `Loan.member: one Borrower`.
 
 The shape after `for` may be one that several shapes take with `is`, or a static union ([§9](Reference-09-Composing-refinements)). `for` then picks the field every one of those shapes takes from one declaration, and the test covers a record of any of them: with `shape AttemptOutcome { attempt: one ChargeAttempt }` taken by `ChargeResponse` and `AttemptTimeout`, `not exists AttemptOutcome for this` on a charge attempt holds until a response or a timeout names it, as `PendingAttempt` in `examples/payments/payments.velle` says. A field two of the shapes each declare for themselves is not shared, so `for` does not find it; declare it once on the shape they take.
 

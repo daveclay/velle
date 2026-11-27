@@ -111,10 +111,12 @@ internal fun Validator.typeMatchedFields(shape: String, expr: Expr, scope: Strin
     return model.typeMatchedFields(shape, exprShape)
 }
 
-/** The shape of the one record a path names; null for any other expression. */
+/** The shape of the one record a path names; null for any other expression. A bare `this`
+ *  is read as the shape a field could be typed with: its base shape, or the static union
+ *  a refinement over a union is drawn from (Reference §9). */
 private fun Validator.instanceShapeOf(expression: Expr, scope: String): String? = when (expression) {
     is PathExpr -> {
-        if (expression.root == "this" && expression.segs.isEmpty()) model.baseOf(thisScope ?: scope)
+        if (expression.root == "this" && expression.segs.isEmpty()) model.viewScopeOf(thisScope ?: scope)
         else model.pathElementShape(expression, scope, scopeByAlias, thisScope ?: scope)
     }
     else -> null

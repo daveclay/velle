@@ -237,6 +237,40 @@ class ComparisonDirectionTest {
         assertSays("MoveFine setting Fine's loan can now make a Member stop being a FinedMember.", consequences)
     }
 
+    @Test
+    fun `a rule moving a loan to another borrower, read as the loans for a borrower of a union, moves members and libraries both ways`() {
+        val consequences = consequencesOf(
+            """
+            act Member { name: text }
+
+            act Library { name: text }
+
+            shape Borrower = Member or Library
+
+            act Loan {
+                member: one Borrower
+                dueOn: Date
+            }
+
+            transient act Transfer {
+                loan: one Loan
+                receiver: one Borrower
+            }
+
+            rule MoveLoan when Transfer {
+                loan.member = receiver
+            }
+
+            shape BorrowerWithLoan = Borrower where exists Loan for this
+            """.trimIndent()
+        )
+
+        for (operand in listOf("Member", "Library")) {
+            assertSays("MoveLoan setting Loan's member can now make a $operand become a BorrowerWithLoan.", consequences)
+            assertSays("MoveLoan setting Loan's member can now make a $operand stop being a BorrowerWithLoan.", consequences)
+        }
+    }
+
     // ── a rule's creation is read for the values it gives the record ─────────
 
     private fun lending(dueOn: String) = """
