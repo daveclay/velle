@@ -64,17 +64,16 @@ private fun Validator.checkBinary(binary: Binary, scope: String) {
     checkOperandKinds(binary, scope)
 }
 
+/** A conjunction narrows what follows it, and the right side of an `or` is read only where its left side failed (Reference §10). */
 private fun Validator.checkRightSide(binary: Binary, scope: String) {
-    when (binary.op) {
-        // a conjunction narrows what follows it (Reference §10)
-        "and" -> withNarrowing(narrowingsOf(binary.left, scope)) {
-            withPresence(binary.left, holds = true, scope) { checkExpr(binary.right, scope) }
-        }
-        // the right side of an `or` is read only where its left side failed (Reference §10)
-        "or" -> withNarrowing(complementNarrowingsOf(binary.left, scope)) {
-            withPresence(binary.left, holds = false, scope) { checkExpr(binary.right, scope) }
-        }
-        else -> checkExpr(binary.right, scope)
+    val leftHolds = when (binary.op) {
+        "and" -> true
+        "or" -> false
+        else -> return checkExpr(binary.right, scope)
+    }
+    val rightScope = model.scopes.ofRightSide(binary, scopeAt(scope))
+    withNarrowing(rightScope.narrowed + actorShownPresent(binary.left, leftHolds)) {
+        withPresence(binary.left, leftHolds, scope) { checkExpr(binary.right, scope) }
     }
 }
 
@@ -82,10 +81,11 @@ private fun Validator.checkRightSide(binary: Binary, scope: String) {
 private fun Validator.checkConditional(conditional: IfExpr, scope: String) {
     val condition = conditional.condition
     checkExpr(condition, scope)
-    withNarrowing(narrowingsOf(condition, scope)) {
+    val scopeOfConditional = scopeAt(scope)
+    withNarrowing(model.scopes.ofThen(conditional, scopeOfConditional).narrowed + actorShownPresent(condition, holds = true)) {
         withPresence(condition, holds = true, scope) { checkExpr(conditional.thenExpr, scope) }
     }
-    withNarrowing(complementNarrowingsOf(condition, scope)) {
+    withNarrowing(model.scopes.ofElse(conditional, scopeOfConditional).narrowed + actorShownPresent(condition, holds = false)) {
         withPresence(condition, holds = false, scope) { checkExpr(conditional.elseExpr, scope) }
     }
 }

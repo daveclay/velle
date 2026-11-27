@@ -2,6 +2,8 @@ package velle.validation
 
 import velle.*
 import velle.ext.Summable
+import velle.spec.BoundElement
+import velle.spec.FilterScopes
 
 // ── collections and selectors (Reference §5, §10; checks F1, F2, E3) ────────
 //
@@ -20,10 +22,9 @@ private data class CollectionRead(val collection: CollectionExpr, val sumField: 
         collection.where != null || sumField != null || orderBy != null || collection.bindings.size > 1 || binding.alias != null
 }
 
-/** What one binding of a collection gives: records of a shape, values named by an alias, or a refusal that ends the check. */
+/** What the check of one binding of a collection found: records, values named by an alias, or a refusal that ends the check. */
 private sealed interface BindingReading {
-    /** Records of [elementShape]; null leaves the element the bindings before it gave. */
-    data class Records(val elementShape: String?) : BindingReading
+    data object Records : BindingReading
     data class NamedValues(val alias: String, val valueType: VType) : BindingReading
     data object Refused : BindingReading
 }
@@ -42,17 +43,16 @@ internal fun Validator.checkCollection(
 ) {
     val introduced = IntroducedAliases()
     val read = CollectionRead(collection, sumField, orderBy)
-    val boundShape = elementShapeOfBindings(read, scope, introduced)
-    if (boundShape != null) checkFilterAndSelectors(read, boundShape)
+    // which records each binding gives and what the `where` is read on is the model's answer (`velle.spec.ScopeRules`)
+    val filter = model.scopes.ofFilter(collection, scopeAt(scope))
+    if (bindingsAccepted(read, filter, scope, introduced)) checkFilterAndSelectors(read, filter.where.element)
     // the `as` names end with the collection, whether or not a binding was refused
     introduced.recordAliases.forEach { alias -> scopeByAlias.remove(alias) }
     introduced.valueAliases.forEach { alias -> scalarTypeByAlias.remove(alias) }
 }
 
 /** The collection's `where`, `sum` field, and `by` datums, read on the records its bindings give. */
-private fun Validator.checkFilterAndSelectors(read: CollectionRead, boundShape: String) {
-    // `(claims where PaidClaim)` holds members of `PaidClaim`, so its body properties are read on each (Reference §10)
-    val elementShape = read.collection.where?.let { where -> model.membershipAtomOf(where, boundShape) } ?: boundShape
+private fun Validator.checkFilterAndSelectors(read: CollectionRead, elementShape: String) {
     read.collection.where?.let { where -> checkExpr(where, elementShape) }
     read.sumField?.let { field -> checkSumField(elementShape, field) }
     // selectors' `by` datums: each must be an orderable member of the
@@ -60,48 +60,46 @@ private fun Validator.checkFilterAndSelectors(read: CollectionRead, boundShape: 
     read.orderBy?.forEach { datum -> checkOrderingDatum(elementShape, datum) }
 }
 
-/** Reads each binding in turn and brings its alias into scope; the element shape the bindings
- *  give, or null when one was refused. */
-private fun Validator.elementShapeOfBindings(read: CollectionRead, scope: String, introduced: IntroducedAliases): String? {
-    var elementShape = scope
-    for (binding in read.collection.bindings) {
+/** Checks each binding in turn and brings its alias into scope; false when one was refused. */
+private fun Validator.bindingsAccepted(read: CollectionRead, filter: FilterScopes, scope: String, introduced: IntroducedAliases): Boolean {
+    read.collection.bindings.forEachIndexed { index, binding ->
         when (val reading = readBinding(binding, read, scope)) {
-            BindingReading.Refused -> return null
+            BindingReading.Refused -> return false
             is BindingReading.NamedValues -> {
                 scalarTypeByAlias[reading.alias] = reading.valueType
                 introduced.valueAliases.add(reading.alias)
             }
-            is BindingReading.Records -> {
-                elementShape = reading.elementShape ?: elementShape
-                // an alias names this binding's element, visible to the shared `where`
-                // and anything nested inside it (Reference §10, `as`)
-                binding.alias?.let { alias -> scopeByAlias[alias] = elementShape; introduced.recordAliases.add(alias) }
-            }
+            // an alias names this binding's element, visible to the sources after it, the shared
+            // `where`, and anything nested inside it (Reference §10, `as`)
+            BindingReading.Records -> bindRecordAlias(binding, filter.sources[index], introduced)
         }
     }
-    return elementShape
+    return true
+}
+
+private fun Validator.bindRecordAlias(binding: Binding, sourceScope: velle.spec.Scope, introduced: IntroducedAliases) {
+    val alias = binding.alias ?: return
+    val element = model.scopes.elementOf(binding, sourceScope) as? BoundElement.Records ?: return
+    scopeByAlias[alias] = element.shape
+    introduced.recordAliases.add(alias)
 }
 
 private fun Validator.readBinding(binding: Binding, read: CollectionRead, scope: String): BindingReading =
     when (val source = binding.source) {
         is PathExpr ->
-            if (isShapeOrRefinement(source.root)) BindingReading.Records(source.root)
+            if (isShapeOrRefinement(source.root)) BindingReading.Records
             else readPathBinding(source, binding, read, scope)
         is ShapeForSource -> readShapeForBinding(source, scope)
-        is WalkExpr -> {
-            checkExpr(source, scope)
-            BindingReading.Records(model.walkTarget(source, scope))
-        }
         else -> {
             checkExpr(source, scope)
-            BindingReading.Records(null)
+            BindingReading.Records
         }
     }
 
 /** `Shape for x` as a source, `count(Loan for this)`: the shape is known (Reference §10). */
 private fun Validator.readShapeForBinding(source: ShapeForSource, scope: String): BindingReading {
     checkExpr(source, scope)
-    if (isShapeOrRefinement(source.shape)) return BindingReading.Records(source.shape)
+    if (isShapeOrRefinement(source.shape)) return BindingReading.Records
     diagnostics.add(Diagnostic("F1", "unknown shape '${source.shape}'"))
     return BindingReading.Refused
 }
@@ -124,10 +122,9 @@ private fun Validator.readPathBinding(source: PathExpr, binding: Binding, read: 
             "`(${Printer.expr(source)} as value where ...)`, but not filtered by a member, summed, or ordered (Reference §5)"))
         return BindingReading.Refused
     }
-    val elementShape = sourceElementShape(source, scope)
     // a path already refused reaches no records, so its filter and selectors are not read on the subject
-    if (elementShape == null && diagnostics.size > diagnosticCountBeforePath) return BindingReading.Refused
-    return BindingReading.Records(elementShape)
+    if (diagnostics.size > diagnosticCountBeforePath && model.scopes.elementOf(binding, scopeAt(scope)) !is BoundElement.Records) return BindingReading.Refused
+    return BindingReading.Records
 }
 
 /** A capitalised source that is no shape, alias, or member in scope, `(Counselling where fill == this)`,
@@ -137,16 +134,6 @@ private fun Validator.namesUndeclaredShape(source: PathExpr, scope: String): Boo
     if (source.segs.isNotEmpty() || !root.first().isUpperCase()) return false
     if (root in scopeByAlias || root in scalarTypeByAlias || root == ruleActor?.name || narrowedPrefix(source) != null) return false
     return root !in model.membersOf(scope)
-}
-
-/** The shape of the records a path source holds. A narrowed prefix (`origin is Composition and
- *  exists (origin.components where ...)`) resolves the rest of the source path against the
- *  narrowed scope (Reference §10). */
-private fun Validator.sourceElementShape(source: PathExpr, scope: String): String? {
-    val narrowedElement = narrowedPrefix(source)?.let { prefix ->
-        model.pathElementShape(PathExpr("this", source.segs.drop(prefix.length)), prefix.shape, emptyMap(), prefix.shape)
-    }
-    return narrowedElement ?: model.pathElementShape(source, scope, scopeByAlias, thisScope ?: scope)
 }
 
 private fun Validator.checkSumField(elementShape: String, field: String) {

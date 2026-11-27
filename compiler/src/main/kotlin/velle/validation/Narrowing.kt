@@ -22,16 +22,8 @@ internal fun Validator.narrowedPrefix(path: PathExpr): NarrowedPrefix? {
     return null
 }
 
-/** What [condition] shows where it holds: each `x is A` (`velle.spec.ShapeNarrowing`), and `actor is some` on a rule's optional actor. */
-internal fun Validator.narrowingsOf(condition: Expr, scope: String): Narrowings =
-    model.narrowing.shownBy(condition, holds = true, scopeAt(scope)) + actorShownPresent(condition, holds = true)
-
-/** What a test failing shows: over a union, the operands it did not name (Reference §10), and `actor is none` failing. */
-internal fun Validator.complementNarrowingsOf(condition: Expr, scope: String): Narrowings =
-    model.narrowing.shownBy(condition, holds = false, scopeAt(scope)) + actorShownPresent(condition, holds = false)
-
 /** `actor is some` holding, or `actor is none` failing, on a rule's optional actor: present in the branch, as its shape. */
-private fun Validator.actorShownPresent(condition: Expr, holds: Boolean): Narrowings {
+internal fun Validator.actorShownPresent(condition: Expr, holds: Boolean): Narrowings {
     val tests = if (holds) partsJoinedByAnd(condition) else listOf(condition)
     return tests.mapNotNull { test -> actorShownPresentBy(test, holds) }.toMap()
 }
@@ -93,5 +85,16 @@ internal inline fun Validator.withNarrowing(narrowings: Narrowings, body: () -> 
     scopeByNarrowedPath.putAll(narrowings)
     try { body() } finally {
         savedShapes.forEach { (key, shape) -> if (shape == null) scopeByNarrowedPath.remove(key) else scopeByNarrowedPath[key] = shape }
+    }
+}
+
+/** Checks [body] with [narrowings] the only ones in force: a walk's `until` reads another record than the one the tests around it narrowed. */
+internal inline fun Validator.withOnlyNarrowing(narrowings: Narrowings, body: () -> Unit) {
+    val narrowingsOutside = scopeByNarrowedPath.toMap()
+    scopeByNarrowedPath.clear()
+    scopeByNarrowedPath.putAll(narrowings)
+    try { body() } finally {
+        scopeByNarrowedPath.clear()
+        scopeByNarrowedPath.putAll(narrowingsOutside)
     }
 }

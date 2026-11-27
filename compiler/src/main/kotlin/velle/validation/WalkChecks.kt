@@ -16,13 +16,13 @@ internal fun Validator.checkWalk(walk: WalkExpr, scope: String) {
         diagnostics.add(Diagnostic("F1", "'${Printer.expr(walk)}' — '${walk.rel}' is not a member of '$scope'"))
         return
     }
-    val target = targetWalkedBack(walk, relationship, scope) ?: return
+    targetWalkedBack(walk, relationship, scope) ?: return
     if (walk.until != null && relationship.type is VType.Coll) refuseUntilThroughMany(walk)
     walk.steps?.let { steps -> checkWalkSteps(walk, steps) }
-    // the condition is asked of each record reached, so over a union it reads the union's
-    // members with `this` as that record (Reference §7; D2 of the union stress pass)
+    // the condition is asked of each record reached, with that record as `this` (Reference §7)
     walk.until?.let { condition ->
-        if (model.isStaticUnion(target)) withThisScope(target) { checkExpr(condition, target) } else checkExpr(condition, scope)
+        val until = model.scopes.ofUntil(walk, scopeAt(scope))
+        withThisScope(until.subject) { withOnlyNarrowing(until.narrowed) { checkExpr(condition, until.element) } }
     }
 }
 

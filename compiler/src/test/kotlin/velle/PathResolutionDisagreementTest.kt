@@ -385,4 +385,23 @@ class PathResolutionDisagreementTest {
         assertFalse(reads.opaque)
         assertTrue(("Member" to "name") in reads.fields)
     }
+
+    // ── 15. a walk's `until`: the record reached for the running system, the outer subject for the validator ──
+
+    @Test
+    fun `this in a walk's until inside a filter names the record reached, for the validator as for the running system`() {
+        val readsTheLoan = renewals + "\nshape Renewer = Member where exists (loans where (walk renewedFrom until this.title == \"first\") is some)"
+        val readsTheMember = renewals + "\nshape Renewer = Member where exists (loans where (walk renewedFrom until this.name == \"first\") is some)"
+
+        assertEquals(emptyList(), Validator.validate(readsTheLoan))
+        assertEquals(listOf("'name' is not a member of 'Loan'"), Validator.validate(readsTheMember).map { diagnostic -> diagnostic.message })
+
+        val system = VelleSystem(Model(Parser.parse(readsTheLoan)))
+        system.scope {
+            val member = accepted(system.commit("Member", mapOf("name" to "first")))
+            val first = accepted(system.commit("Loan", mapOf("member" to member, "title" to "first")))
+            accepted(system.commit("Loan", mapOf("member" to member, "title" to "second", "renewedFrom" to first)))
+            assertTrue(system.isMember(member, "Renewer"))
+        }
+    }
 }

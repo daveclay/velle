@@ -1,6 +1,6 @@
 # OQ225 — Should the compiler resolve every path in a spec once, into one model that every check, generator, and the running system read?
 
-**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built; moves 1 to 10 done, every disagreement in §1 resolved (§3). One work item.
+**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built; moves 1 to 11 done, every disagreement in §1 resolved (§3). One work item.
 
 **In plain terms:** when the compiler reads a condition such as "the loan's member is called late", it does not write down once what "the loan's member" means. Each part of the compiler that later reads the condition works it out again for itself, and they do not always agree. Several recent bugs came from one of them working it out differently from the others. The change is to work it out once, keep the answer, and have every part read that.
 
@@ -70,6 +70,7 @@ Each is pinned by a test in `compiler/src/test/kotlin/velle/PathResolutionDisagr
 12. Found and resolved in move 10: the read analysis read the right side of an `or` as written, while the validator reads it where the left side failed, so `target is Photo or target.body == ""` validated and its read of `body` was not attributed ("the right side of an or is read where its left side failed ...").
 13. Found and resolved in move 10: the read analysis read a filter's `where` on the collection's shape, while the validator reads it on the refinement the filter names, so a property of `LateLoan` in `(loans where LateLoan and penalty > 10)` validated and was not attributed ("a filter that names a refinement reads that refinement's own properties ...").
 14. Found and resolved in move 10: the read analysis forgot the names a filter binds when it read a walk's `until`, while the validator keeps them ("a walk's until reads a name the filter around it binds ...").
+15. Found and resolved in move 11: inside a filter the validator read `this` in a walk's `until` as the outer subject, while the running system reads it as the record the walk reached, so `exists (loans where (walk renewedFrom until this.title == "first") is some)` on a `Member` was refused with F1 and the same read of a `Member` field was accepted ("this in a walk's until inside a filter names the record reached ...").
 
 ### Open OQs it closes or changes
 
@@ -130,7 +131,7 @@ The API is the package `velle.spec`, in `compiler/src/main/kotlin/velle/spec/`.
 - `Scope` (`Paths.kt`) is one point of a spec: the element, the shape a bare name is a member of; the subject, the shape `this` names; the names bound to a record and to a value; and the narrowing an `is` test gives. It is a value, never changed in place. Moving into a filter's `where` is `inside(element)`, binding a name is `withRecordName` or `withValueName`, and a governing test is `narrowedBy`.
 - `PathResolver.resolve(path, scope)` (`Paths.kt`) answers with a `ResolvedPath`: what the path starts from (`PathStart`: the subject, the element, a record name, a value name, or a shape or refinement named on its own); each `Step`, holding the field's declaration, the shape it is looked up on after narrowing, and its `Reach` (from the start, through a reference to one record, or through a collection); and, when a name does not resolve, the `UnresolvedStep` with the shape it was looked for on.
 - `ScopeRules` (`Scopes.kt`), read as `Model.scopes`, answers which `Scope` each part of an expression is read at, so that it is written once: `ofRightSide` for the right side of an `and` or an `or`, `ofThen` and `ofElse` for the branches of an `if`, `ofFilter` for a collection's sources and its `where`, and `ofUntil` for a walk's `until`. Pinned by `compiler/src/test/kotlin/velle/spec/ScopeRulesTest.kt`.
-- Still to come: the scope a `for each` gives its body, and the walks other than the read analysis reading `ScopeRules`.
+- Still to come: the scope a `for each` gives its body, and the polarity walk, the transient check and the serialization-domain analysis reading `ScopeRules`.
 
 ### The order of moves
 
@@ -144,6 +145,7 @@ The API is the package `velle.spec`, in `compiler/src/main/kotlin/velle/spec/`.
 8. One function for the parts of an expression, and one for splitting at `and`, shared by the hand-written walks. Splitting done: `partsJoinedByAnd` and `partsJoinedByOr` in `compiler/src/main/kotlin/velle/spec/Conditions.kt` replace fourteen copies. The parts of an expression done: `operandsOf`, `collectionOf`, `sourcesAndFilterOf`, `subExpressionsOf` and `partsOf` in `compiler/src/main/kotlin/velle/spec/Expressions.kt`, read by every walk that took them from the validator or `StartingValues.kt`, and by `BodyOrder.kt` in place of its own copy.
 9. OQ222, built on `Reach`. Done; OQ222 is in the settled table of `working-docs/QUESTIONS.md`.
 10. `ScopeRules`, and the read analysis in `Model.kt` (`collectBinary`, the `if` branches, `collectCollection`, `collectWalk`) reading it. Done.
+11. The validator reading `ScopeRules`: `checkRightSide` and `checkConditional` in `validation/ExpressionChecks.kt`, `checkCollection` in `validation/CollectionChecks.kt`, and a walk's `until` in `validation/WalkChecks.kt`. Done.
 
 `Keys.kt` and `PresenceFacts.kt` read declarations before `Model` exists, so they cannot read the resolver as it stands; they move when the model is built earlier, or stay, and the decision is recorded here when it is reached.
 
