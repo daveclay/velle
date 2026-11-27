@@ -604,7 +604,7 @@ object SpecGen {
             for (a in rule.body.filterIsInstance<Assignment>()) {
                 val rhs = a.value as? PathExpr ?: continue
                 if (rhs.segs.isNotEmpty() || rhs.root == "this") continue
-                if (a.target.segs.isEmpty()) continue
+                if (a.target.segs.isEmpty() || a.filter != null) continue
                 thens.add("the ${Printer.expr(a.target).removePrefix("this.")} now equals the act's \"${rhs.root}\"")
             }
             (rule.condition as? RefName)?.name?.let { cn ->

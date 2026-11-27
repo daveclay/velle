@@ -72,7 +72,7 @@ private fun Validator.checkTransientFieldsInBody(items: List<BodyItem>, readScop
 }
 
 private fun Validator.checkTransientFieldsInAssignment(assignment: Assignment, readScope: TransientReadScope) {
-    reportTransientReads(assignment.value, readScope)
+    assignment.reads.forEach { read -> reportTransientReads(read, readScope) }
     val assigned = transientFieldOnPath(assignment.target, readScope.thisScope, readScope.thisScope, readScope.aliases) ?: return
     diagnostics.add(Diagnostic("V37", "${readScope.site} assigns '${assigned.owner}.${assigned.field}', which is transient — " +
         "it is in the act's input and not in its record, so there is nothing to assign"))
@@ -226,7 +226,7 @@ private fun visitRule(rule: RuleDecl, visit: (String, Expr) -> Unit) {
     visitCondition(site, rule.condition, visit)
     rule.body.statements().forEach { item ->
         when (item) {
-            is Assignment -> visitTree(site, item.value, visit)
+            is Assignment -> item.reads.forEach { read -> visitTree(site, read, visit) }
             is Creation -> {
                 visitTree(site, item.forExpr, visit)
                 item.fields.forEach { field -> visitTree(site, field.value, visit) }

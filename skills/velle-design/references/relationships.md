@@ -75,7 +75,29 @@ rule ApplyReassignment when ReassignInvoices {
 - The statement writes `customer` once on each invoice in the act's collection. The invoices leave the old customer's `invoices` by themselves.
 - A path may go through one `many` and stop: `invoices.customer` is allowed, `invoices.customer.name` is not.
 - The compiler prints a contention advisory for this rule: every commit that writes an invoice's customer takes turns. It does not block the spec ([time-and-repetition.md](time-and-repetition.md), §6).
-- The value is worked out once, for every member. To give each member its own value, or to write only the members a filter chooses, assign through the name of a `for each` block:
+- To write only the members a filter chooses, put the filter on the collection in parentheses. Inside the filter a bare name is the member's field, and `this.before` is the request's:
+
+```velle
+act Member { name: text }
+
+act Loan {
+    member: one Member
+    dueOn: Date
+    flagged: boolean initially false
+}
+
+transient act FlagLate {
+    member: one Member
+    before: Date
+}
+
+rule Flag when FlagLate {
+    (member.loans where dueOn < this.before).flagged = true
+}
+```
+
+- When the filter is a word the business uses, name it on the shape instead, `overdue: many Loan = (loans where dueOn < today)`, and write `member.overdue.flagged = true`.
+- The value is worked out once, for every member. To give each member its own value, assign through the name of a `for each` block:
 
 ```velle
 act Member { name: text }

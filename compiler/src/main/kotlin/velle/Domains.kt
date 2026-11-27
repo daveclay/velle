@@ -406,7 +406,7 @@ class DomainAnalysis(private val model: Model) {
         for (r in model.rules.values) {
             val scope = conditionScope(r.condition)
             for (item in r.body.statements()) when (item) {
-                is Assignment -> { bodyPath(item.target, scope, out, seen); bodyCorr(item.value, scope, out, seen) }
+                is Assignment -> { bodyPath(item.target, scope, out, seen); item.reads.forEach { read -> bodyCorr(read, scope, out, seen) } }
                 is Creation -> {
                     item.forExpr?.let { bodyCorr(it, scope, out, seen) }
                     for (f in item.fields) bodyCorr(f.value, scope, out, seen)
@@ -988,6 +988,7 @@ class DomainAnalysis(private val model: Model) {
 
         fun walkAssignment(a: Assignment, ctx: Ctx, events: MutableList<Event>) {
             val value = walkExpr(a.value, ctx)
+            a.filteredCollection?.let { collection -> walkExpr(collection, ctx) } // the filter reads the members it chooses from
             // resolve the route to the written field; a collection at the
             // penultimate hop fans out — memberScope keys the collection's
             // owner and yields the correlated element scope, so the final

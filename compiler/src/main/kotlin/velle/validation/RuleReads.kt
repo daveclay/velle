@@ -28,9 +28,10 @@ private fun Validator.collectConditionReads(rule: RuleDecl, scope: String, reads
 }
 
 /** The expressions a body statement evaluates: an assigned value, a
- *  creation's field values, a loop's sources, a delete's target route. */
+ *  creation's field values, a loop's sources, a delete's target route; a filtered
+ *  left side's collection with its filter. */
 internal fun statementReadExpressions(statement: BodyItem): List<Expr> = when (statement) {
-    is Assignment -> listOf(statement.value)
+    is Assignment -> statement.reads
     is Creation -> statement.fields.map { it.value }
     is ForEach -> statement.sourceExprs()
     is DeleteStmt -> listOf(statement.target)

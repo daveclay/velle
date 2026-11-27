@@ -186,6 +186,25 @@ class ForEachAssignmentTest {
         }
     }
 
+    @Test
+    fun `a rule over the loan itself fires when the loan comes to match, not at every request`() {
+        val spec = LIBRARY.replace("transient act Renew { member: one Member }", "act Renewal { member: one Member }") + """
+
+            rule Extend when (Loan where exists (Renewal where member == this.member)) {
+                renewals = renewals + 1
+            }
+        """.trimIndent()
+        val sys = system(spec)
+        sys.scope {
+            val member = sys.accept("Member", "name" to "Ada")
+            val loan = sys.accept("Loan", "member" to member, "dueOn" to lateDate)
+            sys.accept("Renewal", "member" to member)
+            sys.accept("Renewal", "member" to member)
+            // the loan entered the condition at the first renewal and stayed in it, so the second fires nothing
+            assertEquals(1L, sys.numberOf(loan, "renewals"))
+        }
+    }
+
     // ── how the checks and the runtime see the write ─────────────────────────
 
     @Test

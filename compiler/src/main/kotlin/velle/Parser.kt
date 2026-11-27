@@ -487,17 +487,39 @@ class Parser(private val tokens: List<Token>) {
         }
         if (at(TokType.UIDENT)) return parseCreation()
         if (peek().isKw("for") && peekAhead(1).let { it.type == TokType.LIDENT && it.text == "each" }) return parseForEach()
+        // no other statement opens with '(': it is a filtered left side (Reference §12)
+        if (at(TokType.LPAREN)) return parseFilteredAssignment()
         // assignment: literal static path (Reference §12) — plain '.' only
+        val target = parseAssignmentPath("expected a statement (creation or assignment)")
+        expect(TokType.ASSIGN)
+        skipNewlines()
+        return Assignment(target, parseValue())
+    }
+
+    /** A literal static path from the subject, `this.a.b` or `a.b`, plain '.' only; [failure] when it does not start with a name. */
+    private fun parseAssignmentPath(failure: String): PathExpr {
         val root = when {
             peek().isKw("this") -> { next(); "this" }
             at(TokType.LIDENT) -> next().text
-            else -> fail("expected a statement (creation or assignment)", peek())
+            else -> fail(failure, peek())
         }
         val segs = mutableListOf<Seg>()
         while (at(TokType.DOT)) { next(); segs.add(Seg(expect(TokType.LIDENT).text, viaQdot = false)) }
+        return PathExpr(root, segs)
+    }
+
+    /** `(member.loans where dueOn < this.before).flagged = value` (Reference §12): the path, its filter, then the written field. */
+    private fun parseFilteredAssignment(): Assignment {
+        expect(TokType.LPAREN)
+        val collection = parseAssignmentPath("a filtered left side starts from a field of the rule's subject, as '(member.loans where ...)'")
+        expectKw("where"); skipNewlines()
+        val filter = parsePredicate()
+        expect(TokType.RPAREN)
+        expect(TokType.DOT)
+        val field = Seg(expect(TokType.LIDENT).text, viaQdot = false)
         expect(TokType.ASSIGN)
         skipNewlines()
-        return Assignment(PathExpr(root, segs), parseValue())
+        return Assignment(PathExpr(collection.root, collection.segs + field), parseValue(), filter)
     }
 
     /** `for each a in X, b from 1 to n { ... }` (Reference §14): `each`, `in`, and `to` are contextual words. */

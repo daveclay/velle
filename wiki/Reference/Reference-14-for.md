@@ -150,6 +150,7 @@ rule LabelBooks when Relabel {
 }
 ```
 
+- `library.shelfs` is the library's shelves, the inferred inverse of `Shelf.library`, named after the shape with an `s` ([§6](Reference-06-Relationships)).
 - `shelf.books` is the inferred inverse of `Book.shelf` ([§6](Reference-06-Relationships)): the books whose `shelf` is this shelf. A book has one shelf, so the inner block meets each book once.
 - `book.label = shelf.name` writes each book's label. The inner block may run over a filter of `shelf.books` as well.
 

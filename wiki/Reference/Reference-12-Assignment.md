@@ -24,7 +24,7 @@ rule ApplyEmailCorrection when CorrectEmail {
 Three things about the statement:
 
 - **`=` inside a rule means "becomes, now."** Inside a shape body the same symbol means "is always defined as," which is a [derived property](Reference-07-Derived-properties). The two never meet: a rule body holds no definitions and a shape body holds no effects.
-- **The left side is a fixed path written out in full.** `customer.email` names one field of one record reachable from the rule's subject. There is no way to compute which field to write. Because every write names its field, the compiler can tell you every refinement and derived property a write may change.
+- **The left side is a fixed path written out in full.** `customer.email` names one field of one record reachable from the rule's subject. There is no way to compute which field to write. Because every write names its field, the compiler can tell you every refinement and derived property a write may change. A path through a collection may carry a filter that chooses which members are written (below).
 - **The left side is a stored field.** A derived property is a formula, and a formula cannot be assigned. `invoice.balance = 0` is a compile error when `balance` is derived. Instead, commit the data the formula reads, such as a `Payment` record.
 
 Across commits, the last write wins. Within one commit there is no "last," which is why the compiler insists on one writer per field, below.
@@ -32,6 +32,37 @@ Across commits, the last write wins. Within one commit there is no "last," which
 If the right side reads the field being assigned, as in `account.balance = account.balance + amount`, the value is a running total. Running totals need extra care, covered in [§19](Reference-19-Self-referential-folds-and-tolerates).
 
 To assign the same field on every member of a collection, see "Committing and assigning collections" in [§6](Reference-06-Relationships#committing-and-assigning-collections).
+
+### Writing the members a filter chooses
+
+A library asks to flag every loan of a member that fell due before a date the request names. From `compiler/src/test/kotlin/velle/FilteredAssignmentTest.kt`:
+
+```
+act Member { name: text }
+
+act Loan {
+    member: one Member
+    dueOn: Date
+    renewals: integer initially 0
+    flagged: boolean initially false
+}
+
+transient act FlagLate {
+    member: one Member
+    before: Date
+}
+
+rule Flag when FlagLate {
+    (member.loans where dueOn < this.before).flagged = true
+}
+```
+
+- `(member.loans where dueOn < this.before)` is the member's loans that fell due before the request's date. Inside the parentheses, a bare name such as `dueOn` is a field of each loan, and `this.before` is the request's field.
+- `.flagged = true` writes `flagged` on each of those loans and on no other.
+- The parentheses are required. The path inside them goes through one collection, as any path through a collection does ([§6](Reference-06-Relationships#committing-and-assigning-collections)).
+- The filter and the value are read as the state stood before the rule wrote anything. `(member.loans where not flagged).flagged = true` writes each unflagged loan once.
+
+When the filter is an idea the business names, name it on the shape instead, as a derived collection such as `overdue: many Loan = (loans where dueOn < today)`, and write `member.overdue.flagged = true` ([Best practices](Best-practices#name-a-filter-the-business-names)). To give each member a value of its own, use a `for each` block ([§14, "Writing a field of each element"](Reference-14-for#writing-a-field-of-each-element)).
 
 ## One writer per field, per commit
 
@@ -220,6 +251,7 @@ Only a `never` is checked when the commit ends. A rule's condition is read befor
 ## What the compiler checks
 
 - **Rejects** assigning a derived property, or any left side that is not a fixed path to a stored field.
+- **Rejects** a filter on the left over one record rather than a collection, `(member where name == "").name`; the test belongs in the rule's condition ([checks.md, V20](checks#v20--collection-assignment-legality)). The filter is checked as any filter is ([§10](Reference-10-Predicate-expressions)).
 - **Rejects** two assignments to the same field whose triggers could fire from one commit, and names both rules ([checks.md, V1](checks#v1--one-writer-disjointness)).
 - **Rejects** an assignment in a shape body.
 - **Rejects** assigning a value of another type than the field's, `note.locked = 5` on a `boolean`, and assigning a value that may be absent by declaration to a required field, naming the `is some` test to write or the `?` to declare ([checks.md, F2](checks#f2--type-checking)).

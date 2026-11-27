@@ -1,6 +1,4 @@
--- "Count one more renewal on every loan of this member." The value differs per loan,
--- since each loan has its own count. Through the collection, the right side reads every
--- loan's count at once, a collection of numbers, and the compiler refuses it with F2.
+-- A write through a collection whose value reads the same collection, 'member.loans.renewals = member.loans.renewals + 1'; the right side is every loan's count at once, a collection, not one number.
 act Member { name: text }
 
 act Loan {

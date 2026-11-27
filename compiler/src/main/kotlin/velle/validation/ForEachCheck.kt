@@ -219,18 +219,34 @@ private fun Validator.assignmentThroughCollection(blockAssignment: BlockAssignme
     if (rootsOf(assignment.value).any { root -> root in blockNames || root in forEachNamesOutside }) return null
     val field = target.segs.single().name
     val collection = Printer.expr(collectionPath)
-    return "to write '$field' on every member of '$collection', write '$collection.$field = ${Printer.expr(assignment.value)}' " +
-        "in the rule, outside the block (Reference §6)"
+    val value = Printer.expr(assignment.value)
+    if (collectionPath is SetExpr)
+        return "to write '$field' on the members of '$collection', write '$collection.$field = $value' in the rule, outside the block (Reference §12)"
+    return "to write '$field' on every member of '$collection', write '$collection.$field = $value' in the rule, outside the block (Reference §6)"
 }
 
-/** The source of the block's name [name] when it is a path the rule reaches outside the block:
- *  neither a bare shape name nor a path through an outer block's name. */
-private fun Validator.collectionPathOf(block: ForEach, name: String, forEachNamesOutside: Set<String>): PathExpr? {
+/** The source of the block's name [name] when the same collection can stand on the left of an assignment outside
+ *  the block: a path the rule reaches, `items`, or that path under a filter, `(items where n > 0)` (Reference §12);
+ *  never a bare shape name, a filter naming its element with `as`, or a collection that reads an outer block's name. */
+private fun Validator.collectionPathOf(block: ForEach, name: String, forEachNamesOutside: Set<String>): Expr? {
     val source = block.bindings.find { binding -> binding.name == name }?.source as? LoopSource.Over ?: return null
-    val path = source.expr as? PathExpr ?: return null
+    val path = when (val collection = source.expr) {
+        is PathExpr -> collection
+        is SetExpr -> filteredPathOf(collection, forEachNamesOutside) ?: return null
+        else -> return null
+    }
     val isShapeName = path.segs.isEmpty() && (path.root in model.shapes || path.root in model.refinements)
     if (isShapeName || path.root in forEachNamesOutside) return null
-    return path
+    return source.expr
+}
+
+/** The path a filter `(items where n > 0)` runs over, when the filter could stand on the left of an assignment. */
+private fun filteredPathOf(filter: SetExpr, forEachNamesOutside: Set<String>): PathExpr? {
+    val binding = filter.collection.bindings.singleOrNull() ?: return null
+    if (binding.alias != null) return null
+    val condition = filter.collection.where ?: return null
+    if (rootsOf(condition).any { root -> root in forEachNamesOutside }) return null
+    return binding.source as? PathExpr
 }
 
 /** What a `for each` name's source shows about each element, kept under the name (Reference §14):

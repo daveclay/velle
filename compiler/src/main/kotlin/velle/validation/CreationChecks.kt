@@ -12,12 +12,28 @@ import velle.*
 
 internal fun Validator.checkAssignment(rule: RuleDecl, scope: String, assignment: Assignment) {
     val write = resolveWrite(rule, scope, assignment, acceptedBlockWrite(rule, scope, assignment)) ?: return
+    if (!checkFilteredLeftSide(rule, scope, assignment, write)) return
     if (!write.member.stored) reportUnassignableMember(rule, write)
     val diagnosticsBefore = diagnostics.size
     checkExpr(assignment.value, scope)
     checkExtWrite(write.member.type, assignment.value, scope, "rule '${rule.name}' assigns ${write.owner}.${write.member.name}")
     if (write.member.stored && diagnostics.size == diagnosticsBefore)
         checkDeclaredType("rule '${rule.name}' assigns '${write.owner}.${write.member.name}'", write.member.name, write.member.type, assignment.value, scope, ASSIGNED)
+}
+
+/** V20: a filtered left side chooses members of a collection (Reference §12); its filter is checked as any filter is.
+ *  Returns false when the left side is refused. */
+private fun Validator.checkFilteredLeftSide(rule: RuleDecl, scope: String, assignment: Assignment, write: Write): Boolean {
+    val collection = assignment.filteredCollection ?: return true
+    if (!write.fanOut) {
+        val path = Printer.expr(collection.collection.bindings.single().source)
+        diagnostics.add(Diagnostic("V20", "rule '${rule.name}' assigns '${Printer.assignmentTarget(assignment)}', and '$path' is one " +
+            "record, not a collection; a filter on the left chooses which members of a collection are written, so write " +
+            "'$path.${write.member.name} = ...' and put the test in the rule's condition (Reference §12)"))
+        return false
+    }
+    checkExpr(collection, scope)
+    return true
 }
 
 private fun Validator.reportUnassignableMember(rule: RuleDecl, write: Write) {

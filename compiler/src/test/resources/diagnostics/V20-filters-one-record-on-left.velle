@@ -1,0 +1,7 @@
+-- A filter on the left of an assignment over one record, '(member where name == "").name = "unnamed"'; a filter chooses members of a collection.
+act Member { name: text }
+transient act Rename { member: one Member }
+
+rule ApplyRename when Rename {
+    (member where name == "").name = "unnamed"
+}
