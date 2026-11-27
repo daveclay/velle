@@ -15,6 +15,27 @@ the decisions first and show Dave where it is.
 Directory rules load on their own when files are touched:
 `compiler/CLAUDE.md`, `wiki/CLAUDE.md`, `examples/CLAUDE.md`.
 
+## 0. Flag the OQ before any work
+
+Dave, 2026-11-27: "so I don't accidentally work one twice". Before the first
+edit of a build, and before a worker is started for it, the OQ's line in
+`working-docs/QUESTIONS.md` is flagged on `main`, committed alone, and
+pushed:
+
+- The flag is the words `(being built since <date>)` straight after the
+  dash: `- **OQ185** — (being built since 2026-11-27) Stop V10 ...`. It
+  stands at the front of the line so a scan of the section shows it.
+- Read the line first. A line that already carries the flag is being built
+  by another session: stop and tell Dave, do not start a second build.
+- Commit message: `OQ<n>: build started`. Several OQs started together are
+  flagged in one commit, `OQ<a>, OQ<b>: build started`.
+- Under §6 the managing session flags every OQ of the round and pushes
+  before it creates the first worktree, so each branch starts from the
+  flagged line and its settling commit removes it without a conflict.
+- The settling commit removes the line, and the flag with it. A build that
+  is abandoned or handed back to Dave undecided has its flag removed in a
+  commit that says why.
+
 ## 1. Order of work
 
 1. **Code.** Compiler, stores, APIs, extensions. Hand-written callers under
