@@ -33,7 +33,8 @@ private fun Validator.narrowingOfConjunct(conjunct: Expr, scope: String): Narrow
     val test = conjunct as? IsExpr ?: return null
     val subject = test.subject as? PathExpr ?: return null
     return when (test.kind) {
-        "refinement" -> NarrowedPath(subject, test.refinement!!)
+        // a name the spec does not declare is refused where it is written, and narrows nothing
+        "refinement" -> test.refinement!!.takeIf { named -> model.namesShapeOrRefinement(named) }?.let { named -> NarrowedPath(subject, named) }
         // `actor is some` on a rule's optional actor: present in this branch
         "some" -> optionalActorNamedBy(subject)?.let { actor -> NarrowedPath(subject, actor.shape) }
         else -> null

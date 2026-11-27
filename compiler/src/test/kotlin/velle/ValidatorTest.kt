@@ -339,6 +339,31 @@ class ValidatorTest {
     }
 
     @Test
+    fun `F1 - a refinement the spec does not declare, after is in a rule's condition, draws one message`() {
+        val src = """
+            act Fill { fillNumber: integer }
+            act PickUp { fill: one Fill }
+            act Counsel { fill: one Fill }
+            rule Note when (PickUp where fill is CounsellingDue) {
+                Counsel from { fill: fill }
+            }
+        """.trimIndent()
+        assertEquals(listOf("[F1] unknown shape or refinement 'CounsellingDue'"), printedDiagnostics(src))
+    }
+
+    @Test
+    fun `F1 - a refinement the spec does not declare, after is in a conditional, draws one message`() {
+        val src = """
+            act Fill { fillNumber: integer }
+            act PickUp {
+                fill: one Fill
+                number: integer = if fill is CounsellingDue then fill.fillNumber else 0
+            }
+        """.trimIndent()
+        assertEquals(listOf("[F1] unknown shape or refinement 'CounsellingDue'"), printedDiagnostics(src))
+    }
+
+    @Test
     fun `F1 - bare name resolves in the innermost scope only`() {
         val src = """
             act Customer {
