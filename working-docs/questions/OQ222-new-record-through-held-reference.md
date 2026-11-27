@@ -101,15 +101,13 @@ The cost is that some false lines stay, such as one reached through a refinement
 
 ## 3. The build
 
-D1's proposed changes, in build order:
+Built on OQ225's model (`working-docs/QUESTIONS.md`), which records for each step of a path how it is reached (`velle.spec.Reach` in `compiler/src/main/kotlin/velle/spec/Paths.kt`).
 
-1. Tests first, holding today's output: the peptides and gallery instances and the survey spelling, each asserting the false line prints (the first, second, and fourth work items), and the case where a new record is reached through a `one` reference in the commit that creates it, asserting its cause is listed (the third).
-2. `compiler/src/main/kotlin/velle/Model.kt`: `ReadSummary` marks a field read when it is reached by a chain of `one` fields from the subject written in the condition itself, and no other read in the condition reaches that shape. Every other read stays unmarked, and an unmarked read is counted as today. `ReadSummary.absorb` keeps a read marked only if every summary it merges marks it.
-3. `compiler/src/main/kotlin/velle/Kinds.kt`: the `CommitKind.Create` branch of `KindCatalog.touches` stops counting a marked read. The `CommitKind.Delete` branch keeps counting it.
-4. The tests from step 1 turn into tests that the line no longer prints, and `compiler/src/test/kotlin/velle/ComparisonDirectionTest.kt` gains the test that a new Loan and MoveLoan are still listed, and one test per way of reaching a field listed in D1's `**Decided:**` paragraph, each showing the new record is still counted.
-5. Regenerate the examples' output; `examples/peptides/peptides.velle` and `examples/gallery/gallery.velle` change as D1 says, and any other change is read and accounted for.
-6. `wiki/Guides/Comparing-specs.md` and `wiki/Normative/diagrams.md`: check whether either says a new record can move a condition through a reference, and correct it.
-7. Delete the survey file 63 and its README line, add the settled row to `working-docs/QUESTIONS.md`, and delete this file, in the settling commit.
+1. `compiler/src/main/kotlin/velle/Model.kt`: the read analysis marks a shape as read only through held references when a path written in the condition itself, at its top and not inside a filter over another shape, reaches it by a chain of `one` fields from the subject, none typed with a union or a taken shape. Every other read of the shape, through a collection, an inverse, a derived field, a refinement named inside the condition, an alias, or a filter, marks it as read otherwise, and a shape read otherwise is counted as today.
+2. `compiler/src/main/kotlin/velle/Kinds.kt`: the `CommitKind.Create` branch of `KindCatalog.touches` does not count a field read on a shape read only through held references. The `CommitKind.Delete` branch is unchanged.
+3. `compiler/src/test/kotlin/velle/ComparisonDirectionTest.kt`: the survey spelling no longer says a new Member moves a Loan; a new Loan still does; a rule creating a member and a loan naming it in one commit is still listed; and one test per way of reaching a field listed in D1's `**Decided:**` paragraph shows the new record still counted.
+4. The two other instances named in §1 stay as they are under D1's narrowed rule: `examples/peptides/peptides.velle` reads `trial.peptide` inside a filter over GreenhouseResult, and `examples/gallery/gallery.velle` reads `target`, typed with the union `Content`. Each is pinned as it stands, and extending the rule to them is residue with a tag of its own.
+5. Regenerate the examples; delete survey file 63 and its README line; settle.
 
 ## 4. Work items
 

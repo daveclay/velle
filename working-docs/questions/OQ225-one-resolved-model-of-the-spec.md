@@ -1,6 +1,6 @@
 # OQ225 — Should the compiler resolve every path in a spec once, into one model that every check, generator, and the running system read?
 
-**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built, moves 1 to 5 of 9 done (§3). Two work items.
+**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built; moves 1 to 5 done, 6 and 7 in part, every disagreement in §1 resolved (§3). Two work items.
 
 **In plain terms:** when the compiler reads a condition such as "the loan's member is called late", it does not write down once what "the loan's member" means. Each part of the compiler that later reads the condition works it out again for itself, and they do not always agree. Several recent bugs came from one of them working it out differently from the others. The change is to work it out once, keep the answer, and have every part read that.
 
@@ -56,15 +56,17 @@ One rule of the language is taught to each of those parts on its own, and they d
 Each is pinned by a test in `compiler/src/test/kotlin/velle/PathResolutionDisagreementTest.kt` that holds today's answer and names the part that answers differently. The move that makes the two agree turns the test into one that holds the agreed answer.
 
 1. Resolved in move 5. The validator read `this.target` and `target` as different paths when it narrowed, so `if this.target is Post then target.body` is refused with F1, while `ExprTypes.kt` types it ("a test spelled with this does not narrow a read spelled without it ...", and the reverse).
-2. `validation/SignedConsults.kt` reads `this` inside a filter as the element, while the read analysis reads it as the subject ("the polarity walk reads this inside a filter as the element ...").
+2. Resolved by moving the polarity walk (commit 412e448). `validation/SignedConsults.kt` read `this` inside a filter as the element, while the read analysis reads it as the subject ("the polarity walk reads this inside a filter as the element ...").
 3. Resolved in move 4. `ExprTypes.kt` typed a bare collection or a `walk` inside a filter over another shape on the subject, so the validator refuses a valid `sum(lines, amount)` with F2, while the read analysis reads it on the element ("a bare collection inside a filter over another shape ...", "a walk inside a filter over another shape ...").
-4. `validation/TransientFieldCheck.kt` reads a bare name in a filter over two collections on the first, while everything else reads it on the last: V37 is raised for a stored field and missed for a transient one (the two tests "the transient check reads a bare name in a filter over two collections ...").
-5. The serialization-domain analysis in `Domains.kt` gives a write to a field declared on a taken shape no queue key, so a rule the write should wake is missed: a soundness gap ("a write to a field declared on a taken shape wakes no rule ...").
-6. `Domains.kt` `corrExpr` does not follow a refinement named inside a rule's `where`, while it follows one that is the condition's shape ("a refinement named inside a rule's where is not followed ...").
-7. `Domains.kt` `bodyPath` gives a read through a `for each` name no route ("a read through a for each name gives the serialization domain no correlation route ...").
-8. `Query.kt` compiles `exists ... for this` over a union-typed reference to no store pre-filter, while the running system matches it ("exists for this over a union-typed reference compiles to no store pre-filter ...").
-9. `ReadConflicts.kt` does not count a read of a union-typed reference as a read of a reference to its operand, while `PossibleCommits.kt` does ("a read of a union-typed reference is no read of a reference to its operand ...").
-10. Found and resolved in move 4: the read analysis ignored `this is RenameEntry` narrowing `this` itself, while `ExprTypes.kt` honoured it (`compiler/src/test/kotlin/velle/spec/PathResolverTest.kt`, "after this is loan a name only loan declares is looked up on loan"; `SharedShapeTest`, "a rule over a taken shape fires inside a transient taker's own commit ...").
+4. Resolved (commit 412e448). `validation/TransientFieldCheck.kt` read a bare name in a filter over two collections on the first, while everything else reads it on the last: V37 is raised for a stored field and missed for a transient one (the two tests "the transient check reads a bare name in a filter over two collections ...").
+5. Resolved (commit 76c4ede), with `Model.recordsHolding` the one answer to which shapes a read or write of a taken field lands on. The serialization-domain analysis in `Domains.kt` gave a write to a field declared on a taken shape no queue key, so a rule the write should wake is missed: a soundness gap ("a write to a field declared on a taken shape wakes no rule ...").
+6. Resolved (commit 8483cdf). `Domains.kt` `corrExpr` did not follow a refinement named inside a rule's `where`, while it follows one that is the condition's shape ("a refinement named inside a rule's where is not followed ...").
+7. Resolved (commit 8483cdf), with `Model.namesBoundIn` the one answer to the names a rule binds. `Domains.kt` `bodyPath` gave a read through a `for each` name no route ("a read through a for each name gives the serialization domain no correlation route ...").
+8. Resolved (commit d619acc), with `Model.referencesRecordsOf` the one answer. `Query.kt` compiled `exists ... for this` over a union-typed reference to no store pre-filter, while the running system matches it ("exists for this over a union-typed reference compiles to no store pre-filter ...").
+9. Resolved (commit d619acc). `ReadConflicts.kt` did not count a read of a union-typed reference as a read of a reference to its operand, while `PossibleCommits.kt` does ("a read of a union-typed reference is no read of a reference to its operand ...").
+10. Found and resolved in move 4 (commit eeb2af5): the read analysis ignored `this is RenameEntry` narrowing `this` itself, while `ExprTypes.kt` honoured it (`compiler/src/test/kotlin/velle/spec/PathResolverTest.kt`, "after this is loan a name only loan declares is looked up on loan"; `SharedShapeTest`, "a rule over a taken shape fires inside a transient taker's own commit ...").
+
+11. Found in move 1 (commit c4b1734): the read analysis stopped at a step through a `many`, `kids.descendants`, and read anything, while the type reading followed it. It now follows it, so V14 sees a derived collection reading itself that way and fails closed, closing OQ53's B6 (`examples/batches/output/src/test/kotlin/velle/BatchesProbesTest.kt`, "B6 - a derived collection reading itself through a many hop draws V14").
 
 ### Open OQs it closes or changes
 
@@ -133,8 +135,8 @@ The API is the package `velle.spec`, in `compiler/src/main/kotlin/velle/spec/`.
 3. One computation of what an `is` test narrows, taken from `ExprTypes.kt` `narrowingOf`, which is the complete one, and read by the read analysis, the validator, and `ExprTypes.kt`. Done: `velle.spec.ShapeNarrowing`, read by all three.
 4. `ExprTypes.kt` `pathType`, `recordElement`, and the type of a `walk`. Done.
 5. The validator: `validation/PathResolution.kt` and `validation/Narrowing.kt`, with F1 reported from an `UnresolvedStep`. Done.
-6. `Domains.kt`: the `Walker`, `corrExpr`, `bodyCorr`, `bodyPath`.
-7. `StateFlowGen.kt`, `validation/SignedConsults.kt`, `validation/TransientFieldCheck.kt`, `validation/Writes.kt`, `Query.kt`, `Evaluator.kt` `declaredTypeOf`, and the small ones in §1.
+6. `Domains.kt`: the `Walker`, `corrExpr`, `bodyCorr`, `bodyPath`. `bodyCorr` and `bodyPath` done; the `Walker`'s read and write sides read `Model.recordsHolding`; the `Walker`'s own path walk is still to move.
+7. `StateFlowGen.kt`, `validation/SignedConsults.kt`, `validation/TransientFieldCheck.kt`, `validation/Writes.kt`, `Query.kt`, `Evaluator.kt` `declaredTypeOf`, and the small ones in §1. `SignedConsults.kt` and `TransientFieldCheck.kt` done; `Query.kt` and the read conflicts read `Model.referencesRecordsOf`.
 8. One function for the parts of an expression, and one for splitting at `and`, shared by the hand-written walks.
 9. OQ222, built on `Reach`.
 
