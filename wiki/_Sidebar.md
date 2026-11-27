@@ -46,6 +46,7 @@
 - [[Extension types|Extension-types]]
 - [[Extension functions|Extension-functions]]
 - [[Store API|Store-API]]
+- [[The SQL store|SQL-store]]
 - [[Serving a system|Serving-a-system]]
 - [[Using a system from an AI chat|AI-chat]]
 - [[Setting up a design session|Design-session-setup]]

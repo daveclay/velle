@@ -18,10 +18,7 @@ val sys = BillingSystem().also { SqliteStore.attach(it.system, conn) }
 ```
 
 - `BillingSystem()` is the generated system. Until another store is connected it runs over `MemoryStore` (`compiler/src/main/kotlin/velle/MemoryStore.kt`), rows in maps with nothing durable, which is how the generated tests run. The in-memory store is a store like any other: it implements every part of this contract, and the runtime treats it no differently.
-- `SqliteStore.attach` creates one table per shape in the connection, with a unique constraint per key the shape declares ([§21, "Keys"](Reference-21-never#keys)), then connects the system to the store for every part of the contract. An in-memory SQLite database lives in its one connection, so the store takes the connection itself. Over a file or a server database the store takes a `DataSource` instead and borrows a connection from it for each read and each commit: `PostgresStore.attach(system, dataSource)`, as `examples/billing/output/src/test/kotlin/velle/GeneratedApiOverPostgresTest.kt` does.
-- Each field that points at records of one shape gets a [foreign key](GLOSSARY#foreign-key): a declaration on the table telling the database that the column holds the key of a row in that shape's table. The same goes for each `many` field of records of one shape. The database then refuses a write naming a record that is not there, and refuses to remove a row that a record still points at. A field typed with a union, such as `target: one Content` where `shape Content = Post or Photo`, points at rows of several tables and gets no foreign key. A rule's `delete` is never refused, because the store empties every reference to the record before it removes the row (below, "A deletion empties every reference to the record").
-- The store creates only the tables the database does not have yet. A table that already exists is left as it is, so a database created before foreign keys were declared keeps running without them until the engineer adds them.
-- SQLite enforces foreign keys only on a connection that turns them on. The store turns them on for every connection it takes. A connection of your own enforces them only when you turn them on too, with `PRAGMA foreign_keys = ON` or `foreign_keys=true` on the URL.
+- `SqliteStore.attach` creates the tables the database does not have yet, then connects the system to the store for every part of the contract. An in-memory SQLite database lives in its one connection, so the store takes the connection itself. Over a file or a server database the store takes a `DataSource` instead and borrows a connection from it for each read and each commit: `PostgresStore.attach(system, dataSource)`, as `examples/billing/output/src/test/kotlin/velle/GeneratedApiOverPostgresTest.kt` does. The tables it creates, and what the database enforces over them, are on [The SQL store](SQL-store).
 
 From then on every commit through the [Act API](Act-API) lands in the database, and every read through the [Read API](Read-API) is answered from it. The same system runs over the in-memory store for tests and over the database in production, and the spec does not change.
 
@@ -241,6 +238,7 @@ The in-memory store keeps every guarantee with one lock for its rows and one loc
 
 ## Related pages
 
+- [The SQL store](SQL-store), the store Velle ships for relational databases: the tables it creates and what the database enforces.
 - [`evaluation.md`, "The universal transaction"](evaluation#the-universal-transaction), the five guarantees stated one clause each, and what each one protects.
 - [Act API](Act-API), the generated Kotlin that commits through the store.
 - [Read API](Read-API), the generated Kotlin that reads from it.

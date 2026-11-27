@@ -53,7 +53,7 @@ Each probe commits one `Drug` and one `Interaction`, makes one outside change wi
 | P7 | the `Drug` row removed, then the `Drug` read by its own reference | `IllegalArgumentException`: "no instance 13", where 13 is a number private to the runtime | "a removed row read by its own reference fails naming the runtime's private number for it" |
 | P8 | the `Drug` row removed on a connection that enforces foreign keys | refused by the database, and the `Drug` still read | "removing a row a reference holds is refused on a connection that enforces foreign keys" |
 
-Since 2026-11-27 the SQL store declares a foreign key on each reference to one shape (`wiki/Guides/Store-API.md`, "Connecting a system to a store"), so P5 to P7 remove the row with foreign keys turned off, as a connection that does not enforce them or a database created before them can. Of P1 to P7, five say nothing. The two that fail name neither the shape nor the store key, and P6 does not name the field. P2 is specific to SQLite, whose columns accept a value of any type; PostgreSQL refuses that write.
+Since 2026-11-27 the SQL store declares a foreign key on each reference to one shape (`wiki/Guides/SQL-store.md`, "What the database enforces"), so P5 to P7 remove the row with foreign keys turned off, as a connection that does not enforce them or a database created before them can. Of P1 to P7, five say nothing. The two that fail name neither the shape nor the store key, and P6 does not name the field. P2 is specific to SQLite, whose columns accept a value of any type; PostgreSQL refuses that write.
 
 ## 2. What to decide
 

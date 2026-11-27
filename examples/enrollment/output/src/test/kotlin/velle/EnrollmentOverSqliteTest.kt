@@ -139,3 +139,35 @@ class EnrollmentPersistenceTest {
     }
 }
 
+
+/** The tables the SQL store creates for `Student` in `examples/enrollment/enrollment.velle`, as SQLite records them; quoted in `wiki/Guides/SQL-store.md`. */
+class EnrollmentSchemaOverSqliteTest {
+    private val connection: Connection = DriverManager.getConnection("jdbc:sqlite::memory:")
+
+    @AfterTest
+    fun close() = connection.close()
+
+    private fun createTableStatement(table: String): String =
+        connection.prepareStatement("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").use { select ->
+            select.setString(1, table)
+            select.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else "no table $table" }
+        }
+
+    @Test
+    fun `a student's table, its collection of tags, and its collection of courses`() {
+        EnrollmentSystem().also { enrollment -> SqliteStore.attach(enrollment.system, connection) }
+        assertEquals(
+            """CREATE TABLE "Student" (id INTEGER PRIMARY KEY AUTOINCREMENT, "name" TEXT, "advisor" INTEGER, FOREIGN KEY ("advisor") REFERENCES "Advisor"(id))""",
+            createTableStatement("Student"),
+        )
+        assertEquals(
+            """CREATE TABLE "Student__tags" (owner INTEGER NOT NULL, pos INTEGER NOT NULL, value TEXT NOT NULL)""",
+            createTableStatement("Student__tags"),
+        )
+        assertEquals(
+            """CREATE TABLE "Student__courses" (owner INTEGER NOT NULL, pos INTEGER NOT NULL, target INTEGER NOT NULL, FOREIGN KEY ("target") REFERENCES "Course"(id))""",
+            createTableStatement("Student__courses"),
+        )
+        assertEquals("""CREATE TABLE "velle_tick" (schedule TEXT PRIMARY KEY, ran_at TEXT NOT NULL)""", createTableStatement("velle_tick"))
+    }
+}
