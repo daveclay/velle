@@ -1,0 +1,19 @@
+-- A shape that takes another with `is` and adds no field of its own, written with no body.
+-- REFUSED today: "The compiler cannot read it: expected '{' after 'is Ask' — a shape that
+-- takes another's declarations has a body of its own". `shape Build is Ask {}` validates,
+-- as in 65-ask-answer-silence-taken-three-times.velle.
+act Part {
+    name: text
+}
+
+-- A shape other shapes take with `is`. It has no records of its own.
+shape Ask {
+    part: one Part                   -- the part the ask is about
+}
+
+shape Build is Ask                   -- the line the compiler cannot read
+
+-- Fires in the commit that brings a Part.
+rule AskForBuild when Part {
+    Build from { part: this }
+}

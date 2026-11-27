@@ -1,0 +1,129 @@
+-- A tool that builds environments at a cloud provider. The provider is the outside world:
+-- the spec keeps what was asked of it and what it said, and never claims a server exists.
+-- Asking, hearing an answer, and giving up on silence is written once, on `Ask`, and taken
+-- three times with `is` (Reference §9): to build a part, to remove one, and to check one is
+-- still there. Validates, with six A5 advisories naming the rule Unwind.
+
+-- The compiler makes each of these a type whose only values are its words.
+Kind is one of "server", "database"
+Outcome is one of "succeeded", "failed"
+
+-- A kept act: a developer asks for an environment.
+act Environment {
+    name: text unique                -- a key: a second environment with this name is refused
+    owner: text                      -- who is told when it goes wrong
+}
+
+-- A kept act: one thing the environment needs. This is what was wanted, not what exists.
+act Part {
+    environment: one Environment     -- the environment this part belongs to
+    kind: Kind                       -- a word outside the two is refused when the request arrives
+}
+
+-- ── Asking the provider, written once ────────────────────────────────────────
+
+-- A shape other shapes take with `is`. It has no records of its own: every Ask is a Build,
+-- a Removal, or a Check.
+shape Ask {
+    part: one Part                   -- the part the provider is asked about
+    askedOn: timestamp on create     -- the runtime fills this when the record is created
+    patience: duration               -- how long silence is waited for, chosen by the rule that asks
+}
+
+-- The three things asked. Each takes `part`, `askedOn`, and `patience` and adds nothing.
+shape Build is Ask {}
+shape Removal is Ask {}
+shape Check is Ask {}
+
+-- A transient act: the provider's word on one ask, committed by the engineer's code.
+transient act ProviderReport {
+    ask: one Ask                     -- holds a Build, a Removal, or a Check
+    outcome: Outcome                 -- "succeeded" or "failed"
+}
+
+-- What ends the waiting, declared once and taken by the two ways it can end.
+shape Settlement {
+    ask: one Ask
+}
+
+-- The provider said something. Only the rule RecordReport creates one.
+shape Answer is Settlement {
+    outcome: Outcome                 -- copied from the report, which is gone after its commit
+    heardOn: timestamp on create     -- the runtime fills this when the record is created
+}
+
+-- The provider said nothing in time. Only the rule GiveUpWaiting creates one.
+shape Silence is Settlement {
+    noticedOn: timestamp on create   -- the runtime fills this when the record is created
+}
+
+-- One rule over the bare act, so every report is answered (checks V18).
+rule RecordReport when ProviderReport {
+    Answer from { ask: ask, outcome: outcome }
+}
+
+-- The states of an ask. Each is one refinement over all three kinds.
+shape Awaited   = Ask where not exists Settlement for this      -- no answer and no silence yet
+shape Overdue   = Awaited where askedOn < now - patience        -- reads the clock against the ask's own patience
+shape Succeeded = Ask where exists (Answer where ask == this and outcome == "succeeded")
+-- A late "succeeded" after a recorded silence wins: the ask is Succeeded and so not Failed.
+shape Failed    = Ask where exists Settlement for this and not (this is Succeeded)
+
+-- One scheduled rule gives up on all three kinds: at each tick, one commit per overdue ask.
+rule GiveUpWaiting when Overdue on EveryFiveMinutes {
+    Silence from { ask: this }       -- the Silence takes the ask out of Awaited, so the rule fires once
+}
+
+-- ── What each kind of ask means for a part ───────────────────────────────────
+
+-- Fires in the commit that brings a Part: the first thing done about a part is to ask for it.
+rule AskForBuild when Part {
+    Build from { part: this, patience: 10 minutes }
+}
+
+-- The states of an ask narrowed to one kind, each named for what it means to the business.
+shape Built   = Build where this is Succeeded     -- the provider said the part is built
+shape Unbuilt = Build where this is Failed        -- the provider refused, or said nothing in ten minutes
+shape Removed = Removal where this is Succeeded   -- the provider said the part is gone
+shape Stuck   = Removal where this is Failed      -- removal was asked for and cannot be confirmed
+shape Gone    = Check where this is Failed        -- the part was looked for and not found, or the look went unanswered
+
+-- A part believed to be running: built, not removed, and never found missing.
+shape Up   = Part where exists Built for this and not exists Removed for this and not exists Gone for this
+shape Down = Part where not (this is Up)
+
+-- The states of an environment, read off its parts.
+shape Ready     = Environment where exists (Up where environment == this) and not exists (Down where environment == this)
+shape HalfBuilt = Environment where exists (Up where environment == this) and exists (Unbuilt where part.environment == this)
+
+-- A part that came up in an environment where another did not: ask for it to be removed.
+rule Unwind when (Up where environment is HalfBuilt and not exists Removal for this) {
+    Removal from { part: this, patience: 10 minutes }   -- the Removal disarms the rule for this part
+}
+
+-- At each tick of Hourly, look at every part believed up that was not looked at in the last hour.
+rule Look when (Up where not exists (Check where part == this and askedOn > now - 1 hours)) on Hourly {
+    Check from { part: this, patience: 5 minutes }
+}
+
+-- ── Telling the owner ────────────────────────────────────────────────────────
+
+-- What the owner is told, once per ask that went wrong.
+shape Notice {
+    about: one Ask unique            -- a key: one notice per ask; holds a Build, a Removal, or a Check
+    reason: text                     -- the sentence the owner reads
+    toldOn: timestamp on create      -- the runtime fills this when the record is created
+}
+
+-- The three ways an ask goes wrong, as one shape.
+shape Trouble = Unbuilt or Stuck or Gone
+
+-- Fires once per trouble: the Notice it creates takes the ask out of the condition.
+rule TellOwner when (Trouble where not exists (Notice where about == this)) {
+    Notice from {
+        about: this,
+        reason: if this is Build then "a part could not be built"
+                else if this is Removal then "a part could not be removed and may still be running"
+                else "a part that was running is no longer there"
+    }
+}

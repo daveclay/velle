@@ -1,0 +1,52 @@
+-- Preview environments torn down after seven days, with one policy across two kinds of part:
+-- a database without backups is never beside a public server.
+-- REFUSED today, V26: the rule TerminateServers deletes a Server and the prohibition reads
+-- Server. The prohibition reads it only as `exists (Server where ... isPublic)`, so removing
+-- a Server can take a Database out of the forbidden state and can never put one in.
+-- Without the prohibition the spec validates.
+
+-- The compiler makes Size a type whose only values are these two words.
+Size is one of "small", "large"
+
+-- A kept act: a developer asks for a preview environment. The store creates a network at the provider.
+act Environment {
+    name: text unique                -- a key: a second environment with this name is refused
+    owner: text                      -- who asked, so a rejection can reach them
+    createdOn: timestamp on create   -- the runtime fills this at the commit
+}
+
+-- A kept act: a server in an environment. The store's commit is the provider's "create instance" call.
+act Server {
+    environment: one Environment     -- the store holds the provider's id of the network
+    size: Size                       -- a word outside the two is refused when the request arrives
+    isPublic: boolean initially false  -- left out, the server has no public address
+}
+
+-- A kept act: a database in an environment. The store's commit is the provider's "create database" call.
+act Database {
+    environment: one Environment     -- the store holds the provider's id of the network
+    backedUp: boolean initially false  -- left out, the database has no backups
+}
+
+-- A constraint: checked before the store is asked to create anything, in every commit that adds a Server.
+never (Server where size == "large" and count(Server where environment == this.environment and size == "large") > 2)
+
+-- A constraint that binds two acts: a public Server arriving beside a bare Database is refused,
+-- and so is a bare Database arriving beside a public Server.
+never (Database where not backedUp and exists (Server where environment == this.environment and isPublic))
+
+-- A refinement that reads the clock: an environment becomes Expired with no act and no commit.
+shape Expired = Environment where createdOn < now - 7 days
+
+-- Scheduled rules: at each tick of Nightly, one commit per member. The store's delete is the provider's "terminate" call.
+rule TerminateServers when (Server where environment is Expired) on Nightly {
+    delete this
+}
+
+rule DropDatabases when (Database where environment is Expired) on Nightly {
+    delete this
+}
+
+rule RemoveEnvironment when (Expired where this is not held) on Nightly {
+    delete this
+}

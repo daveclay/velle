@@ -1,0 +1,46 @@
+-- A small spec for one question: which record does `for this` find when `this` is a union
+-- of the shapes that take `Ask`, and `Notice.about` is typed with `Ask` itself?
+act Part {
+    name: text
+}
+
+-- A shape other shapes take with `is`. It has no records of its own.
+shape Ask {
+    part: one Part                   -- the part the ask is about
+    failed: boolean initially false  -- starts false; nothing in this spec sets it
+}
+
+shape Build is Ask {}                -- takes `part` and `failed`
+shape Removal is Ask {}              -- takes `part` and `failed`
+
+-- Fires in the commit that brings a Part.
+rule AskForBuild when Part {
+    Build from { part: this }
+}
+
+-- A transient act: a request to remove a part.
+transient act Remove {
+    part: one Part
+}
+
+-- One rule over the bare act, so every Remove is answered (checks V18).
+rule AskForRemoval when Remove {
+    Removal from { part: part }
+}
+
+shape Unbuilt = Build where failed       -- a refinement of one taker
+shape Stuck   = Removal where failed     -- a refinement of the other taker
+
+shape Notice {
+    about: one Ask                   -- holds a Build or a Removal
+}
+
+-- A union of refinements of the two takers.
+shape Trouble = Unbuilt or Stuck
+
+-- REFUSED today, V13: "exists Notice for ... — 'for' matches 0 fields of 'Notice'". `about: one Ask`
+-- takes every Trouble, since each is a Build or a Removal. The same `for this` validates when
+-- the rule is over `Unbuilt` alone, or over `Ask where failed`.
+rule TellOwner when (Trouble where not exists Notice for this) {
+    Notice from { about: this }
+}
