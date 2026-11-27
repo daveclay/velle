@@ -1,5 +1,8 @@
 package velle
 
+import velle.spec.BoundElement
+import velle.spec.Scope
+
 /** An assignment written inside `for each` blocks (Reference §14), with the blocks around it, outermost first. */
 data class BlockAssignment(val assignment: Assignment, val blocks: List<ForEach>) {
     /** The block the assignment stands directly in. */
@@ -22,16 +25,8 @@ fun RuleDecl.blockAssignments(): List<BlockAssignment> {
 
 /** The shape of the records a `for each` source runs over, or [VALUE_ALIAS] when it runs over numbers or values, or is unknown. */
 fun Model.loopElementShape(source: LoopSource, scope: String, aliases: Map<String, String>): String {
-    val collection = (source as? LoopSource.Over)?.expr ?: return VALUE_ALIAS
-    val shape = when (collection) {
-        is PathExpr ->
-            if (collection.segs.isEmpty() && (collection.root in shapes || collection.root in refinements)) collection.root
-            else pathElementShape(collection, scope, aliases)
-        is SetExpr -> collectionElement(collection.collection, scope, aliases)
-        is WalkExpr -> walkTarget(collection, scope)
-        else -> null
-    }
-    return shape ?: VALUE_ALIAS
+    val element = scopes.elementOfLoop(source, Scope.of(scope, aliases, scope))
+    return (element as? BoundElement.Records)?.shape ?: VALUE_ALIAS
 }
 
 /** The shape a rule's condition is over, which its body reads `this` and bare names on; null when it names none. */

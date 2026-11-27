@@ -1,6 +1,7 @@
 package velle.validation
 
 import velle.*
+import velle.spec.BoundElement
 
 // ── V34: a `for each` block (Reference §14) ────────────────────────────────
 //
@@ -258,40 +259,36 @@ private fun Validator.loopNarrowing(name: String, element: String, source: Expr?
     model.types.elementNarrowing((source as? SetExpr)?.collection, element, name, scopeByAlias.keys)
 
 /** What a `for each` name runs over, or null with a diagnostic when the source is not a collection. */
-private fun Validator.elementOfLoopSource(rule: RuleDecl, name: String, source: Expr, scope: String): LoopElement? = when (source) {
-    is PathExpr -> elementOfPath(rule, name, source, scope)
-    is SetExpr -> elementOfFilter(source, scope)
-    is WalkExpr -> elementOfWalk(rule, name, source, scope)
-    else -> {
+private fun Validator.elementOfLoopSource(rule: RuleDecl, name: String, source: Expr, scope: String): LoopElement? {
+    if (!loopSourceResolves(source, scope)) return null
+    if (!isCollection(source, scope)) return reportNotACollection(rule, name, source)
+    // which records the name runs over is the model's answer (`velle.spec.ScopeRules`)
+    return when (val element = model.scopes.elementOfLoop(LoopSource.Over(source), scopeAt(scope))) {
+        is BoundElement.Records -> LoopElement.Records(element.shape)
+        BoundElement.Values -> (scalarTypeOf(source, scope) as? VType.CollS)?.let { values -> LoopElement.Values(model.scalarOf(values.name)) }
+        BoundElement.Unknown -> null
+    }
+}
+
+/** Checks the names [source] reads; false when a path that is the whole source was refused. */
+private fun Validator.loopSourceResolves(source: Expr, scope: String): Boolean {
+    if (source !is PathExpr) {
         checkExpr(source, scope)
-        reportNotACollection(rule, name, source)
+        return true
     }
-}
-
-private fun Validator.elementOfFilter(filter: SetExpr, scope: String): LoopElement? {
-    checkExpr(filter, scope)
-    return model.collectionElement(filter.collection, scope, scopeByAlias)?.let { shape -> LoopElement.Records(shape) }
-}
-
-/** A walk runs over the records it reaches; a walk `until` names one record and is no collection. */
-private fun Validator.elementOfWalk(rule: RuleDecl, name: String, walk: WalkExpr, scope: String): LoopElement? {
-    checkExpr(walk, scope)
-    if (walk.until != null) return reportNotACollection(rule, name, walk)
-    return model.walkTarget(walk, scope)?.let { shape -> LoopElement.Records(shape) }
-}
-
-/** A bare shape name runs over its records; any other path runs over the collection it resolves to. */
-private fun Validator.elementOfPath(rule: RuleDecl, name: String, path: PathExpr, scope: String): LoopElement? {
-    if (path.segs.isEmpty() && (path.root in model.shapes || path.root in model.refinements)) return LoopElement.Records(path.root)
+    if (source.segs.isEmpty() && isShapeOrRefinement(source.root)) return true
     val diagnosticsBefore = diagnostics.size
-    resolvePath(path, scope)
-    if (diagnostics.size > diagnosticsBefore) return null
-    return when (val pathType = scalarTypeOf(path, scope)) {
-        is VType.Coll -> LoopElement.Records(pathType.shape)
-        is VType.CollS -> LoopElement.Values(model.scalarOf(pathType.name))
-        null -> null
-        else -> reportNotACollection(rule, name, path)
-    }
+    resolvePath(source, scope)
+    return diagnostics.size == diagnosticsBefore
+}
+
+/** A path to a `many` or a shape named on its own, a filter, and a walk without `until`, which names one record. */
+private fun Validator.isCollection(source: Expr, scope: String): Boolean = when (source) {
+    is PathExpr -> source.segs.isEmpty() && isShapeOrRefinement(source.root) ||
+        scalarTypeOf(source, scope).let { type -> type == null || type is VType.Coll || type is VType.CollS }
+    is SetExpr -> true
+    is WalkExpr -> source.until == null
+    else -> false
 }
 
 /** Reports V34 for a source that is not a collection, and returns null: such a source has no element. */

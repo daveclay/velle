@@ -3,6 +3,7 @@ package velle.spec
 import velle.Binary
 import velle.ExistsExpr
 import velle.Expr
+import velle.ForEach
 import velle.IfExpr
 import velle.Model
 import velle.Parser
@@ -49,6 +50,18 @@ class ScopeRulesTest {
 
         shape LateLoan = Loan where title == "late" {
             lateness: integer = 1
+        }
+
+        shape Reminder {
+            loan: one Loan
+            wording: text
+            copy: integer
+        }
+
+        rule Remind when (Member where name == "forgetful") {
+            for each loan in (loans where LateLoan), wording in loan.options, copy from 1 to 2 {
+                Reminder from { loan: loan, wording: wording, copy: copy }
+            }
         }
     """.trimIndent()
 
@@ -146,5 +159,27 @@ class ScopeRulesTest {
             .narrowedBy(mapOf(listOf("about") to "Post", listOf("holder") to "Member"))
 
         assertEquals(mapOf(listOf("holder") to "Member"), rules.ofUntil(walk, narrowedStart).narrowed)
+    }
+
+    @Test
+    fun `a for each name is bound to what it runs over and each source reads the names before it`() {
+        val block = model.rules.getValue("Remind").body.single() as ForEach
+
+        val body = rules.ofBlock(block, Scope("Member"))
+
+        assertEquals(mapOf("loan" to "LateLoan"), body.recordNames)
+        assertEquals(setOf("wording", "copy"), body.valueNames)
+        assertEquals("Member", body.element)
+    }
+
+    @Test
+    fun `a for each name over a filter runs over the records the filter holds, over a many of values over values, over a range over numbers`() {
+        val bindings = (model.rules.getValue("Remind").body.single() as ForEach).bindings
+        val withLoan = Scope("Member").withRecordName("loan", "LateLoan")
+
+        assertEquals(BoundElement.Records("LateLoan"), rules.elementOfLoop(bindings[0].source, Scope("Member")))
+        assertEquals(BoundElement.Values, rules.elementOfLoop(bindings[1].source, withLoan))
+        assertEquals(BoundElement.Unknown, rules.elementOfLoop(bindings[1].source, Scope("Member")))
+        assertEquals(BoundElement.Values, rules.elementOfLoop(bindings[2].source, Scope("Member")))
     }
 }

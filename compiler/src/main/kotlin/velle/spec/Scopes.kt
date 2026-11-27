@@ -4,9 +4,12 @@ import velle.Binary
 import velle.Binding
 import velle.CollectionExpr
 import velle.Expr
+import velle.ForEach
 import velle.IfExpr
+import velle.LoopSource
 import velle.Model
 import velle.PathExpr
+import velle.SetExpr
 import velle.ShapeForSource
 import velle.VType
 import velle.WalkExpr
@@ -20,7 +23,7 @@ import velle.WalkExpr
 // [ScopeRules] for the scope of each part, so that two walks cannot read one name
 // against different records.
 
-/** What one binding of a collection, `loans as loan`, runs over. */
+/** What one binding of a collection, `loans as loan`, or one name of a `for each` runs over. */
 sealed interface BoundElement {
     /** Records of [shape]. */
     data class Records(val shape: String) : BoundElement
@@ -77,19 +80,47 @@ class ScopeRules(private val model: Model, private val paths: PathResolver, priv
 
     /** What [binding] runs over when its source is read at [scope]. */
     fun elementOf(binding: Binding, scope: Scope): BoundElement = when (val source = binding.source) {
-        is PathExpr -> elementOfPath(source, binding, scope)
+        // a `many` of values is filtered by naming each value (Reference §5); with no name it has nothing a `where` could read
+        is PathExpr -> elementOfPath(source, scope).takeUnless { element -> element == BoundElement.Values && binding.alias == null } ?: BoundElement.Unknown
         is ShapeForSource -> BoundElement.Records(source.shape)
-        is WalkExpr -> model.walkTarget(source, scope.element)?.let { shape -> BoundElement.Records(shape) } ?: BoundElement.Unknown
+        is WalkExpr -> elementOfWalk(source, scope)
         else -> BoundElement.Unknown
     }
 
-    private fun elementOfPath(source: PathExpr, binding: Binding, scope: Scope): BoundElement {
+    /** What a `for each` name runs over when its source is read at [scope] (Reference §14); a range runs over numbers. */
+    fun elementOfLoop(source: LoopSource, scope: Scope): BoundElement {
+        val collection = (source as? LoopSource.Over)?.expr ?: return BoundElement.Values
+        return when (collection) {
+            is PathExpr -> elementOfPath(collection, scope)
+            is SetExpr -> ofFilter(collection.collection, scope).element?.let { shape -> BoundElement.Records(shape) } ?: BoundElement.Unknown
+            is WalkExpr -> elementOfWalk(collection, scope)
+            else -> BoundElement.Unknown
+        }
+    }
+
+    /**
+     * The scope of the body of [block] (Reference §14): each name is bound to what it runs over, and each
+     * source reads the names before it. A name whose source holds no records is bound to a value, which no
+     * member resolves on.
+     */
+    fun ofBlock(block: ForEach, scope: Scope): Scope =
+        block.bindings.fold(scope) { scopeSoFar, binding ->
+            when (val element = elementOfLoop(binding.source, scopeSoFar)) {
+                is BoundElement.Records -> scopeSoFar.withRecordName(binding.name, element.shape)
+                BoundElement.Values, BoundElement.Unknown -> scopeSoFar.withValueName(binding.name)
+            }
+        }
+
+    /** The records or values a path names as a collection: a shape named on its own is its records. */
+    private fun elementOfPath(source: PathExpr, scope: Scope): BoundElement {
         if (source.segs.isEmpty() && model.namesShapeOrRefinement(source.root)) return BoundElement.Records(source.root)
         val resolved = paths.resolve(source, scope)
         resolved.endShape?.let { shape -> return BoundElement.Records(shape) }
-        // a `many` of values filtered by naming each value (Reference §5): the name is a value
-        return if (binding.alias != null && resolved.endType is VType.CollS) BoundElement.Values else BoundElement.Unknown
+        return if (resolved.endType is VType.CollS) BoundElement.Values else BoundElement.Unknown
     }
+
+    private fun elementOfWalk(walk: WalkExpr, scope: Scope): BoundElement =
+        model.walkTarget(walk, scope.element)?.let { shape -> BoundElement.Records(shape) } ?: BoundElement.Unknown
 
     private fun withNameOf(binding: Binding, element: BoundElement, scope: Scope): Scope {
         val name = binding.alias ?: return scope
