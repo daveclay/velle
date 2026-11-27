@@ -48,6 +48,8 @@ internal class KindCatalog(private val model: Model) {
     fun producedKinds(rule: RuleDecl): List<CommitKind> {
         val subject = (rule.condition as? RefName)?.name ?: model.baseOfExpr(rule.condition)
         val out = mutableListOf<CommitKind>()
+        // an assignment in a block writes through a `for each` name, a record of the shape its block runs over
+        val shapeByLoopName = subject?.let { scope -> model.loopElementShapes(rule, scope, emptyMap()) }.orEmpty()
         for (item in rule.body.statements()) when (item) {
             is ForEach -> {} // its statements follow, flattened
             is Creation -> out.add(CommitKind.Create(item.shape))
@@ -55,7 +57,7 @@ internal class KindCatalog(private val model: Model) {
                 val t = item.target
                 val ownerScope =
                     if (t.segs.isEmpty()) subject
-                    else model.pathElementShape(PathExpr(t.root, t.segs.dropLast(1)), subject ?: continue)
+                    else model.pathElementShape(PathExpr(t.root, t.segs.dropLast(1)), subject ?: continue, shapeByLoopName)
                 val owner = ownerScope?.let { model.baseOf(it) } ?: continue
                 val field = if (t.segs.isEmpty()) t.root else t.segs.last().name
                 out.add(CommitKind.Assign(owner, field))

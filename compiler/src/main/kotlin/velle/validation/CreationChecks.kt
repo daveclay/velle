@@ -11,7 +11,7 @@ import velle.*
 // checked in CreationAliasCheck.kt.
 
 internal fun Validator.checkAssignment(rule: RuleDecl, scope: String, assignment: Assignment) {
-    val write = resolveWrite(rule, scope, assignment) ?: return
+    val write = resolveWrite(rule, scope, assignment, acceptedBlockWrite(rule, scope, assignment)) ?: return
     if (!write.member.stored) reportUnassignableMember(rule, write)
     val diagnosticsBefore = diagnostics.size
     checkExpr(assignment.value, scope)

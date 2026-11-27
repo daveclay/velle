@@ -1137,8 +1137,7 @@ class Evaluator(private val system: VelleSystem) {
         if (target.segs.size >= 2) {
             // check whether the penultimate hop reads a collection
             val routeEnd = target.segs.size - 2
-            var current: Value = if (target.root == "this") Value.VRef(ctx.subjectId)
-            else readMember(ctx.subjectId, ctx.subjectScope, target.root)
+            var current: Value = targetRoot(target, ctx)
             for (i in 0..routeEnd) {
                 val seg = target.segs[i]
                 current = when (current) {
@@ -1153,11 +1152,19 @@ class Evaluator(private val system: VelleSystem) {
                 return coll.ids to target.segs.last().name
             }
         } else if (target.segs.size == 1 && target.root != "this") {
-            val v = readMember(ctx.subjectId, ctx.subjectScope, target.root)
+            val v = targetRoot(target, ctx)
             (v as? Value.VColl)?.let { return it.ids to target.segs.last().name }
         }
         val (id, field) = resolveTarget(target, ctx)
         return listOf(id) to field
+    }
+
+    /** What an assignment target starts from: the subject, the record a `for each` name stands for in this
+     *  iteration (Reference §14), or a member of the subject. */
+    private fun targetRoot(target: PathExpr, ctx: Ctx): Value = when (target.root) {
+        "this" -> Value.VRef(ctx.subjectId)
+        in ctx.locals -> ctx.locals.getValue(target.root)
+        else -> readMember(ctx.subjectId, ctx.subjectScope, target.root)
     }
 
     /** Resolve `a.b.c` to (instance holding c, "c"). */
@@ -1166,10 +1173,8 @@ class Evaluator(private val system: VelleSystem) {
             require(target.root != "this") { "assignment needs a field" }
             return ctx.subjectId to target.root
         }
-        var current: Long = if (target.root == "this") ctx.subjectId else {
-            val v = readMember(ctx.subjectId, ctx.subjectScope, target.root)
-            (v as? Value.VRef)?.id ?: throw VelleRuntimeError("assignment route '${target.root}' is not an instance")
-        }
+        var current: Long = (targetRoot(target, ctx) as? Value.VRef)?.id
+            ?: throw VelleRuntimeError("assignment route '${target.root}' is not an instance")
         for ((i, seg) in target.segs.withIndex()) {
             if (i == target.segs.lastIndex) return current to seg.name
             val inst = system.instance(current) ?: throw VelleRuntimeError("missing instance $current")

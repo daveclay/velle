@@ -6,8 +6,8 @@ import velle.*
 
 internal fun Validator.checkFolds() {
     for (write in writes) {
-        val fold = foldAssignment(write) ?: continue
-        val facts = foldFacts(write.member.type, fold.value)
+        if (!readsItsOwnField(write)) continue
+        val facts = foldFacts(write.member.type, write.value)
         if (facts?.idempotent == true) continue
         val toleration = (model.shapes[write.owner]?.members
             ?.filterIsInstance<StoredProp>()?.find { field -> field.name == write.member.name })?.tolerates
@@ -16,12 +16,11 @@ internal fun Validator.checkFolds() {
     }
 }
 
-/** The assignment behind [write] when its value reads the field it writes, a fold; null otherwise. */
-private fun Validator.foldAssignment(write: Write): Assignment? {
-    val scope = subjectScope(write.rule) ?: return null
-    val assignment = write.rule.body.filterIsInstance<Assignment>().find { assignment -> assignment.target == write.target } ?: return null
-    val valueReads = ReadSummary().also { summary -> model.collectExpr(assignment.value, scope, summary) }
-    return assignment.takeIf { (write.owner to write.member.name) in valueReads.fields }
+/** Whether [write]'s value reads the field it writes, a fold; a `for each` name reads its records' fields (Reference §14). */
+private fun Validator.readsItsOwnField(write: Write): Boolean {
+    val scope = subjectScope(write.rule) ?: return false
+    val valueReads = ReadSummary().also { summary -> model.collectExpr(write.value, scope, summary, loopAliases(write.rule)) }
+    return (write.owner to write.member.name) in valueReads.fields
 }
 
 /**

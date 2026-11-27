@@ -99,7 +99,66 @@ rule LayOut when ExperimentDesign {
 - `replicate`, `position`, `condition`, and `slot` are values inside their block. `condition.block` reads the condition's field. `slot` is a number and has no fields. Outside the block the names mean nothing.
 - The rule fires once per design. Every container and every well it creates lands in the design's own commit, so a well a `never` refuses refuses the whole design ([§20](Reference-20-State-change-patterns)).
 
-A block holds creations and other blocks. To write one field of every member of a collection, write the assignment in the rule, outside any block, through the collection: `items.n = 1` writes `n` on every record in `items` ([§6](Reference-06-Relationships#committing-and-assigning-collections)). To delete every member, write a rule on the member shape that deletes `this` ([§12](Reference-12-Assignment), "Deletion"). A later name in one `for each` may use an earlier one, as in `for each n from 1 to lines, copy from 1 to n`. `then` inside a block orders the block's statements each time it runs ([§15](Reference-15-then)).
+A block holds creations, other blocks, and assignments through its own name (the next section). To write one field of every member of a collection with one value, the assignment through the collection in the rule is shorter: `items.n = 1` writes `n` on every record in `items` ([§6](Reference-06-Relationships#committing-and-assigning-collections)). To delete every member, write a rule on the member shape that deletes `this` ([§12](Reference-12-Assignment), "Deletion"). A later name in one `for each` may use an earlier one, as in `for each n from 1 to lines, copy from 1 to n`. `then` inside a block orders the block's statements each time it runs ([§15](Reference-15-then)).
+
+## Writing a field of each element
+
+Inside a `for each` block, an assignment through the block's own name writes one field of each element, and its value may read that element. Use it when each record gets a value worked out from that record, or when a filter chooses which records to write.
+
+"Each time a member asks to renew, count one more renewal on each of their late loans, and flag it," from `compiler/src/test/kotlin/velle/ForEachAssignmentTest.kt`:
+
+```
+act Member { name: text }
+
+act Loan {
+    member: one Member
+    dueOn: Date
+    renewals: integer initially 0
+    flagged: boolean initially false
+}
+
+transient act Renew { member: one Member }
+
+rule Extend when Renew {
+    for each loan in (member.loans where dueOn < today) {
+        loan.renewals = loan.renewals + 1
+        loan.flagged = true
+    }
+}
+```
+
+- `for each loan in (member.loans where dueOn < today)` runs the block once for each of the member's loans that is late.
+- `loan.renewals = loan.renewals + 1` writes each late loan's own count, one more than it was. A loan that is not late is not written.
+- `loan.flagged = true` flags each late loan.
+- The filter and every value are read as the state stood before the rule wrote anything. A block over `(member.loans where not flagged)` that sets `loan.flagged = true` writes each unflagged loan once.
+- Every write lands in the request's own commit.
+
+A block inside another block may assign too, when each inner record belongs to one outer record. "Label every book with the name of its shelf," from `compiler/src/test/kotlin/velle/ForEachAssignmentTest.kt`:
+
+```
+act Library { name: text }
+act Shelf { library: one Library, name: text }
+act Book { shelf: one Shelf, label: text initially "" }
+transient act Relabel { library: one Library }
+
+rule LabelBooks when Relabel {
+    for each shelf in library.shelfs {
+        for each book in shelf.books {
+            book.label = shelf.name
+        }
+    }
+}
+```
+
+- `shelf.books` is the inferred inverse of `Book.shelf` ([§6](Reference-06-Relationships)): the books whose `shelf` is this shelf. A book has one shelf, so the inner block meets each book once.
+- `book.label = shelf.name` writes each book's label. The inner block may run over a filter of `shelf.books` as well.
+
+An assignment in a block is accepted when no record can be written twice by it:
+
+- The left side is one stored field of the name of the block the assignment stands in, `loan.renewals`. A field of an outer block's name, of the rule's subject, or of a record reached through the name, `loan.member.name`, is written in the rule or in a block of its own.
+- That block and every block around it has one name and runs over records. A block with two names, or over a range or values, meets a record more than once.
+- A block inside another runs over the records that point at the outer name through a `one` field, as `shelf.books` does, filtered or not. A declared `many`, a derived collection, or a collection that does not start from the outer name can hold one record under two outer records.
+- A field written in a block is written nowhere else in the same rule.
 
 ## What the compiler checks
 
@@ -107,7 +166,8 @@ A block holds creations and other blocks. To write one field of every member of 
 - The compiler rejects a `from` block that gives a field a value of another type than the field's, `effective: "yes"` for a `boolean`, and one that gives a required field a value that may be absent by declaration, an optional field of the subject not tested with `is some`; a selection that matches nothing is the runtime's, below ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects `for` when more than one field matches the value's type ([checks.md, V13](checks#v13--ambiguity-is-a-connected-diagnostic)). A field typed with a union ([§9](Reference-09-Composing-refinements)) matches a record of any operand, so a singular reference `(Comment for this)` beside `target: one Content` and `post: one Post` is refused the same way, naming both fields.
 - The compiler rejects an `as` name that is already a name in the rule, a read through the name, the name in an assignment or a `delete`, and two named creations pointing at each other ([checks.md, V33](checks#v33--a-creations-as-name)).
-- The compiler rejects a `for each` whose source is not a collection or a range, a range bound that is not a number, a name already in the rule, an assignment or `delete` inside a block, and an `as` name read outside the block that binds it ([checks.md, V34](checks#v34--a-for-each-block)).
+- The compiler rejects a `for each` whose source is not a collection or a range, a range bound that is not a number, a name already in the rule, a `delete` inside a block, an assignment inside a block that could write one record twice, and an `as` name read outside the block that binds it ([checks.md, V34](checks#v34--a-for-each-block)). The message names which of the conditions above the assignment breaks.
+- The compiler rejects a rule that writes one field both in a block and elsewhere in its body, and two rules that write the same field and could fire in one commit, as it does for any assignment ([checks.md, V1](checks#v1--one-writer-disjointness)).
 
 ## A required field given an absent value
 

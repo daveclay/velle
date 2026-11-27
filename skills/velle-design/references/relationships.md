@@ -75,20 +75,42 @@ rule ApplyReassignment when ReassignInvoices {
 - The statement writes `customer` once on each invoice in the act's collection. The invoices leave the old customer's `invoices` by themselves.
 - A path may go through one `many` and stop: `invoices.customer` is allowed, `invoices.customer.name` is not.
 - The compiler prints a contention advisory for this rule: every commit that writes an invoice's customer takes turns. It does not block the spec ([time-and-repetition.md](time-and-repetition.md), §6).
-- Inside `for each`, assignments are refused:
+- The value is worked out once, for every member. To give each member its own value, or to write only the members a filter chooses, assign through the name of a `for each` block:
 
-```velle refused
-act Item { label: text, n: integer }
-act Batch { items: many Item, n: integer }
+```velle
+act Member { name: text }
 
-rule Tag when Batch {
-    for each item in items {
-        item.n = 1
+act Loan {
+    member: one Member
+    dueOn: Date
+    renewals: integer initially 0
+}
+
+transient act Renew { member: one Member }
+
+rule Extend when Renew {
+    for each loan in (member.loans where dueOn < today) {
+        loan.renewals = loan.renewals + 1
     }
 }
 ```
 
-> [V34] rule 'Tag' assigns 'item.n' inside 'for each' — a block creates records; to write 'n' on every member of 'items', write 'items.n = 1' in the rule, outside the block
+- Each late loan gets one more renewal than it had. The filter and the value are read as the state stood before the rule wrote anything.
+- The assignment writes one field of the block's own name. The block has one name and runs over records; a block inside another runs over the records that point at the outer name through a `one` field, as `shelf.books` for `Book { shelf: one Shelf }`. Otherwise one record could be written twice, and the compiler refuses it:
+
+```velle refused
+act Member { name: text }
+act Loan { member: one Member, flagged: boolean initially false }
+transient act Renew { member: one Member, times: integer }
+
+rule Extend when Renew {
+    for each loan in member.loans, step from 1 to times {
+        loan.flagged = true
+    }
+}
+```
+
+> [V34] rule 'Extend' assigns 'loan.flagged' within 'for each loan in member.loans, step from 1 to times', which has more than one name, so one loan is met more than once and 'loan.flagged' could be written twice in one commit; an assignment stands in blocks of one name; to write 'flagged' on every member of 'member.loans', write 'member.loans.flagged = true' in the rule, outside the block
 
 ## 3. Deleting a record others point at
 

@@ -992,9 +992,11 @@ class DomainAnalysis(private val model: Model) {
             // penultimate hop fans out — memberScope keys the collection's
             // owner and yields the correlated element scope, so the final
             // write keys back to the owner
-            val route = if (a.target.root == "this") a.target.segs.map { it.name }
+            // a `for each` name is an alias for its element: the route starts at the element's scope
+            val loopScope = ctx.aliases[a.target.root]
+            val route = if (a.target.root == "this" || loopScope != null) a.target.segs.map { it.name }
             else listOf(a.target.root) + a.target.segs.map { it.name }
-            var scope: Scope? = ctx.subject
+            var scope: Scope? = loopScope ?: ctx.subject
             for ((i, name) in route.withIndex()) {
                 if (i == route.lastIndex) {
                     val sc = scope ?: return

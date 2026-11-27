@@ -276,7 +276,8 @@ data class FieldInit(val name: String, val value: Expr)
 /**
  * `for each <name> in <source>, ... { statements }` (Reference §14): the block's
  * statements run once per element of each source, nested for a product. A
- * statement inside is a creation or another block; the names are values for
+ * statement inside is a creation, another block, or an assignment through the
+ * block's own name that writes no record twice; the names are values for
  * the block's statements and nothing outside it (checks V34).
  */
 data class ForEach(val bindings: List<LoopBinding>, val body: List<BodyItem>) : BodyItem

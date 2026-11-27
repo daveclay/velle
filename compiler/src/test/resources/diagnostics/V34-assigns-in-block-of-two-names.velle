@@ -1,0 +1,10 @@
+-- An assignment in a block with two names, 'for each loan in member.loans, step from 1 to times'; each loan is met once per step. The advice names the write through the collection.
+act Member { name: text }
+act Loan { member: one Member, flagged: boolean initially false }
+transient act Renew { member: one Member, times: integer }
+
+rule Extend when Renew {
+    for each loan in member.loans, step from 1 to times {
+        loan.flagged = true
+    }
+}

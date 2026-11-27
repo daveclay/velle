@@ -1,0 +1,12 @@
+-- An assignment in a block inside a block over a collection of values, 'for each tag in tags'; each loan would be written once per value.
+act Member { name: text }
+act Loan { member: one Member, note: text initially "" }
+transient act Renew { member: one Member, tags: many text }
+
+rule Extend when Renew {
+    for each tag in tags {
+        for each loan in member.loans {
+            loan.note = tag
+        }
+    }
+}

@@ -15,13 +15,18 @@ internal data class Write(val rule: RuleDecl, val owner: String, val member: Mem
 private class TargetStep(val shape: String, val fanOut: Boolean)
 
 /** Resolves [assignment]'s target to the field it writes, or reports why it
- *  cannot be written and returns null. */
-internal fun Validator.resolveWrite(rule: RuleDecl, scope: String, assignment: Assignment): Write? {
+ *  cannot be written and returns null. [blockRecordShape] holds the `for each`
+ *  name the target goes through and the shape of its records, when V34 accepts
+ *  the assignment in its block: one write per record, as through a collection. */
+internal fun Validator.resolveWrite(
+    rule: RuleDecl, scope: String, assignment: Assignment, blockRecordShape: Map<String, String> = emptyMap(),
+): Write? {
     val target = assignment.target
     if (target.root == "this") return resolveTargetSegments(rule, assignment, TargetStep(scope, fanOut = false))
+    blockRecordShape[target.root]?.let { shape -> return resolveTargetSegments(rule, assignment, TargetStep(shape, fanOut = true)) }
     val rootMember = model.membersOf(scope)[target.root]
     if (rootMember == null) {
-        // an assignment through a `for each` name has its one message, V34's
+        // an assignment through a `for each` name that V34 refuses has its one message, V34's
         if (target.root !in forEachNames)
             diagnostics.add(Diagnostic("F1", "rule '${rule.name}' assigns through unknown member '${target.root}'"))
         return null
@@ -98,6 +103,13 @@ private fun Validator.fanOutStep(
 internal fun Validator.findWrites(): List<Write> {
     return model.rules.values.flatMap { rule ->
         val scope = subjectScope(rule) ?: return@flatMap emptyList()
-        rule.body.filterIsInstance<Assignment>().mapNotNull { resolveWrite(rule, scope, it) }
+        rule.body.filterIsInstance<Assignment>().mapNotNull { resolveWrite(rule, scope, it) } + blockWrites(rule, scope)
     }
 }
+
+/** The writes of the assignments V34 accepts inside the rule's `for each` blocks (Reference §14). */
+private fun Validator.blockWrites(rule: RuleDecl, scope: String): List<Write> =
+    rule.blockAssignments().mapNotNull { blockAssignment ->
+        val recordShape = blockWriteShape(rule, scope, blockAssignment)
+        if (recordShape.isEmpty()) null else resolveWrite(rule, scope, blockAssignment.assignment, recordShape)
+    }

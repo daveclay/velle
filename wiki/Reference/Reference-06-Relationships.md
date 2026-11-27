@@ -125,6 +125,7 @@ rule ApplyReassignment when ReassignInvoices {
 - The statement writes `customer` once on each invoice in the act's collection.
 - A collection path goes through one `many` and stops. `this.invoices.customer` is allowed. `this.invoices.customer.tier` is not. To write the deeper field, write a rule on the shape that owns it.
 - Nothing is removed from the old customer's invoices. The invoices now point elsewhere, so they leave that collection on their own. Removing an invoice from a customer entirely is a separate act on the invoice, setting the pointer elsewhere or to `none` if it is optional.
+- The value is worked out once and written on every member. To give each member a value worked out from that member, write the assignment inside a `for each` block through the block's own name ([§14, "Writing a field of each element"](Reference-14-for#writing-a-field-of-each-element)).
 
 The compiler rejects assigning an inferred or derived collection, and rejects a path through more than one `many` ([checks.md, V20](checks#v20--collection-assignment-legality)). For the one-writer check, a write through a collection counts as a write to that field on every record of the member shape ([checks.md, V1](checks#v1--one-writer-disjointness)).
 

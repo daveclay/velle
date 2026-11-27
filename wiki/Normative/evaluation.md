@@ -80,7 +80,10 @@ process(C):
   6. for each in-transaction firing, in any order [S3]: apply its body as a new
      commit C' — all statements land together, `then` ordering respected within
      the body (§15), a `for each` block's statements landing once per element
-     (§14) — and recurse: process(C')
+     (§14); every value, filter, and block collection the body reads is read
+     from the state before C' lands, so an assignment in a block over
+     (loans where not flagged) that sets flagged writes each unflagged loan
+     once — and recurse: process(C')
   7. close C: retract the captures marked in step 3
 ```
 

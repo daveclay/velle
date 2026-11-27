@@ -1,0 +1,17 @@
+-- An assignment in an inner block over a derived collection, 'for each book in shelf.unlabelled'; the compiler does not read a derived collection as one record under one shelf.
+act Library { name: text }
+act Shelf {
+    library: one Library
+    name: text
+    unlabelled: many Book = (books where label == "")
+}
+act Book { shelf: one Shelf, label: text initially "" }
+transient act Relabel { library: one Library }
+
+rule LabelBooks when Relabel {
+    for each shelf in library.shelfs {
+        for each book in shelf.unlabelled {
+            book.label = shelf.name
+        }
+    }
+}

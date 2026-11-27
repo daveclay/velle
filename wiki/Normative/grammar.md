@@ -177,7 +177,8 @@ loopBinding   := Identifier "in" valueExpr
                  -- the block's statements run once per element of each binding, nested for a
                  -- product (Reference §14); `in` names a collection the rule can reach, `from ... to`
                  -- the whole numbers from the first bound to the second, both included, empty when the
-                 -- second is below the first; a block holds creations and blocks only, and a name is
+                 -- second is below the first; a block holds creations, blocks, and assignments
+                 -- through its own name where no record's field can be written twice, and a name is
                  -- new in the rule — validator rules (checks catalog, V34), not grammar
 
 creation      := ShapeName "from" "{" fieldInit* "}" ("as" Identifier)?

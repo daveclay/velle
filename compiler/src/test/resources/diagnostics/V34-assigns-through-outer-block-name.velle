@@ -1,0 +1,13 @@
+-- An assignment in an inner block through the outer block's name, 'shelf.label' inside 'for each book in shelf.books'; the shelf would be written once per book.
+act Library { name: text }
+act Shelf { library: one Library, name: text, label: text initially "" }
+act Book { shelf: one Shelf, label: text initially "" }
+transient act Relabel { library: one Library }
+
+rule LabelShelves when Relabel {
+    for each shelf in library.shelfs {
+        for each book in shelf.books {
+            shelf.label = book.label
+        }
+    }
+}

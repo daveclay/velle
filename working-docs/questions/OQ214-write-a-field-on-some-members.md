@@ -1,6 +1,6 @@
 # OQ214 — How an author writes a field on some members of a collection, or with a value that differs per member
 
-**Status:** opened 2026-11-27 while building OQ207, as a one-line question about what the V34 message should advise. Given a file on 2026-11-27 because the message cannot be fixed until the language question is answered. D1 and D2 decided 2026-11-27; both being built.
+**Status:** opened 2026-11-27 while building OQ207, as a one-line question about what the V34 message should advise. Given a file on 2026-11-27 because the message cannot be fixed until the language question is answered. D1 decided 2026-11-27 and built 2026-11-27; D2 awaits Dave.
 
 **In plain terms:** "Flag every late loan of this member" and "count one more renewal on each of this member's loans" are ordinary things for a business to say. Velle can write one field on every member of a collection with the same value. It can write only some of the members when the shape names them as a collection of its own. It has no direct way to give each member a value worked out from that member; the only spelling that works for that today makes the author keep an extra record per member.
 
@@ -157,7 +157,7 @@ Not offered, and why:
 
 **Decided:** yes, with the real rule and not the simple limits above (Dave, 2026-11-27: "implement the real rule from the start"). The limits in the proposal refuse every assignment in a nested block. The rule Dave chose refuses an assignment only where a record could be written twice, so a nested block that reaches each record once may assign. The rule is spelled out in §3.
 
-### D2. Whether a filter may stand on the left of an assignment · Decided 2026-11-27
+### D2. Whether a filter may stand on the left of an assignment
 
 **May a rule write one field on the members of a collection that a filter chooses, with the filter written in the rule?**
 
@@ -196,11 +196,9 @@ Not checked: that the parser can tell this statement from every other that could
 - `wiki/Guides/Best-practices.md`: name a filter on the shape when it means something to the business.
 - Survey file 57 becomes the settled spelling and moves as the `implement` skill §4 says.
 
-**Decided:** yes (Dave, 2026-11-27).
-
 ## 3. The build
 
-D1 first, then D2. The commit that lands D2 settles the question.
+Nothing remains for D1. It is built: Reference §14 "Writing a field of each element" states the rule, `checks.md` V34 lists each refusal, and `compiler/src/test/kotlin/velle/ForEachAssignmentTest.kt` pins it. D2 is not decided, so the file stays and survey files 57 to 61 stay with it. The rule as built, for reference while D2 is decided:
 
 **The rule.** One request never writes the same field of the same record twice. An assignment inside a `for each` block is accepted when the compiler can see that from the declarations:
 
@@ -212,33 +210,9 @@ D1 first, then D2. The commit that lands D2 settles the question.
 
 Each refusal names which of these the assignment breaks, in plain words, with what to write instead where there is something.
 
-**Changes, in build order.**
-
-- `compiler/src/main/kotlin/velle/validation/ForEachCheck.kt`: `checkBlockStatementKind` applies the rule above. The existing V34 advice stays for an assignment the rule refuses, where its spelling exists.
-- The evaluator runs the assignment once per element. Every value and every filter is read from the state before the rule's writes, as for any assignment (`evaluation.md`).
-- The rule's write summary records the field on the member shape, so V1, `velle compare`, the diagrams, and the runtime's recheck of conditions all see the write.
-- `wiki/Reference/Reference-14-for.md`, "Creating one record per element": a block holds creations, blocks, and an assignment through its own name, with the Renew example and the shelf example.
-- `wiki/Reference/Reference-06-Relationships.md`, "Write one field on every member": one sentence pointing at the block for a value per member.
-- `wiki/Normative/checks.md` V34, `wiki/Normative/grammar.md`, `wiki/Normative/evaluation.md`.
-- `compiler/src/test/resources/diagnostics/`: the two V34 assignment specs are replaced by one spec per refusal of the rule, and `wiki/Normative/diagnostics.md` is regenerated.
-- Tests: each accepted form at runtime (one block, a block over a filter, a nested block through the other side of a `one` reference), each refusal, V1 across two rules, and what `velle compare` says for a rule that assigns in a block.
-
-**D2, after D1.**
-
-- `wiki/Normative/grammar.md` and the parser: an assignment's left side may be `(path where condition).field`. The parentheses are required.
-- The validator checks the filter as any filter is checked, with the rule's subject in scope, so the filter may read the request. V20's limits on a path through a collection apply unchanged: one `many`, then a stored field of the member shape.
-- The evaluator reads the filter and the value from the state before the rule's writes, then writes the field on each member the filter chose. Pin `(loans where not flagged).flagged = true`.
-- The write is recorded on the member shape for V1, `velle compare`, the diagrams, and the runtime's recheck, as an unfiltered write through a collection is.
-- V34: an assignment in a block that the rule of D1 refuses, where the block runs over a filter and the value does not read the block's name, is advised the filtered form.
-- `wiki/Reference/Reference-06-Relationships.md`, "Write one field on every member", and `wiki/Reference/Reference-12-Assignment.md`, where it says the left side is a fixed path: the filtered form, with the FlagLate example.
-- `wiki/Guides/Best-practices.md`: name a filter on the shape when it means something to the business.
-- The survey files 57 to 61 leave as the `implement` skill §4 says, and the file is deleted in the settling commit.
-
 ## 4. Work items
 
-- [ ] Pin with a compiler test what file 59 does at runtime: two `Renew` requests leave the late loan with `renewals` 2 and the other loan with 0.
-- [ ] Pin with a compiler test what file 61 does at runtime: only the late loan is flagged.
 - [ ] Run the rule over the member itself from §1 and record whether it fires at a member's second `Renewal`.
-- [ ] Whatever D1 decides: make the V34 message for an assignment over a filter name the derived-collection spelling of file 61.
 - [ ] Before building D2: confirm the parser can tell `(path where condition).field = value` from every other statement, and pin with a test that a filter reading the field it writes is evaluated before any write.
-- [ ] After D1: reword the V34 message for an assignment over a filter and for a value that reads the block's name, so that it names a spelling that exists.
+- [ ] Grow an example under `examples/` with an assignment in a `for each` block. The build branch does not regenerate examples, so the spellings stand only in `compiler/src/test/kotlin/velle/ForEachAssignmentTest.kt`.
+- [ ] Make the generated test scenarios name a field a rule writes inside a `for each` block: `effectsPhrase` in `compiler/src/main/kotlin/velle/SpecGen.kt` reads `rule.body` only, so "sets ..." leaves out `loan.renewals` in rule `Extend` of `ForEachAssignmentTest`.
