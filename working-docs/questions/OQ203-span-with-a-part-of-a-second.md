@@ -1,6 +1,6 @@
 # OQ203 — What happens to a span of time that arrives with a part of a second?
 
-**Status:** opened 2026-11-26 while building OQ184. D1 awaits Dave.
+**Status:** opened 2026-11-26 while building OQ184. D1 is decided. The build is pending.
 
 **In plain terms:** a `duration` in Velle holds whole seconds. The outside world can hand Velle a span with a part of a second, such as one and a half seconds. Today Velle quietly changes it to a whole number of seconds and tells nobody, and it changes a span before zero in the opposite direction from everything else in Velle.
 
@@ -20,7 +20,7 @@
 
 Roster: D1 (what Velle does with the part of a second).
 
-### D1. A span with a part of a second is refused at the door
+### D1. A span with a part of a second is refused at the door · Decided 2026-11-27
 
 Should an act that supplies a span with a part of a second be refused, with a message saying a duration holds whole seconds?
 
@@ -59,10 +59,18 @@ Whichever is chosen, a value a store hands back with a part of a second is a sep
 - A test for each of the three ways in: the engineer's code, the JSON API, and a store.
 - `wiki/Reference/Reference-05-Scalars.md`, the `duration` paragraph: one sentence saying a duration holds whole seconds and what happens to a supplied part of a second. `wiki/Guides/Act-API.md` the same for the input class.
 
+**Decided:** yes, refused, as recommended (Dave, 2026-11-27).
+
 ## 3. The build
 
-Written when D1 is decided.
+In build order, from D1's proposed changes.
+
+1. Code. A `duration` supplied to an act with a part of a second is refused before anything is written, with a message that names the field and says a duration holds whole seconds (`compiler/src/main/kotlin/velle/ActInput.kt`). The same refusal reaches a request over the JSON, GraphQL and MCP APIs.
+2. Code. `VDuration.ofJava` in `compiler/src/main/kotlin/velle/Value.kt` drops a part of a second toward zero, for a value a store hands back.
+3. Wiki. `Reference-05-Scalars.md`, the `duration` paragraph, and `wiki/Guides/Act-API.md`: a duration holds whole seconds, and a supplied part of a second is refused.
+4. Tests. One for each way in: the engineer's code, the JSON API, and a store. A span before zero in each.
+5. Settle. The OQ203 line leaves `QUESTIONS.md`, a row goes at the top of the settled table, and this file is deleted in the same commit.
 
 ## 4. Work items
 
-- [ ] Decide D1 (Dave).
+- [ ] Build items 1 to 5 of §3.

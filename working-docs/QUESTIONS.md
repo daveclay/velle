@@ -30,7 +30,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ53](questions/OQ53-validator-precision.md)** — legitimate specs the fail-closed checks reject: V6, V29/V10/V26, the disarm proof, V10's induction · opened 2026-10-14 from the two passes; eleven work items
 
 ## Expressions, refinements, and unions
-- **[OQ203](questions/OQ203-span-with-a-part-of-a-second.md)** — what happens to a span of time that arrives with a part of a second? Today it is silently changed to whole seconds, and a span before zero is changed the opposite way from the rest of Velle · opened 2026-11-26 while building OQ184; D1 awaits Dave; one work item
+- **[OQ203](questions/OQ203-span-with-a-part-of-a-second.md)** — (being built since 2026-11-27) what happens to a span of time that arrives with a part of a second? Today it is silently changed to whole seconds, and a span before zero is changed the opposite way from the rest of Velle · opened 2026-11-26 while building OQ184; D1 decided 2026-11-27, build pending; one work item
 - **[OQ204](questions/OQ204-each-started-day.md)** — how does an author say "charge for each started day", so 36 hours late is 2 days? `days(36 hours)` is 1 and nothing in Velle rounds up · opened 2026-11-26 from OQ184 D2; D1 awaits Dave; one work item
 
 - **OQ179** — Let `count` and the other collection functions take a walk written in place: Reference §7 "Walks" says a walk is "a collection like any other", yet `count(walk recruits where gold)` and `count(walk recruits)` do not parse, `working-docs/examples/survey/30-walk-count-filter-refused.velle`; the author names the walk as a property first and counts that, `30-walk-count-filter-workaround.velle` · opened 2026-11-26 from OQ174
