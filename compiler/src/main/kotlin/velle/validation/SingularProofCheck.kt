@@ -1,6 +1,7 @@
 package velle.validation
 
 import velle.*
+import velle.spec.partsJoinedByAnd
 
 // ── V12 (refinement slice): at-most-one proofs for (Refinement for expr) ─
 //
@@ -130,11 +131,8 @@ private fun Validator.namedConjuncts(named: RefName): List<Expr>? {
         in model.refinements -> refPredicateConjuncts(model.refinements.getValue(named.name).expr)
         else -> null
     } ?: return null
-    return definitionConjuncts + named.where?.let(::conjunctsOf).orEmpty()
+    return definitionConjuncts + named.where?.let(::partsJoinedByAnd).orEmpty()
 }
-
-internal fun Validator.conjunctsOf(expr: Expr): List<Expr> =
-    if (expr is Binary && expr.op == "and") conjunctsOf(expr.left) + conjunctsOf(expr.right) else listOf(expr)
 
 /** `this`: the rule's subject. */
 private val thisPath = PathExpr("this")

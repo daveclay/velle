@@ -2,6 +2,7 @@ package velle
 
 import velle.spec.PathStart
 import velle.spec.Scope as PathScope
+import velle.spec.partsJoinedByAnd
 
 /**
  * Serialization-domain derivation (OQ40): per act — and per
@@ -343,7 +344,7 @@ class DomainAnalysis(private val model: Model) {
                 is PathExpr ->
                     if ((src.root in model.shapes || src.root in model.refinements) && src.segs.isEmpty()) {
                         val base = model.baseOf(src.root) ?: continue
-                        for (conj in conjuncts(c.where ?: continue)) {
+                        for (conj in partsJoinedByAnd(c.where ?: continue)) {
                             val cmp = conj as? Binary ?: continue
                             if (cmp.op != "==") continue
                             for ((l, r) in listOf(cmp.left to cmp.right, cmp.right to cmp.left)) {
@@ -386,9 +387,6 @@ class DomainAnalysis(private val model: Model) {
             else -> {}
         }
     }
-
-    private fun conjuncts(e: Expr): List<Expr> =
-        if (e is Binary && e.op == "and") conjuncts(e.left) + conjuncts(e.right) else listOf(e)
 
     /** Can any reader correlate rows of [shape] on [field]? True when the
      *  target shape carries the inferred inverse of this field, or when some
@@ -460,7 +458,7 @@ class DomainAnalysis(private val model: Model) {
                     if ((src.root in model.shapes || src.root in model.refinements) && src.segs.isEmpty()) {
                         refRoutes(src.root)
                         val base = model.baseOf(src.root) ?: continue
-                        for (conj in conjuncts(c.where ?: continue)) {
+                        for (conj in partsJoinedByAnd(c.where ?: continue)) {
                             val cmp = conj as? Binary ?: continue
                             if (cmp.op != "==") continue
                             for ((l, r) in listOf(cmp.left to cmp.right, cmp.right to cmp.left)) {
@@ -910,7 +908,7 @@ class DomainAnalysis(private val model: Model) {
             val base = model.baseOf(root) ?: root
             var anchor: Anchor? = null
             if (c.bindings.size == 1 && c.where != null) {
-                outer@ for (conj in conjuncts(c.where)) {
+                outer@ for (conj in partsJoinedByAnd(c.where)) {
                     val cmp = conj as? Binary ?: continue
                     if (cmp.op != "==") continue
                     for ((l, r) in listOf(cmp.left to cmp.right, cmp.right to cmp.left)) {

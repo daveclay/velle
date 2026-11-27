@@ -6,6 +6,7 @@ import velle.ext.builtin.RegexValue
 
 import java.math.BigDecimal
 import java.util.UUID
+import velle.spec.partsJoinedByAnd
 
 /**
  * Expression and membership evaluation against the runtime state.
@@ -466,7 +467,7 @@ class Evaluator(private val system: VelleSystem) {
     private fun keyedCandidates(shapeOrRef: String, where: Expr?, ctx: Ctx): List<Long>? {
         if (where == null) return null
         val base = if (shapeOrRef in model.refinements) model.baseOf(shapeOrRef) ?: return null else shapeOrRef
-        for (conjunct in conjunctsOf(where)) {
+        for (conjunct in partsJoinedByAnd(where)) {
             val cmp = conjunct as? Binary ?: continue
             if (cmp.op != "==") continue
             for ((fieldSide, refSide) in listOf(cmp.left to cmp.right, cmp.right to cmp.left)) {
@@ -488,9 +489,6 @@ class Evaluator(private val system: VelleSystem) {
         }
         return null
     }
-
-    private fun conjunctsOf(e: Expr): List<Expr> =
-        if (e is Binary && e.op == "and") conjunctsOf(e.left) + conjunctsOf(e.right) else listOf(e)
 
     private fun combinations(c: CollectionExpr, ctx: Ctx): Sequence<Ctx> {
         var ctxs = sequenceOf(ctx)

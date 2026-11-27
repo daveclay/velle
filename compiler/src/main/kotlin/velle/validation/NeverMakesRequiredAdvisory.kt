@@ -1,6 +1,7 @@
 package velle.validation
 
 import velle.*
+import velle.spec.partsJoinedByOr
 
 // ── A8 (advisory): a prohibition that is a required declaration (Reference §21) ──
 //
@@ -12,7 +13,7 @@ internal fun Validator.checkNeverMakesRequired() {
     for (never in model.nevers) {
         val forbiddenRecords = never.target as? RefName ?: continue
         val shape = model.shapes[forbiddenRecords.name] ?: continue
-        val forbiddenTests = PresenceFacts.disjuncts(forbiddenRecords.where)
+        val forbiddenTests = partsJoinedByOr(forbiddenRecords.where)
         if (forbiddenTests.isEmpty()) continue
         val fields = forbiddenTests.map { disjunct -> optionalFieldForbiddenAbsent(disjunct, shape) ?: continue }
         val fieldNames = fields.joinToString(" and ") { field -> "'${field.name}'" }

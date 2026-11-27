@@ -1,5 +1,7 @@
 package velle
 
+import velle.spec.partsJoinedByAnd
+
 /**
  * Key lookups (Reference §10, "Reading the one related record"; Reference §21,
  * "Keys"): where a spec expects one record and the author wrote a filter,
@@ -117,7 +119,7 @@ class KeyLookups(decls: List<Decl>) {
     /** The element's fields compared with `==` in the filter's conjuncts, each with the value it is compared to. */
     private fun comparedFields(where: Expr?, alias: String?): Map<String, Expr> {
         val out = linkedMapOf<String, Expr>()
-        for (conjunct in conjuncts(where)) {
+        for (conjunct in partsJoinedByAnd(where)) {
             val cmp = conjunct as? Binary ?: continue
             if (cmp.op != "==") continue
             for ((side, other) in listOf(cmp.left to cmp.right, cmp.right to cmp.left)) {
@@ -167,7 +169,7 @@ class KeyLookups(decls: List<Decl>) {
 
     /** The paths a condition's conjuncts narrow with `is some`, spelled without `this.`, each
      *  with every path on the way to it: `site?.name is some` shows `site` present as well. */
-    private fun narrowings(condition: Expr): Set<String> = conjuncts(condition).flatMapTo(linkedSetOf()) { conjunct ->
+    private fun narrowings(condition: Expr): Set<String> = partsJoinedByAnd(condition).flatMapTo(linkedSetOf()) { conjunct ->
         val test = conjunct as? IsExpr ?: return@flatMapTo emptyList()
         if (test.kind != "some") return@flatMapTo emptyList()
         val path = test.subject as? PathExpr ?: return@flatMapTo emptyList()
@@ -182,7 +184,7 @@ class KeyLookups(decls: List<Decl>) {
     /** The tests a refinement expression establishes: its own `where` conjuncts and, through a name, the named refinement's. */
     private fun establishedIn(expr: RefExpr, seen: MutableSet<String> = mutableSetOf()): Set<String> = when (expr) {
         is RefName -> {
-            val own = conjuncts(expr.where).map(PresenceFacts::testKey).toSet()
+            val own = partsJoinedByAnd(expr.where).map(PresenceFacts::testKey).toSet()
             val named = refinements[expr.name]?.takeIf { seen.add(expr.name) }?.let { establishedIn(it.expr, seen) }.orEmpty()
             own + named
         }
@@ -253,11 +255,5 @@ class KeyLookups(decls: List<Decl>) {
     private fun isOptional(type: TypeRef): Boolean = when (type) {
         is ScalarType -> type.optional
         is RelType -> type.optional
-    }
-
-    private fun conjuncts(expr: Expr?): List<Expr> = when {
-        expr == null -> emptyList()
-        expr is Binary && expr.op == "and" -> conjuncts(expr.left) + conjuncts(expr.right)
-        else -> listOf(expr)
     }
 }

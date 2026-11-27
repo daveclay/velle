@@ -1,6 +1,7 @@
 package velle.validation
 
 import velle.*
+import velle.spec.partsJoinedByAnd
 
 // ── rule disjointness: can two rules never hold for one subject at once? ─
 //
@@ -40,12 +41,9 @@ internal fun Validator.provablyDisjoint(first: RuleDecl, second: RuleDecl): Bool
 internal fun Validator.conditionConjuncts(condition: RefExpr): List<Expr> = when (condition) {
     is RefName -> {
         val inherited = model.refinements[condition.name]?.let { conditionConjuncts(it.expr) } ?: emptyList()
-        inherited + (condition.where?.let { predicateConjuncts(it) } ?: emptyList())
+        inherited + (condition.where?.let { partsJoinedByAnd(it) } ?: emptyList())
     }
     is RefAnd -> conditionConjuncts(condition.left) + conditionConjuncts(condition.right)
     else -> emptyList()
 }
 
-internal fun Validator.predicateConjuncts(predicate: Expr): List<Expr> =
-    if (predicate is Binary && predicate.op == "and") predicateConjuncts(predicate.left) + predicateConjuncts(predicate.right)
-    else listOf(predicate)

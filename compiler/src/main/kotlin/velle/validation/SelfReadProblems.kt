@@ -1,6 +1,7 @@
 package velle.validation
 
 import velle.*
+import velle.spec.partsJoinedByAnd
 
 // ── V14: definition-graph well-foundedness (stratify, then prove each self-read ends) ──
 //
@@ -217,7 +218,7 @@ private fun Validator.rulesAssigning(shape: String, field: String): List<String>
 private fun Validator.descentProblem(shape: String, step: String, formula: Expr): SelfReadProblem? {
     val selection = (formula as? AggCall)?.takeIf { aggregate -> selectsFromOwnShape(aggregate, shape) }
         ?: return ComputedStep(step)
-    val conjuncts = selection.collection.where?.let(::conjunctsOf) ?: return ComputedStep(step)
+    val conjuncts = selection.collection.where?.let(::partsJoinedByAnd) ?: return ComputedStep(step)
     return orderingProblem(shape, step, conjuncts.mapNotNull(::orderingComparison))
 }
 

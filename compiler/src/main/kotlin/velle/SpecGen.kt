@@ -2,6 +2,7 @@ package velle
 
 import velle.ext.VelleType
 import java.math.BigDecimal
+import velle.spec.partsJoinedByAnd
 
 /**
  * Generates the executable specs (testgen.md): one file per story root, cases
@@ -134,15 +135,11 @@ object SpecGen {
         fun conditionConjuncts(e: RefExpr): List<Expr> = when (e) {
             is RefName -> {
                 val inherited = model.refinements[e.name]?.let { conditionConjuncts(it.expr) } ?: emptyList()
-                inherited + (e.where?.let { predicateConjuncts(it) } ?: emptyList())
+                inherited + (e.where?.let { partsJoinedByAnd(it) } ?: emptyList())
             }
             is RefAnd -> conditionConjuncts(e.left) + conditionConjuncts(e.right)
             else -> emptyList()
         }
-
-        fun predicateConjuncts(p: Expr): List<Expr> =
-            if (p is Binary && p.op == "and") predicateConjuncts(p.left) + predicateConjuncts(p.right)
-            else listOf(p)
 
         fun guardConjuncts(rule: RuleDecl): List<Expr> =
             conditionConjuncts(rule.condition).filter { c ->
@@ -671,7 +668,7 @@ object SpecGen {
                 else "never over a refinement",
             )
             if (target.name !in model.exposed) return skip(ordinal, "shape is not an act")
-            val conjunct = target.where?.let { predicateConjuncts(it) } ?: return skip(ordinal, "no predicate")
+            val conjunct = target.where?.let { partsJoinedByAnd(it) } ?: return skip(ordinal, "no predicate")
             if (conjunct.size != 1) return skip(ordinal, "multi-conjunct predicate")
             val cmp = conjunct.single() as? Binary ?: return skip(ordinal, "non-comparison predicate")
             val fieldPath = cmp.left as? PathExpr ?: return skip(ordinal, "complex comparison subject")
@@ -842,7 +839,7 @@ object SpecGen {
             model.nevers.flatMap { n ->
                 val t = n.target as? RefName ?: return@flatMap emptyList()
                 if (t.name != shape) return@flatMap emptyList()
-                val c = t.where?.let { predicateConjuncts(it) }?.singleOrNull() ?: return@flatMap emptyList()
+                val c = t.where?.let { partsJoinedByAnd(it) }?.singleOrNull() ?: return@flatMap emptyList()
                 disjuncts(c).filter { d ->
                     d.op != "or" && (d.left as? PathExpr)?.let { it.root == field && it.segs.isEmpty() } == true
                 }

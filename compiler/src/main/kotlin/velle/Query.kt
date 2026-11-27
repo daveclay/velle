@@ -3,6 +3,7 @@ package velle
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
+import velle.spec.partsJoinedByAnd
 
 /**
  * The query IR: a compiled *pre-filter* over one
@@ -277,7 +278,7 @@ class QueryCompiler(
 
         var refField: String? = null
         var inner: QF = head
-        for (conjunct in conjunctsOf(c.where)) {
+        for (conjunct in partsJoinedByAnd(c.where)) {
             val corr = if (depth == 0) asCorrelation(conjunct, elemScope, subjectBase) else null
             if (corr != null && refField == null) { refField = corr; continue }
             inner = QF.And(inner, compileExpr(conjunct, elemScope, positive, depth + 1))
@@ -300,12 +301,6 @@ class QueryCompiler(
         val m = model.membersOf(elemScope)[p.root] ?: return null
         if (!m.stored || !model.referencesRecordsOf(m.type, subjectBase)) return null
         return p.root
-    }
-
-    private fun conjunctsOf(e: Expr?): List<Expr> = when (e) {
-        null -> emptyList()
-        is Binary -> if (e.op == "and") conjunctsOf(e.left) + conjunctsOf(e.right) else listOf(e)
-        else -> listOf(e)
     }
 
     // ── comparisons ──────────────────────────────────────────────────────────

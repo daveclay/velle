@@ -1,6 +1,7 @@
 package velle
 
 import velle.validation.subExpressionsOf
+import velle.spec.partsJoinedByAnd
 
 /**
  * State-flow emission (diagrams.md): one section per base
@@ -246,7 +247,7 @@ private class ShapeFlow(
             edge(this, "pre", r.name, "$label — may flip")
             edge(this, r.name, "post", "$label — may flip")
         }
-        val down = analysis.conjuncts(r.whereExpr()!!)
+        val down = partsJoinedByAnd(r.whereExpr()!!)
             .firstOrNull { analysis.mono(it, base) == Mono.DOWN }
         val settled = ((down as? NotExpr)?.inner ?: down)?.let { Printer.expr(it) }
         note(this, "post", "terminal — " + (settled?.let {
@@ -393,15 +394,12 @@ private class TransientFlow(val model: Model, val base: String, refs: List<Refin
 
 internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
 
-    fun conjuncts(e: Expr): List<Expr> =
-        if (e is Binary && e.op == "and") conjuncts(e.left) + conjuncts(e.right) else listOf(e)
-
     /** Provable disjointness: some conjunct of one is the complement of some
      *  conjunct of the other. */
     fun disjoint(a: RefinementDecl, b: RefinementDecl): Boolean {
         val wa = a.whereExpr() ?: return false
         val wb = b.whereExpr() ?: return false
-        return conjuncts(wa).any { ca -> conjuncts(wb).any { cb -> complementary(ca, cb) } }
+        return partsJoinedByAnd(wa).any { ca -> partsJoinedByAnd(wb).any { cb -> complementary(ca, cb) } }
     }
 
     private val complementOps = setOf("<=" to ">", "<" to ">=", "==" to "!=")

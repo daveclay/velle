@@ -7,6 +7,7 @@ import velle.spec.Step
 
 import velle.ext.VelleType
 import java.math.BigDecimal
+import velle.spec.partsJoinedByAnd
 
 /**
  * What a type reading runs in: what `this` names when it is not the scope itself, the `as`
@@ -393,7 +394,7 @@ class ExprTypes(private val model: Model) {
      */
     fun elementNarrowing(collection: CollectionExpr?, element: String, name: String, outerAliases: Set<String>): Narrowing {
         val filterAlias = collection?.bindings?.singleOrNull()?.alias
-        val elementTests = PresenceFacts.conjuncts(collection?.where).filter { conjunct ->
+        val elementTests = partsJoinedByAnd(collection?.where).filter { conjunct ->
             val root = testedRoot(conjunct)
             root != null && root != "this" && (root == filterAlias || root !in outerAliases)
         }

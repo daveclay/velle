@@ -3,6 +3,7 @@ package velle.validation
 import velle.*
 import velle.spec.Narrowings
 import velle.spec.ShapeNarrowing
+import velle.spec.partsJoinedByAnd
 
 // ── narrowing (Reference §10; V11's union slice) ────────────────────────────
 //
@@ -31,7 +32,7 @@ internal fun Validator.complementNarrowingsOf(condition: Expr, scope: String): N
 
 /** `actor is some` holding, or `actor is none` failing, on a rule's optional actor: present in the branch, as its shape. */
 private fun Validator.actorShownPresent(condition: Expr, holds: Boolean): Narrowings {
-    val tests = if (holds) predicateConjuncts(condition) else listOf(condition)
+    val tests = if (holds) partsJoinedByAnd(condition) else listOf(condition)
     return tests.mapNotNull { test -> actorShownPresentBy(test, holds) }.toMap()
 }
 

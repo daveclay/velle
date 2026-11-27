@@ -1,5 +1,8 @@
 package velle
 
+import velle.spec.partsJoinedByAnd
+import velle.spec.partsJoinedByOr
+
 /**
  * What the prohibitions the rules cannot move say about presence (Reference §21; checks.md
  * V10, V11): `never (Submission where parentLabel is some and parent is none)` says `parent` is
@@ -90,7 +93,7 @@ class PresenceFacts(decls: List<Decl>) {
         val target = never.target as? RefName ?: return emptyList()
         val bases = basesOf(target.name)
         if (bases.isEmpty()) return emptyList()
-        return disjuncts(target.where).flatMap { disjunct -> factsOf(target.name, bases, conjuncts(disjunct)) }
+        return partsJoinedByOr(target.where).flatMap { disjunct -> factsOf(target.name, bases, partsJoinedByAnd(disjunct)) }
     }
 
     /** `C and q is none` never holding: `q` is present wherever `C` holds, for each such `q`, on every base. */
@@ -200,17 +203,5 @@ class PresenceFacts(decls: List<Decl>) {
 
         fun namesOf(path: PathExpr): List<String> =
             if (path.root == "this") path.segs.map { seg -> seg.name } else listOf(path.root) + path.segs.map { seg -> seg.name }
-
-        fun conjuncts(expr: Expr?): List<Expr> = when {
-            expr == null -> emptyList()
-            expr is Binary && expr.op == "and" -> conjuncts(expr.left) + conjuncts(expr.right)
-            else -> listOf(expr)
-        }
-
-        fun disjuncts(expr: Expr?): List<Expr> = when {
-            expr == null -> emptyList()
-            expr is Binary && expr.op == "or" -> disjuncts(expr.left) + disjuncts(expr.right)
-            else -> listOf(expr)
-        }
     }
 }

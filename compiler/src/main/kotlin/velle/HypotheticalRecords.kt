@@ -1,5 +1,7 @@
 package velle
 
+import velle.spec.partsJoinedByAnd
+
 /** One thing an edit does to a record like the ones the system keeps, of the shape [base]. */
 data class RecordChange(val base: String, val sentence: String, val pointer: Pointer)
 
@@ -131,12 +133,8 @@ object HypotheticalRecords {
         val base = version.baseOf(expression.name)
         val membership = if (expression.name in version.baseShapes) emptyList() else listOf(RefName(expression.name))
         val where = expression.where ?: return membership
-        return membership + predicateConjuncts(where).map { conjunct -> RefName(base, conjunct) }
+        return membership + partsJoinedByAnd(where).map { conjunct -> RefName(base, conjunct) }
     }
-
-    private fun predicateConjuncts(predicate: Expr): List<Expr> =
-        if (predicate is Binary && predicate.op == "and") predicateConjuncts(predicate.left) + predicateConjuncts(predicate.right)
-        else listOf(predicate)
 
     /**
      * Whether the conditions can never all hold, by the two facts that need no values: a condition

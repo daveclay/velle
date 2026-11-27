@@ -1,6 +1,7 @@
 package velle.validation
 
 import velle.*
+import velle.spec.partsJoinedByOr
 
 // ── V24: referential completeness (OQ37, OQ162) ──────────────────────
 //
@@ -56,16 +57,11 @@ private fun Validator.refusedWhileHeld(site: DeleteSite): Boolean {
 
 /** Whether [forbidden], or one of its `or` operands, tests that [target] is held. */
 private fun Validator.forbidsHeld(forbidden: Expr, target: PathExpr): Boolean =
-    disjuncts(forbidden).any { disjunct -> testsHeld(disjunct, target) }
+    partsJoinedByOr(forbidden).any { disjunct -> testsHeld(disjunct, target) }
 
 /** The transient act a rule fires for, null for a rule over kept records or on a schedule. */
 private fun Validator.triggeringRequest(rule: RuleDecl): String? =
     model.baseOfExpr(rule.condition)?.takeIf { base -> base in model.transients }
-
-/** The operands of an `or`, flattened; a predicate with no `or` is its own one operand. */
-private fun disjuncts(predicate: Expr): List<Expr> =
-    if (predicate is Binary && predicate.op == "or") disjuncts(predicate.left) + disjuncts(predicate.right)
-    else listOf(predicate)
 
 /** Whether the deleting rule's condition has the conjunct `<target> is not held`. */
 private fun Validator.conditionedOnNotHeld(site: DeleteSite): Boolean =

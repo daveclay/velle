@@ -1,6 +1,7 @@
 package velle.validation
 
 import velle.*
+import velle.spec.partsJoinedByAnd
 
 // ── A2 (advisory): an `initially` that reads the records pointing at its own record ──
 //
@@ -70,7 +71,7 @@ private fun Validator.collectionStartingEmpty(collection: CollectionExpr, shape:
         return memberStartingEmpty(memberName, shape, visiting)?.elementShape
     }
     val filter = collection.where ?: return null
-    return sourceShape.takeIf { conjunctsOf(filter).any { conjunct -> pointsAtThis(conjunct, sourceShape) } }
+    return sourceShape.takeIf { partsJoinedByAnd(filter).any { conjunct -> pointsAtThis(conjunct, sourceShape) } }
 }
 
 /** Whether [condition] is `field == this`, with `field` a stored reference of [elementShape] to one record. */

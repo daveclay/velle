@@ -9,6 +9,7 @@ import velle.spec.ShapeNarrowing
 
 import velle.ext.VelleFunction
 import velle.ext.VelleType
+import velle.spec.partsJoinedByAnd
 
 /**
  * Resolved-spec model: symbol tables, refinement→base resolution, member lookup
@@ -1243,7 +1244,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     /** The refinement a filter names as a bare conjunct, `where PaidClaim` or `where PaidClaim and ...`,
      *  when every record of [element] it holds is one of its bases; the element is then read as it (Reference §10). */
     fun membershipAtomOf(where: Expr, element: String): String? =
-        andConjuncts(where).firstNotNullOfOrNull { c ->
+        partsJoinedByAnd(where).firstNotNullOfOrNull { c ->
             (c as? PathExpr)?.takeIf { it.segs.isEmpty() && it.root in refinements && it.root != element }?.root
                 ?.takeIf { basesOf(element).let { b -> b.isNotEmpty() && b.all { base -> base in basesOf(it) } } }
         }
@@ -1295,9 +1296,6 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     /** The base shapes whose records [name] holds; a name the spec does not declare stands for itself. */
     private fun basesOrSelf(name: String): Set<String> =
         if (namesShapeOrRefinement(name)) basesOf(name) else setOf(name)
-
-    private fun andConjuncts(e: Expr): List<Expr> =
-        if (e is Binary && e.op == "and") andConjuncts(e.left) + andConjuncts(e.right) else listOf(e)
 
     private fun record(scope: String, m: MemberInfo, s: ReadSummary, heldReference: Boolean = false) {
         val readBases = recordsHolding(scope, m)
