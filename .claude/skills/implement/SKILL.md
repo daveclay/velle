@@ -33,6 +33,9 @@ Directory rules load on their own when files are touched:
    each bug the OQ found. Run the full suite (§3).
 6. **Settle** (§4).
 
+When several OQs are being built at once, each on its own branch, steps 2
+and 5 change. See §6 before starting.
+
 ## 2. Regenerating the examples
 
 - Modules: `ls -d examples/*/output`. Do not trust a remembered list; a
@@ -151,3 +154,60 @@ repointed to its new home in the same commit. Code never cites
 - No survey example of the settled OQ left under
   `working-docs/examples/survey/`, and no line for one in its README.
 - `QUESTIONS.md` still names the right next free tag.
+
+## 6. Several OQs at once
+
+Dave, 2026-11-27. When the session that manages the workers says more than
+one OQ is being built at the same time, each OQ is built by one worker on
+its own branch in its own git worktree (a second checkout of the repository
+in another directory). The example tests are slow, so they run once, after
+the last branch has merged, and not once per branch. Without that word from
+the managing session, §1 to §5 apply unchanged.
+
+### On the branch
+
+- Step 2 of §1 is skipped. Do not regenerate, and do not commit any
+  generated file under `examples/*/output/`. A branch that leaves the
+  generated files alone cannot conflict with another branch over them.
+- The `.velle` specs under `examples/` and the hand-written files under
+  `examples/*/output/` (the tests, and
+  `examples/billing/output/src/main/kotlin/velle/app/BillingApp.kt`) are
+  still written or migrated on the branch, as step 4 of §1 says. They are
+  not compiled or run there.
+- To check the feature against one example, regenerate that one module in
+  the worktree, run its tests, and discard the generated files before
+  committing (`git checkout -- examples/<m>/output` for the tracked ones).
+- Step 5 of §1 runs every module that is not an example:
+  `./gradlew :compiler:test :stores:sql:test :stores:sqlite:test
+  :stores:postgres:test :apis:json:test :apis:graphql:test :apis:mcp:test
+  :apis:spring:test :extensions:finance:test :extensions:finance-sql:test
+  --continue -q --max-workers=2`. Check the list against
+  `settings.gradle.kts`; it is every module there that does not start with
+  `examples:`.
+- The settling commit (§4) lands on the branch. Its grep for the OQ tag
+  skips the generated files, which the final step rewrites.
+- The report says "built, examples not yet run", never "done". The first
+  two checks of §5 wait for the final step.
+
+### Merging
+
+The managing session merges one branch at a time. The branch is rebased onto
+the current `main`, the command above runs again, and the branch lands as a
+single merge commit, so that a later failure can be traced to one OQ. Only
+the managing session resolves a conflict in `working-docs/QUESTIONS.md`.
+
+### The final step
+
+Once, on `main`, after the last branch has merged:
+
+1. Regenerate every module (§2).
+2. Run the full suite (§3).
+3. Name every failure with the OQ that caused it. `git bisect` over the
+   merge commits finds the OQ when the failure does not say.
+4. Grep the generated files for the tag of every OQ settled in this round
+   (§4, item 3).
+5. Commit the regenerated output on its own:
+   `Examples regenerated after OQ<a>, OQ<b>, OQ<c>`. A fix for a failure is
+   a separate commit that names its OQ.
+
+Until that commit, `main` is not known to pass the example tests.
