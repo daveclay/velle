@@ -165,8 +165,10 @@ class ScopeRulesTest {
     fun `a for each name is bound to what it runs over and each source reads the names before it`() {
         val block = model.rules.getValue("Remind").body.single() as ForEach
 
-        val body = rules.ofBlock(block, Scope("Member"))
+        val scopes = rules.ofBlock(block, Scope("Member"))
+        val body = scopes.body
 
+        assertEquals(listOf(emptyMap(), mapOf("loan" to "LateLoan"), mapOf("loan" to "LateLoan")), scopes.sources.map { source -> source.recordNames })
         assertEquals(mapOf("loan" to "LateLoan"), body.recordNames)
         assertEquals(setOf("wording", "copy"), body.valueNames)
         assertEquals("Member", body.element)
@@ -181,5 +183,15 @@ class ScopeRulesTest {
         assertEquals(BoundElement.Values, rules.elementOfLoop(bindings[1].source, withLoan))
         assertEquals(BoundElement.Unknown, rules.elementOfLoop(bindings[1].source, Scope("Member")))
         assertEquals(BoundElement.Values, rules.elementOfLoop(bindings[2].source, Scope("Member")))
+    }
+
+    @Test
+    fun `the parts of an expression each come with the scope they are read at`() {
+        val watched = rules.scopedPartsOf(derived("Member", "watched"), Scope("Member"))
+        assertEquals(listOf("Member", "Loan"), watched.map { part -> part.scope.element })
+        assertEquals(listOf("Member", "Member"), watched.map { part -> part.scope.subject })
+
+        val aboutBody = rules.scopedPartsOf(derived("Loan", "aboutBody"), Scope("Loan"))
+        assertEquals(listOf(emptyMap(), mapOf(listOf("about") to "Post"), mapOf(listOf("about") to "Photo")), aboutBody.map { part -> part.scope.narrowed })
     }
 }

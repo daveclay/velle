@@ -404,4 +404,54 @@ class PathResolutionDisagreementTest {
             assertTrue(system.isMember(member, "Renewer"))
         }
     }
+
+    // ── 16. the transient check: no narrowing, no `for each` name in a later source, another record of the act taken for the act ──
+
+    private val charges = """
+        act Account { name: text }
+        act Refund { account: one Account, amount: decimal }
+        act Charge { account: one Account, transient amount: decimal }   -- Charge's 'amount' is input only
+        shape Movement = Refund or Charge
+    """.trimIndent()
+
+    private fun codes(spec: String): List<String> = Validator.validate(spec).map { diagnostic -> diagnostic.code }
+
+    @Test
+    fun `the transient check reads a path after an is test on the shape the test shows, as the validator resolves it`() {
+        val spec = charges + """
+
+            act Dispute {
+                about: one Movement
+                large: boolean = if about is Charge then about.amount > 5 else false
+            }
+        """.trimIndent()
+
+        // where 'about is Charge' holds, 'about.amount' is Charge's transient field
+        assertEquals(listOf("V37"), codes(spec))
+    }
+
+    @Test
+    fun `the transient check reads a for each source on the names before it`() {
+        val spec = charges + """
+
+            act Review { account: one Account }
+            shape Line { review: one Review, size: integer }
+            rule Lines when Review {
+                for each charge in account.charges, size from 1 to charge.amount {
+                    Line from { review: this, size: size }
+                }
+            }
+        """.trimIndent()
+
+        // 'charge' is a Charge by the time the second source is read, so 'charge.amount' is its transient field
+        assertTrue("V37" in codes(spec), "expected V37 among ${codes(spec)}")
+    }
+
+    @Test
+    fun `the transient check takes a bare name inside a filter over the act's own shape as another record's field`() {
+        val spec = charges + "\nnever (Charge where exists (Charge where amount > 5))"
+
+        // inside the filter 'amount' is read on every Charge on the books, none of which has it in its record
+        assertEquals(listOf("V37"), codes(spec))
+    }
 }

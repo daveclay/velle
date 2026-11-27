@@ -1,9 +1,8 @@
 package velle.validation
 
 import velle.*
+import velle.spec.PathStart
 import velle.spec.Scope
-import velle.spec.operandsOf
-import velle.spec.collectionOf
 import velle.spec.subExpressionsOf
 
 // ── V37: transient fields of a kept act (Reference §4, "Transient fields of a
@@ -40,8 +39,8 @@ private fun Validator.checkTransientFieldsAreOnActs() {
 
 private fun Validator.checkTransientReadsInShapeMember(name: String, member: Member) {
     when (member) {
-        is StoredProp -> transientFieldReads(member.initially, name, name, null, "'$name.${member.name}'")
-        is DerivedProp -> transientFieldReads(member.expr, name, name, null, "'$name.${member.name}'")
+        is StoredProp -> transientFieldReads(member.initially, name, allowedAct = null, site = "'$name.${member.name}'")
+        is DerivedProp -> transientFieldReads(member.expr, name, allowedAct = null, site = "'$name.${member.name}'")
         else -> {}
     }
 }
@@ -49,57 +48,59 @@ private fun Validator.checkTransientReadsInShapeMember(name: String, member: Mem
 private fun Validator.checkTransientReadsInRefinement(name: String, refinement: RefinementDecl) {
     transientFieldReadsInRef(refinement.expr, null, "shape '$name'")
     refinement.members.filterIsInstance<DerivedProp>().forEach { property ->
-        transientFieldReads(property.expr, name, name, null, "'$name.${property.name}'")
+        transientFieldReads(property.expr, name, allowedAct = null, site = "'$name.${property.name}'")
     }
 }
 
 private fun Validator.checkTransientFieldsInRule(rule: RuleDecl) {
-    val scope = subjectScope(rule) ?: return
+    val subject = subjectScope(rule) ?: return
     val site = "rule '${rule.name}'"
     // the subject is the bare act, so the body runs once, at the act's commit
     val bareAct = (rule.condition as? RefName)?.takeIf { condition -> condition.where == null && condition.name in model.shapes }?.name
     transientFieldReadsInRef(rule.condition, null, site)
-    val aliases = rule.by?.let { actor -> mapOf(actor.name to actor.shape) }.orEmpty()
-    checkTransientFieldsInBody(rule.body, TransientReadScope(scope, scope, bareAct, site, aliases))
+    val bodyScope = rule.by?.let { actor -> Scope(subject).withRecordName(actor.name, actor.shape) } ?: Scope(subject)
+    checkTransientFieldsInBody(rule.body, TransientRead(bodyScope, bareAct, site))
 }
 
-private fun Validator.checkTransientFieldsInBody(items: List<BodyItem>, readScope: TransientReadScope) {
+private fun Validator.checkTransientFieldsInBody(items: List<BodyItem>, read: TransientRead) {
     for (item in items) when (item) {
-        is Assignment -> checkTransientFieldsInAssignment(item, readScope)
+        is Assignment -> checkTransientFieldsInAssignment(item, read)
         is Creation -> {
-            reportTransientReads(item.forExpr, readScope)
-            item.fields.forEach { field -> reportTransientReads(field.value, readScope) }
+            reportTransientReads(item.forExpr, read)
+            item.fields.forEach { field -> reportTransientReads(field.value, read) }
         }
-        is ForEach -> checkTransientFieldsInBlock(item, readScope)
+        is ForEach -> checkTransientFieldsInBlock(item, read)
         is DeleteStmt, ThenMarker -> {}
     }
 }
 
-private fun Validator.checkTransientFieldsInAssignment(assignment: Assignment, readScope: TransientReadScope) {
-    assignment.reads.forEach { read -> reportTransientReads(read, readScope) }
-    val assigned = transientFieldOnPath(assignment.target, readScope.thisScope, readScope.thisScope, readScope.aliases) ?: return
-    diagnostics.add(Diagnostic("V37", "${readScope.site} assigns '${assigned.owner}.${assigned.field}', which is transient — " +
+private fun Validator.checkTransientFieldsInAssignment(assignment: Assignment, read: TransientRead) {
+    assignment.reads.forEach { expression -> reportTransientReads(expression, read) }
+    val assigned = transientFieldOnPath(assignment.target, read.scope) ?: return
+    diagnostics.add(Diagnostic("V37", "${read.site} assigns '${assigned.owner}.${assigned.field}', which is transient — " +
         "it is in the act's input and not in its record, so there is nothing to assign"))
 }
 
-/** A block's sources are read in the enclosing scope; its body reads each `for each` name as its element's shape. */
-private fun Validator.checkTransientFieldsInBlock(block: ForEach, readScope: TransientReadScope) {
-    block.sourceExprs().forEach { source -> reportTransientReads(source, readScope) }
-    val shapeByLoopName = block.bindings.associate { binding ->
-        val element = (binding.source as? LoopSource.Over)?.let { over ->
-            elementScopeOf(over.expr, readScope.thisScope, readScope.thisScope, readScope.aliases)
-        }
-        binding.name to (element ?: VALUE_ALIAS)
+/** Each source of a block reads the names before it; the body reads every name of the block (`velle.spec.ScopeRules`). */
+private fun Validator.checkTransientFieldsInBlock(block: ForEach, read: TransientRead) {
+    val scopes = model.scopes.ofBlock(block, read.scope)
+    block.bindings.forEachIndexed { index, binding ->
+        expressionsOf(binding.source).forEach { source -> reportTransientReads(source, read.copy(scope = scopes.sources[index])) }
     }
-    checkTransientFieldsInBody(block.body, readScope.copy(aliases = readScope.aliases + shapeByLoopName))
+    checkTransientFieldsInBody(block.body, read.copy(scope = scopes.body))
 }
 
-/** The reads in a refinement expression: each `where` runs with its name's base as `this`. */
+/** The expressions a `for each` source reads: its collection, or the two bounds of its range. */
+private fun expressionsOf(source: LoopSource): List<Expr> = when (source) {
+    is LoopSource.Over -> listOf(source.expr)
+    is LoopSource.Range -> listOf(source.from, source.to)
+}
+
+/** The reads in a refinement expression: each `where` runs with its name's records as `this`. */
 private fun Validator.transientFieldReadsInRef(expr: RefExpr, allowedAct: String?, site: String) {
     when (expr) {
         is RefName -> expr.where?.let { where ->
-            val scope = model.baseOf(expr.name) ?: expr.name
-            transientFieldReads(where, scope, scope, allowedAct, site)
+            transientFieldReads(where, model.baseOf(expr.name) ?: expr.name, allowedAct, site)
         }
         is RefAnd -> { transientFieldReadsInRef(expr.left, allowedAct, site); transientFieldReadsInRef(expr.right, allowedAct, site) }
         is RefOr -> { transientFieldReadsInRef(expr.left, allowedAct, site); transientFieldReadsInRef(expr.right, allowedAct, site) }
@@ -108,81 +109,52 @@ private fun Validator.transientFieldReadsInRef(expr: RefExpr, allowedAct: String
 }
 
 /**
- * Where a read is checked. [thisScope] is what `this` names; [elementScope] is
- * what a bare name resolves on, the element of the innermost collection
- * `where`; [allowedAct] is the act whose own transient fields may be read at
- * the subject level; [site] names the reader in the message; [aliases] maps
- * each name in scope to its shape, or to [VALUE_ALIAS].
+ * Where a read is checked: the [scope] its names are read at, [allowedAct], the act whose own
+ * transient fields may be read on the subject itself, and [site], which names the reader in the message.
  */
-private data class TransientReadScope(
-    val thisScope: String, val elementScope: String, val allowedAct: String?, val site: String,
-    val aliases: Map<String, String>,
-)
+private data class TransientRead(val scope: Scope, val allowedAct: String?, val site: String)
 
 /**
- * Reports every read of a transient field in [expr] that is not a read of
- * [allowedAct]'s own field at the subject level. [thisScope] is what `this`
- * names; [elementScope] is what a bare name resolves on, the element of the
- * innermost collection `where`.
+ * Reports every read of a transient field in [expr], read with a record of [subject] as `this`,
+ * that is not a read of [allowedAct]'s own field on the subject itself.
  */
-internal fun Validator.transientFieldReads(
-    expr: Expr?, thisScope: String, elementScope: String, allowedAct: String?, site: String,
-    aliases: Map<String, String> = emptyMap(),
-) = reportTransientReads(expr, TransientReadScope(thisScope, elementScope, allowedAct, site, aliases))
+internal fun Validator.transientFieldReads(expr: Expr?, subject: String, allowedAct: String?, site: String) =
+    reportTransientReads(expr, TransientRead(Scope(subject), allowedAct, site))
 
-private fun Validator.reportTransientReads(expression: Expr?, readScope: TransientReadScope) {
+/** Reads each path where it meets one, and each part of any other expression at the scope `ScopeRules` gives it. */
+private fun Validator.reportTransientReads(expression: Expr?, read: TransientRead) {
     expression ?: return
     if (expression is PathExpr) {
-        reportTransientPathRead(expression, readScope)
+        reportTransientPathRead(expression, read)
         return
     }
-    operandsOf(expression).forEach { operand -> reportTransientReads(operand, readScope) }
-    collectionOf(expression)?.let { collection -> reportTransientReadsInCollection(collection, readScope) }
+    // a walk's `until` is asked of each record the walk reaches, none of them the act being committed
+    val allowedInParts = read.allowedAct.takeUnless { expression is WalkExpr }
+    model.scopes.scopedPartsOf(expression, read.scope).forEach { part ->
+        reportTransientReads(part.expression, read.copy(scope = part.scope, allowedAct = allowedInParts))
+    }
 }
 
-private fun Validator.reportTransientPathRead(path: PathExpr, readScope: TransientReadScope) {
-    val read = transientFieldOnPath(path, readScope.thisScope, readScope.elementScope, readScope.aliases) ?: return
-    val ownRead = path.root == "this" || (path.root !in readScope.aliases && readScope.elementScope == readScope.thisScope)
-    if (readScope.allowedAct == read.owner && ownRead && read.stepIndex == 0) return
-    diagnostics.add(Diagnostic("V37", "${readScope.site} reads '${read.owner}.${read.field}', which is transient — " +
-        "it is in the act's input and not in its record, so only a `never` over '${read.owner}' " +
+private fun Validator.reportTransientPathRead(path: PathExpr, read: TransientRead) {
+    val found = transientFieldOnPath(path, read.scope) ?: return
+    if (read.allowedAct == found.owner && found.onSubjectItself) return
+    diagnostics.add(Diagnostic("V37", "${read.site} reads '${found.owner}.${found.field}', which is transient — " +
+        "it is in the act's input and not in its record, so only a `never` over '${found.owner}' " +
         "or a rule on the bare act may read it, at the commit (Reference §4)"))
 }
 
-/** A collection's `where` runs with its last binding's element as the bare-name scope and `this` unchanged (Reference §10). */
-private fun Validator.reportTransientReadsInCollection(collection: CollectionExpr, readScope: TransientReadScope) {
-    collection.bindings.forEach { binding -> reportTransientReads(binding.source, readScope) }
-    val where = collection.where ?: return
-    val bindingAliases = collection.bindings.mapNotNull { binding ->
-        binding.alias?.let { alias -> elementScopeOf(binding.source, readScope)?.let { shape -> alias to shape } }
-    }
-    val element = collection.bindings.lastOrNull()?.let { binding -> elementScopeOf(binding.source, readScope) } ?: readScope.elementScope
-    reportTransientReads(where, readScope.copy(elementScope = element, aliases = readScope.aliases + bindingAliases))
-}
+/** A transient field a path reads: the act that owns it, the field, and whether it is the subject's own field, read on the subject. */
+private data class TransientFieldRead(val owner: String, val field: String, val onSubjectItself: Boolean)
 
-private fun Validator.elementScopeOf(source: Expr, readScope: TransientReadScope): String? =
-    elementScopeOf(source, readScope.thisScope, readScope.elementScope, readScope.aliases)
-
-/** The shape of a collection source's element: a bare shape name, or the type the model gives the expression. */
-private fun Validator.elementScopeOf(source: Expr, thisScope: String, elementScope: String, aliases: Map<String, String>): String? {
-    if (source is PathExpr && source.segs.isEmpty() && (source.root in model.shapes || source.root in model.refinements)) return source.root
-    val env = TypeEnv(thisScope = thisScope, aliases = aliases)
-    return when (val type = model.types.of(source, elementScope, env)) {
-        is VType.Coll -> type.shape
-        else -> type?.instanceShape()
-    }
-}
-
-/** A transient field a path reads: the act that owns it, the field, and the step of the path that reads it. */
-private data class TransientFieldRead(val owner: String, val field: String, val stepIndex: Int)
-
-/** The first transient field a path reads, or null when the path reads none. */
-private fun Validator.transientFieldOnPath(path: PathExpr, thisScope: String, elementScope: String, aliases: Map<String, String>): TransientFieldRead? {
-    val resolved = model.paths.resolve(path, Scope.of(elementScope, aliases, thisScope))
+/** The first transient field a path reads at [scope], or null when the path reads none. */
+private fun Validator.transientFieldOnPath(path: PathExpr, scope: Scope): TransientFieldRead? {
+    val resolved = model.paths.resolve(path, scope)
     val index = resolved.steps.indexOfFirst { step -> step.member.transient }
     if (index < 0) return null
     val member = resolved.steps[index].member
-    return TransientFieldRead(member.owner, member.name, index)
+    // a bare name is the subject's inside no filter; inside one it is the element's
+    val startsAtSubject = resolved.start is PathStart.Subject || resolved.start is PathStart.Element && !scope.inFilter
+    return TransientFieldRead(member.owner, member.name, onSubjectItself = startsAtSubject && index == 0)
 }
 
 /** Walks every expression in the spec with a human-readable site label. */

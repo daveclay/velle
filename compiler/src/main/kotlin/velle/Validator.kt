@@ -90,7 +90,7 @@ class Validator(internal val model: Model) {
     fun checkQueryPredicate(expr: Expr, scope: String): List<Diagnostic> {
         val diagnosticCountBefore = diagnostics.size
         checkExpr(expr, scope)
-        transientFieldReads(expr, scope, scope, allowedAct = null, site = "the query")
+        transientFieldReads(expr, scope, allowedAct = null, site = "the query")
         val queryDiagnostics = diagnostics.subList(diagnosticCountBefore, diagnostics.size).toList()
         while (diagnostics.size > diagnosticCountBefore) diagnostics.removeAt(diagnostics.size - 1)
         return queryDiagnostics

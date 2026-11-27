@@ -43,6 +43,15 @@ sealed interface BoundElement {
  */
 data class FilterScopes(val sources: List<Scope>, val element: String?, val where: Scope)
 
+/**
+ * The scopes a block such as `for each loan in loans, option in loan.options` is read at. Each
+ * name's source is read at its entry of [sources], which has the names before it. The body is read at [body].
+ */
+data class BlockScopes(val sources: List<Scope>, val body: Scope)
+
+/** An expression and the scope it is read at. */
+data class ScopedExpr(val expression: Expr, val scope: Scope)
+
 /** Answers which scope each part of an expression is read at. */
 class ScopeRules(private val model: Model, private val paths: PathResolver, private val narrowing: ShapeNarrowing) {
 
@@ -99,17 +108,46 @@ class ScopeRules(private val model: Model, private val paths: PathResolver, priv
     }
 
     /**
-     * The scope of the body of [block] (Reference §14): each name is bound to what it runs over, and each
+     * The scopes [block] is read at (Reference §14): each name is bound to what it runs over, and each
      * source reads the names before it. A name whose source holds no records is bound to a value, which no
      * member resolves on.
      */
-    fun ofBlock(block: ForEach, scope: Scope): Scope =
-        block.bindings.fold(scope) { scopeSoFar, binding ->
-            when (val element = elementOfLoop(binding.source, scopeSoFar)) {
+    fun ofBlock(block: ForEach, scope: Scope): BlockScopes {
+        val sources = mutableListOf<Scope>()
+        var scopeSoFar = scope
+        for (binding in block.bindings) {
+            sources.add(scopeSoFar)
+            scopeSoFar = when (val element = elementOfLoop(binding.source, scopeSoFar)) {
                 is BoundElement.Records -> scopeSoFar.withRecordName(binding.name, element.shape)
                 BoundElement.Values, BoundElement.Unknown -> scopeSoFar.withValueName(binding.name)
             }
         }
+        return BlockScopes(sources, scopeSoFar)
+    }
+
+    /**
+     * Every expression directly inside [expression], each with the scope it is read at when [expression]
+     * is read at [scope]. A walk over a whole expression reads a path where it meets one and goes on into
+     * these parts, and so reads every name against the record the language says it names.
+     */
+    fun scopedPartsOf(expression: Expr, scope: Scope): List<ScopedExpr> = when (expression) {
+        is Binary -> listOf(ScopedExpr(expression.left, scope), ScopedExpr(expression.right, ofRightSide(expression, scope)))
+        is IfExpr -> listOf(
+            ScopedExpr(expression.condition, scope),
+            ScopedExpr(expression.thenExpr, ofThen(expression, scope)),
+            ScopedExpr(expression.elseExpr, ofElse(expression, scope)),
+        )
+        is WalkExpr -> listOfNotNull(expression.until?.let { condition -> ScopedExpr(condition, ofUntil(expression, scope)) })
+        else -> operandsOf(expression).map { operand -> ScopedExpr(operand, scope) } +
+            collectionOf(expression)?.let { collection -> scopedPartsOf(collection, scope) }.orEmpty()
+    }
+
+    /** A collection's sources and its `where`, each with the scope it is read at. */
+    fun scopedPartsOf(collection: CollectionExpr, scope: Scope): List<ScopedExpr> {
+        val filter = ofFilter(collection, scope)
+        val sources = collection.bindings.mapIndexed { index, binding -> ScopedExpr(binding.source, filter.sources[index]) }
+        return sources + listOfNotNull(collection.where?.let { where -> ScopedExpr(where, filter.where) })
+    }
 
     /** The records or values a path names as a collection: a shape named on its own is its records. */
     private fun elementOfPath(source: PathExpr, scope: Scope): BoundElement {
