@@ -136,9 +136,44 @@ class SpanFunctionsTest {
     @Test
     fun `days takes a duration and refuses a number or a date`() {
         val number = diagnosticsOf("daysLate: integer = days(3)")
-        assertEquals(listOf("[F2] 'days(3)' — 'days' takes a duration, but '3' is a decimal"), number.map { it.toString() })
+        assertEquals(listOf("[F2] 'days(3)' — 'days' takes a duration, but '3' is a number"), number.map { it.toString() })
         val date = diagnosticsOf("daysLate: integer = days(dueOn)")
         assertEquals(listOf("[F2] 'days(dueOn)' — 'days' takes a duration, but 'dueOn' is a Date"), date.map { it.toString() })
+    }
+
+    @Test
+    fun `a duration multiplied by a number is told to read it with days`() {
+        val durationOnTheRight = diagnosticsOf("lateFee: decimal = 2 * (returnedOn - dueOn)")
+        assertEquals(
+            listOf("[F2] '2 * (returnedOn - dueOn)' — '*' is not defined on a duration; " +
+                "read it as a number first, 'days(returnedOn - dueOn)' (Reference §5)"),
+            durationOnTheRight.map { it.toString() },
+        )
+        val durationOnTheLeft = diagnosticsOf("lateFee: decimal = (returnedOn - dueOn) * 2")
+        assertEquals(
+            listOf("[F2] '(returnedOn - dueOn) * 2' — '*' is not defined on a duration; " +
+                "read it as a number first, 'days(returnedOn - dueOn)' (Reference §5)"),
+            durationOnTheLeft.map { it.toString() },
+        )
+    }
+
+    @Test
+    fun `a duration divided is told to read it with days`() {
+        val diagnostics = diagnosticsOf("daysLate: integer = (returnedOn - dueOn) / 1 days")
+        assertEquals(
+            listOf("[F2] '(returnedOn - dueOn) / 1 days' — '/' is not defined on a duration; " +
+                "read it as a number first, 'days(returnedOn - dueOn)' (Reference §5)"),
+            diagnostics.map { it.toString() },
+        )
+    }
+
+    @Test
+    fun `a duration in a remainder keeps the remainder message`() {
+        val diagnostics = diagnosticsOf("daysLeft: integer = (returnedOn - dueOn) % 7")
+        assertTrue(
+            diagnostics.any { it.toString() == "[F2] '(returnedOn - dueOn) % 7' — '%' takes numbers, but 'returnedOn - dueOn' is not a number" },
+            diagnostics.toString(),
+        )
     }
 
     @Test

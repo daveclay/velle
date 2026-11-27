@@ -1,0 +1,6 @@
+-- A late fee computed as the span between two dates multiplied by 2, `2 * (returnedOn - dueOn)`; a duration is not multiplied, and the number of days in it is `days(returnedOn - dueOn)`.
+act Return {
+    dueOn: Date
+    returnedOn: Date
+    lateFee: decimal = 2 * (returnedOn - dueOn)
+}

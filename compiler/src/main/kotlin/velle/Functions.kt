@@ -132,7 +132,7 @@ class FunctionResolver(private val registry: TypeRegistry, private val elementTy
         } else if (k == Ordered::class) {
             Reason("F2", "'$call' — '${obj.name}' values have no order, so '${fn.name}' is not defined on $what (Reference §5)")
         } else {
-            Reason("F2", "'$call' — '${fn.name}' takes ${p.takes ?: describe(k)}, but '$arg' is ${if (plural) "a many of ${obj.name}" else describeType(obj)}")
+            Reason("F2", "'$call' — '${fn.name}' takes ${p.takes ?: describe(k)}, but '$arg' is ${if (plural) "a many of ${obj.name}" else describeArg(registry.vtypeOf(obj))}")
         }
     }
 
@@ -160,6 +160,7 @@ class FunctionResolver(private val registry: TypeRegistry, private val elementTy
         null -> "untyped"
         is VType.CollS -> "a many of ${t.name}"
         is VType.Inst, is VType.Coll -> "a record"
+        is VType.Num -> "a number" // the four number types are one kind (Reference §5)
         else -> registry.typeFor(t)?.let { describeType(it) } ?: "a value of another type"
     }
 

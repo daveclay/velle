@@ -213,7 +213,7 @@ class ExtensionFunctionTest {
         val m4 = messages("act Order { a: decimal }\nshape X = Order where roundTo(a) == 1")
         assertTrue("'roundTo' takes 2 arguments" in m4, m4)
         val m5 = messages("act Order { a: decimal, b: text }\nshape X = Order where clamp(a, b, 3) == 1")
-        assertTrue("'clamp' takes one type; 'b' is not a decimal" in m5, m5)
+        assertTrue("'clamp' takes one type; 'b' is not a number" in m5, m5)
     }
 
     @Test

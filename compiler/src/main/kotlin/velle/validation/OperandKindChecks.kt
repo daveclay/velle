@@ -80,9 +80,12 @@ private fun Validator.checkOperandsHaveOrder(binary: Binary, scope: String) {
 private fun Validator.checkArithmetic(binary: Binary, scope: String) {
     val leftType = scalarTypeOf(binary.left, scope)
     val rightType = scalarTypeOf(binary.right, scope)
+    val scaledDuration = if (binary.op in SCALING_OPERATORS) durationOperand(binary, scope) else null
     when {
         leftType is VType.Ext || rightType is VType.Ext -> operatorLine(binary, leftType, rightType, scope)
         binary.op == "%" -> checkRemainderOperands(binary, scope)
+        // a duration is not scaled (Reference §5): `2 * (returnedOn - dueOn)` is refused, not multiplied
+        scaledDuration != null -> refuseScaledDuration(binary, scaledDuration)
         // a text takes part in no arithmetic (Reference §5): `name + "_unit"` is refused, not joined
         isTextBesideBuiltin(leftType, rightType) ->
             diagnostics.add(Diagnostic("F2", "'${Printer.expr(binary)}' — '${binary.op}' is not defined on a text; " +
@@ -96,6 +99,17 @@ private fun Validator.checkRemainderOperands(binary: Binary, scope: String) {
         if (sideType != null && sideType !is VType.Num)
             diagnostics.add(Diagnostic("F2", "'${Printer.expr(binary)}' — '%' takes numbers, but '${Printer.expr(side)}' is not a number"))
     }
+}
+
+private val SCALING_OPERATORS = setOf("*", "/")
+
+/** The first side of [binary] that is a duration, or null when neither is. */
+private fun Validator.durationOperand(binary: Binary, scope: String): Expr? =
+    listOf(binary.left, binary.right).firstOrNull { side -> bareScalarTypeOf(side, scope) == VType.DurationT }
+
+private fun Validator.refuseScaledDuration(binary: Binary, duration: Expr) {
+    diagnostics.add(Diagnostic("F2", "'${Printer.expr(binary)}' — '${binary.op}' is not defined on a duration; " +
+        "read it as a number first, 'days(${Printer.expr(duration)})' (Reference §5)"))
 }
 
 private fun Validator.isTextBesideBuiltin(leftType: VType?, rightType: VType?): Boolean =
