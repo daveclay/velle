@@ -1,0 +1,24 @@
+-- A member or a library can borrow: `Borrower` is a static union, and `Loan.member` is one
+-- field typed with it, so it takes a record of either operand (Reference §9, §14).
+--
+-- `exists Loan for holder` over a Hold, where `holder` is a Borrower, validates and finds the
+-- loans whose `member` is the holder. The same test over a Borrower itself, `exists Loan for
+-- this`, is refused with V13: "exists Loan for ... — 'for' matches 0 fields of 'Loan'". The
+-- record after `for` is a Borrower in both, and `checks.md` V13 says the fields that match
+-- over a union are those every operand takes from one declaration, which `Loan.member` is.
+act Member { name: text }
+
+act Library { name: text }
+
+shape Borrower = Member or Library
+
+act Loan {
+    member: one Borrower
+    dueOn: Date
+}
+
+act Hold { holder: one Borrower }
+
+shape HoldWithLoan = Hold where exists Loan for holder
+
+shape BorrowerWithLoan = Borrower where exists Loan for this

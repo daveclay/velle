@@ -199,6 +199,44 @@ class ComparisonDirectionTest {
         assertSays("MoveLoan setting Loan's member can now make a Member stop being a MemberWithLateLoan.", consequences)
     }
 
+    @Test
+    fun `a rule moving a loan to another member, read as the one loan for the member, moves members both ways`() {
+        val consequences = consequencesOf(movingLoans("(Loan for this).dueOn < today"))
+
+        assertSays("MoveLoan setting Loan's member can now make a Member become a MemberWithLateLoan.", consequences)
+        assertSays("MoveLoan setting Loan's member can now make a Member stop being a MemberWithLateLoan.", consequences)
+    }
+
+    @Test
+    fun `a rule moving a fine to another loan, read as the fine for the member's one loan, moves members both ways`() {
+        val consequences = consequencesOf(
+            """
+            act Member { name: text }
+
+            act Loan {
+                member: one Member
+                dueOn: Date
+            }
+
+            act Fine { loan: one Loan }
+
+            transient act Reassign {
+                fine: one Fine
+                loan: one Loan
+            }
+
+            rule MoveFine when Reassign {
+                fine.loan = loan
+            }
+
+            shape FinedMember = Member where (Fine for (Loan for this)) is some
+            """.trimIndent()
+        )
+
+        assertSays("MoveFine setting Fine's loan can now make a Member become a FinedMember.", consequences)
+        assertSays("MoveFine setting Fine's loan can now make a Member stop being a FinedMember.", consequences)
+    }
+
     // ── a rule's creation is read for the values it gives the record ─────────
 
     private fun lending(dueOn: String) = """

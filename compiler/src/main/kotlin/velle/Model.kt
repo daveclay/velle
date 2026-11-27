@@ -1081,12 +1081,41 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     /** `Shape for <record>` reads the record expression and the field of [shape] that `for`
      *  matches (Reference §10): which records it finds is that field's value on each of them.
      *  Every field that could match is recorded, so a spec V13 refuses for matching several
-     *  still reads each; a record expression whose shape cannot be resolved records none. */
+     *  still reads each. When the record's shape cannot be told, or no field of [shape] takes
+     *  it, which records the read finds cannot be attributed, and the summary may read anything. */
     private fun collectFor(shape: String, forExpr: Expr, subject: String, s: ReadSummary, aliases: Map<String, String>, root: String) {
         collectExpr(forExpr, subject, s, aliases, root)
-        val recordShape = (forExpr as? PathExpr)?.let { path -> pathElementShape(path, subject, aliases, root) } ?: return
-        val matchedFields = basesOf(recordShape).flatMap { recordBase -> typeMatchedFields(shape, recordBase) }.distinct()
+        val recordShape = forRecordShape(forExpr, subject, aliases, root)
+        val matchedFields = recordShape?.let { basesOf(it) }.orEmpty().flatMap { recordBase -> typeMatchedFields(shape, recordBase) }.distinct()
+        if (matchedFields.isEmpty()) {
+            s.opaque = true
+            return
+        }
         for (matchedField in matchedFields) membersOf(shape)[matchedField]?.let { member -> record(shape, member, s) }
+    }
+
+    /** The shape of the one record after `for`: a path's end, the shape a `(Shape for ...)` finds,
+     *  the element `latest` or `first` picks, and a field read after either; null for anything else. */
+    private fun forRecordShape(forExpr: Expr, subject: String, aliases: Map<String, String>, root: String): String? = when (forExpr) {
+        is PathExpr -> pathElementShape(forExpr, subject, aliases, root)
+        is SingularFor -> forExpr.shape
+        is AggCall -> pickedElementShape(forExpr, subject, aliases, root)
+        is Access -> accessRecordShape(forExpr, subject, aliases, root)
+        else -> null
+    }
+
+    private fun pickedElementShape(selection: AggCall, subject: String, aliases: Map<String, String>, root: String): String? =
+        if (selection.name == "latest" || selection.name == "first") collectCollection(selection.collection, subject, ReadSummary(), aliases, root)
+        else null
+
+    /** The shape `(Fine for this).loan` or `first(...).holder` reaches: the target's record, then each field's. */
+    private fun accessRecordShape(access: Access, subject: String, aliases: Map<String, String>, root: String): String? {
+        val start = when (val target = access.target) {
+            is SingularFor -> target.shape
+            is AggCall -> pickedElementShape(target, subject, aliases, root)
+            else -> null
+        }
+        return access.segs.fold(start) { recordShape, seg -> recordShape?.let { membersOf(it)[seg.name]?.type?.instanceShape() } }
     }
 
     private fun consultShape(name: String, s: ReadSummary) {
