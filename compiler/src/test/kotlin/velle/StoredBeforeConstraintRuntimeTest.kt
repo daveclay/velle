@@ -7,13 +7,13 @@ import kotlin.test.assertIs
 
 /**
  * A record stored before a `never` over its shape or kept act was added can already break it.
- * The prohibition is read over every record of its shape, so the next commit it watches, here the
- * next record of that shape or act, is refused and names the stored record as the one in the
- * forbidden state. A kept act is caught exactly as a shape is. This is what `velle compare` means
- * by "A Visit stored before this change is now forbidden when its minutes is above 600. Its next
- * change could be refused." A seeded record stands for one stored under the earlier spec: it lands
- * with no prohibition checked. No rule may assign a field a `never` reads (V10), so the stored
- * record itself is not changed through that field.
+ * The prohibition is read over every record of its shape, and every commit that adds a record of
+ * that shape or act checks it, so each new record is refused, not only the next one, and the
+ * refusal names the stored record as the one in the forbidden state. A kept act is caught exactly
+ * as a shape is. This is what `velle compare` means by "A Visit stored before this change is now
+ * forbidden when its minutes is above 600. While such a Visit is stored, every new Visit is
+ * refused, and the refusal names the stored one." A seeded record stands for one stored under the
+ * earlier spec: it lands with no prohibition checked.
  */
 class StoredBeforeConstraintRuntimeTest {
 
@@ -62,30 +62,34 @@ class StoredBeforeConstraintRuntimeTest {
     }
 
     @Test
-    fun `a kept act stored before its constraint and above the limit refuses the next one committed`() {
+    fun `a kept act stored before its constraint and above the limit refuses every new one committed`() {
         val sys = system()
         sys.scope {
             val member = accepted(sys.commit("Member", mapOf("name" to "Ada")))
             sys.seed("Visit", mapOf("member" to member, "minutes" to 700L))
 
             val nextVisit = sys.commit("Visit", mapOf("member" to member, "minutes" to 30L))
+            val visitAfterThat = sys.commit("Visit", mapOf("member" to member, "minutes" to 45L))
 
             assertEquals(listOf("700"), violatingValues(nextVisit, "minutes"), "the stored Visit is the one named")
-            assertEquals(1, sys.instancesOf("Visit").size, "the refused Visit was not stored")
+            assertEquals(listOf("700"), violatingValues(visitAfterThat, "minutes"), "every new Visit is refused, not only the next")
+            assertEquals(1, sys.instancesOf("Visit").size, "the refused Visits were not stored")
         }
     }
 
     @Test
-    fun `a shape stored before its constraint and above the limit refuses the next one made`() {
+    fun `a shape stored before its constraint and above the limit refuses every new one made`() {
         val sys = system()
         sys.scope {
             val member = accepted(sys.commit("Member", mapOf("name" to "Ada")))
             sys.seed("Deposit", mapOf("member" to member, "amount" to BigDecimal("6000")))
 
             val nextDeposit = sys.commit("MakeDeposit", mapOf("member" to member, "amount" to BigDecimal("30")))
+            val depositAfterThat = sys.commit("MakeDeposit", mapOf("member" to member, "amount" to BigDecimal("45")))
 
             assertEquals(listOf("6000"), violatingValues(nextDeposit, "amount"), "the stored Deposit is the one named")
-            assertEquals(1, sys.instancesOf("Deposit").size, "the refused Deposit was not stored")
+            assertEquals(listOf("6000"), violatingValues(depositAfterThat, "amount"), "every new Deposit is refused, not only the next")
+            assertEquals(1, sys.instancesOf("Deposit").size, "the refused Deposits were not stored")
         }
     }
 }
