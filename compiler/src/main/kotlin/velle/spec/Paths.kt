@@ -135,7 +135,8 @@ class PathResolver(private val model: Model) {
         return when (start) {
             is PathStart.ValueName -> ResolvedPath(path, start, emptyList(), path.segs.firstOrNull()?.let { seg -> UnresolvedStep(seg.name, null) }, null)
             is PathStart.ShapeName -> resolveShapeName(path, start)
-            is PathStart.Subject -> walk(path, start, VType.Inst(start.shape), emptyList(), path.segs.map { seg -> seg.name }, emptyList(), scope)
+            // `this is RenameEntry` narrows the subject itself: its key is the empty path
+            is PathStart.Subject -> walk(path, start, VType.Inst(scope.narrowed[emptyList()] ?: start.shape), emptyList(), path.segs.map { seg -> seg.name }, emptyList(), scope)
             is PathStart.RecordName -> walk(path, start, startTypeOfRecordName(start, scope), emptyList(), path.segs.map { seg -> seg.name }, listOf(start.name), scope)
             is PathStart.Element -> resolveFromElement(path, start, scope)
             is PathStart.FoundRecord -> resolveAfter(start.shape, path.segs.map { seg -> seg.name })

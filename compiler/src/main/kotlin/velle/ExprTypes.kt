@@ -1,5 +1,10 @@
 package velle
 
+import velle.spec.PathStart
+import velle.spec.ResolvedPath
+import velle.spec.Scope
+import velle.spec.Step
+
 import velle.ext.VelleType
 import java.math.BigDecimal
 
@@ -105,7 +110,8 @@ class ExprTypes(private val model: Model) {
             of(expr.thenExpr, scope, env.with(narrowingOf(expr.condition, holds = true, scope, env))),
             of(expr.elseExpr, scope, env.with(narrowingOf(expr.condition, holds = false, scope, env))),
         )
-        is WalkExpr -> model.walkType(expr, env.thisScope ?: scope)
+        // a walk follows a relationship of the record a bare name is a member of, the innermost element
+        is WalkExpr -> model.walkType(expr, scope)
         is PathExpr -> pathType(expr, scope, env)
         is Access -> accessType(expr, scope, env)
         is SetExpr -> recordElement(expr.collection, scope, env)?.let { VType.Coll(it) } ?: valueCollectionType(expr.collection, scope, env)
@@ -198,7 +204,7 @@ class ExprTypes(private val model: Model) {
 
     /** The shape of the records a collection expression holds; null for a `many` of values or an unresolved source. */
     private fun recordElement(collection: CollectionExpr, scope: String, env: TypeEnv): String? =
-        model.collectionElement(collection, env.thisScope ?: scope, env.aliases)?.takeIf { it in model.shapes || it in model.refinements }
+        model.collectionElement(collection, readScope(scope, env))?.takeIf { it in model.shapes || it in model.refinements }
 
     /** The `many` of values a collection expression names: one bare path to one, or that path
      *  filtered by naming each value, `(options as o where ...)` (Reference §5); null otherwise. */
@@ -253,12 +259,50 @@ class ExprTypes(private val model: Model) {
     private fun pathType(path: PathExpr, scope: String, outer: TypeEnv): VType? {
         if (path.root in outer.scalarAliases) return if (path.segs.isEmpty()) outer.scalarAliases[path.root] else null
         val env = scopeEnv(outer, scope)
-        // `this` is the outer subject, an alias is its binding, and a bare name is a member of the
-        // innermost element, [scope], which differs from the subject inside a filter over another shape
-        val start: String? = if (path.root in env.aliases) env.aliases[path.root] else env.thisScope ?: scope
-        if (path.root == "this" || path.root in env.aliases) return along(start, path.segs, aliasPrefix(path, env), optional = false, env)
-        val rootMember = model.membersOf(scope)[path.root] ?: return null
-        return along(rootMember, path.segs, listOf(path.root), optional = false, env)
+        val resolved = model.paths.resolve(path, readScope(scope, env))
+        if (!resolved.resolves) return null
+        return when (val start = resolved.start) {
+            is PathStart.Subject, is PathStart.RecordName -> typeAfterRecord(start, resolved, env)
+            is PathStart.Element -> typeAlong(resolved.steps, emptyList(), optional = false, env)
+            else -> null
+        }
+    }
+
+    /** The [Scope] a read at [element] in [env] is resolved at: `this` is the outer subject, an alias its binding. */
+    private fun readScope(element: String, env: TypeEnv): Scope =
+        Scope.of(element, env.aliases, env.thisScope ?: element)
+            .copy(valueNames = env.scalarAliases.keys)
+            .narrowedBy(env.narrowed)
+
+    /** A path that starts at a record, `this` or an alias: the record itself when no name follows, narrowed when a test narrowed it. */
+    private fun typeAfterRecord(start: PathStart, resolved: ResolvedPath, env: TypeEnv): VType? {
+        val prefix = if (start is PathStart.RecordName) listOf(start.name) else emptyList()
+        if (resolved.steps.isNotEmpty()) return typeAlong(resolved.steps, prefix, optional = false, env)
+        return resolved.endType?.instanceShape()?.let { shape -> VType.Inst(shape) }
+    }
+
+    /**
+     * The type at the end of [steps], read after the names [prefix]: absent when a step is optional and
+     * not shown present; a step narrowed to a shape reads as that shape; a step through a `many`,
+     * `origin.components.source`, reads the field off every record, a collection of what it holds.
+     */
+    private fun typeAlong(steps: List<Step>, prefix: List<String>, optional: Boolean, env: TypeEnv): VType? {
+        var type: VType? = null
+        var absent = optional
+        var throughMany = false
+        val names = prefix.toMutableList()
+        for (step in steps) {
+            type = memberType(step.member).takeIf { it != VType.Unknown } ?: return null
+            names.add(step.name)
+            if (type is VType.Optional && names !in env.present && names !in env.narrowed) absent = true
+            if (step === steps.last()) {
+                if (names in env.narrowed) type = VType.Inst(env.narrowed.getValue(names))
+                break
+            }
+            if (bare(type) is VType.Coll) throughMany = true
+        }
+        val read = type?.let { if (absent) VType.Optional(bare(it)) else bare(it) } ?: return null
+        return if (throughMany) asCollection(read) else read
     }
 
     /** The environment a read in [scope] sees: what the scope's own `where` shows, and what the

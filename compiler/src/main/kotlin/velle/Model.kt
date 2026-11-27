@@ -1277,6 +1277,9 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     fun collectionElement(c: CollectionExpr, subject: String, aliases: Map<String, String> = emptyMap()): String? =
         collectCollection(c, Scope.of(subject, aliases, subject), ReadSummary())
 
+    /** The element scope of a collection expression read at [scope], or null when it cannot be resolved. */
+    fun collectionElement(c: CollectionExpr, scope: Scope): String? = collectCollection(c, scope, ReadSummary())
+
     /** The scalar type a `many <scalar>` member's elements have. */
     fun scalarOf(name: String): VType = typeOf(ScalarType(name, optional = false))
 

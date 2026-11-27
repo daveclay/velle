@@ -129,4 +129,12 @@ class PathResolverTest {
         assertEquals("Loan", narrowed.steps.last().readOn)
         assertEquals(VType.Text, narrowed.endType)
     }
+
+    @Test
+    fun `after this is loan a name only loan declares is looked up on loan`() {
+        val resolved = resolver.resolve(path("this.title"), Scope("Borrowing").narrowedBy(mapOf(emptyList<String>() to "Loan")))
+
+        assertEquals("Loan", resolved.steps.single().readOn)
+        assertEquals(VType.Text, resolved.endType)
+    }
 }

@@ -104,7 +104,7 @@ class PathResolutionDisagreementTest {
     // ── 3. a bare name inside a nested filter: the subject for ExprTypes, the element elsewhere ──
 
     @Test
-    fun `a bare collection inside a filter over another shape is typed on the subject, so the validator refuses a sum the model reads on the element`() {
+    fun `a bare collection inside a filter over another shape is typed on the element, as the model reads it, so the validator accepts the sum`() {
         val spec = """
             act Customer {
                 name: text
@@ -116,12 +116,9 @@ class PathResolutionDisagreementTest {
             act Line { order: one Order, amount: decimal }
         """.trimIndent()
 
-        // ExprTypes.recordElement passes the subject, Customer, as the bare-name scope inside the
-        // filter over orders: 'lines' is the customer's Remarks and 'amount' a text
-        val refusal = Validator.validate(spec).single()
-        assertEquals("F2", refusal.code)
-        assertTrue("compares the text 'sum(lines, amount)' with a number" in refusal.message, refusal.message)
-        assertEquals(VType.Text, Model(Parser.parse(spec)).types.of(Parser.parsePredicate("sum(lines, amount)"), "Order", TypeEnv(thisScope = "Customer")))
+        // inside the filter over orders a bare 'lines' is the order's Lines, and 'amount' a decimal
+        assertEquals(emptyList(), Validator.validate(spec))
+        assertEquals(VType.Num("decimal"), Model(Parser.parse(spec)).types.of(Parser.parsePredicate("sum(lines, amount)"), "Order", TypeEnv(thisScope = "Customer")))
 
         // Model.collectionElement resolves the bare 'lines' on the innermost element, the Order
         val model = Model(Parser.parse(spec))
@@ -129,7 +126,7 @@ class PathResolutionDisagreementTest {
     }
 
     @Test
-    fun `a walk inside a filter over another shape is typed on the subject by ExprTypes and found on the element by the model`() {
+    fun `a walk inside a filter over another shape is typed on the element by ExprTypes, as the model finds it`() {
         val spec = """
             act Customer { name: text }
             act Order { customer: one Customer, parent: one Order? }
@@ -138,9 +135,8 @@ class PathResolutionDisagreementTest {
         assertEquals(emptyList(), Validator.validate(spec))
         val model = Model(Parser.parse(spec))
 
-        // ExprTypes types a walk on `env.thisScope ?: scope`, the Customer, which has no 'parent'
-        assertEquals(null, model.types.of(WalkExpr("parent"), "Order", TypeEnv(thisScope = "Customer")))
-        // the validator's collection reading and Model.walkType follow 'parent' on the element, the Order
+        // both follow 'parent' on the element, the Order, not on the subject, the Customer
+        assertEquals(VType.Coll("Order"), model.types.of(WalkExpr("parent"), "Order", TypeEnv(thisScope = "Customer")))
         assertEquals(VType.Coll("Order"), model.walkType(WalkExpr("parent"), "Order"))
     }
 
