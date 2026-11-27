@@ -2,6 +2,8 @@ package velle
 
 import velle.spec.PathResolver
 import velle.spec.PathStart
+import velle.spec.Reach
+import velle.spec.ResolvedPath
 import velle.spec.Scope
 import velle.spec.ShapeNarrowing
 
@@ -1021,8 +1023,8 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     private fun collectRefExpr(expr: RefExpr, s: ReadSummary) {
         when (expr) {
             is RefName -> {
-                if (expr.name in refinements) s.absorb(predicateSummary(expr.name))
-                expr.where?.let { collectExpr(it, if (expr.name in refinements || expr.name in shapes) expr.name else baseOfExpr(expr) ?: return, s) }
+                if (expr.name in refinements) s.absorb(predicateSummary(expr.name), asOwn = true)
+                expr.where?.let { where -> collect(where, Scope(if (expr.name in refinements || expr.name in shapes) expr.name else baseOfExpr(expr) ?: return), s) }
             }
             is RefNot -> collectRefExpr(expr.inner, s)
             is RefAnd -> { collectRefExpr(expr.left, s); collectRefExpr(expr.right, s) }
@@ -1032,8 +1034,11 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     /** Collect reads of an expression evaluated with `subject` as its scope.
      *  [aliases] maps `as`-bound names to their element scopes (Reference §10). */
-    fun collectExpr(e: Expr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject) =
-        collect(e, Scope.of(subject, aliases, root), s)
+    fun collectExpr(e: Expr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject) {
+        // an expression handed in on its own is not known to be a condition's top (OQ222)
+        s.outsideConditionDepth++
+        try { collect(e, Scope.of(subject, aliases, root), s) } finally { s.outsideConditionDepth-- }
+    }
 
     /** Collect the reads of [expression] read at [scope]. */
     private fun collect(expression: Expr, scope: Scope, summary: ReadSummary) {
@@ -1115,6 +1120,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
         for (holding in holdingFields(heldShape)) {
             summary.existsShapes.add(holding.shape)
             summary.fields.add(holding.shape to holding.field)
+            summary.readOtherwise.add(holding.shape)
         }
     }
 
@@ -1246,9 +1252,32 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
         val resolved = paths.resolve(path, scope)
         // a bare refinement name is a membership atom: it reads what the refinement's predicate reads
         (resolved.start as? PathStart.ShapeName)?.let { named -> if (named.name in refinements) summary.absorb(predicateSummary(named.name)) }
-        resolved.steps.forEach { step -> record(step.readOn, step.member, summary) }
+        val heldSteps = stepsThroughHeldReference(resolved, scope, summary)
+        resolved.steps.forEachIndexed { index, step -> record(step.readOn, step.member, summary, heldReference = index in heldSteps) }
         if (!resolved.resolves) summary.opaque = true
     }
+
+    /**
+     * The steps of [resolved] reached through a chain of `one` references from the subject (OQ222): the path
+     * is written at the top of the condition itself, starts at the subject, and every reference on the way is
+     * typed with a plain shape, not a union or a shape others take with `is`. The first step is the subject's
+     * own field, never such a step.
+     */
+    private fun stepsThroughHeldReference(resolved: ResolvedPath, scope: Scope, summary: ReadSummary): Set<Int> {
+        if (summary.outsideConditionDepth > 0 || scope.inFilter) return emptySet()
+        val startsAtSubject = resolved.start is PathStart.Subject || resolved.start is PathStart.Element && scope.element == scope.subject
+        if (!startsAtSubject) return emptySet()
+        val held = mutableSetOf<Int>()
+        for (index in 1 until resolved.steps.size) {
+            if (resolved.steps[index].reach != Reach.ONE_REFERENCE) break
+            if (!isPlainShape(resolved.steps[index - 1].member.type.instanceShape())) break
+            held.add(index)
+        }
+        return held
+    }
+
+    /** A shape that is its own only base: not a union, and not a shape others take with `is`. */
+    private fun isPlainShape(shape: String?): Boolean = shape != null && shape in shapes && basesOf(shape) == setOf(shape)
 
     // ── narrowing carried into the read summary (Reference §10) ──────────────
 
@@ -1270,17 +1299,21 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     private fun andConjuncts(e: Expr): List<Expr> =
         if (e is Binary && e.op == "and") andConjuncts(e.left) + andConjuncts(e.right) else listOf(e)
 
-    private fun record(scope: String, m: MemberInfo, s: ReadSummary) {
+    private fun record(scope: String, m: MemberInfo, s: ReadSummary, heldReference: Boolean = false) {
         val readBases = recordsHolding(scope, m)
+        (if (heldReference) s.readThroughHeldReference else s.readOtherwise).addAll(readBases)
         if (m.stored) readBases.forEach { base -> s.fields.add(base to m.name) }
         // an inferred inverse is the declared side read from the other end: which records it
         // holds is the reference field each of them stores (Reference §6)
-        m.inverse?.let { declaredSide -> basesOrSelf(declaredSide.shape).forEach { base -> s.fields.add(base to declaredSide.field) } }
+        m.inverse?.let { declaredSide -> basesOrSelf(declaredSide.shape).forEach { base -> s.fields.add(base to declaredSide.field); s.readOtherwise.add(base) } }
         if (m.timestamp) readBases.forEach { base -> s.collFields.add(base to m.name) }
         (m.type as? VType.Coll)?.let { collection -> s.collShapes.addAll(basesOrSelf(collection.shape)) }
         m.derived?.let { d ->
             val key = m.owner to m.name
-            if (s.derivedSeen.add(key)) collect(d.expr, Scope(m.owner), s)
+            if (s.derivedSeen.add(key)) {
+                s.outsideConditionDepth++
+                try { collect(d.expr, Scope(m.owner), s) } finally { s.outsideConditionDepth-- }
+            }
         }
     }
 
@@ -1430,7 +1463,26 @@ class ReadSummary(val includesHeldReads: Boolean = true) {
      *  soundness must then treat the summary as "may read anything" */
     var opaque = false
 
-    fun absorb(other: ReadSummary) {
+    /** Shapes a field is read on through a chain of `one` references from the subject, written at the
+     *  top of the condition itself (OQ222): a record an existing subject already names. */
+    val readThroughHeldReference = mutableSetOf<String>()
+    /** Shapes a field is read on in any other way: as the subject, through a collection, an inverse, a
+     *  derived field, a refinement named inside the condition, an alias, or inside a filter. */
+    val readOtherwise = mutableSetOf<String>()
+    /** How deep the walk is inside reads that are not the condition itself: a derived field's formula,
+     *  or an expression a caller hands the read analysis on its own, such as a filter's `where`. */
+    internal var outsideConditionDepth = 0
+
+    /** Shapes whose every field read is through a reference an existing subject holds: a new record of
+     *  one is named by no existing subject, so it cannot move the condition (OQ222). */
+    fun readOnlyThroughHeldReference(): Set<String> = readThroughHeldReference - readOtherwise
+
+    /** Takes in what [other] reads. [asOwn] is true when [other] is the condition itself, a refinement that is
+     *  the rule's condition; a refinement named inside a condition is not, so every read of it counts as otherwise. */
+    fun absorb(other: ReadSummary, asOwn: Boolean = false) {
+        if (asOwn) readThroughHeldReference.addAll(other.readThroughHeldReference)
+        else readOtherwise.addAll(other.readThroughHeldReference)
+        readOtherwise.addAll(other.readOtherwise)
         fields.addAll(other.fields)
         existsShapes.addAll(other.existsShapes)
         if (other.readsTime) readsTime = true

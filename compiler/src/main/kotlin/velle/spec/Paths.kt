@@ -34,6 +34,8 @@ data class Scope(
     val valueNames: Set<String> = emptySet(),
     /** A path, as its names after any leading `this`, to the shape a governing `is` test narrowed it to. */
     val narrowed: Map<List<String>, String> = emptyMap(),
+    /** Whether this point is inside a filter's `where`, `exists (Loan where ...)`, and not at the top of a condition. */
+    val inFilter: Boolean = false,
 ) {
     /** The same point of the spec with [name] bound to a record of [shape]. */
     fun withRecordName(name: String, shape: String): Scope = copy(recordNames = recordNames + (name to shape), valueNames = valueNames - name)
@@ -42,7 +44,7 @@ data class Scope(
     fun withValueName(name: String): Scope = copy(recordNames = recordNames - name, valueNames = valueNames + name)
 
     /** The scope of a filter's `where` over records of [element]: bare names move to it, `this` stays. */
-    fun inside(element: String): Scope = copy(element = element)
+    fun inside(element: String): Scope = copy(element = element, inFilter = true)
 
     /** The same point of the spec with the narrowings in [narrowings] in force as well. */
     fun narrowedBy(narrowings: Map<List<String>, String>): Scope =

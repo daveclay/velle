@@ -358,6 +358,120 @@ class ComparisonDirectionTest {
         assertDoesNotSay("Time passing can now make a Member stop being a MemberWithLateBorrowing.", consequences)
     }
 
+    // ── a new record reached only through a reference an existing record holds (OQ222) ──
+
+    private fun lateMembers(condition: String, extra: String = "") = """
+        act Member { name: text }
+
+        act Loan {
+            member: one Member
+            title: text
+        }
+        $extra
+        shape LoanOfLateMember = $condition
+    """.trimIndent()
+
+    @Test
+    fun `a new member cannot move a loan through the member the loan already names`() {
+        val consequences = consequencesOf(lateMembers("Loan where member.name == \"late\""))
+
+        assertDoesNotSay("A new Member can now make a Loan become a LoanOfLateMember.", consequences)
+        assertDoesNotSay("A new Member can now make a Loan stop being a LoanOfLateMember.", consequences)
+    }
+
+    @Test
+    fun `a rule moving a loan to another member still moves it, and a rule making a member and a loan naming it moves no existing loan`() {
+        val spec = lateMembers(
+            "Loan where member.name == \"late\"",
+            """
+            transient act Transfer { loan: one Loan, receiver: one Member }
+            rule MoveLoan when Transfer { loan.member = receiver }
+            transient act Join { name: text }
+            rule Enrol when Join {
+                Member from { name: name } as joined
+                Loan from { member: joined, title: "welcome" }
+            }
+            """.trimIndent(),
+        )
+        val consequences = consequencesOf(spec)
+
+        assertSays("MoveLoan setting Loan's member can now make a Loan become a LoanOfLateMember.", consequences)
+        assertSays("MoveLoan setting Loan's member can now make a Loan stop being a LoanOfLateMember.", consequences)
+        // the loan that names the new member is the one Enrol creates in the same commit, which is born into
+        // LoanOfLateMember or not; no existing loan names the new member
+        assertDoesNotSay("Enrol creating a Member can now make a Loan become a LoanOfLateMember.", consequences)
+        val model = Model(Parser.parse(spec))
+        val diagram = StateFlowGen.render(model, KindCatalog(model))
+        // the state-flow diagram says where a new loan starts, and draws no arrow for the new member
+        assertTrue("note right of out : which side a new Loan starts on depends on its committed values" in diagram, diagram)
+        assertTrue("Enrol inserts Member" !in diagram, diagram)
+    }
+
+    @Test
+    fun `a new member is still a cause when the condition also reads members a second way`() {
+        val consequences = consequencesOf(lateMembers("Loan where member.name == \"late\" or exists (Member where name == \"late\")"))
+
+        assertSays("A new Member can now make a Loan become a LoanOfLateMember.", consequences)
+    }
+
+    @Test
+    fun `a new member is still a cause when the condition names a refinement of the member`() {
+        val consequences = consequencesOf(lateMembers("Loan where member is LateMember", "shape LateMember = Member where name == \"late\""))
+
+        assertSays("A new Member can now make a Loan become a LoanOfLateMember.", consequences)
+    }
+
+    @Test
+    fun `a new member is still a cause when the condition reads it through a derived field`() {
+        val consequences = consequencesOf("""
+            act Member { name: text }
+
+            act Loan {
+                member: one Member
+                memberName: text = member.name
+            }
+
+            shape LoanOfLateMember = Loan where memberName == "late"
+        """.trimIndent())
+
+        assertSays("A new Member can now make a Loan become a LoanOfLateMember.", consequences)
+    }
+
+    @Test
+    fun `a new member is still a cause when the condition reads it inside a filter over another shape`() {
+        val consequences = consequencesOf("""
+            act Member { name: text }
+
+            act Branch { name: text }
+
+            act Loan {
+                member: one Member
+                branch: one Branch
+            }
+
+            shape BranchWithLateMember = Branch where exists (loans where member.name == "late")
+        """.trimIndent())
+
+        assertSays("A new Member can now make a Branch become a BranchWithLateMember.", consequences)
+    }
+
+    @Test
+    fun `a new post is still a cause when the condition reads it through a reference typed with a union`() {
+        val consequences = consequencesOf("""
+            act Post { title: text }
+
+            act Photo { caption: text }
+
+            shape Content = Post or Photo
+
+            act Comment { target: one Content }
+
+            shape CommentOnLatePost = Comment where target is Post and target.title == "late"
+        """.trimIndent())
+
+        assertSays("A new Post can now make a Comment become a CommentOnLatePost.", consequences)
+    }
+
     // ── a rule's creation is read for the values it gives the record ─────────
 
     private fun lending(dueOn: String) = """

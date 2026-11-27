@@ -142,6 +142,16 @@ Arrow directions are proven, not guessed, from five sources:
   no arrow into a refinement that asks for it. Any other value, such as one read from the act, counts as able
   to make the `where` hold. So does every value of a record that arrives as
   an act, since the caller chooses it.
+- **A new record reached only through a reference.** In `Loan where
+  member.name == "late"`, a loan's condition reads the member the loan names.
+  A loan names its member when it is created, or when a rule sets its
+  `member`. So a new member is named by no loan that already exists. A new
+  Member draws no arrow into or out of that refinement, and `velle compare`
+  lists no such change. This holds when the condition reads the field through
+  `one` references that start at its subject and are written in the condition
+  itself. The new record still counts when the condition reaches it through a
+  collection, a derived field, a refinement it names, a reference typed with a
+  union, or a filter over another shape.
 
 Entry and exit decorate the states: `when X` rules as entry actions, `when
 leaving X` as exit actions, `captured` fields as entry captures, `frozen` as a

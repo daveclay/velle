@@ -1,6 +1,6 @@
 # OQ225 — Should the compiler resolve every path in a spec once, into one model that every check, generator, and the running system read?
 
-**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built; moves 1 to 5 done, 6 and 7 in part, every disagreement in §1 resolved (§3). Two work items.
+**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built; moves 1 to 5 done, 6 and 7 in part, every disagreement in §1 resolved (§3). One work item.
 
 **In plain terms:** when the compiler reads a condition such as "the loan's member is called late", it does not write down once what "the loan's member" means. Each part of the compiler that later reads the condition works it out again for itself, and they do not always agree. Several recent bugs came from one of them working it out differently from the others. The change is to work it out once, keep the answer, and have every part read that.
 
@@ -138,11 +138,10 @@ The API is the package `velle.spec`, in `compiler/src/main/kotlin/velle/spec/`.
 6. `Domains.kt`: the `Walker`, `corrExpr`, `bodyCorr`, `bodyPath`. `bodyCorr` and `bodyPath` done; the `Walker`'s read and write sides read `Model.recordsHolding`; the `Walker`'s own path walk is still to move.
 7. `StateFlowGen.kt`, `validation/SignedConsults.kt`, `validation/TransientFieldCheck.kt`, `validation/Writes.kt`, `Query.kt`, `Evaluator.kt` `declaredTypeOf`, and the small ones in §1. `SignedConsults.kt` and `TransientFieldCheck.kt` done; `Query.kt` and the read conflicts read `Model.referencesRecordsOf`.
 8. One function for the parts of an expression, and one for splitting at `and`, shared by the hand-written walks.
-9. OQ222, built on `Reach`.
+9. OQ222, built on `Reach`. Done; OQ222 is in the settled table of `working-docs/QUESTIONS.md`.
 
 `Keys.kt` and `PresenceFacts.kt` read declarations before `Model` exists, so they cannot read the resolver as it stands; they move when the model is built earlier, or stay, and the decision is recorded here when it is reached.
 
 ## 4. Work items
 
 - [ ] Move each part onto the model, one commit each, output unchanged.
-- [ ] Build OQ222 on the model.

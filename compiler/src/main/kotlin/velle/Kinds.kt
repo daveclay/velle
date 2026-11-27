@@ -89,9 +89,12 @@ internal class KindCatalog(private val model: Model) {
 
     /** Can this kind change the value of a predicate with this read summary? */
     fun touches(k: CommitKind, s: ReadSummary): Boolean = s.opaque || when (k) {
+        // a new record that every read reaches through a reference an existing subject holds is named by no
+        // existing subject, so it cannot move one (OQ222); a subject naming it is new, or written, itself
         is CommitKind.Create ->
             k.shape in s.existsShapes || k.shape in s.collShapes ||
-                s.fields.any { it.first == k.shape } || s.collFields.any { it.first == k.shape }
+                k.shape !in s.readOnlyThroughHeldReference() &&
+                (s.fields.any { it.first == k.shape } || s.collFields.any { it.first == k.shape })
         is CommitKind.Assign ->
             (k.shape to k.field) in s.fields || (k.shape to k.field) in s.collFields
         // a deletion flips existence/aggregate consults of the shape and turns
