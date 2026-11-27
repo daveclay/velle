@@ -1,6 +1,8 @@
 package velle.validation
 
 import velle.*
+import velle.spec.PathStart
+import velle.spec.Scope
 
 // ── V23: delete statement legality (OQ37) ────────────────────────────────
 //
@@ -106,13 +108,7 @@ private fun Validator.checkWritersBesideDeleters() {
 
 /** Whether any step of [target], read from a [scope] subject, goes through a collection. */
 private fun Validator.pathHasCollectionHop(target: PathExpr, scope: String): Boolean {
-    val segmentNames = target.segs.map { segment -> segment.name }
-    val steps = if (target.root == "this") segmentNames else listOf(target.root) + segmentNames
-    var currentShape: String? = scope
-    for (name in steps) {
-        val member = currentShape?.let { shape -> model.membersOf(shape)[name] } ?: return false
-        if (member.type is VType.Coll || member.type is VType.CollS) return true
-        currentShape = member.type.instanceShape()
-    }
-    return false
+    val resolved = model.paths.resolve(target, Scope(scope))
+    if (resolved.start !is PathStart.Subject && resolved.start !is PathStart.Element) return false
+    return resolved.steps.any { step -> step.member.type is VType.Coll || step.member.type is VType.CollS }
 }

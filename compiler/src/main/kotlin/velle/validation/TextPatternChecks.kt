@@ -2,6 +2,9 @@ package velle.validation
 
 import velle.*
 import velle.ext.builtin.RegexType
+import velle.spec.PathStart
+import velle.spec.Reach
+import velle.spec.Scope
 
 // ── text patterns and text literals with pieces (Reference §5, §10; checks F2, A7) ──
 //
@@ -46,17 +49,13 @@ internal fun Validator.checkPatternRead(call: FunCall, scope: String) {
         "as pattern too; declare '${member.name}' as `Regex` to keep a text piece as characters", advisory = true))
 }
 
-/** The members a path reads, hop by hop, from [scope]; null when a hop is not a member. */
+/** The members a path reads, hop by hop, from [scope], through references to one record; null when a
+ *  name is not a member, or when the path goes on through a collection. */
 internal fun Validator.membersAlong(path: PathExpr, scope: String): List<MemberInfo>? {
-    val names = if (path.root == "this") path.segs.map { segment -> segment.name } else listOf(path.root) + path.segs.map { segment -> segment.name }
-    val members = mutableListOf<MemberInfo>()
-    var current: String? = scope
-    for (name in names) {
-        val member = current?.let { shape -> model.membersOf(shape)[name] } ?: return null
-        members.add(member)
-        current = member.type.instanceShape()
-    }
-    return members
+    val resolved = model.paths.resolve(path, Scope(scope))
+    val readsFromScope = resolved.start is PathStart.Subject || resolved.start is PathStart.Element
+    if (!readsFromScope || !resolved.resolves || resolved.steps.any { step -> step.reach == Reach.COLLECTION }) return null
+    return resolved.steps.map { step -> step.member }
 }
 
 /** The spelling of `a + b` over texts as a text literal with pieces (Reference §5). */

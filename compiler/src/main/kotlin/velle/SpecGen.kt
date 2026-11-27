@@ -541,15 +541,10 @@ object SpecGen {
         /** True when an assignment target reads a collection anywhere on its route or writes one —
          *  the generated scalar-equality assert would misread it (Reference §6). */
         fun traversesCollection(target: PathExpr, base: String?): Boolean {
-            var scope = base ?: return true
-            val segs = (listOf(target.root) + target.segs.map { it.name }).filterNot { it == "this" }
-            for ((i, seg) in segs.withIndex()) {
-                val m = model.membersOf(scope)[seg] ?: return true
-                if (m.type is VType.Coll || m.type is VType.CollS) return true
-                if (i == segs.lastIndex) return false
-                scope = m.type.instanceShape() ?: return true
-            }
-            return false
+            val resolved = model.paths.resolve(target, velle.spec.Scope(base ?: return true))
+            val readsFromBase = resolved.start is velle.spec.PathStart.Subject || resolved.start is velle.spec.PathStart.Element
+            if (!readsFromBase || !resolved.resolves) return true
+            return resolved.steps.any { step -> step.member.type is VType.Coll || step.member.type is VType.CollS }
         }
 
         /** Interface kdoc: what the implementer owes. Rule-agnostic, since rules sharing a bare condition share the given. (Exit rules demand their pair inline — a state-given and an exit action.) */
