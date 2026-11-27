@@ -148,12 +148,19 @@ class PathResolver(private val model: Model) {
 
     /**
      * The [names] read after an expression that finds a record of [recordShape], `(Fine for this).loan`.
-     * No `is` test narrows such a record, so no narrowing applies.
+     * The record's narrowings are those in [narrowed] kept under [keptUnder], the name the record is read
+     * by, such as `r` for `r.field`; with none, no `is` test narrows such a record.
      */
-    fun resolveAfter(recordShape: String?, names: List<String>): ResolvedPath {
+    fun resolveAfter(
+        recordShape: String?,
+        names: List<String>,
+        keptUnder: List<String> = emptyList(),
+        narrowed: Map<List<String>, String> = emptyMap(),
+    ): ResolvedPath {
         val start = PathStart.FoundRecord(recordShape)
         if (recordShape == null) return ResolvedPath(null, start, emptyList(), names.firstOrNull()?.let { name -> UnresolvedStep(name, null) }, null)
-        return walk(null, start, VType.Inst(recordShape), emptyList(), names, emptyList(), Scope(recordShape))
+        val startType = VType.Inst(narrowed[keptUnder] ?: recordShape)
+        return walk(null, start, startType, emptyList(), names, keptUnder, Scope(recordShape).narrowedBy(narrowed))
     }
 
     private fun startOf(path: PathExpr, scope: Scope): PathStart = when {

@@ -349,16 +349,14 @@ class ExprTypes(private val model: Model) {
 
     /** The first of [steps], read from [start] and kept under [prefix], that a plain dot follows while it may be absent. */
     private fun untestedStepAmong(steps: List<Seg>, start: String?, prefix: List<String>, env: TypeEnv): List<String>? {
-        var current = start
+        val resolved = model.paths.resolveAfter(start ?: return null, steps.map { seg -> seg.name }, prefix, env.narrowed)
         val names = prefix.toMutableList()
         var mayBeAbsent = false
-        for (step in steps) {
-            if (mayBeAbsent && !step.viaQdot) return names.toList()
-            val member = model.membersOf(current ?: return null)[step.name] ?: return null
+        for ((index, seg) in steps.withIndex()) {
+            if (mayBeAbsent && !seg.viaQdot) return names.toList()
+            val step = resolved.steps.getOrNull(index) ?: return null
             names.add(step.name)
-            val type = memberType(member)
-            mayBeAbsent = type is VType.Optional && names !in env.present && names !in env.narrowed
-            current = env.narrowed[names] ?: bare(type).instanceShape() ?: (bare(type) as? VType.Coll)?.shape
+            mayBeAbsent = memberType(step.member) is VType.Optional && names !in env.present && names !in env.narrowed
         }
         return null
     }
@@ -416,28 +414,11 @@ class ExprTypes(private val model: Model) {
     /** The type at the end of [segs] read from [shape], the record itself when there are none;
      *  absent when a step is optional and not shown present; a step narrowed to a shape reads there. */
     private fun along(shape: String?, segs: List<Seg>, prefix: List<String>, optional: Boolean, env: TypeEnv): VType? {
-        var current = (env.narrowed[prefix] ?: shape) ?: return null
+        val current = (env.narrowed[prefix] ?: shape) ?: return null
         if (segs.isEmpty()) return VType.Inst(current).let { if (optional) VType.Optional(it) else it }
-        var type: VType? = null
-        var absent = optional
-        var throughMany = false
-        val names = prefix.toMutableList()
-        for (seg in segs) {
-            val member = model.membersOf(current)[seg.name] ?: return null
-            type = memberType(member).takeIf { it != VType.Unknown } ?: return null
-            names.add(seg.name)
-            if (type is VType.Optional && names !in env.present && names !in env.narrowed) absent = true
-            if (seg === segs.last()) {
-                if (names in env.narrowed) type = VType.Inst(env.narrowed.getValue(names))
-                break
-            }
-            // a step through a `many`, `origin.components.source`, reads the field off every record
-            val collectionElement = (bare(type) as? VType.Coll)?.shape
-            if (collectionElement != null) throughMany = true
-            current = env.narrowed[names] ?: bare(type).instanceShape() ?: collectionElement ?: return null
-        }
-        val read = type?.let { if (absent) VType.Optional(bare(it)) else bare(it) } ?: return null
-        return if (throughMany) asCollection(read) else read
+        val resolved = model.paths.resolveAfter(current, segs.map { seg -> seg.name }, prefix, env.narrowed)
+        if (!resolved.resolves) return null
+        return typeAlong(resolved.steps, prefix, optional, env)
     }
 
     /** A field read off every record of a collection is the collection of what the field holds:
