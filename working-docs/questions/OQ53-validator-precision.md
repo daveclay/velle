@@ -86,7 +86,6 @@ A derivation recalculates when a record it aggregates over is deleted: `balance 
 
 ## The rest
 
-- V21 (`initially`/`timestamp` on an act is a compile error; OQ31, settled) is in `checks.md` and not in the validator; once it lands, the now-dead `initially` optional-parameter branch in `Codegen.kt` `commitFn` goes (optional `?` fields stay optional parameters, ratified 2026-08-20; no example spec puts `initially` on an act any more).
 - The slices `Validator.kt`'s header lists as not implemented: V11 branch-sensitive narrowing beyond the union slice; V12 at-most-one beyond the refinement slice (`singular_references.md`); the A-series beyond A4/A5.
 - The static selector-discrimination check: a `latest`/`first` whose candidates can collide within one transaction fails loudly at runtime today (Reference §10); the static proof, or a demand for a discriminating datum at compile time, rides OQ16.
 
@@ -100,7 +99,6 @@ A derivation recalculates when a record it aggregates over is deleted: `balance 
 - [ ] Collect the data point OQ37's coarseness ruling asked for: whether V25's accepted false positive (window arithmetic the refinement-overlap prover cannot see) forces the field-witness restructure often enough to justify sharpening the prover.
 - [ ] Let V24 discharge a referrer whose existence the deleter's scope provably excludes (P6: the fills of a never-filled prescription).
 - [ ] Write a spec that deletes against a stored fold twin or a snapshot and rule whether the existence-dependency check should name them (OQ37's flagged edge).
-- [ ] Implement V21 in the validator (`initially`/`timestamp` on an act is a compile error; OQ31), then remove the now-dead `initially` optional-parameter branch from `Codegen.kt` `commitFn`.
 - [ ] Close the validator gaps `Validator.kt`'s header lists: V11 branch-sensitive narrowing · V12 at-most-one beyond the refinement slice (`singular_references.md`) · A1 and A3 of the A-series.
 - [ ] Add the static selector-discrimination check (selectors fail loudly at runtime today; Reference §10; rides OQ16).
 - [ ] Read a comparison that holds as showing a read through a selection present, `first(rows by key).newKey == "a"`, as it shows a path present (Reference §10); today only `is some` on the read does (`ExprTypes.selectionNarrowingOf`; residue of OQ143, settled table).
