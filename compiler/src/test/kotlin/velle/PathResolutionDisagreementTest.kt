@@ -1,0 +1,334 @@
+package velle
+
+import java.time.Instant
+import java.time.LocalDate
+import velle.validation.conditionReadsRefTo
+import velle.validation.readsReferenceTo
+import velle.validation.refinementPolarities
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
+
+/**
+ * Places where two parts of the compiler disagree about what one path in a spec means, pinned
+ * before OQ225 resolves every path once into one model. Each test asserts what the compiler does
+ * today and says in its comment which parts disagree and what the other part answers, so the
+ * test is flipped when the parts are made to agree.
+ */
+class PathResolutionDisagreementTest {
+
+    private fun accepted(result: CommitResult): Long {
+        assertIs<CommitResult.Accepted>(result, "commit refused: $result")
+        return result.id
+    }
+
+    // ── 1. narrowing kept under `this.target` by the validator, under `target` by the model ──
+
+    private fun gallery(excerpt: String) = """
+        act Post { body: text }
+        act Photo { caption: text }
+        shape Content = Post or Photo
+        act Comment {
+            target: one Content
+            excerpt: text = $excerpt
+        }
+    """.trimIndent()
+
+    private fun excerptTypeByTheModel(spec: String): VType? {
+        val model = Model(Parser.parse(spec))
+        val excerpt = model.membersOf("Comment").getValue("excerpt").derived!!.expr
+        return model.types.of(excerpt, "Comment")
+    }
+
+    @Test
+    fun `a test spelled with this does not narrow a read spelled without it for the validator, though it does for the model's typing`() {
+        val sameSpelling = gallery("if this.target is Post then this.target.body else \"\"")
+        val mixedSpelling = gallery("if this.target is Post then target.body else \"\"")
+
+        assertEquals(emptyList(), Validator.validate(sameSpelling))
+        // validation/Narrowing.kt keys the narrowing as "this.target" and looks the read up as
+        // "target", so the read of 'body' resolves on Content, where Post's 'body' is no member
+        val refusal = Validator.validate(mixedSpelling).single()
+        assertEquals("F1", refusal.code)
+        assertTrue("'body' is declared on 'Post' separately" in refusal.message, refusal.message)
+        // ExprTypes (and Model's read summary) drop the `this`, so both spellings name one path
+        // and the model types the excerpt as a text
+        assertEquals(VType.Text, excerptTypeByTheModel(mixedSpelling))
+    }
+
+    @Test
+    fun `a test spelled without this does not narrow a read spelled with it for the validator, though it does for the model's typing`() {
+        val mixedSpelling = gallery("if target is Post then this.target.body else \"\"")
+
+        // the validator keys the narrowing as "target" and looks the read up as "this.target"
+        assertEquals(listOf("F1"), Validator.validate(mixedSpelling).map { diagnostic -> diagnostic.code })
+        // the model's typing reads both as the path 'target' and narrows it to Post
+        assertEquals(VType.Text, excerptTypeByTheModel(mixedSpelling))
+    }
+
+    // ── 2. `this` inside a filter: the element for the polarity walk, the subject for the model ──
+
+    @Test
+    fun `the polarity walk reads this inside a filter as the element, while the read summary reads it as the subject`() {
+        val spec = """
+            act Member {
+                name: text
+                flagged: boolean = count(warnings) > 0   -- Member's 'flagged' counts Warnings
+            }
+            act Warning { member: one Member }
+            act Loan {
+                member: one Member
+                flagged: boolean = count(holds) > 0      -- Loan's 'flagged' counts Holds
+            }
+            act Hold { loan: one Loan }
+            -- inside the filter over loans, 'this' is still the member (Reference §10)
+            shape Watched = Member where exists (loans where this.flagged)
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(spec))
+        val model = Model(Parser.parse(spec))
+
+        // Model.collectExpr keeps 'this' as the subject: the refinement reads Member.flagged, so Warnings
+        val summary = model.predicateSummary("Watched")
+        assertTrue(("Warning" to "member") in summary.fields, "read summary: ${summary.fields}")
+        assertFalse(summary.fields.any { (shape, _) -> shape == "Hold" }, "read summary: ${summary.fields}")
+
+        // validation/SignedConsults.kt followPath resolves 'this.flagged' on the element, Loan, so
+        // the signs name Holds, which the refinement never reads, and not Warnings, which it does
+        val polarities = Validator(model).refinementPolarities("Watched")
+        assertEquals(mapOf("Loan" to 1, "Hold" to 0), polarities.signByConsult)
+        assertTrue(polarities.complete)
+    }
+
+    // ── 3. a bare name inside a nested filter: the subject for ExprTypes, the element elsewhere ──
+
+    @Test
+    fun `a bare collection inside a filter over another shape is typed on the subject, so the validator refuses a sum the model reads on the element`() {
+        val spec = """
+            act Customer {
+                name: text
+                lines: many Remark                       -- the customer's own 'lines' hold Remarks
+                bigOrders: integer = count(orders where sum(lines, amount) > 100)
+            }
+            act Remark { amount: text }
+            act Order { customer: one Customer }         -- an order's inferred 'lines' hold Lines
+            act Line { order: one Order, amount: decimal }
+        """.trimIndent()
+
+        // ExprTypes.recordElement passes the subject, Customer, as the bare-name scope inside the
+        // filter over orders: 'lines' is the customer's Remarks and 'amount' a text
+        val refusal = Validator.validate(spec).single()
+        assertEquals("F2", refusal.code)
+        assertTrue("compares the text 'sum(lines, amount)' with a number" in refusal.message, refusal.message)
+        assertEquals(VType.Text, Model(Parser.parse(spec)).types.of(Parser.parsePredicate("sum(lines, amount)"), "Order", TypeEnv(thisScope = "Customer")))
+
+        // Model.collectionElement resolves the bare 'lines' on the innermost element, the Order
+        val model = Model(Parser.parse(spec))
+        assertEquals("Line", model.collectionElement(CollectionExpr(listOf(Binding(PathExpr("lines")))), "Order"))
+    }
+
+    @Test
+    fun `a walk inside a filter over another shape is typed on the subject by ExprTypes and found on the element by the model`() {
+        val spec = """
+            act Customer { name: text }
+            act Order { customer: one Customer, parent: one Order? }
+            shape Deep = Customer where exists (orders where (walk parent until parent is none) is some)
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(spec))
+        val model = Model(Parser.parse(spec))
+
+        // ExprTypes types a walk on `env.thisScope ?: scope`, the Customer, which has no 'parent'
+        assertEquals(null, model.types.of(WalkExpr("parent"), "Order", TypeEnv(thisScope = "Customer")))
+        // the validator's collection reading and Model.walkType follow 'parent' on the element, the Order
+        assertEquals(VType.Coll("Order"), model.walkType(WalkExpr("parent"), "Order"))
+    }
+
+    // ── 4. a filter over two collections: the first for the transient check, the last elsewhere ──
+
+    private fun accounts(bindings: String) = """
+        act Account { name: text }
+        act Payment { account: one Account, amount: decimal }
+        act Charge { account: one Account, transient amount: decimal }   -- Charge's 'amount' is input only
+        shape Matched = Account where exists ($bindings where amount > 5)
+    """.trimIndent()
+
+    @Test
+    fun `the transient check reads a bare name in a filter over two collections on the first, so it refuses a read of the last one's stored field`() {
+        val spec = accounts("charges as charge, payments")
+
+        // validation/TransientFieldCheck.kt reads the bare 'amount' on the first binding's element, Charge
+        assertEquals(listOf("V37"), Validator.validate(spec).map { diagnostic -> diagnostic.code })
+        // Model.collectExpr, CollectionChecks and the Evaluator read it on the last, Payment
+        assertTrue(("Payment" to "amount") in Model(Parser.parse(spec)).predicateSummary("Matched").fields)
+    }
+
+    @Test
+    fun `the transient check reads a bare name in a filter over two collections on the first, so it misses a read of the last one's transient field`() {
+        val spec = accounts("payments as payment, charges")
+
+        // the transient check reads 'amount' on Payment, a stored field, and refuses nothing
+        assertEquals(emptyList(), Validator.validate(spec))
+        // the model reads Charge.amount, which is in the act's input and not in its record
+        assertTrue(("Charge" to "amount") in Model(Parser.parse(spec)).predicateSummary("Matched").fields)
+    }
+
+    // ── 5. a write to a field taken with `is`: the taken shape for Domains, each taker for Model ──
+
+    private fun reassignments(postDeclaration: String) = """
+        act Member { name: text, credits: integer initially 0 }
+        $postDeclaration
+        transient act Reassign { post: one Post, receiver: one Member }
+        rule Move when Reassign { post.author = receiver }
+        -- wakes when a post's author changes, and writes the author's credits
+        rule Credit when (Post where author.name == "Ada") on commit { author.credits = author.credits + 1 }
+    """.trimIndent()
+
+    private fun reassignKeys(spec: String): List<String> {
+        assertEquals(emptyList(), Validator.validate(spec))
+        return DomainAnalysis(Model(Parser.parse(spec))).actDomains.getValue("Reassign").renderKeys("reassign").sorted()
+    }
+
+    @Test
+    fun `a write to a field declared on a taken shape wakes no rule in the serialization domain, though the same field declared on the act does`() {
+        val declaredOnPost = reassignments("act Post { title: text, author: one Member }")
+        val takenFromContribution = reassignments("shape Contribution { author: one Member }\nact Post is Contribution { title: text }")
+
+        assertEquals(listOf("reassign.post", "reassign.post.author", "reassign.receiver"), reassignKeys(declaredOnPost))
+        // Domains.kt walkAssignment records the write as Contribution.author, while the watcher's
+        // read summary (Model) holds Post.author, so `relevant` never matches, Credit is not
+        // woken, and the author it writes is not keyed: a domain narrower than the runtime's
+        assertEquals(listOf("reassign.post"), reassignKeys(takenFromContribution))
+        // the same walk looks the owner up in model.shapes, which holds no taken shape
+        assertEquals(null, Model(Parser.parse(takenFromContribution)).shapes["Contribution"])
+    }
+
+    // ── 6. a refinement named inside a watcher's `where`: not followed for correlations ──
+
+    private fun finedNotices(condition: String) = """
+        act Member { name: text }
+        act Fine { member: one Member }
+        shape Fined = Member where exists Fine for this
+        shape FinedNotice { member: one Member }
+        rule NoticeFined when $condition on commit { FinedNotice from { member: this } }
+    """.trimIndent()
+
+    private fun fineDomain(condition: String): SerializationDomain {
+        val spec = finedNotices(condition)
+        assertEquals(emptyList(), Validator.validate(spec))
+        return DomainAnalysis(Model(Parser.parse(spec))).actDomains.getValue("Fine")
+    }
+
+    @Test
+    fun `a refinement named inside a rule's where is not followed for the subject's correlations, though the same refinement as the condition's shape is`() {
+        val asTheShape = fineDomain("(Fined where name != \"\")")
+        assertEquals(listOf("fine.member"), asTheShape.renderKeys("fine"))
+        assertFalse(asTheShape.wide, "widenings: ${asTheShape.widenings}")
+
+        // Domains.kt corrExpr reads a bare 'Fined' as a member of Member, finds none, and stops,
+        // so the route from a Fine back to its member is lost and the domain widens; Domains'
+        // body-side routes (bodyPath) follow a refinement-named root into its predicate
+        for (condition in listOf("(Member where Fined and name != \"\")", "(Member where this is Fined and name != \"\")")) {
+            val insideTheWhere = fineDomain(condition)
+            assertTrue(insideTheWhere.widenings.any { widening -> widening.shape == "Fine" && widening.declaration == "rule NoticeFined" },
+                "$condition widenings: ${insideTheWhere.widenings}")
+        }
+    }
+
+    // ── 7. a `for each` name as a path root: an unknown step for Domains' body routes ──
+
+    private fun annotations(scan: String) = """
+        act Branch { name: text }
+        act Account {
+            branch: one Branch
+            risky: boolean = exists (Transfer where source == this)   -- correlates Transfers on 'source'
+        }
+        -- two references to Account, so no inverse is inferred onto it
+        act Transfer { source: one Account, target: one Account, note: text initially "" }
+        shape Report { account: one Account, risky: boolean }
+        transient act Annotate { transfer: one Transfer, note: text }
+        rule Note when Annotate { transfer.note = note }
+        $scan
+    """.trimIndent()
+
+    private fun annotateKeys(scan: String): List<String> {
+        val spec = annotations(scan)
+        assertEquals(emptyList(), Validator.validate(spec))
+        return DomainAnalysis(Model(Parser.parse(spec))).actDomains.getValue("Annotate").renderKeys("annotate").sorted()
+    }
+
+    @Test
+    fun `a read through a for each name gives the serialization domain no correlation route, though the same read through the subject does`() {
+        val throughTheSubject = "rule Scan when Account on commit { Report from { account: this, risky: risky } }"
+        val throughALoopName = "rule Scan when Branch on commit { for each account in accounts { Report from { account: account, risky: account.risky } } }"
+
+        // a body reading 'risky' correlates Transfers on 'source', so a write to a Transfer keys its source
+        assertEquals(listOf("annotate.transfer", "annotate.transfer.source"), annotateKeys(throughTheSubject))
+        // Domains.kt bodyPath takes the loop name 'account' as a member of Branch, finds none, and
+        // records no route, while Domains' Walker resolves the loop name to its element
+        assertEquals(listOf("annotate.transfer"), annotateKeys(throughALoopName))
+    }
+
+    // ── 8. a union-typed reference: no store pre-filter for Query, a match for the Evaluator ──
+
+    private val comments = """
+        act Post { body: text }
+        act Photo { caption: text }
+        shape Content = Post or Photo
+        act Comment { target: one Content }
+        shape Discussed = Post where exists Comment for this
+        shape DiscussedByFilter = Post where exists (Comment where target == this)
+    """.trimIndent()
+
+    private fun preFilter(spec: String, refinement: String): QF =
+        QueryCompiler(Model(Parser.parse(spec)), LocalDate.of(2026, 1, 1), Instant.parse("2026-01-01T00:00:00Z")).filterFor(RefName(refinement))
+
+    @Test
+    fun `exists for this over a union-typed reference compiles to no store pre-filter, though the Evaluator matches it`() {
+        assertEquals(emptyList(), Validator.validate(comments))
+        val plainReference = comments.replace("target: one Content", "target: one Post")
+        assertEquals(QF.Exists("Comment", "target", QF.True), preFilter(plainReference, "Discussed"))
+        assertEquals(QF.Exists("Comment", "target", QF.True), preFilter(plainReference, "DiscussedByFilter"))
+
+        // Query.kt backFieldOf compares the declared type, Content, with Post exactly, and the
+        // sugar form falls back to no pre-filter; asCorrelation does the same for the filter form,
+        // which keeps an exists over Comments correlated to nothing
+        assertEquals(QF.True, preFilter(comments, "Discussed"))
+        assertEquals(QF.Exists("Comment", null, QF.True), preFilter(comments, "DiscussedByFilter"))
+
+        // the Evaluator matches the reference by the bases of its declared type
+        val system = VelleSystem(Model(Parser.parse(comments)))
+        system.scope {
+            val post = accepted(system.commit("Post", mapOf("body" to "hello")))
+            accepted(system.commit("Comment", mapOf("target" to post)))
+            assertTrue(system.isMember(post, "Discussed"))
+            assertTrue(system.isMember(post, "DiscussedByFilter"))
+        }
+    }
+
+    // ── 9. a union-typed reference: no read through it for ReadConflicts, a read for PossibleCommits ──
+
+    @Test
+    fun `a read of a union-typed reference is no read of a reference to its operand for the read conflicts, though it is for the possible commits`() {
+        val spec = """
+            act Post { body: text }
+            act Photo { caption: text }
+            shape Content = Post or Photo
+            act Comment { target: one Content, body: text }
+            shape Note { comment: one Comment }
+            rule Noted when (Comment where target.id != none) { Note from { comment: this } }
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(spec))
+        val model = Model(Parser.parse(spec))
+        val validator = Validator(model)
+        val rule = model.rules.getValue("Noted")
+        val conditionReads = model.summaryOfRefExpr(rule.condition)
+        assertEquals(setOf("Comment" to "target"), conditionReads.fields.toSet())
+
+        // validation/ReadConflicts.kt readsReferenceTo asks `baseOf(Content) == Post`, and a
+        // union has no single base, so deleting a Post conflicts with no read of 'target'
+        assertFalse(validator.readsReferenceTo(conditionReads, "Post"))
+        // validation/PossibleCommits.kt conditionReadsRefTo asks whether Post is among the bases of Content
+        assertTrue(validator.conditionReadsRefTo(rule, "Post"))
+    }
+}

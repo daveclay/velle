@@ -133,7 +133,7 @@ A frontend framework grown from the console: given the model description and not
 
 ## Compiler structure
 
-- **[OQ225](questions/OQ225-one-resolved-model-of-the-spec.md)** — (being built since 2026-11-27) Should the compiler resolve every path in a spec once, into one model that every check, generator, and the running system read, instead of each part resolving paths for itself? · opened 2026-11-27 from OQ222; D1 (do it) and D2 (OQ222 waits) decided 2026-11-27; inventory taken; not designed; five work items
+- **[OQ225](questions/OQ225-one-resolved-model-of-the-spec.md)** — (being built since 2026-11-27) Should the compiler resolve every path in a spec once, into one model that every check, generator, and the running system read, instead of each part resolving paths for itself? · opened 2026-11-27 from OQ222; D1 (do it) and D2 (OQ222 waits) decided 2026-11-27; designed; being built; two work items
 
 ## Larger language questions
 
