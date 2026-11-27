@@ -107,7 +107,19 @@ rule Extend when Renew {
 }
 ```
 
-I recommend yes, within these limits, so that every field is still written at most once per record per commit:
+I recommend yes, within the limits below. They are there so that one request never writes the same field of the same record twice. Velle already insists on that everywhere (Reference §12, "One writer per field, per commit"): within one commit there is no order between writes, so a field written twice with two values would have no defined value. A block could break it like this:
+
+```
+transient act RenewTimes { member: one Member, times: integer }
+
+rule Extend when RenewTimes {
+    for each loan in member.loans, step from 1 to times {    -- two names: each loan is met once per step
+        loan.renewals = step                                 -- one loan written `times` times, with 1, 2, 3...
+    }
+}
+```
+
+The limits:
 
 - The block has exactly one name, and its source is a collection of records. A collection is a set, so each record is met once.
 - The block is not inside another block. Inside two blocks one record could be met several times with different values, and the field would have no defined value.
