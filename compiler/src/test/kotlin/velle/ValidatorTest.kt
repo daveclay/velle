@@ -294,6 +294,75 @@ class ValidatorTest {
         assertEquals(listOf("unknown shape 'Counselling'"), printedMessages(src, "F1"))
     }
 
+    private fun printedDiagnostics(source: String): List<String> =
+        diags(source).map { diagnostic -> "[${diagnostic.code}] ${diagnostic.message}" }
+
+    @Test
+    fun `F1 - a filter over a shape the spec does not declare draws one message, in a refinement`() {
+        val src = """
+            act Fill { fillNumber: integer }
+            shape CounsellingDue = Fill where not exists (Counselling where fill == this)
+        """.trimIndent()
+        assertEquals(listOf("[F1] unknown shape 'Counselling'"), printedDiagnostics(src))
+    }
+
+    @Test
+    fun `F1 - a selector over a shape the spec does not declare draws one message, with its by`() {
+        val src = """
+            act Fill { fillNumber: integer }
+            shape CounsellingDue = Fill where first(Counselling where fill == this by givenOn) is none
+        """.trimIndent()
+        assertEquals(listOf("[F1] unknown shape 'Counselling'"), printedDiagnostics(src))
+    }
+
+    @Test
+    fun `F1 - a filter over a shape the spec does not declare draws one message, in a derived property`() {
+        val src = """
+            act Fill { fillNumber: integer }
+            shape CountedFill = Fill where fillNumber > 0 {
+                counsellings: integer = count(Counselling where fill == this)
+            }
+        """.trimIndent()
+        assertEquals(listOf("[F1] unknown shape 'Counselling'"), printedDiagnostics(src))
+    }
+
+    @Test
+    fun `F1 - a filter over a member the subject does not declare draws one message`() {
+        val src = """
+            act Fill { fillNumber: integer }
+            shape CounsellingDue = Fill where not exists (counsellings where fill == this)
+        """.trimIndent()
+        assertEquals(
+            listOf("[F1] 'counsellings' is not a member of 'Fill' (bare names resolve in the innermost scope only — use this.<field> for the subject)"),
+            printedDiagnostics(src),
+        )
+    }
+
+    @Test
+    fun `F1 - a refinement the spec does not declare, after is in a rule's condition, draws one message`() {
+        val src = """
+            act Fill { fillNumber: integer }
+            act PickUp { fill: one Fill }
+            act Counsel { fill: one Fill }
+            rule Note when (PickUp where fill is CounsellingDue) {
+                Counsel from { fill: fill }
+            }
+        """.trimIndent()
+        assertEquals(listOf("[F1] unknown shape or refinement 'CounsellingDue'"), printedDiagnostics(src))
+    }
+
+    @Test
+    fun `F1 - a refinement the spec does not declare, after is in a conditional, draws one message`() {
+        val src = """
+            act Fill { fillNumber: integer }
+            act PickUp {
+                fill: one Fill
+                number: integer = if fill is CounsellingDue then fill.fillNumber else 0
+            }
+        """.trimIndent()
+        assertEquals(listOf("[F1] unknown shape or refinement 'CounsellingDue'"), printedDiagnostics(src))
+    }
+
     @Test
     fun `F1 - bare name resolves in the innermost scope only`() {
         val src = """

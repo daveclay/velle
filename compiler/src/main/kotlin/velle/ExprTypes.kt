@@ -553,6 +553,8 @@ class ExprTypes(private val model: Model) {
                     Narrowing(present = Narrowing.stepsOf(path), established = setOf(PresenceFacts.testKey(IsExpr(cond.subject, "some"))))
                 cond.kind == "some" || cond.kind == "none" ->
                     Narrowing(established = setOf(PresenceFacts.testKey(IsExpr(cond.subject, "none"))))
+                // a name the spec does not declare is refused where it is written, and narrows nothing
+                cond.kind == "refinement" && !model.namesShapeOrRefinement(cond.refinement!!) -> Narrowing.NONE
                 cond.kind == "refinement" && holds -> Narrowing(narrowed = mapOf(path to cond.refinement!!), established = setOf(PresenceFacts.testKey(cond)))
                 cond.kind == "refinement" -> complementOf(cond.subject, cond.refinement!!, scope, env)?.let { Narrowing(narrowed = mapOf(path to it)) } ?: Narrowing.NONE
                 else -> Narrowing.NONE

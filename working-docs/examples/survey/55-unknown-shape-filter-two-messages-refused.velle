@@ -1,8 +1,0 @@
--- A fill owes counselling until a Counselling exists for it, written as a filter over the
--- shape. The spec does not declare Counselling.
---
--- The compiler reads the undeclared name as a field of Fill, and then reads the filter's
--- `fill` on Fill too, so the one missing name draws two messages.
-act Fill { fillNumber: integer }
-
-shape CounsellingDue = Fill where not exists (Counselling where fill == this)
