@@ -43,32 +43,23 @@ class PathResolutionDisagreementTest {
     }
 
     @Test
-    fun `a test spelled with this does not narrow a read spelled without it for the validator, though it does for the model's typing`() {
+    fun `a test spelled with this narrows a read spelled without it, for the validator as for the model's typing`() {
         val sameSpelling = gallery("if this.target is Post then this.target.body else \"\"")
         val mixedSpelling = gallery("if this.target is Post then target.body else \"\"")
 
+        // at the top of a condition `this.target` and `target` name one path, so the read of 'body' is on a Post
         assertEquals(emptyList(), Validator.validate(sameSpelling))
-        // validation/Narrowing.kt keys the narrowing as "this.target" and looks the read up as
-        // "target", so the read of 'body' resolves on Content, where Post's 'body' is no member
-        val refusal = Validator.validate(mixedSpelling).single()
-        assertEquals("F1", refusal.code)
-        assertTrue("'body' is declared on 'Post' separately" in refusal.message, refusal.message)
-        // ExprTypes (and Model's read summary) drop the `this`, so both spellings name one path
-        // and the model types the excerpt as a text
+        assertEquals(emptyList(), Validator.validate(mixedSpelling))
         assertEquals(VType.Text, excerptTypeByTheModel(mixedSpelling))
     }
 
     @Test
-    fun `a test spelled without this does not narrow a read spelled with it for the validator, though it does for the model's typing`() {
+    fun `a test spelled without this narrows a read spelled with it, for the validator as for the model's typing`() {
         val mixedSpelling = gallery("if target is Post then this.target.body else \"\"")
 
-        // the validator keys the narrowing as "target" and looks the read up as "this.target"
-        assertEquals(listOf("F1"), Validator.validate(mixedSpelling).map { diagnostic -> diagnostic.code })
-        // the model's typing reads both as the path 'target' and narrows it to Post
+        assertEquals(emptyList(), Validator.validate(mixedSpelling))
         assertEquals(VType.Text, excerptTypeByTheModel(mixedSpelling))
     }
-
-    // ── 2. `this` inside a filter: the element for the polarity walk, the subject for the model ──
 
     @Test
     fun `the polarity walk reads this inside a filter as the element, while the read summary reads it as the subject`() {

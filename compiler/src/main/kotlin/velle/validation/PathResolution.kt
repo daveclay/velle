@@ -1,6 +1,10 @@
 package velle.validation
 
 import velle.*
+import velle.spec.PathStart
+import velle.spec.ResolvedPath
+import velle.spec.Scope
+import velle.spec.UnresolvedStep
 
 // ── path resolution (Reference §9, §10; checks F1, F2) ──────────────────────
 //
@@ -11,23 +15,40 @@ import velle.*
 /** The shape of the records a member of [type] reaches: its record's, or its collection's. Null for a value. */
 internal fun recordShapeOf(type: VType): String? = type.instanceShape() ?: (type as? VType.Coll)?.shape
 
+/** The point of the spec the validator is checking at, as the resolver reads it: [scope] is the element. */
+internal fun Validator.scopeAt(scope: String): Scope = Scope(
+    element = scope,
+    subject = thisScope ?: scope,
+    recordNames = scopeByAlias.toMap(),
+    valueNames = scalarTypeByAlias.keys - scopeByAlias.keys,
+    narrowed = scopeByNarrowedPath.toMap(),
+)
+
+/** F1 for a name that names nothing, F2 for a read through an optional actor or through a value. */
 internal fun Validator.resolvePath(path: PathExpr, scope: String) {
-    // a narrowed prefix (`target is Post` governing this branch) resolves the
-    // rest of the path against the narrowed scope — V11's union slice
-    narrowedPrefix(path)?.let { prefix -> walkSegments(prefix.shape, path.segs.drop(prefix.length), path); return }
-    checkReadThroughOptionalActor(path)
-    val rootShape: String? = when {
-        path.root == "this" -> thisScope ?: scope
-        path.root in scopeByAlias -> scopeByAlias[path.root]
-        path.root in scalarTypeByAlias -> {
-            checkNoReadThroughValue(path)
-            return
-        }
-        isShapeOrRefinement(path.root) -> return // membership atom / collection source
-        else -> memberRootShape(path, scope) ?: return
+    // a narrowed prefix (`target is Post` governing this branch) shows the record present
+    if (narrowedPrefix(path) == null) checkReadThroughOptionalActor(path)
+    val resolved = model.paths.resolve(path, scopeAt(scope))
+    when (resolved.start) {
+        is PathStart.ValueName -> checkNoReadThroughValue(path)
+        // a membership atom or a collection source
+        is PathStart.ShapeName -> return
+        else -> resolved.unresolved?.let { unresolved -> refuseUnresolved(path, resolved, unresolved) }
     }
-    walkSegments(rootShape, path.segs, path)
 }
+
+private fun Validator.refuseUnresolved(path: PathExpr, resolved: ResolvedPath, unresolved: UnresolvedStep) {
+    // a name after a value has no record to be a member of; F2 reads that elsewhere
+    val shape = unresolved.readOn ?: return
+    if (resolved.start is PathStart.Element && resolved.steps.isEmpty()) return refuseUnknownRoot(path, shape)
+    val read = Printer.expr(PathExpr(path.root, path.segs.take(segmentsUpToUnresolved(resolved))))
+    diagnostics.add(declaredSeparately(unresolved.name, shape, read) ?: Diagnostic("F1", "'${unresolved.name}' is not a member of '$shape'"))
+}
+
+/** How many of a path's names after its root are spelled up to and including the one that did not resolve. */
+private fun segmentsUpToUnresolved(resolved: ResolvedPath): Int =
+    // a path from the element spells its first step as its root
+    if (resolved.start is PathStart.Element) resolved.steps.size else resolved.steps.size + 1
 
 /** A rule's `by Shape?`: the actor may be absent on some path to the trigger (V31), so a read
  *  through it needs an `is some` first, as any optional does (Reference §10). */
@@ -43,37 +64,12 @@ private fun Validator.checkNoReadThroughValue(path: PathExpr) {
     diagnostics.add(Diagnostic("F1", "'${Printer.expr(path)}' reads through '${path.root}', which is a value, not a record (a `for each` name over numbers or scalar values)"))
 }
 
-/** The shape a root that names a member of [scope] reaches; F1 when it names no member. */
-private fun Validator.memberRootShape(path: PathExpr, scope: String): String? {
-    val member = model.membersOf(scope)[path.root]
-    if (member == null) {
-        refuseUnknownRoot(path, scope)
-        return null
-    }
-    return recordShapeOf(member.type)
-}
-
 private fun Validator.refuseUnknownRoot(path: PathExpr, scope: String) {
     val actorHint = if (path.root == "actor" && model.shapes.values.any { shape -> shape.actor != null })
         " — 'actor' is what an act's `by` clause binds in the act's own scope, and what a rule reads " +
         "when its header declares `by <Shape>?` (Reference §22, \"The actor\")" else ""
     diagnostics.add(declaredSeparately(path.root, scope, "this.${path.root}") ?: Diagnostic("F1", "'${path.root}' is not a member of '$scope' " +
         "(bare names resolve in the innermost scope only — use this.<field> for the subject)$actorHint"))
-}
-
-/** Each of [segments] is a member of the record the step before it reached, from [start]. */
-private fun Validator.walkSegments(start: String?, segments: List<Seg>, path: PathExpr) {
-    var current = start
-    for (segment in segments) {
-        val shape = current ?: return
-        val member = model.membersOf(shape)[segment.name]
-        if (member == null) {
-            val read = Printer.expr(PathExpr(path.root, path.segs.take(path.segs.indexOf(segment) + 1)))
-            diagnostics.add(declaredSeparately(segment.name, shape, read) ?: Diagnostic("F1", "'${segment.name}' is not a member of '$shape'"))
-            return
-        }
-        current = recordShapeOf(member.type)
-    }
 }
 
 /** F1 over a union (Reference §9): a name each operand declares for itself is not one declaration,

@@ -141,8 +141,9 @@ class Validator(internal val model: Model) {
     /** The `for each` blocks around the statement being checked, outermost first (Reference §14). */
     internal var enclosingBlocks: List<ForEach> = emptyList()
 
-    /** Each narrowed path, as text, to the scope it is narrowed to, while a licensed branch is checked. */
-    internal val scopeByNarrowedPath = mutableMapOf<String, String>()
+    /** Each narrowed path, by its names after any leading `this` (`velle.spec.ShapeNarrowing.namesOf`), to the
+     *  shape it is narrowed to, while a licensed branch is checked. */
+    internal val scopeByNarrowedPath = mutableMapOf<List<String>, String>()
 
     /** What the governing tests of the branch being checked show: paths present and tests established (Reference §10). */
     internal var branchNarrowing: Narrowing = Narrowing.NONE

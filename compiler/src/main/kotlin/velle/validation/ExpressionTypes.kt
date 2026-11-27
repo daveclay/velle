@@ -33,14 +33,8 @@ internal fun Validator.valueKind(type: VType?): String? = when (type) {
  *  the aliases, and the paths the branch being checked has narrowed (V11). */
 internal fun Validator.typeEnv(): TypeEnv = TypeEnv(
     thisScope, scopeByAlias.toMap(), scalarTypeByAlias.toMap(),
-    narrowed = scopeByNarrowedPath.entries.associate { (pathKey, shape) -> namesAfterThis(pathKey) to shape },
+    narrowed = scopeByNarrowedPath.toMap(),
 ).with(ruleNarrowing).with(branchNarrowing)
-
-/** The names of a narrowed path's key, `this.a.b` or `a.b`, without a leading `this`. */
-private fun namesAfterThis(pathKey: String): List<String> {
-    val names = pathKey.split(".")
-    return if (names.first() == "this") names.drop(1) else names
-}
 
 /** The type of an expression as the model reads it (`ExprTypes`), with its optionality
  *  taken off, as the kind checks here want it; null when the model gives none or the
