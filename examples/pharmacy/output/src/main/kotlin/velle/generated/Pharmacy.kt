@@ -148,8 +148,6 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         boundary("CountLot", input, actor).carryingNoRecord(input)
 
     /** Queue keys: [recall.lot] — plus system-wide width below.
-     *  System-wide over Recall — consults Recall through 'recalls' with no keyable owner (unexamined (A5)).
-     *  System-wide over Quarantine — consults Quarantine through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Fill — reads Fill.lot with no path back to any key (unexamined (A5)).
      *  System-wide over Recall — consults Recall through 'recalls' with no keyable owner (unexamined (A5)).
      *  System-wide over RecallNotice — consults RecallNotice through a path the derivation cannot key (unexamined (A5)).

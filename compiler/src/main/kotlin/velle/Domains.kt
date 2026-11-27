@@ -1,5 +1,8 @@
 package velle
 
+import velle.spec.PathStart
+import velle.spec.Scope as PathScope
+
 /**
  * Serialization-domain derivation (OQ40): per act — and per
  * schedule-fired rule, per firing — the set of **queue keys** the envelope's
@@ -306,7 +309,12 @@ class DomainAnalysis(private val model: Model) {
         }
     }
 
-    private fun corrExpr(e: Expr, scope: String, out: MutableSet<Pair<String, String>>, seen: MutableSet<String>) {
+    /** [atSubject] is true where a bare name is a member of the condition's subject, false inside a filter over another shape. */
+    private fun corrExpr(e: Expr, scope: String, out: MutableSet<Pair<String, String>>, seen: MutableSet<String>, atSubject: Boolean = true) {
+        // a refinement the subject is tested against, `Fined` or `this is Fined`, correlates as its own condition does
+        fun subjectRefinement(name: String?) {
+            if (name != null && name in model.refinements && seen.add(name)) collectCorrelations(model.refinements.getValue(name).expr, out, seen)
+        }
         fun inverseAt(p: PathExpr) {
             // a subject-rooted read of an inferred inverse collection: `loans` /
             // `this.loans` — including one hidden behind a derived property
@@ -349,12 +357,19 @@ class DomainAnalysis(private val model: Model) {
                 is ShapeForSource -> forThis(src.shape, src.forExpr)
                 else -> {}
             }
-            c.where?.let { corrExpr(it, scope, out, seen) }
+            c.where?.let { corrExpr(it, scope, out, seen, atSubject = false) }
         }
         when (e) {
-            is PathExpr -> inverseAt(e)
-            is Binary -> { corrExpr(e.left, scope, out, seen); corrExpr(e.right, scope, out, seen) }
-            is NotExpr -> corrExpr(e.inner, scope, out, seen)
+            is PathExpr -> {
+                if (atSubject && e.segs.isEmpty()) subjectRefinement(e.root)
+                inverseAt(e)
+            }
+            is IsExpr -> {
+                if (e.subject == PathExpr("this")) subjectRefinement(e.refinement)
+                corrExpr(e.subject, scope, out, seen, atSubject)
+            }
+            is Binary -> { corrExpr(e.left, scope, out, seen, atSubject); corrExpr(e.right, scope, out, seen, atSubject) }
+            is NotExpr -> corrExpr(e.inner, scope, out, seen, atSubject)
             is UnaryMinus -> corrExpr(e.inner, scope, out, seen)
             is IfExpr -> { corrExpr(e.condition, scope, out, seen); corrExpr(e.thenExpr, scope, out, seen); corrExpr(e.elseExpr, scope, out, seen) }
             is Interpolation -> e.pieces.forEach { piece -> corrExpr(piece, scope, out, seen) }
@@ -404,7 +419,9 @@ class DomainAnalysis(private val model: Model) {
         val out = mutableSetOf<Pair<String, String>>()
         val seen = mutableSetOf<String>()
         for (r in model.rules.values) {
-            val scope = conditionScope(r.condition)
+            val subject = conditionScope(r.condition)
+            // a path in the body may start at the rule's actor, an `as` name, or a `for each` name
+            val scope = PathScope.of(subject, model.namesBoundIn(r), subject)
             for (item in r.body.statements()) when (item) {
                 is Assignment -> { bodyPath(item.target, scope, out, seen); item.reads.forEach { read -> bodyCorr(read, scope, out, seen) } }
                 is Creation -> {
@@ -419,7 +436,7 @@ class DomainAnalysis(private val model: Model) {
         out
     }
 
-    private fun bodyCorr(e: Expr, scope: String, out: MutableSet<Pair<String, String>>, seen: MutableSet<String>) {
+    private fun bodyCorr(e: Expr, scope: PathScope, out: MutableSet<Pair<String, String>>, seen: MutableSet<String>) {
         fun refRoutes(name: String) {
             if (name in model.refinements) collectCorrelations(RefName(name), out, seen)
         }
@@ -428,7 +445,7 @@ class DomainAnalysis(private val model: Model) {
             refRoutes(shape)
             forExpr?.let { bodyCorr(it, scope, out, seen) }
             val tbase = (forExpr as? PathExpr)
-                ?.let { model.pathElementShape(it, scope) }?.let { model.baseOf(it) }
+                ?.let { path -> model.paths.resolve(path, scope).endShape }?.let { model.baseOf(it) }
             val matched = tbase?.let { target -> model.typeMatchedFields(shape, target).singleOrNull() }
             for (base in model.basesOf(shape)) {
                 if (matched != null) { out.add(base to matched); continue }
@@ -485,22 +502,15 @@ class DomainAnalysis(private val model: Model) {
     /** Walk a body path for routes: an inverse-collection member read anywhere
      *  along it correlates, derived members expand, and a refinement-named
      *  root contributes its predicate's routes. */
-    private fun bodyPath(p: PathExpr, scope: String, out: MutableSet<Pair<String, String>>, seen: MutableSet<String>) {
-        fun step(sc: String?, name: String): String? {
-            val m = model.membersOf(sc ?: return null)[name] ?: return null
-            m.inverse?.let { inv -> if (!inv.many) model.basesOf(inv.shape).forEach { declaring -> out.add(declaring to inv.field) } }
-            m.derived?.let { d -> if (seen.add("d:${m.owner}.${m.name}")) bodyCorr(d.expr, m.owner, out, seen) }
-            return m.type.instanceShape() ?: (m.type as? VType.Coll)?.shape
-        }
-        var sc: String? = when {
-            p.root == "this" -> scope
-            p.root in model.shapes || p.root in model.refinements -> {
-                if (p.root in model.refinements) collectCorrelations(RefName(p.root), out, seen)
-                model.baseOf(p.root)
-            }
-            else -> step(scope, p.root)
-        }
-        for (seg in p.segs) sc = step(sc, seg.name)
+    private fun bodyPath(p: PathExpr, scope: PathScope, out: MutableSet<Pair<String, String>>, seen: MutableSet<String>) {
+        val resolved = model.paths.resolve(p, scope)
+        (resolved.start as? PathStart.ShapeName)?.let { named -> if (named.name in model.refinements) collectCorrelations(RefName(named.name), out, seen) }
+        for (step in resolved.steps) bodyRouteThrough(step.member, out, seen)
+    }
+
+    private fun bodyRouteThrough(member: MemberInfo, out: MutableSet<Pair<String, String>>, seen: MutableSet<String>) {
+        member.inverse?.let { inverse -> if (!inverse.many) model.basesOf(inverse.shape).forEach { declaring -> out.add(declaring to inverse.field) } }
+        member.derived?.let { derived -> if (seen.add("d:${member.owner}.${member.name}")) bodyCorr(derived.expr, PathScope(member.owner), out, seen) }
     }
 
     // ── the derivation driver ────────────────────────────────────────────────

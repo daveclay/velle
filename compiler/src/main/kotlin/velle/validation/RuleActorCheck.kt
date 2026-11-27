@@ -130,19 +130,11 @@ private fun Validator.checkActorAccepted(rule: RuleDecl, actor: RuleActor, decla
 /** The alias a rule's `by` clause binds, for the read summaries: the actor's
  *  reads are reads on its shape, not an unresolvable root. */
 internal fun Validator.ruleAliases(rule: RuleDecl): Map<String, String> =
-    actorAlias(rule) + creationAliases(rule) + loopAliases(rule)
-
-private fun actorAlias(rule: RuleDecl): Map<String, String> =
-    rule.by?.let { actor -> mapOf(actor.name to actor.shape) }.orEmpty()
-
-/** The names the body's `as` clauses bind, each to the shape it creates (Reference §14). */
-private fun creationAliases(rule: RuleDecl): Map<String, String> =
-    rule.creations().mapNotNull { creation -> creation.alias?.let { alias -> alias to creation.shape } }.toMap()
+    model.namesBoundOutsideBlocks(rule) + loopAliases(rule)
 
 /** The names the body's `for each` blocks bind (Reference §14): a record name
  *  to its element shape, a number or scalar name to [VALUE_ALIAS]. */
 internal fun Validator.loopAliases(rule: RuleDecl): Map<String, String> = loopAliasesByRuleName.getOrPut(rule.name) {
-    val scope = (rule.condition as? RefName)?.name?.takeIf { name -> name in model.shapes || name in model.refinements }
-        ?: model.baseOfExpr(rule.condition) ?: return@getOrPut emptyMap()
-    model.loopElementShapes(rule, scope, actorAlias(rule) + creationAliases(rule))
+    val scope = model.ruleSubjectShape(rule) ?: return@getOrPut emptyMap()
+    model.loopElementShapes(rule, scope, model.namesBoundOutsideBlocks(rule))
 }

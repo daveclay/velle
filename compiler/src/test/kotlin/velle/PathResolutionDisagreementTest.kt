@@ -221,18 +221,16 @@ class PathResolutionDisagreementTest {
     }
 
     @Test
-    fun `a refinement named inside a rule's where is not followed for the subject's correlations, though the same refinement as the condition's shape is`() {
+    fun `a refinement named inside a rule's where is followed for the subject's correlations, as the same refinement as the condition's shape is`() {
         val asTheShape = fineDomain("(Fined where name != \"\")")
         assertEquals(listOf("fine.member"), asTheShape.renderKeys("fine"))
         assertFalse(asTheShape.wide, "widenings: ${asTheShape.widenings}")
 
-        // Domains.kt corrExpr reads a bare 'Fined' as a member of Member, finds none, and stops,
-        // so the route from a Fine back to its member is lost and the domain widens; Domains'
-        // body-side routes (bodyPath) follow a refinement-named root into its predicate
+        // a bare 'Fined' and 'this is Fined' test the subject against the refinement, so the route
+        // from a Fine back to its member is followed and the domain does not widen
         for (condition in listOf("(Member where Fined and name != \"\")", "(Member where this is Fined and name != \"\")")) {
             val insideTheWhere = fineDomain(condition)
-            assertTrue(insideTheWhere.widenings.any { widening -> widening.shape == "Fine" && widening.declaration == "rule NoticeFined" },
-                "$condition widenings: ${insideTheWhere.widenings}")
+            assertFalse(insideTheWhere.widenings.any { widening -> widening.shape == "Fine" }, "$condition widenings: ${insideTheWhere.widenings}")
         }
     }
 
@@ -259,15 +257,14 @@ class PathResolutionDisagreementTest {
     }
 
     @Test
-    fun `a read through a for each name gives the serialization domain no correlation route, though the same read through the subject does`() {
+    fun `a read through a for each name gives the serialization domain the correlation route the same read through the subject does`() {
         val throughTheSubject = "rule Scan when Account on commit { Report from { account: this, risky: risky } }"
         val throughALoopName = "rule Scan when Branch on commit { for each account in accounts { Report from { account: account, risky: account.risky } } }"
 
         // a body reading 'risky' correlates Transfers on 'source', so a write to a Transfer keys its source
         assertEquals(listOf("annotate.transfer", "annotate.transfer.source"), annotateKeys(throughTheSubject))
-        // Domains.kt bodyPath takes the loop name 'account' as a member of Branch, finds none, and
-        // records no route, while Domains' Walker resolves the loop name to its element
-        assertEquals(listOf("annotate.transfer"), annotateKeys(throughALoopName))
+        // the loop name 'account' starts the path at its element, an Account (Model.namesBoundIn)
+        assertEquals(listOf("annotate.transfer", "annotate.transfer.source"), annotateKeys(throughALoopName))
     }
 
     // ── 8. a union-typed reference: no store pre-filter for Query, a match for the Evaluator ──

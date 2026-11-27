@@ -34,6 +34,22 @@ fun Model.loopElementShape(source: LoopSource, scope: String, aliases: Map<Strin
     return shape ?: VALUE_ALIAS
 }
 
+/** The shape a rule's condition is over, which its body reads `this` and bare names on; null when it names none. */
+fun Model.ruleSubjectShape(rule: RuleDecl): String? =
+    (rule.condition as? RefName)?.name?.takeIf { name -> name in shapes || name in refinements } ?: baseOfExpr(rule.condition)
+
+/** The names a rule binds outside its blocks (Reference §14, §22): its `by` actor and its creations' `as` names, each to its shape. */
+fun Model.namesBoundOutsideBlocks(rule: RuleDecl): Map<String, String> =
+    rule.by?.let { actor -> mapOf(actor.name to actor.shape) }.orEmpty() +
+        rule.creations().mapNotNull { creation -> creation.alias?.let { alias -> alias to creation.shape } }.toMap()
+
+/** Every name a rule binds, each to the shape of its records or [VALUE_ALIAS]: what a path in its body may start from. */
+fun Model.namesBoundIn(rule: RuleDecl): Map<String, String> {
+    val outside = namesBoundOutsideBlocks(rule)
+    val subject = ruleSubjectShape(rule) ?: return outside
+    return outside + loopElementShapes(rule, subject, outside)
+}
+
 /** The names the rule's blocks bind, each to the shape of its records or [VALUE_ALIAS]; each name's source reads the names before it. */
 fun Model.loopElementShapes(rule: RuleDecl, scope: String, outerAliases: Map<String, String>): Map<String, String> {
     val shapeByLoopName = linkedMapOf<String, String>()

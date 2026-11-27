@@ -114,14 +114,8 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun commit(input: NewGreenhousePlot): Commit<NewGreenhousePlot, Ref<GreenhousePlot>> =
         boundary("GreenhousePlot", input).carrying(input)
 
-    /** Queue keys: [treatment.trial] — plus system-wide width below.
-     *  System-wide over GreenhousePlot — consults GreenhousePlot correlated through 'trial' (unexamined (A5)).
-     *  System-wide over GreenhouseTrial — reads GreenhouseTrial.protocol with no path back to any key (unexamined (A5)).
-     *  System-wide over GreenhouseProtocol — reads GreenhouseProtocol.plotsPerArm with no path back to any key (unexamined (A5)).
-     *  System-wide over Treatment — consults Treatment through 'treatments' with no keyable owner (unexamined (A5)).
-     *  System-wide over PlotObservation — consults PlotObservation through 'plotObservations' with no keyable owner (unexamined (A5)).
-     *  System-wide over GreenhouseResult — consults GreenhouseResult through a path the derivation cannot key (unexamined (A5)).
-     *  System-wide over ObservationCorrection — consults ObservationCorrection through 'observationCorrections' with no keyable owner (unexamined (A5)).
+    /** Queue keys: [treatment.trial], [treatment.trial.protocol] — plus system-wide width below.
+     *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  System-wide over PlotObservation — reads PlotObservation.plot with no path back to any key (unexamined (A5)).
      *  System-wide over GreenhousePlot — reads GreenhousePlot.trial with no path back to any key (unexamined (A5)).
      *  System-wide over Treatment — consults Treatment through 'treatments' with no keyable owner (unexamined (A5)).
