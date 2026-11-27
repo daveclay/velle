@@ -33,7 +33,15 @@ sealed interface Value {
         fun seconds(): Long = amount * unitSeconds(unit)
         fun toJava(): java.time.Duration = java.time.Duration.ofSeconds(seconds())
         companion object {
-            fun ofJava(javaDuration: java.time.Duration): VDuration = ofSeconds(javaDuration.seconds)
+            /** [javaDuration] with any part of a second dropped toward zero: a span a store hands back, or the span between two moments. */
+            fun ofJava(javaDuration: java.time.Duration): VDuration =
+                ofSeconds(javaDuration.truncatedTo(java.time.temporal.ChronoUnit.SECONDS).seconds)
+            /** [javaDuration] when it is whole seconds, the only span a `duration` holds; null when it has a part of a second. */
+            fun ofWholeSeconds(javaDuration: java.time.Duration): VDuration? =
+                if (javaDuration.nano == 0) ofSeconds(javaDuration.seconds) else null
+            /** Why [javaDuration], which has a part of a second, cannot be given to [fieldName]. */
+            fun partOfASecond(fieldName: String, javaDuration: java.time.Duration): String =
+                "'$fieldName' holds whole seconds; $javaDuration has a part of a second"
             fun ofSeconds(totalSeconds: Long): VDuration {
                 for ((unit, secondsPerUnit) in UNITS) {
                     if (totalSeconds != 0L && totalSeconds % secondsPerUnit == 0L) return VDuration(totalSeconds / secondsPerUnit, unit)

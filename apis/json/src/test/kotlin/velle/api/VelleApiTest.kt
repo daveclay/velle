@@ -416,4 +416,20 @@ class VelleApiTest {
         assertEquals(conditions.map { it["key"] }, wells.map { (it["condition"] as Map<*, *>)["key"] })
         assertEquals(BigDecimal("0.1"), conditions[0]["value"])
     }
+
+    // ── a duration holds whole seconds ──────────────────────────────────────────
+
+    @Test
+    fun `a span with a part of a second is refused as data naming the field, and nothing is written`() {
+        // examples/enrollment/enrollment.velle: act Course { title: text, capacity: integer, term: duration, ... }
+        val api = VelleApi(system(example("enrollment")), clock)
+        val forward = api.commit("Course", mapOf("title" to "Algebra", "capacity" to 30, "term" to "PT1.5S"), null)
+        assertEquals(false, forward["accepted"])
+        assertEquals("type: 'Course.term' holds whole seconds; PT1.5S has a part of a second", forward["reason"])
+        val beforeZero = api.commit("Course", mapOf("title" to "Algebra", "capacity" to 30, "term" to "-PT1.5S"), null)
+        assertEquals("type: 'Course.term' holds whole seconds; PT-1.5S has a part of a second", beforeZero["reason"])
+        assertEquals(0, api.count("Course", null, null))
+        accepted(api.commit("Course", mapOf("title" to "Algebra", "capacity" to 30, "term" to "PT90S"), null))
+        assertEquals(1, api.count("Course", null, null))
+    }
 }

@@ -198,4 +198,15 @@ class VelleMcpTest {
         val api = VelleApi(VelleSystem(Model(Parser.parse(example("billing")))), null)
         assertEquals(listOf("velle://model"), VelleMcp(api).resources.map { resource -> resource.resource().uri() })
     }
+
+    @Test
+    fun `a span with a part of a second is a refusal whose text names the field`() {
+        // examples/enrollment/enrollment.velle: act Course { title: text, capacity: integer, term: duration, ... }
+        val client = Client(example("enrollment"))
+
+        val refused = client.call("Course", mapOf("title" to "Algebra", "capacity" to 30, "term" to "PT1.5S"))
+
+        assertEquals(false, refused["isError"])
+        assertEquals("type: 'Course.term' holds whole seconds; PT1.5S has a part of a second", refused.text())
+    }
 }
