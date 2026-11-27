@@ -1,6 +1,6 @@
 # OQ205 — Whether the SQL store names its tables and columns in snake case
 
-**Status:** opened 2026-11-27 from Dave's question whether capitalized table names are conventional in PostgreSQL. D1 and D2 decided 2026-11-27; D3 and D4 await Dave. Nothing built.
+**Status:** opened 2026-11-27 from Dave's question whether capitalized table names are conventional in PostgreSQL. D1, D2, and D3 decided 2026-11-27; D4 awaits Dave. Nothing built.
 
 **In plain terms:** The SQL store names a table `"Student"` and a column `"dueOn"`, exactly as the spec spells them. PostgreSQL users write `student` and `due_on`, and a name with capitals must be quoted in every query of their own. The store will use the lower-case names. Three questions follow: how a run of capitals converts, what happens when two names convert to one, and what happens to a database that already has the old names.
 
@@ -84,7 +84,7 @@ Recommendation: one word per run, the conversion engineers expect.
 
 **Decided:** one word per run, 2026-11-27.
 
-### D3. The store refuses to start when two names become one
+### D3. The store refuses to start when two names become one · Decided 2026-11-27
 
 Should the store refuse to start, naming both Velle names and the table or column they share, when two of them convert to one name?
 
@@ -99,6 +99,8 @@ Recommendation: yes. The compiler cannot catch it, because a table name is the s
 **If we don't**
 - Pro: nothing more to check.
 - Con: two shapes would share one table, and each would read the other's rows as its own.
+
+**Decided:** yes, 2026-11-27.
 
 ### D4. A database with the old names
 
@@ -124,7 +126,7 @@ Recommendation: 3 if no database you care about runs on the SQL store today, oth
 
 ## 3. The build
 
-Not written. D3 and D4 await Dave.
+Not written. D4 awaits Dave.
 
 ## 4. Work items
 
