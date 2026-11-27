@@ -62,7 +62,7 @@ class PathResolutionDisagreementTest {
     }
 
     @Test
-    fun `the polarity walk reads this inside a filter as the element, while the read summary reads it as the subject`() {
+    fun `the polarity walk reads this inside a filter as the subject, as the read summary does`() {
         val spec = """
             act Member {
                 name: text
@@ -85,10 +85,9 @@ class PathResolutionDisagreementTest {
         assertTrue(("Warning" to "member") in summary.fields, "read summary: ${summary.fields}")
         assertFalse(summary.fields.any { (shape, _) -> shape == "Hold" }, "read summary: ${summary.fields}")
 
-        // validation/SignedConsults.kt followPath resolves 'this.flagged' on the element, Loan, so
-        // the signs name Holds, which the refinement never reads, and not Warnings, which it does
+        // the polarity walk resolves 'this.flagged' on the subject too, so the signs name Warnings, not Holds
         val polarities = Validator(model).refinementPolarities("Watched")
-        assertEquals(mapOf("Loan" to 1, "Hold" to 0), polarities.signByConsult)
+        assertEquals(mapOf("Loan" to 1, "Warning" to 0), polarities.signByConsult)
         assertTrue(polarities.complete)
     }
 
@@ -141,22 +140,20 @@ class PathResolutionDisagreementTest {
     """.trimIndent()
 
     @Test
-    fun `the transient check reads a bare name in a filter over two collections on the first, so it refuses a read of the last one's stored field`() {
+    fun `the transient check reads a bare name in a filter over two collections on the last, so it accepts a read of its stored field`() {
         val spec = accounts("charges as charge, payments")
 
-        // validation/TransientFieldCheck.kt reads the bare 'amount' on the first binding's element, Charge
-        assertEquals(listOf("V37"), Validator.validate(spec).map { diagnostic -> diagnostic.code })
-        // Model.collectExpr, CollectionChecks and the Evaluator read it on the last, Payment
+        // the bare 'amount' is the last binding's, Payment's, which is stored
+        assertEquals(emptyList(), Validator.validate(spec))
         assertTrue(("Payment" to "amount") in Model(Parser.parse(spec)).predicateSummary("Matched").fields)
     }
 
     @Test
-    fun `the transient check reads a bare name in a filter over two collections on the first, so it misses a read of the last one's transient field`() {
+    fun `the transient check reads a bare name in a filter over two collections on the last, so it refuses a read of its transient field`() {
         val spec = accounts("payments as payment, charges")
 
-        // the transient check reads 'amount' on Payment, a stored field, and refuses nothing
-        assertEquals(emptyList(), Validator.validate(spec))
-        // the model reads Charge.amount, which is in the act's input and not in its record
+        // the bare 'amount' is Charge's, which is in the act's input and not in its record
+        assertEquals(listOf("V37"), Validator.validate(spec).map { diagnostic -> diagnostic.code })
         assertTrue(("Charge" to "amount") in Model(Parser.parse(spec)).predicateSummary("Matched").fields)
     }
 

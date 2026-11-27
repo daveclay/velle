@@ -1,6 +1,7 @@
 package velle.validation
 
 import velle.*
+import velle.spec.Scope
 
 // ── V37: transient fields of a kept act (Reference §4, "Transient fields of a
 // kept act") ────────────────────────────────────────────────────────────────
@@ -145,14 +146,14 @@ private fun Validator.reportTransientPathRead(path: PathExpr, readScope: Transie
         "or a rule on the bare act may read it, at the commit (Reference §4)"))
 }
 
-/** A collection's `where` runs with its first binding's element as the bare-name scope and `this` unchanged. */
+/** A collection's `where` runs with its last binding's element as the bare-name scope and `this` unchanged (Reference §10). */
 private fun Validator.reportTransientReadsInCollection(collection: CollectionExpr, readScope: TransientReadScope) {
     collection.bindings.forEach { binding -> reportTransientReads(binding.source, readScope) }
     val where = collection.where ?: return
     val bindingAliases = collection.bindings.mapNotNull { binding ->
         binding.alias?.let { alias -> elementScopeOf(binding.source, readScope)?.let { shape -> alias to shape } }
     }
-    val element = collection.bindings.firstOrNull()?.let { binding -> elementScopeOf(binding.source, readScope) } ?: readScope.elementScope
+    val element = collection.bindings.lastOrNull()?.let { binding -> elementScopeOf(binding.source, readScope) } ?: readScope.elementScope
     reportTransientReads(where, readScope.copy(elementScope = element, aliases = readScope.aliases + bindingAliases))
 }
 
@@ -172,34 +173,13 @@ private fun Validator.elementScopeOf(source: Expr, thisScope: String, elementSco
 /** A transient field a path reads: the act that owns it, the field, and the step of the path that reads it. */
 private data class TransientFieldRead(val owner: String, val field: String, val stepIndex: Int)
 
-/** Where a path starts: the shape its first step resolves on, null when that is a value, and the steps. */
-private data class PathStart(val shape: String?, val steps: List<String>)
-
-/**
- * The first transient field a path reads, or null when the path reads none.
- * A step after the first resolves on the shape the previous step's reference
- * points at.
- */
+/** The first transient field a path reads, or null when the path reads none. */
 private fun Validator.transientFieldOnPath(path: PathExpr, thisScope: String, elementScope: String, aliases: Map<String, String>): TransientFieldRead? {
-    val start = pathStart(path, thisScope, elementScope, aliases)
-    var shape = start.shape
-    for ((index, step) in start.steps.withIndex()) {
-        val owner = shape ?: return null
-        val member = model.membersOf(owner)[step] ?: return null
-        if (member.transient) return TransientFieldRead(member.owner, step, index)
-        shape = member.type.instanceShape() ?: (member.type as? VType.Coll)?.shape
-    }
-    return null
-}
-
-private fun Validator.pathStart(path: PathExpr, thisScope: String, elementScope: String, aliases: Map<String, String>): PathStart {
-    val segmentNames = path.segs.map { segment -> segment.name }
-    return when {
-        path.root == "this" -> PathStart(thisScope, segmentNames)
-        path.root in aliases -> PathStart(aliases.getValue(path.root).takeIf { shape -> shape != VALUE_ALIAS }, segmentNames)
-        path.root in model.shapes || path.root in model.refinements -> PathStart(path.root, segmentNames)
-        else -> PathStart(elementScope, listOf(path.root) + segmentNames)
-    }
+    val resolved = model.paths.resolve(path, Scope.of(elementScope, aliases, thisScope))
+    val index = resolved.steps.indexOfFirst { step -> step.member.transient }
+    if (index < 0) return null
+    val member = resolved.steps[index].member
+    return TransientFieldRead(member.owner, member.name, index)
 }
 
 /** Walks every expression in the spec with a human-readable site label. */

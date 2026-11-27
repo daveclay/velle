@@ -1,6 +1,8 @@
 package velle.validation
 
 import velle.*
+import velle.spec.PathStart
+import velle.spec.Scope
 
 // ── signed consults: which way can a creation move this condition? ──────
 //
@@ -71,12 +73,12 @@ private fun Validator.signedRefName(refName: RefName, scope: String, sign: Int, 
     if (refName.name in model.refinements) absorbConsult(accumulator, refName.name, sign, visiting, mergeName = false)
     val where = refName.where ?: return
     val whereScope = if (refName.name in model.shapes || refName.name in model.refinements) refName.name else scope
-    signedExpr(where, whereScope, sign, accumulator, visiting)
+    signedExpr(where, Scope(whereScope), sign, accumulator, visiting)
 }
 
 /** A flat table: each kind of expression either signs its consults itself or
  *  hands its operands on at sign 0, where they move the predicate both ways. */
-private fun Validator.signedExpr(expr: Expr?, scope: String, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
+private fun Validator.signedExpr(expr: Expr?, scope: Scope, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
     when (expr) {
         null -> {}
         is NotExpr -> signedExpr(expr.inner, scope, -sign, accumulator, visiting)
@@ -100,7 +102,7 @@ private fun Validator.signedExpr(expr: Expr?, scope: String, sign: Int, accumula
     }
 }
 
-private fun Validator.signedBinary(binary: Binary, scope: String, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
+private fun Validator.signedBinary(binary: Binary, scope: Scope, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
     when (binary.op) {
         "and", "or" -> {
             signedExpr(binary.left, scope, sign, accumulator, visiting)
@@ -113,7 +115,7 @@ private fun Validator.signedBinary(binary: Binary, scope: String, sign: Int, acc
 
 /** A comparison with a `count` on one side moves with the counted collection;
  *  any other comparison moves both ways. */
-private fun Validator.signedComparison(comparison: Binary, scope: String, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
+private fun Validator.signedComparison(comparison: Binary, scope: Scope, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
     val aggregate = comparison.left as? AggCall ?: comparison.right as? AggCall
     if (aggregate == null || aggregate.name != "count") {
         signedOperandsAtZero(comparison, scope, accumulator, visiting)
@@ -136,24 +138,24 @@ private fun growthDirection(operator: String, aggregateOnLeft: Boolean, sign: In
     }
 }
 
-private fun Validator.signedOperandsAtZero(binary: Binary, scope: String, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
+private fun Validator.signedOperandsAtZero(binary: Binary, scope: Scope, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
     signedExpr(binary.left, scope, 0, accumulator, visiting)
     signedExpr(binary.right, scope, 0, accumulator, visiting)
 }
 
-private fun Validator.signedExists(exists: ExistsExpr, scope: String, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
+private fun Validator.signedExists(exists: ExistsExpr, scope: Scope, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
     exists.shape?.let { shape -> absorbConsult(accumulator, shape, sign, visiting, mergeName = true) } // quantifies
     exists.collection?.let { collection -> signedCollection(collection, scope, sign, accumulator, visiting) }
 }
 
-private fun Validator.signedMembershipTest(membershipTest: IsExpr, scope: String, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
+private fun Validator.signedMembershipTest(membershipTest: IsExpr, scope: Scope, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
     // a membership test on a reference or the subject: internals
     // only — a fresh instance is unreferenced and not the subject
     membershipTest.refinement?.let { refinement -> absorbConsult(accumulator, refinement, sign, visiting, mergeName = false) }
     signedExpr(membershipTest.subject, scope, 0, accumulator, visiting)
 }
 
-private fun Validator.signedPath(path: PathExpr, scope: String, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
+private fun Validator.signedPath(path: PathExpr, scope: Scope, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
     when {
         path.segs.isEmpty() && path.root in model.refinements -> absorbConsult(accumulator, path.root, sign, visiting, mergeName = false)
         path.segs.isEmpty() && path.root in model.shapes -> accumulator.merge(path.root, sign)
@@ -161,7 +163,7 @@ private fun Validator.signedPath(path: PathExpr, scope: String, sign: Int, accum
     }
 }
 
-private fun Validator.signedSelector(shape: String, forExpr: Expr, scope: String, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
+private fun Validator.signedSelector(shape: String, forExpr: Expr, scope: Scope, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
     absorbConsult(accumulator, shape, 0, visiting, mergeName = true)
     signedExpr(forExpr, scope, 0, accumulator, visiting)
 }
@@ -170,45 +172,41 @@ private fun Validator.signedSelector(shape: String, forExpr: Expr, scope: String
  *  amount` consults `SuccessfulCharge` through `netPaid`'s sum): resolve
  *  the path and walk each derived member's formula, at sign 0 — a consult
  *  reached through a value read moves the predicate both ways. */
-private fun Validator.followPath(path: PathExpr, scope: String, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
-    val memberNames: List<String> =
-        if (path.root == "this") path.segs.map { it.name } else listOf(path.root) + path.segs.map { it.name }
-    var currentShape: String? = scope
-    for (memberName in memberNames) {
-        val member = currentShape?.let { model.membersOf(it)[memberName] }
-        if (member == null) { accumulator.incomplete = true; return } // alias or unresolvable: fills cover it
-        signedMemberRead(member, accumulator, visiting)
-        currentShape = member.type.instanceShape() ?: (member.type as? VType.Coll)?.shape
-    }
+private fun Validator.followPath(path: PathExpr, scope: Scope, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
+    val resolved = model.paths.resolve(path, scope)
+    resolved.steps.forEach { step -> signedMemberRead(step.member, accumulator, visiting) }
+    // an alias, or a name that does not resolve: fills cover it
+    if (!resolved.resolves || resolved.start is PathStart.RecordName || resolved.start is PathStart.ValueName) accumulator.incomplete = true
 }
 
 /** Reading [member] consults its formula, if it is derived, and its element shape, if it is a collection. */
 private fun Validator.signedMemberRead(member: MemberInfo, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
     val derived = member.derived
     if (derived != null && visiting.add("prop:${member.owner}.${member.name}"))
-        signedExpr(derived.expr, member.owner, 0, accumulator, visiting)
+        signedExpr(derived.expr, Scope(member.owner), 0, accumulator, visiting)
     (member.type as? VType.Coll)?.let { collectionType -> accumulator.merge(collectionType.shape, 0) }
 }
 
-private fun Validator.signedCollection(collection: CollectionExpr, scope: String, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
+private fun Validator.signedCollection(collection: CollectionExpr, scope: Scope, sign: Int, accumulator: PolarityAccumulator, visiting: MutableSet<String>) {
     // a `where` that is exactly one refinement-membership atom gates fresh
     // rows behind that refinement: the consult is the refinement (name
     // merged — a fresh element enters through it or not at all), never
     // the collection's bare element shape
     val refinementFilter = (collection.where as? PathExpr)?.takeIf { it.segs.isEmpty() && it.root in model.refinements }
-    var elementShape = scope
+    var elementShape = scope.element
     for (binding in collection.bindings) {
         val filteredByRefinement = refinementFilter != null
         elementShape = signedBindingSource(binding.source, scope, sign, filteredByRefinement, accumulator, visiting) ?: elementShape
     }
     if (refinementFilter != null) absorbConsult(accumulator, refinementFilter.root, sign, visiting, mergeName = true)
-    else collection.where?.let { where -> signedExpr(where, elementShape, sign, accumulator, visiting) }
+    // the `where` reads bare names on the element while `this` stays the subject (Reference §10)
+    else collection.where?.let { where -> signedExpr(where, scope.inside(elementShape), sign, accumulator, visiting) }
 }
 
 /** Signs one collection binding's source and returns the shape of its elements,
  *  or null where the source does not name one. */
 private fun Validator.signedBindingSource(
-    source: Expr, scope: String, sign: Int, filteredByRefinement: Boolean,
+    source: Expr, scope: Scope, sign: Int, filteredByRefinement: Boolean,
     accumulator: PolarityAccumulator, visiting: MutableSet<String>,
 ): String? = when (source) {
     is PathExpr -> signedPathSource(source, scope, sign, filteredByRefinement, accumulator, visiting)
@@ -225,14 +223,14 @@ private fun Validator.signedBindingSource(
 }
 
 private fun Validator.signedPathSource(
-    source: PathExpr, scope: String, sign: Int, filteredByRefinement: Boolean,
+    source: PathExpr, scope: Scope, sign: Int, filteredByRefinement: Boolean,
     accumulator: PolarityAccumulator, visiting: MutableSet<String>,
 ): String? {
     if (source.segs.isEmpty() && (source.root in model.shapes || source.root in model.refinements)) {
         absorbConsult(accumulator, source.root, sign, visiting, mergeName = true)
         return source.root
     }
-    val elementShape = model.pathElementShape(source, scope)
+    val elementShape = model.paths.resolve(source, scope).endShape
     if (elementShape == null) {
         accumulator.incomplete = true
         return null
