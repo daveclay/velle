@@ -134,6 +134,10 @@ class Validator(internal val model: Model) {
     /** Each `for each` name bound to numbers or scalar values (Reference §14) to the type of its values: a value with no members. */
     internal val scalarTypeByAlias = mutableMapOf<String, VType>()
 
+    /** The names of every `for each` block around the statement being checked (Reference §14). V34 refuses
+     *  any assignment inside a block, so an assignment through one of these names has been answered. */
+    internal var forEachNames: Set<String> = emptySet()
+
     /** Each narrowed path, as text, to the scope it is narrowed to, while a licensed branch is checked. */
     internal val scopeByNarrowedPath = mutableMapOf<String, String>()
 

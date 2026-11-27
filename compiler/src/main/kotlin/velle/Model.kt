@@ -1032,26 +1032,26 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             }
             is ExistsExpr -> {
                 e.shape?.let { consultShape(it, s) }
-                e.forExpr?.let { collectExpr(it, subject, s, aliases, root) }
+                e.shape?.let { shape -> e.forExpr?.let { forExpr -> collectFor(shape, forExpr, subject, s, aliases, root) } }
                 e.collection?.let { collectCollection(it, subject, s, aliases, root) }
             }
             is AggCall -> collectAgg(e, subject, s, aliases, root)
             is FunCall -> e.args.forEach { collectExpr(it, subject, s, aliases, root) }
-            is SingularFor -> { consultShape(e.shape, s); collectExpr(e.forExpr, subject, s, aliases, root) }
+            is SingularFor -> { consultShape(e.shape, s); collectFor(e.shape, e.forExpr, subject, s, aliases, root) }
             is Access -> {
                 val start: String? = when (val t = e.target) {
                     is AggCall -> collectAgg(t, subject, s, aliases, root)
                         .takeIf { t.name == "latest" || t.name == "first" }
                     is SingularFor -> {
                         consultShape(t.shape, s)
-                        collectExpr(t.forExpr, subject, s, aliases, root)
+                        collectFor(t.shape, t.forExpr, subject, s, aliases, root)
                         t.shape
                     }
                     else -> { collectExpr(t, subject, s, aliases, root); null }
                 }
                 walkSegs(start, e.segs, s)
             }
-            is ShapeForSource -> { consultShape(e.shape, s); collectExpr(e.forExpr, subject, s, aliases, root) }
+            is ShapeForSource -> { consultShape(e.shape, s); collectFor(e.shape, e.forExpr, subject, s, aliases, root) }
             is SetExpr -> collectCollection(e.collection, subject, s, aliases, root)
             // a walk reads its relationship on every record it reaches: the field at
             // shape granularity, which is what the summary records; the condition is
@@ -1076,6 +1076,17 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             summary.existsShapes.add(holding.shape)
             summary.fields.add(holding.shape to holding.field)
         }
+    }
+
+    /** `Shape for <record>` reads the record expression and the field of [shape] that `for`
+     *  matches (Reference §10): which records it finds is that field's value on each of them.
+     *  Every field that could match is recorded, so a spec V13 refuses for matching several
+     *  still reads each; a record expression whose shape cannot be resolved records none. */
+    private fun collectFor(shape: String, forExpr: Expr, subject: String, s: ReadSummary, aliases: Map<String, String>, root: String) {
+        collectExpr(forExpr, subject, s, aliases, root)
+        val recordShape = (forExpr as? PathExpr)?.let { path -> pathElementShape(path, subject, aliases, root) } ?: return
+        val matchedFields = basesOf(recordShape).flatMap { recordBase -> typeMatchedFields(shape, recordBase) }.distinct()
+        for (matchedField in matchedFields) membersOf(shape)[matchedField]?.let { member -> record(shape, member, s) }
     }
 
     private fun consultShape(name: String, s: ReadSummary) {
@@ -1117,7 +1128,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
                 }
                 is ShapeForSource -> {
                     consultShape(src.shape, s)
-                    collectExpr(src.forExpr, subject, s, env, root)
+                    collectFor(src.shape, src.forExpr, subject, s, env, root)
                     bScope = src.shape
                 }
                 is WalkExpr -> {

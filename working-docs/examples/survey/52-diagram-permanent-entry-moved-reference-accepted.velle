@@ -1,0 +1,24 @@
+-- A member has a loan when a Loan exists for it. Nothing deletes a Loan, and rule MoveLoan
+-- gives a loan to another member by setting the loan's `member`.
+--
+-- The state-flow diagram for Member says entry to MemberWithLoan is permanent, with the note
+-- "exists Loan for this can never stop holding", and also draws an arrow out of
+-- MemberWithLoan caused by MoveLoan. The arrow is right: a member whose only loan moves away
+-- stops being a MemberWithLoan. The note is wrong.
+act Member { name: text }
+
+act Loan {
+    member: one Member
+    dueOn: Date
+}
+
+transient act Transfer {
+    loan: one Loan
+    receiver: one Member
+}
+
+rule MoveLoan when Transfer {
+    loan.member = receiver
+}
+
+shape MemberWithLoan = Member where exists Loan for this

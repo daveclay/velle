@@ -16,6 +16,8 @@ private sealed interface LoopElement {
 
 internal fun Validator.checkForEach(rule: RuleDecl, scope: String, block: ForEach, created: Map<String, String>) {
     val narrowingOutside = branchNarrowing
+    val forEachNamesOutside = forEachNames
+    forEachNames = forEachNamesOutside + block.bindings.map { binding -> binding.name }
     val boundNames = block.bindings.filter { binding -> bindLoopName(rule, scope, binding, created) }.map { binding -> binding.name }
     block.body.forEach { item -> checkBlockStatementKind(rule, item) }
     try {
@@ -23,6 +25,7 @@ internal fun Validator.checkForEach(rule: RuleDecl, scope: String, block: ForEac
     } finally {
         boundNames.forEach { name -> scopeByAlias.remove(name); scalarTypeByAlias.remove(name) }
         branchNarrowing = narrowingOutside
+        forEachNames = forEachNamesOutside
     }
 }
 

@@ -199,6 +199,22 @@ class ValidatorTest {
     }
 
     @Test
+    fun `F1 - a filter over a shape the spec does not declare names only the names the author wrote`() {
+        val src = """
+            act PickUp { fill: one Fill }
+            shape VerifiedFill = Fill where exists (verifications where outcome == "approved")
+            never (PickUp where fill is VerifiedFill)
+        """.trimIndent()
+        assertEquals(
+            listOf(
+                "[F1] 'PickUp.fill' relates to unknown shape 'Fill'",
+                "[F1] unknown shape or refinement 'Fill'",
+            ),
+            diags(src).map { diagnostic -> "[${diagnostic.code}] ${diagnostic.message}" },
+        )
+    }
+
+    @Test
     fun `F1 - bare name resolves in the innermost scope only`() {
         val src = """
             act Customer {

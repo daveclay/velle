@@ -175,15 +175,28 @@ class ComparisonDirectionTest {
         assertSays("MoveLoan setting Loan's member can now make a Member stop being a MemberWithLateLoan.", consequences)
     }
 
-    /** `for` names the reference field only by its type, and the comparison does not read that
-     *  field from the test: this pins what the comparison says today, the new Loan and no move. */
     @Test
-    fun `a rule moving a loan to another member, read as the loans for the member, is not said to move members`() {
+    fun `a rule moving a loan to another member, read as the loans for the member, moves members both ways`() {
         val consequences = consequencesOf(movingLoans("exists Loan for this"))
 
-        assertSays("A new Loan can now make a Member become a MemberWithLateLoan.", consequences)
-        assertDoesNotSay("MoveLoan setting Loan's member can now make a Member become a MemberWithLateLoan.", consequences)
-        assertDoesNotSay("MoveLoan setting Loan's member can now make a Member stop being a MemberWithLateLoan.", consequences)
+        assertSays("MoveLoan setting Loan's member can now make a Member become a MemberWithLateLoan.", consequences)
+        assertSays("MoveLoan setting Loan's member can now make a Member stop being a MemberWithLateLoan.", consequences)
+    }
+
+    @Test
+    fun `a rule moving a loan to another member, counted as the loans for the member, moves members both ways`() {
+        val consequences = consequencesOf(movingLoans("count(Loan for this) > 0"))
+
+        assertSays("MoveLoan setting Loan's member can now make a Member become a MemberWithLateLoan.", consequences)
+        assertSays("MoveLoan setting Loan's member can now make a Member stop being a MemberWithLateLoan.", consequences)
+    }
+
+    @Test
+    fun `a rule moving a loan to another member, read as the late loans for the member, moves members both ways`() {
+        val consequences = consequencesOf(movingLoans("exists (Loan for this where dueOn < today)"))
+
+        assertSays("MoveLoan setting Loan's member can now make a Member become a MemberWithLateLoan.", consequences)
+        assertSays("MoveLoan setting Loan's member can now make a Member stop being a MemberWithLateLoan.", consequences)
     }
 
     // ── a rule's creation is read for the values it gives the record ─────────

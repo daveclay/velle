@@ -1,0 +1,5 @@
+-- A field typed with a shape the spec does not declare: `fill: one Fill` with no `Fill`.
+act PickUp {
+    fill: one Fill
+    collectedBy: text
+}

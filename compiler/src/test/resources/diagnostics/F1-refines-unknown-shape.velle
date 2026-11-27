@@ -1,0 +1,4 @@
+-- A refinement over a shape the spec does not declare: `Fil`, where the spec declares `Fill`.
+act Fill { fillNumber: integer }
+
+shape FirstFill = Fil where fillNumber == 1

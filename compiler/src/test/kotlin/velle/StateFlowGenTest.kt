@@ -84,7 +84,7 @@ class StateFlowGenTest {
         assertFalse("--> ActionableOverdue" in invoice, "a composition is not a state")
     }
 
-    private val movingLoans = """
+    private fun movingLoans(lateLoanTest: String) = """
         act Member { name: text }
 
         act Loan {
@@ -101,15 +101,25 @@ class StateFlowGenTest {
             loan.member = receiver
         }
 
-        shape MemberWithLateLoan = Member where exists (loans where dueOn < today)
+        shape MemberWithLateLoan = Member where $lateLoanTest
     """.trimIndent()
 
     @Test
     fun `a rule moving a loan to another member draws the member moving both ways`() {
-        val library = DiagramGen.generate(movingLoans, "Library")
-        val member = library.substringAfter("## State flow").substringAfter("### Member").substringBefore("\n### ")
+        val member = memberStateFlow(movingLoans("exists (loans where dueOn < today)"))
 
         assertTrue("out --> MemberWithLateLoan : MoveLoan writes Loan.member — may flip" in member, member)
         assertTrue("MemberWithLateLoan --> out : MoveLoan writes Loan.member — may flip" in member, member)
     }
+
+    @Test
+    fun `a rule moving a loan to another member draws the member moving both ways when the loans are read with for`() {
+        val member = memberStateFlow(movingLoans("exists (Loan for this where dueOn < today)"))
+
+        assertTrue("out --> MemberWithLateLoan : MoveLoan writes Loan.member — may flip" in member, member)
+        assertTrue("MemberWithLateLoan --> out : MoveLoan writes Loan.member — may flip" in member, member)
+    }
+
+    private fun memberStateFlow(spec: String): String =
+        DiagramGen.generate(spec, "Library").substringAfter("## State flow").substringAfter("### Member").substringBefore("\n### ")
 }

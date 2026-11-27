@@ -1,0 +1,9 @@
+-- An assignment inside `for each`, `item.n = 1`, written through the block's own name; a block creates records.
+act Item { label: text, n: integer }
+act Batch { items: many Item, n: integer }
+
+rule Tag when Batch {
+    for each item in items {
+        item.n = 1
+    }
+}

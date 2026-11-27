@@ -606,9 +606,14 @@ class DomainAnalysis(private val model: Model) {
 
         /** A width over a shape with no records of its own, one several shapes take with `is`
          *  or a static union, is a width over every shape that has them (Reference §9): the
-         *  store serializes on shapes it holds rows of. */
+         *  store serializes on shapes it holds rows of. A scope the walker could not resolve names
+         *  no shape, and holds none: the name that left it unresolved is reported where it is written. */
         fun widen(shape: String, cause: String, decl: String, tolerated: Boolean) {
-            val held = if (shape in model.shapes) listOf(shape) else model.basesOf(shape).toList()
+            val held = when {
+                shape in model.shapes -> listOf(shape)
+                model.namesShapeOrRefinement(shape) -> model.basesOf(shape).toList()
+                else -> emptyList()
+            }
             for (heldShape in held) widenings.putIfAbsent(decl to heldShape, Widening(heldShape, cause, decl, tolerated))
         }
 

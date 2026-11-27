@@ -1,0 +1,12 @@
+-- A fill owes counselling until a Counselling exists for it, and a fill that owes counselling
+-- is not picked up. The spec does not declare Counselling.
+--
+-- The compiler prints two messages for the one missing name, on top of the one about PickUp.
+-- The first says where the name is written; the second repeats it with nothing added.
+act Fill { fillNumber: integer }
+
+transient act PickUp { fill: one Fill }
+
+shape CounsellingDue = Fill where not exists Counselling for this
+
+never (PickUp where fill is CounsellingDue)

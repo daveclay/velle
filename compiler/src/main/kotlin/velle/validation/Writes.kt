@@ -21,7 +21,9 @@ internal fun Validator.resolveWrite(rule: RuleDecl, scope: String, assignment: A
     if (target.root == "this") return resolveTargetSegments(rule, assignment, TargetStep(scope, fanOut = false))
     val rootMember = model.membersOf(scope)[target.root]
     if (rootMember == null) {
-        diagnostics.add(Diagnostic("F1", "rule '${rule.name}' assigns through unknown member '${target.root}'"))
+        // an assignment through a `for each` name has its one message, V34's
+        if (target.root !in forEachNames)
+            diagnostics.add(Diagnostic("F1", "rule '${rule.name}' assigns through unknown member '${target.root}'"))
         return null
     }
     val scopeBase = model.baseOf(scope) ?: scope

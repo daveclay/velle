@@ -240,6 +240,34 @@ class ForEachTest {
         assertTrue(del.any { it.code == "V34" && "deletes inside" in it.message }, del.toString())
     }
 
+    private val assignmentThroughLoopName = """
+        act Item { label: text, n: integer }
+        act Batch { items: many Item, n: integer }
+
+        rule Tag when Batch {
+            for each item in items {
+                item.n = 1
+            }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `an assignment through a block's own name draws V34 alone`() {
+        val messages = diags(assignmentThroughLoopName).map { diagnostic -> "[${diagnostic.code}] ${diagnostic.message}" }
+        assertEquals(
+            listOf("[V34] rule 'Tag' assigns inside `for each` — a block creates records; to write one field of every member " +
+                "of a collection, assign through the collection (`this.n = ...` on the collection path, Reference §12)"),
+            messages,
+        )
+    }
+
+    @Test
+    fun `an assignment inside a block through a name the rule does not have draws F1`() {
+        val diagnostics = diags(assignmentThroughLoopName.replace("item.n = 1", "thing.n = 1"))
+        assertTrue(diagnostics.any { diagnostic -> diagnostic.code == "F1" && diagnostic.message == "rule 'Tag' assigns through unknown member 'thing'" },
+            diagnostics.toString())
+    }
+
     @Test
     fun `V34 - an as name bound in a block is read inside it only`() {
         val spec = BASE + """
