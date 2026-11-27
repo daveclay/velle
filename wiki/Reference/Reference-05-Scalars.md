@@ -208,7 +208,7 @@ sequence: integer initially if exists (Chart where patient == this.patient) then
 
 The first chart of a patient starts at 1, the next at 2. `count(Chart where patient == this.patient)` in an `initially` is the number of earlier charts and does not count the new one.
 
-On an `act`, a field with `initially` is one the committer may leave out. `act Listing { title: text  isDraft: boolean initially true }` in `examples/moderation/moderation.velle` is committed with a title alone, and the listing starts as a draft. A committer who gives `isDraft` a value has that value kept.
+On an `act`, a field with `initially` is one the committer may leave out. `act Listing { title: text  isDraft: boolean initially true }` in `examples/moderation/moderation.velle` is committed with a title alone, and the listing starts as a draft. A committer who gives `isDraft` a value has that value kept. The same holds for a computed starting value: `receivedOn: Date initially today` on an act is the date of the commit when left out, and the committer's date when given. A rule fired by the act, kept or `transient`, reads the filled value.
 
 ## Generated values
 
@@ -231,7 +231,7 @@ shape Review {
 - `createdAt: timestamp on create` is set once, at the commit that creates the review.
 - `updatedAt: timestamp on update` moves forward at every commit that writes a stored field of the review. The creating commit counts, so the field is never absent.
 
-The names are yours; `correctedOn: timestamp on create` is fine. A committer cannot supply the value, and `this.updatedAt = now` in a rule is a compile error.
+The names are yours; `correctedOn: timestamp on create` is fine. A committer cannot supply the value: an act committed with a value for a timestamp field is refused, and the refusal names the field. `this.updatedAt = now` in a rule is a compile error. On an act, `on create` is the moment of the commit that submits it, and `on update` moves forward when a rule writes a field of the act.
 
 Choose `initially now` when the moment is a business fact someone may later correct, and `timestamp on create` when it is a fact about the commit. A timestamp can be named in a selector's `by` clause like any field ([§10](Reference-10-Predicate-expressions)), but only by name.
 

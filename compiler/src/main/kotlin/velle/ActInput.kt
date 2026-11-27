@@ -386,8 +386,11 @@ private fun typeFailure(decl: ShapeDecl, supplied: Map<String, Any?>, skipRequir
     val required = stored.filter { prop -> prop.requiredAtCreation() }.map { prop -> prop.name }
     val missing = required - supplied.keys - skipRequired
     val undeclared = supplied.keys - stored.map { prop -> prop.name }.toSet()
+    val timestampSupplied = decl.members.filterIsInstance<TimestampProp>().firstOrNull { timestamp -> timestamp.name in supplied.keys }
     return when {
         missing.isNotEmpty() -> "type: '${decl.name}' requires $missing"
+        // a timestamp is the commit's own fact, never the committer's (Reference §5, "Timestamps")
+        timestampSupplied != null -> "type: '${decl.name}.${timestampSupplied.name}' is a timestamp the commit fills; a committer cannot supply it"
         undeclared.isNotEmpty() -> "type: '${decl.name}' does not declare $undeclared"
         else -> "type: unacceptable fields for '${decl.name}'"
     }
