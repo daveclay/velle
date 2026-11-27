@@ -720,11 +720,7 @@ class DomainAnalysis(private val model: Model) {
                 }
                 is FunCall -> e.args.forEach { walkExpr(it, ctx) }
                 is SingularFor -> return correlatedSource(e.shape, e.forExpr, ctx)
-                is Access -> {
-                    var scope = walkExpr(e.target, ctx)
-                    for (seg in e.segs) scope = hop(scope, seg.name)
-                    return scope
-                }
+                is Access -> return walkNames(walkExpr(e.target, ctx), e.segs.map { seg -> seg.name })
                 is ShapeForSource -> return correlatedSource(e.shape, e.forExpr, ctx)
                 is SetExpr -> return walkCollection(e.collection, ctx)
                 // a walk reads the whole connected part of its shape: no key reaches
@@ -760,9 +756,10 @@ class DomainAnalysis(private val model: Model) {
         }
 
         private fun walkPath(p: PathExpr, ctx: Ctx): Scope? {
-            var scope: Scope? = when {
-                p.root == "this" -> ctx.subject
-                p.root in ctx.aliases -> ctx.aliases.getValue(p.root)
+            val segmentNames = p.segs.map { seg -> seg.name }
+            return when {
+                p.root == "this" -> walkNames(ctx.subject, segmentNames)
+                p.root in ctx.aliases -> walkNames(ctx.aliases.getValue(p.root), segmentNames)
                 p.root in model.shapes || p.root in model.refinements -> {
                     // bare name as a membership atom of the innermost element
                     if (p.root in model.refinements && expanding.add("atom:${p.root}"))
@@ -771,22 +768,24 @@ class DomainAnalysis(private val model: Model) {
                     if (p.segs.isNotEmpty())
                         acc.widen(model.baseOf(p.root) ?: p.root,
                             "'${Printer.expr(p)}' reads through a bare shape name", decl, tolerated)
-                    return null
+                    null
                 }
-                else -> {
-                    val inner = ctx.innermost()
-                    val m = model.membersOf(inner.name)[p.root]
-                    if (m == null) {
-                        val narrowed = narrowedOnUnion(p.root, inner) ?: run {
-                            acc.widen(model.declaredBaseOf(inner.name) ?: inner.name,
-                                "'${p.root}' cannot be resolved on '${inner.name}'", decl, tolerated)
-                            return null
-                        }
-                        narrowed.scope
-                    } else memberScope(m, inner)
-                }
+                else -> walkNames(ctx.innermost(), listOf(p.root) + segmentNames)
             }
-            for (seg in p.segs) scope = hop(scope, seg.name)
+        }
+
+        /**
+         * Reads [names] one after another from a record of [start], as `velle.spec.PathResolver` resolves
+         * them, and steps the anchor along each. A name no member resolves to, one only some operands of a
+         * union declare, goes to [hop], which reads it on each operand that does.
+         */
+        private fun walkNames(start: Scope?, names: List<String>): Scope? {
+            if (start == null || names.isEmpty()) return start
+            val resolved = model.paths.resolveAfter(start.name, names)
+            var scope: Scope? = start
+            for (step in resolved.steps) scope = memberScope(step.member, scope ?: return null)
+            val unresolvedAt = resolved.steps.size
+            for (name in names.drop(unresolvedAt)) scope = hop(scope, name)
             return scope
         }
 
