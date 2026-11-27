@@ -61,6 +61,33 @@ class ComparisonDirectionTest {
         assertDoesNotSay("Time passing can now make a Member stop being a MemberWithLateLoan.", consequences)
     }
 
+    private fun lateLoans(lateLoanTest: String) = """
+        act Member { name: text }
+
+        act Loan {
+            member: one Member
+            dueOn: Date
+        }
+
+        shape MemberWithLateLoan = Member where $lateLoanTest
+    """.trimIndent()
+
+    @Test
+    fun `time passing can make a member one with a late loan and never not, read as the loans naming the member`() {
+        val consequences = consequencesOf(lateLoans("exists (Loan where member == this and dueOn < today)"))
+
+        assertSays("Time passing can now make a Member become a MemberWithLateLoan.", consequences)
+        assertDoesNotSay("Time passing can now make a Member stop being a MemberWithLateLoan.", consequences)
+    }
+
+    @Test
+    fun `time passing can make a member one with a late loan and never not, read as the loans for the member`() {
+        val consequences = consequencesOf(lateLoans("exists (Loan for this where dueOn < today)"))
+
+        assertSays("Time passing can now make a Member become a MemberWithLateLoan.", consequences)
+        assertDoesNotSay("Time passing can now make a Member stop being a MemberWithLateLoan.", consequences)
+    }
+
     @Test
     fun `a new return can take a member's loan out of open and never put one in`() {
         val consequences = consequencesOf(openAndLateLoans)

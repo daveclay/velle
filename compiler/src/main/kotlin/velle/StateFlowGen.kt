@@ -521,25 +521,63 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
     private class FixedCollection(val where: Expr, val elementShape: String)
 
     /**
-     * [collection] as a [FixedCollection] when it is one relationship of [subject], filtered,
-     * and a commit of kind [k] cannot add an element to it, remove one, or re-point one in or
-     * out. Null for every collection this cannot be proven for.
+     * [collection] as a [FixedCollection] when it is filtered, reads one relationship of
+     * [subject] or the records of one shape, and a commit of kind [k] cannot add an element to
+     * it, remove one, or re-point one in or out. Null for every collection this cannot be proven for.
      */
     private fun fixedFilteredCollection(collection: CollectionExpr?, k: CommitKind, subject: String): FixedCollection? {
         val where = collection?.where ?: return null
-        // `this` names the subject, which a read of one element does not see
-        if (mentionsThis(where)) return null
-        val relationship = soleRelationshipOf(collection, subject) ?: return null
-        val elementShape = (relationship.type as? VType.Coll)?.shape?.takeIf { shape -> shape in model.shapes } ?: return null
-        if (canChangeElements(k, subject, relationship, elementShape)) return null
-        return FixedCollection(where, elementShape)
+        // `this` names the subject, whose fields a read of one element does not see
+        if (!readsThisOnlyAsItself(where)) return null
+        val source = collection.bindings.singleOrNull()?.takeIf { binding -> binding.alias == null }?.source ?: return null
+        val relationship = soleRelationshipOf(source, subject)
+        if (relationship != null) {
+            val elementShape = (relationship.type as? VType.Coll)?.shape?.takeIf { shape -> shape in model.shapes } ?: return null
+            if (canChangeElements(k, subject, relationship, elementShape)) return null
+            return FixedCollection(where, elementShape)
+        }
+        val recordShape = recordsOfOneShape(source) ?: return null
+        if (canChangeRecords(k, source, recordShape, subject)) return null
+        return FixedCollection(where, recordShape)
     }
 
-    /** The one stored or inverse relationship of [subject] that [collection] reads, named bare,
-     *  so that the filter's bare names name the element's fields. Null for anything else. */
-    private fun soleRelationshipOf(collection: CollectionExpr, subject: String): MemberInfo? {
-        val binding = collection.bindings.singleOrNull()?.takeIf { binding -> binding.alias == null } ?: return null
-        val source = binding.source as? PathExpr ?: return null
+    /** Whether every `this` in [expression] stands alone on one side of `==` or `!=`: the subject
+     *  record itself, compared with a field of the element, and no field of the subject read. */
+    private fun readsThisOnlyAsItself(expression: Expr): Boolean {
+        if (expression is PathExpr) return expression.root != "this"
+        val subjectItself = PathExpr("this")
+        if (expression is Binary && (expression.op == "==" || expression.op == "!=")) {
+            if (expression.left == subjectItself) return readsThisOnlyAsItself(expression.right)
+            if (expression.right == subjectItself) return readsThisOnlyAsItself(expression.left)
+        }
+        val parts = if (expression is ListLit) expression.items else subExpressionsOf(expression)
+        return parts.all { part -> readsThisOnlyAsItself(part) }
+    }
+
+    /** The shape of the records [source] holds when it is every record of one shape, `Loan`, or
+     *  the records of one shape that name the subject, `Loan for this`. Null for anything else. */
+    private fun recordsOfOneShape(source: Expr): String? = when {
+        source is PathExpr && source.segs.isEmpty() -> source.root.takeIf { name -> name in model.shapes }
+        source is ShapeForSource && source.forExpr == PathExpr("this") -> source.shape.takeIf { name -> name in model.shapes }
+        else -> null
+    }
+
+    /** Whether a commit of kind [k] can change which [recordShape] records [source] holds. */
+    private fun canChangeRecords(k: CommitKind, source: Expr, recordShape: String, subject: String): Boolean {
+        val shapesThatMatter = model.basesOf(recordShape) + recordShape + setOfNotNull(model.baseOf(subject))
+        return when (k) {
+            is CommitKind.Create -> k.shape in shapesThatMatter || model.typeAccepts(recordShape, k.shape)
+            is CommitKind.Delete -> k.shape in shapesThatMatter || model.typeAccepts(recordShape, k.shape)
+            // `for` finds the records by a reference field, which a write can re-point
+            is CommitKind.Assign -> source is ShapeForSource && touchesExpr(source, k, subject)
+            CommitKind.TimePasses -> false
+        }
+    }
+
+    /** The one stored or inverse relationship of [subject] that [source] names bare, so that
+     *  the filter's bare names name the element's fields. Null for anything else. */
+    private fun soleRelationshipOf(source: Expr, subject: String): MemberInfo? {
+        if (source !is PathExpr) return null
         if (source.root == "this" || source.segs.isNotEmpty()) return null
         val relationship = model.membersOf(subject)[source.root] ?: return null
         val recorded = relationship.derived == null && (relationship.stored || relationship.inverse != null)

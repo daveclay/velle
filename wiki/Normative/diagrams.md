@@ -120,7 +120,12 @@ Arrow directions are proven, not guessed, from five sources:
   record to the collection, remove one, or move one in or out by changing the
   reference that puts it there. After such a change the collection holds the
   same records, so the `exists` moves the way its `where` moves on each
-  record. In `examples/payments/payments.velle`, `InGracePeriod = Order where
+  record. The collection is one relationship of the record, such as `loans`,
+  or the records of one shape, such as `Loan` or `Loan for this`. Its `where`
+  may compare a field with `this`, as `member == this` does, but may not
+  read a field of `this`. So `exists (Loan where member == this and dueOn <
+  today)` moves as `exists (loans where dueOn < today)` does: time passing can
+  only make it hold. In `examples/payments/payments.velle`, `InGracePeriod = Order where
   exists (paymentExtensions where endsOn >= today)` can only stop holding as
   time passes. In `examples/peptides/peptides.velle`, a new
   PhytotoxicityReport can only put a trial into `HaltedTrial`. A new record
