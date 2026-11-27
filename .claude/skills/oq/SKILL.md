@@ -34,10 +34,15 @@ audit- files. An investigation is part of an OQ file and dies with it.
 - Opening paragraphs state the rules and the next free tag
   (`next free: OQ<n>`). Bump the number every time an OQ is opened.
 - Sections are the part of Velle an OQ changes (Calibration, Prohibitions,
-  Validator proofs, Expressions, Acts, Serialization domains, Spec
-  generation, Reads, Serving, Velle UI, Runtime, Deletion, Larger language
-  questions, Examples and docs). File an OQ by what it changes, never by
-  where it was found.
+  Validator proofs, Expressions, Acts, Serialization domains, Describing
+  and comparing a spec, Compiler messages, Spec generation, Reads, Serving,
+  Velle UI, Runtime, Deletion, Larger language questions, Examples and
+  docs). File an OQ by what it changes, never by where it was found.
+  Residue goes to the section of what it changes, which is often not the
+  section of the OQ it came from: what `velle describe`, `velle compare`,
+  or a diagram says goes under "Describing and comparing a spec", and what
+  a message says or how many print goes under "Compiler messages" (Dave,
+  2026-11-27).
 - An OQ line with a file: `- **[OQ<n>](questions/OQ<n>-<slug>.md)** — <the
   question in plain words> · <status: opened when, from where, what awaits
   whom; how many work items the file holds, when it holds any>`.
