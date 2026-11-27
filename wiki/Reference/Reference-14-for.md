@@ -99,7 +99,7 @@ rule LayOut when ExperimentDesign {
 - `replicate`, `position`, `condition`, and `slot` are values inside their block. `condition.block` reads the condition's field. `slot` is a number and has no fields. Outside the block the names mean nothing.
 - The rule fires once per design. Every container and every well it creates lands in the design's own commit, so a well a `never` refuses refuses the whole design ([§20](Reference-20-State-change-patterns)).
 
-A block holds creations and other blocks. To write one field of every member of a collection, assign through the collection ([§12](Reference-12-Assignment)). To delete every member, write a rule on the member shape that deletes `this` ([§12](Reference-12-Assignment), "Deletion"). A later name in one `for each` may use an earlier one, as in `for each n from 1 to lines, copy from 1 to n`. `then` inside a block orders the block's statements each time it runs ([§15](Reference-15-then)).
+A block holds creations and other blocks. To write one field of every member of a collection, write the assignment in the rule, outside any block, through the collection: `items.n = 1` writes `n` on every record in `items` ([§6](Reference-06-Relationships#committing-and-assigning-collections)). To delete every member, write a rule on the member shape that deletes `this` ([§12](Reference-12-Assignment), "Deletion"). A later name in one `for each` may use an earlier one, as in `for each n from 1 to lines, copy from 1 to n`. `then` inside a block orders the block's statements each time it runs ([§15](Reference-15-then)).
 
 ## What the compiler checks
 

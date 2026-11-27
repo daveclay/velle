@@ -1,0 +1,9 @@
+-- An assignment inside `for each`, `item.n = 1`, where the block runs over a filter, `(items where n > 0)`; the advice names no spelling of the author's own.
+act Item { label: text, n: integer }
+act Batch { items: many Item, n: integer }
+
+rule Tag when Batch {
+    for each item in (items where n > 0) {
+        item.n = 1
+    }
+}

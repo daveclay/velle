@@ -235,7 +235,7 @@ class ForEachTest {
     @Test
     fun `V34 - a block holds creations and blocks only`() {
         val assign = diags(BASE + "\nrule R when Design { for each item in items { item.k = 1 } }")
-        assertTrue(assign.any { it.code == "V34" && "assigns inside" in it.message }, assign.toString())
+        assertTrue(assign.any { it.code == "V34" && "assigns 'item.k' inside 'for each'" in it.message }, assign.toString())
         val del = diags(BASE + "\nrule R when Design { for each item in items { delete item } }")
         assertTrue(del.any { it.code == "V34" && "deletes inside" in it.message }, del.toString())
     }
@@ -255,10 +255,50 @@ class ForEachTest {
     fun `an assignment through a block's own name draws V34 alone`() {
         val messages = diags(assignmentThroughLoopName).map { diagnostic -> "[${diagnostic.code}] ${diagnostic.message}" }
         assertEquals(
-            listOf("[V34] rule 'Tag' assigns inside `for each` — a block creates records; to write one field of every member " +
-                "of a collection, assign through the collection (`this.n = ...` on the collection path, Reference §12)"),
+            listOf("[V34] rule 'Tag' assigns 'item.n' inside 'for each' — a block creates records; to write 'n' on every member " +
+                "of 'items', write 'items.n = 1' in the rule, outside the block (Reference §6)"),
             messages,
         )
+    }
+
+    @Test
+    fun `an assignment through a block's name over a filter is advised in general words`() {
+        val messages = diags(assignmentThroughLoopName.replace("in items", "in (items where n > 0)"))
+            .map { diagnostic -> "[${diagnostic.code}] ${diagnostic.message}" }
+        assertEquals(listOf(generalAssignmentAdvice("item.n")), messages)
+    }
+
+    @Test
+    fun `an assignment whose value reads the block's name is advised in general words`() {
+        val messages = diags(assignmentThroughLoopName.replace("item.n = 1", "item.n = item.n + 1"))
+            .map { diagnostic -> "[${diagnostic.code}] ${diagnostic.message}" }
+        assertEquals(listOf(generalAssignmentAdvice("item.n")), messages)
+    }
+
+    private fun generalAssignmentAdvice(target: String) =
+        "[V34] rule 'Tag' assigns '$target' inside 'for each' — a block creates records; to write one field of every member " +
+            "of a collection, write the assignment in the rule, outside the block, through the path to the collection, " +
+            "as 'this.invoices.customer = this.customer' writes 'customer' on every invoice (Reference §6)"
+
+    private val assignmentThroughCollection = """
+        act Item { label: text, n: integer }
+        act Batch { items: many Item, n: integer }
+
+        rule Tag when Batch {
+            items.n = 1
+        }
+    """.trimIndent()
+
+    @Test
+    fun `the spelling V34 advises writes the field on every member of the collection`() {
+        val sys = system(assignmentThroughCollection)
+        sys.scope {
+            val first = sys.accept("Item", "label" to "a", "n" to 0)
+            val second = sys.accept("Item", "label" to "b", "n" to 0)
+            val untouched = sys.accept("Item", "label" to "c", "n" to 0)
+            sys.accept("Batch", "items" to listOf(first, second), "n" to 0)
+            assertEquals(listOf(1L, 1L, 0L), listOf(first, second, untouched).map { item -> (sys.get(item, "n") as Number).toLong() })
+        }
     }
 
     @Test
