@@ -1,6 +1,9 @@
 package velle.validation
 
 import velle.*
+import velle.spec.PathStart
+import velle.spec.ResolvedPath
+import velle.spec.Scope
 
 // ── writes ───────────────────────────────────────────────────────────────
 
@@ -10,10 +13,6 @@ internal data class Write(val rule: RuleDecl, val owner: String, val member: Mem
                           *  one-writer treats it as a write to the field on every instance (V1, coarse) */
                          val fanOut: Boolean = false)
 
-/** One step of an assignment's target path: the shape it reaches, and whether
- *  a `many` hop on the way already fanned the write out. */
-private class TargetStep(val shape: String, val fanOut: Boolean)
-
 /** Resolves [assignment]'s target to the field it writes, or reports why it
  *  cannot be written and returns null. [blockRecordShape] holds the `for each`
  *  name the target goes through and the shape of its records, when V34 accepts
@@ -22,40 +21,34 @@ internal fun Validator.resolveWrite(
     rule: RuleDecl, scope: String, assignment: Assignment, blockRecordShape: Map<String, String> = emptyMap(),
 ): Write? {
     val target = assignment.target
-    if (target.root == "this") return resolveTargetSegments(rule, assignment, TargetStep(scope, fanOut = false))
-    blockRecordShape[target.root]?.let { shape -> return resolveTargetSegments(rule, assignment, TargetStep(shape, fanOut = true)) }
-    val rootMember = model.membersOf(scope)[target.root]
-    if (rootMember == null) {
+    val writeScope = blockRecordShape.entries.fold(Scope(scope)) { soFar, (name, shape) -> soFar.withRecordName(name, shape) }
+    val resolved = model.paths.resolve(target, writeScope)
+    if (resolved.start is PathStart.Element && resolved.steps.isEmpty() || resolved.start is PathStart.ShapeName) {
         // an assignment through a `for each` name that V34 refuses has its one message, V34's
         if (target.root !in forEachNames)
             diagnostics.add(Diagnostic("F1", "rule '${rule.name}' assigns through unknown member '${target.root}'"))
         return null
     }
-    val scopeBase = model.baseOf(scope) ?: scope
-    if (target.segs.isEmpty())
-        return writeOfMember(rule, scopeBase, rootMember, assignment, fanOut = false, targetText = target.root)
-    val firstStep = stepThrough(rule, rootMember, scopeBase, atPenultimate = target.segs.size == 1, fannedOut = false)
-        ?: return null
-    return resolveTargetSegments(rule, assignment, firstStep)
-}
-
-/** Walks the target's segments from [firstStep] to the member the last one names. */
-private fun Validator.resolveTargetSegments(rule: RuleDecl, assignment: Assignment, firstStep: TargetStep): Write? {
-    val segments = assignment.target.segs
-    var step = firstStep
-    for ((index, segment) in segments.withIndex()) {
-        val member = model.membersOf(step.shape)[segment.name]
-        if (member == null) {
-            diagnostics.add(Diagnostic("F1", "rule '${rule.name}' assigns through unknown member '${segment.name}' of '${step.shape}'"))
-            return null
+    var fannedOut = resolved.start is PathStart.RecordName
+    val lastIndex = namesWrittenThrough(resolved) - 1
+    for ((index, step) in resolved.steps.withIndex()) {
+        if (index == lastIndex) {
+            val owner = model.baseOf(step.readOn) ?: step.readOn
+            val targetText = if (target.segs.isEmpty()) target.root else Printer.expr(target)
+            return writeOfMember(rule, owner, step.member, assignment, fannedOut, targetText)
         }
-        if (index == segments.lastIndex) {
-            val owner = model.baseOf(step.shape) ?: step.shape
-            return writeOfMember(rule, owner, member, assignment, step.fanOut, targetText = Printer.expr(assignment.target))
-        }
-        step = stepThrough(rule, member, step.shape, atPenultimate = index == segments.lastIndex - 1, step.fanOut) ?: return null
+        fannedOut = stepThrough(rule, step.member, step.readOn, atPenultimate = index == lastIndex - 1, fannedOut) ?: return null
+    }
+    resolved.unresolved?.readOn?.let { readOn ->
+        diagnostics.add(Diagnostic("F1", "rule '${rule.name}' assigns through unknown member '${resolved.unresolved.name}' of '$readOn'"))
     }
     return null
+}
+
+/** How many names of the target are members a write goes through or lands on: the root too, when it is a member itself. */
+private fun namesWrittenThrough(resolved: ResolvedPath): Int {
+    val segments = resolved.path?.segs?.size ?: 0
+    return if (resolved.start is PathStart.Element) segments + 1 else segments
 }
 
 private fun Validator.writeOfMember(
@@ -68,24 +61,22 @@ private fun Validator.writeOfMember(
     return Write(rule, owner, member, assignment.target, assignment.value, fanOut)
 }
 
-/** Steps through [member] of [ownerShape] toward the written field; null where
- *  the path cannot go on (reported, unless the member reaches no shape). */
-private fun Validator.stepThrough(rule: RuleDecl, member: MemberInfo, ownerShape: String, atPenultimate: Boolean, fannedOut: Boolean): TargetStep? {
-    val collectionType = member.type as? VType.Coll
-    if (collectionType != null) return fanOutStep(rule, member, ownerShape, collectionType, atPenultimate, fannedOut)
+/** Steps through [member] of [ownerShape] toward the written field: whether
+ *  the write has fanned out after it, or null where the path cannot go on
+ *  (reported, unless the member reaches no shape). */
+private fun Validator.stepThrough(rule: RuleDecl, member: MemberInfo, ownerShape: String, atPenultimate: Boolean, fannedOut: Boolean): Boolean? {
+    if (member.type is VType.Coll) return fanOutStep(rule, member, ownerShape, atPenultimate, fannedOut)
     if (member.type is VType.CollS) {
         diagnostics.add(Diagnostic("V20", "rule '${rule.name}' assigns through scalar collection '$ownerShape.${member.name}'"))
         return null
     }
-    val instanceShape = member.type.instanceShape() ?: return null
-    return TargetStep(instanceShape, fannedOut)
+    member.type.instanceShape() ?: return null
+    return fannedOut
 }
 
 /** V20: a collection path fans out exactly at the penultimate hop —
  *  it writes a field *of* the members, never through them (Reference §6). */
-private fun Validator.fanOutStep(
-    rule: RuleDecl, member: MemberInfo, ownerShape: String, collectionType: VType.Coll, atPenultimate: Boolean, fannedOut: Boolean,
-): TargetStep? {
+private fun Validator.fanOutStep(rule: RuleDecl, member: MemberInfo, ownerShape: String, atPenultimate: Boolean, fannedOut: Boolean): Boolean? {
     if (!atPenultimate) {
         diagnostics.add(Diagnostic("V20", "rule '${rule.name}' assigns through '$ownerShape.${member.name}' and onward — " +
             "a collection path writes a field of the collection's members, never through them; " +
@@ -97,7 +88,7 @@ private fun Validator.fanOutStep(
             "a fan-out traverses exactly one (Reference §6)"))
         return null
     }
-    return TargetStep(collectionType.shape, fanOut = true)
+    return true
 }
 
 internal fun Validator.findWrites(): List<Write> {
