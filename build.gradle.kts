@@ -35,5 +35,14 @@ tasks.register("generate") {
         ":examples:batches:output:generate",
         ":examples:platelayout:output:generate",
         ":examples:bookings:output:generate",
+        ":examples:vendors:output:generate",
     )
+}
+
+// Each example's `generate` runs in a Java process of its own. Without a ceiling Java lets it grow
+// to a quarter of the machine's memory; the largest spec, pharmacy, uses under 100 MB of heap.
+subprojects {
+    tasks.withType<JavaExec>().matching { task -> task.name == "generate" }.configureEach {
+        maxHeapSize = "512m"
+    }
 }

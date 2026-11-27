@@ -61,8 +61,8 @@ and 5 change. See §6 before starting.
 
 - Modules: `ls -d examples/*/output`. Do not trust a remembered list; a
   module is added with every use case.
-- Per module, sequentially: `./gradlew :examples:<m>:output:generate -q
-  --max-workers=1`. Parallel runs run out of memory. Each module's
+- Every module at once: `./gradlew generate -q`, or one module with
+  `./gradlew :examples:<m>:output:generate -q`. Each module's
   `generate` task runs on that module's main runtime classpath, so its main
   must compile first.
 - When a runtime type the generated code names changes shape, the stale
@@ -91,7 +91,7 @@ and 5 change. See §6 before starting.
 
 ## 3. Running the suite
 
-`./gradlew test --continue -q --max-workers=2`. The suite has no expected
+`./gradlew test --continue -q`. The suite has no expected
 failures: every failing test is a failure to fix or to report. Name them by
 parsing `**/build/test-results/test/*.xml` for `<testcase>` elements holding
 a `<failure>`.
@@ -185,6 +185,11 @@ in another directory). The example tests are slow, so they run once, after
 the last branch has merged, and not once per branch. Without that word from
 the managing session, §1 to §5 apply unchanged.
 
+Workers build at the same time; each build gets its own Gradle daemon, and
+no worker waits for another. A worker never runs `./gradlew --stop`: it
+stops every Gradle daemon on the machine, and the other workers' builds fail
+with it.
+
 ### On the branch
 
 - Step 2 of §1 is skipped. Do not regenerate, and do not commit any
@@ -202,7 +207,7 @@ the managing session, §1 to §5 apply unchanged.
   `./gradlew :compiler:test :stores:sql:test :stores:sqlite:test
   :stores:postgres:test :apis:json:test :apis:graphql:test :apis:mcp:test
   :apis:spring:test :extensions:finance:test :extensions:finance-sql:test
-  --continue -q --max-workers=2`. Check the list against
+  --continue -q`. Check the list against
   `settings.gradle.kts`; it is every module there that does not start with
   `examples:`.
 - The settling commit (§4) lands on the branch. Its grep for the OQ tag
