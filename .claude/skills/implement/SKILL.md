@@ -210,12 +210,63 @@ the managing session, §1 to §5 apply unchanged.
 - The report says "built, examples not yet run", never "done". The first
   two checks of §5 wait for the final step.
 
+### Before the workers start
+
+The managing session flags every OQ of the round (§0), then gives each
+worker, in its brief:
+
+- its branch name, `oq<n>`, and the commit of `main` it starts from;
+- two tags of its own for residue, taken above `next free`, so that two
+  workers never open the same tag. A worker sets `next free` only past a
+  tag it used;
+- the name of any other worker changing the same files, so that it keeps
+  its change narrow.
+
+A survey file a worker adds takes the next free number in
+`working-docs/examples/survey/`. Two branches can pick the same number; the
+managing session renumbers the later one when it merges.
+
 ### Merging
 
-The managing session merges one branch at a time. The branch is rebased onto
-the current `main`, the command above runs again, and the branch lands as a
-single merge commit, so that a later failure can be traced to one OQ. Only
-the managing session resolves a conflict in `working-docs/QUESTIONS.md`.
+The managing session merges one branch at a time, in the order the workers
+report. Each branch lands as a single merge commit, so that a later failure
+can be traced to one OQ.
+
+1. In the worker's worktree, `git rebase main`.
+2. Resolve each conflict, one commit of the branch at a time. Only the
+   managing session resolves these:
+   - **`working-docs/QUESTIONS.md`.** Start from `main`'s copy, never the
+     branch's. Remove the line of each OQ the commit settles, with its
+     flag. Put the commit's settled rows at the top of the settled table.
+     Put each residue line the commit opened under the section the worker
+     filed it in. Set `next free` to the larger of `main`'s and the
+     branch's. Nothing else of the branch's copy is kept.
+   - **`working-docs/examples/survey/README.md`.** Start from `main`'s
+     copy. Remove the rows of the survey files the commit moves or
+     deletes, and add the rows of any it adds.
+   - **A survey file whose number another branch took.** `git mv` it to
+     the next free number, and change its README row and every line that
+     names it.
+   - **An OQ file the branch deletes and `main` changed.** `git rm` it.
+   - **Code or a wiki page two branches both changed.** Keep what each OQ
+     built; read both sides, never take one whole. Say in the report to
+     Dave which file it was and what was kept.
+3. `GIT_EDITOR=true git rebase --continue`, and repeat step 2 for the next
+   commit of the branch.
+4. Check the result: the settled OQ has no line left in `QUESTIONS.md`
+   outside the settled table, and no survey file or README row of it is
+   left.
+5. Run the non-example command above on the rebased branch, and name every
+   failure from `**/build/test-results/test/*.xml`. A branch with a
+   failure is not merged.
+6. If `main` moved while the tests ran, rebase again. A run stays good
+   when `main` gained only files under `working-docs/`.
+7. On `main`: `git merge --no-ff oq<n> -m "Merge OQ<n>: <what Velle can
+   now say>"`, then `git push`.
+
+After the last merge, no line in `QUESTIONS.md` says "(being built since
+...)", and `next free` is one past the highest tag in the file. A flag
+still present means a worker or a merge is still owed.
 
 ### The final step
 
