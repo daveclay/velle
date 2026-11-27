@@ -977,6 +977,118 @@ abstract class SqlStoreConformance {
         assertEquals(mapOf<String, Any?>("escalatedWith" to ada), b.store.fetchCaptures(fire, "Escalated"), "the closed ticket is not the agent")
     }
 
+    // ── foreign keys: the database refuses a reference to a row that is not there ──
+
+    /** A connection of the engineer's own, set up as the store sets up each of its connections. */
+    private fun Attached.preparedConnection(): Connection = ds.connection.also { connection -> store.dialect.prepare(connection) }
+
+    private fun Attached.executePrepared(sql: String) =
+        preparedConnection().use { connection -> connection.createStatement().use { statement -> statement.execute(sql) } }
+
+    /** Runs [commit] in a write unit of the store's own, as the runtime does, and ends the unit with how it went. */
+    private fun Attached.commitDirectly(commit: CommitSet): List<StoreKey> {
+        val unit = store.begin(WorkKind.WRITE)
+        val minted = try {
+            store.onCommit(commit)
+        } catch (failure: Exception) {
+            unit.end(Outcome.Failed(failure))
+            throw failure
+        }
+        unit.end(Outcome.Committed)
+        return minted
+    }
+
+    @Test
+    fun `the database refuses to remove a row a reference or a collection still holds, and a rule's delete still commits`() {
+        val a = attach(spec = pointedAtSpec)
+        val ada = accepted(a.sys.commit("Seller", mapOf("name" to "Ada")))!!
+        val bea = accepted(a.sys.commit("Seller", mapOf("name" to "Bea")))!!
+        accepted(a.sys.commit("Listing", mapOf("title" to "Lamp", "seller" to a.id(ada))))
+        accepted(a.sys.commit("Shelf", mapOf("label" to "all", "sellers" to listOf(a.id(bea)), "items" to emptyList<Any>())))
+
+        assertFailsWith<Exception>("a listing's seller") { a.executePrepared("""DELETE FROM "Seller" WHERE id = ${ada.key.value}""") }
+        assertFailsWith<Exception>("a shelf's member") { a.executePrepared("""DELETE FROM "Seller" WHERE id = ${bea.key.value}""") }
+        assertEquals(2L, a.count("Seller"))
+
+        accepted(a.sys.commit("CloseAccount", mapOf("seller" to a.id(ada))))
+        accepted(a.sys.commit("CloseAccount", mapOf("seller" to a.id(bea))))
+        assertEquals(0L, a.count("Seller"))
+        assertNull(a.scalar("""SELECT seller FROM "Listing""""))
+        assertEquals(0L, a.count("Shelf__sellers"))
+    }
+
+    @Test
+    fun `the store's own connections enforce the foreign key, so a commit naming a record that is not there fails`() {
+        val a = attach(spec = pointedAtSpec)
+        val missingSeller = Ref.Persisted("Seller", StoreKey(999L))
+        val listing = CommitSet.Creation("Listing", mapOf("title" to "Lamp", "seller" to missingSeller))
+        assertFailsWith<Exception> { a.commitDirectly(CommitSet(created = listOf(listing), assigned = emptyList())) }
+        assertEquals(0L, a.count("Listing"), "the failed commit wrote nothing")
+    }
+
+    @Test
+    fun `one commit creating a record and a record pointing at it writes them in an order the foreign key accepts`() {
+        val a = attach(spec = pointedAtSpec)
+        val seller = CommitSet.Creation("Seller", mapOf("name" to "Ada"))
+        val listing = CommitSet.Creation("Listing", mapOf("title" to "Lamp", "seller" to Ref.Pending("Seller", 0)))
+        val shelf = CommitSet.Creation("Shelf", mapOf("label" to "all", "sellers" to listOf(Ref.Pending("Seller", 0)), "items" to emptyList<Any>()))
+        val minted = a.commitDirectly(CommitSet(created = listOf(seller, listing, shelf), assigned = emptyList()))
+        assertEquals(minted[0].value, (a.scalar("""SELECT seller FROM "Listing"""") as Number).toLong())
+        assertEquals(minted[0].value, (a.scalar("""SELECT target FROM "Shelf__sellers"""") as Number).toLong())
+    }
+
+    @Test
+    fun `two records pointing at each other are accepted by the foreign key`() {
+        val partnerSpec = """
+            act Dancer {
+                name: text
+                partner: one Dancer?
+            }
+            transient act Pair {
+                dancer: one Dancer
+                partner: one Dancer
+            }
+            rule ApplyPair when Pair { dancer.partner = partner }
+        """.trimIndent()
+        val a = attach(spec = partnerSpec)
+        val ada = accepted(a.sys.commit("Dancer", mapOf("name" to "Ada")))!!
+        val bea = accepted(a.sys.commit("Dancer", mapOf("name" to "Bea", "partner" to a.id(ada))))!!
+        accepted(a.sys.commit("Pair", mapOf("dancer" to a.id(ada), "partner" to a.id(bea))))
+        assertEquals(bea.key.value, (a.scalar("""SELECT partner FROM "Dancer" WHERE name = 'Ada'""") as Number).toLong())
+        assertFailsWith<Exception> { a.executePrepared("""DELETE FROM "Dancer" WHERE id = ${ada.key.value}""") }
+    }
+
+    @Test
+    fun `a reference typed with a union has no foreign key`() {
+        val a = attach(spec = pointedAtSpec)
+        val post = accepted(a.sys.commit("Post", mapOf("title" to "Hello")))!!
+        accepted(a.sys.commit("Bookmark", mapOf("label" to "on the post", "target" to a.id(post))))
+        a.executePrepared("""DELETE FROM "Post" WHERE id = ${post.key.value}""")
+        assertEquals(0L, a.count("Post"))
+    }
+
+    @Test
+    fun `a table that already exists is left as it is, without a foreign key`() {
+        val dataSource = ds()
+        val dialect = store(system(pointedAtSpec).model, dataSource, emptyList()).dialect
+        dataSource.connection.use { connection ->
+            connection.createStatement().use { statement ->
+                statement.execute("""CREATE TABLE "Listing" (id ${dialect.keyColumn}, "title" TEXT, "seller" BIGINT)""")
+            }
+        }
+        val a = attach(dataSource, spec = pointedAtSpec)
+        val ada = accepted(a.sys.commit("Seller", mapOf("name" to "Ada")))!!
+        val bea = accepted(a.sys.commit("Seller", mapOf("name" to "Bea")))!!
+        accepted(a.sys.commit("Listing", mapOf("title" to "Lamp", "seller" to a.id(ada))))
+        accepted(a.sys.commit("Shelf", mapOf("label" to "all", "sellers" to listOf(a.id(bea)), "items" to emptyList<Any>())))
+
+        a.executePrepared("""DELETE FROM "Seller" WHERE id = ${ada.key.value}""")
+        assertEquals(ada.key.value, (a.scalar("""SELECT seller FROM "Listing"""") as Number).toLong(), "the existing table has no foreign key")
+        assertFailsWith<Exception>("a table the store created has its foreign key") {
+            a.executePrepared("""DELETE FROM "Seller" WHERE id = ${bea.key.value}""")
+        }
+    }
+
     // ── E4: an extension type's binding, checked at start-up through the dialect's column ──
 
     protected val moneySpec = """

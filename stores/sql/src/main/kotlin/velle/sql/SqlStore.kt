@@ -444,13 +444,75 @@ open class SqlStore(
         else -> scalarColumn(type).columnType
     }
 
+    /**
+     * A foreign key on [column] of [table], naming the table of [targetShape]: the database
+     * refuses a write leaving the column holding a key no row of that table has, and the
+     * removal of a row a reference still holds.
+     */
+    private data class ForeignKey(val table: String, val column: String, val targetShape: String) {
+        val clause: String get() = """FOREIGN KEY ("$column") REFERENCES "$targetShape"(id)"""
+    }
+
+    /**
+     * The foreign keys of [shape]'s table and its junction tables: one per column or junction
+     * member that references one shape. A reference typed with a union points at rows of
+     * several tables and has none; a junction table's owner has none, since the owner's
+     * row is removed before its collections ([delete]); a capture table has none, for the same reason.
+     */
+    private fun foreignKeysOf(shape: String): List<ForeignKey> {
+        val columnKeys = columnsOf(shape).filterNot { column -> column.union }.mapNotNull { column ->
+            referencedTable(column.type)?.let { targetShape -> ForeignKey(shape, column.name, targetShape) }
+        }
+        val memberKeys = collectionsOf(shape).filterNot { collection -> collection.union }.mapNotNull { collection ->
+            referencedTable(collection.element)?.let { targetShape -> ForeignKey(junctionTable(shape, collection.name), "target", targetShape) }
+        }
+        return columnKeys + memberKeys
+    }
+
+    /** The table a reference of [type] points at: its declared shape's one base, when that base is stored; null for anything else. */
+    private fun referencedTable(type: VType): String? {
+        val declaredShape = type.instanceShape() ?: return null
+        val baseShape = model.baseOf(declaredShape) ?: return null
+        return baseShape.takeIf { shape -> shape in persistedShapes }
+    }
+
+    private val foreignKeysByTable: Map<String, List<ForeignKey>> by lazy {
+        persistedShapes.flatMap { shape -> foreignKeysOf(shape) }.groupBy { foreignKey -> foreignKey.table }
+    }
+
+    /** The foreign key clauses `CREATE TABLE` declares for [table], each after a comma; none when the dialect adds them afterwards. */
+    private fun inlineForeignKeys(table: String): String {
+        if (!dialect.declaresForeignKeysInTable) return ""
+        return foreignKeysByTable[table].orEmpty().joinToString("") { foreignKey -> ", ${foreignKey.clause}" }
+    }
+
+    /**
+     * Creates every table the model needs that the database does not have. A table that
+     * already exists is left as it is, its constraints included: the store adds a foreign
+     * key only to a table it creates.
+     */
     fun createSchema() = onConnection { connection ->
+        val tablesBefore = if (dialect.declaresForeignKeysInTable) emptySet() else existingTables(connection)
         connection.createStatement().use { statement ->
             for (shape in persistedShapes) createShapeTables(statement, shape)
+            if (!dialect.declaresForeignKeysInTable) addForeignKeys(statement, tablesBefore)
             for (captureSchema in model.captureSchemas) createCaptureTable(statement, captureSchema)
             statement.execute("""CREATE TABLE IF NOT EXISTS "$tickTable" (schedule $textColumnType PRIMARY KEY, ran_at ${momentStorage.columnType} NOT NULL)""")
         }
         installRenderings(connection)
+    }
+
+    /** The names of the tables in the connection's current schema. */
+    private fun existingTables(connection: Connection): Set<String> =
+        connection.metaData.getTables(connection.catalog, connection.schema, "%", arrayOf("TABLE")).use { tables ->
+            buildSet { while (tables.next()) add(tables.getString("TABLE_NAME")) }
+        }
+
+    /** Adds the foreign keys of every table created just now, once every table they name exists. */
+    private fun addForeignKeys(statement: Statement, tablesBefore: Set<String>) {
+        val createdTables = foreignKeysByTable.filterKeys { table -> table !in tablesBefore }
+        for (foreignKey in createdTables.values.flatten())
+            statement.execute("""ALTER TABLE "${foreignKey.table}" ADD ${foreignKey.clause}""")
     }
 
     private fun createShapeTables(statement: Statement, shape: String) {
@@ -458,7 +520,7 @@ open class SqlStore(
             """, "${column.name}" ${columnType(column.type)}""" +
                 if (column.union) """, "${shapeColumn(column.name)}" $textColumnType""" else ""
         }
-        statement.execute("""CREATE TABLE IF NOT EXISTS "$shape" (id ${dialect.keyColumn}$columns${keyConstraints(shape)})""")
+        statement.execute("""CREATE TABLE IF NOT EXISTS "$shape" (id ${dialect.keyColumn}$columns${keyConstraints(shape)}${inlineForeignKeys(shape)})""")
         for (collection in collectionsOf(shape)) createJunctionTable(statement, shape, collection)
     }
 
@@ -469,9 +531,10 @@ open class SqlStore(
             collection.union -> "target ${keyStorage.columnType} NOT NULL, target_shape $textColumnType NOT NULL"
             else -> "target ${keyStorage.columnType} NOT NULL"
         }
+        val table = junctionTable(shape, collection.name)
         statement.execute(
-            """CREATE TABLE IF NOT EXISTS "${junctionTable(shape, collection.name)}" """ +
-                """(owner ${keyStorage.columnType} NOT NULL, pos ${keyStorage.columnType} NOT NULL, $member)"""
+            """CREATE TABLE IF NOT EXISTS "$table" """ +
+                """(owner ${keyStorage.columnType} NOT NULL, pos ${keyStorage.columnType} NOT NULL, $member${inlineForeignKeys(table)})"""
         )
     }
 

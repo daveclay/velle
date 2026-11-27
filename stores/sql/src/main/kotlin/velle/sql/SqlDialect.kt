@@ -31,6 +31,14 @@ interface SqlDialect {
      */
     val serializesKeys: Boolean get() = false
 
+    /**
+     * Whether a foreign key is declared inside the `CREATE TABLE` of the table holding the
+     * reference, where the database accepts one naming a table not yet created. When false,
+     * as standard SQL needs, the store adds each foreign key of a table it just created with
+     * `ALTER TABLE` once every table exists.
+     */
+    val declaresForeignKeysInTable: Boolean get() = false
+
     /** Installs what the dialect needs on a connection the store just took from its `DataSource`; idempotent. */
     fun prepare(conn: Connection) {}
 

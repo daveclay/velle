@@ -29,6 +29,10 @@ import java.util.WeakHashMap
  * decimal column answers no comparison in SQL), dates, times, datetimes and
  * uuids as ISO-8601 TEXT, bytes as BLOB.
  *
+ * Foreign keys: SQLite enforces them only on a connection that turns them on, so
+ * [prepare] turns them on for every connection the store takes. The engineer's own
+ * connections enforce them only when the engineer turns them on as well.
+ *
  * Units of work: a read begins a deferred transaction, which SQLite answers from
  * one snapshot; a write begins an immediate one, taking the database's single
  * write lock at once rather than at the first write. SQLite has one writer at a
@@ -55,10 +59,18 @@ object SqliteDialect : SqlDialect {
         else runCatching { conn.unwrap(SQLiteConnection::class.java) }.getOrNull()
             ?: throw IllegalStateException("SQLite store: the connection is not SQLite's own and cannot be unwrapped to one (${conn::class.qualifiedName})")
 
-    /** `REGEXP` once per underlying connection, so `matches` (Reference §10) runs in the store. */
+    /** SQLite has no `ALTER TABLE` that adds a constraint, and accepts a foreign key naming a table it has not yet created. */
+    override val declaresForeignKeysInTable: Boolean get() = true
+
+    /**
+     * Once per underlying connection: foreign keys enforced, which SQLite leaves off unless
+     * each connection turns them on, and `REGEXP`, so `matches` (Reference §10) runs in the
+     * store. The pragma is set before any transaction begins, since SQLite ignores it inside one.
+     */
     override fun prepare(conn: Connection) {
         val c = native(conn)
         if (!prepared.add(c)) return
+        conn.createStatement().use { statement -> statement.execute("PRAGMA foreign_keys = ON") }
         org.sqlite.Function.create(c, "REGEXP", object : org.sqlite.Function() {
             private val cache = HashMap<String, java.util.regex.Pattern>()
             override fun xFunc() {

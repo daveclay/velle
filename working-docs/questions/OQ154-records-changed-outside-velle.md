@@ -11,7 +11,7 @@
 ## Roster
 
 - **D1** to **D5**: the decisions, in §2.
-- **P1** to **P7**: the probes, each one test in `OutsideChangeProbeTest`, in §1.
+- **P1** to **P8**: the probes, each one test in `OutsideChangeProbeTest`, in §1.
 - **U4**, **U5**: clauses of the store contract in `wiki/Normative/evaluation.md`, "The universal transaction". U4 says what a commit wrote stays written. U5 says nothing writes to the tables but a commit.
 - **An outside change**: a write to a table backing a Velle shape that is not a commit, a seed, or a tick of the running system. Hand-run SQL, a migration script, another service.
 - **An unreadable record**: a record whose row the runtime cannot turn into what the spec declares: a required field with no value, a value of another type than the field's, or no row at all where a reference says there is one.
@@ -51,8 +51,9 @@ Each probe commits one `Drug` and one `Interaction`, makes one outside change wi
 | P5 | the `Drug` row removed, then `Interaction.drug` read | the reference to the `Drug`, no error (absent before OQ153 D4 was built on 2026-11-20) | "a reference to a removed row is still read as a reference, with no error" |
 | P6 | the `Drug` row removed, then `Interaction.drugName` read | `VelleRuntimeError`: "missing instance 5", where 5 is a number private to the runtime (before OQ153 D4 was built: "'.' through an absent value (validator narrowing gap)") | "a member derived through a removed row fails naming the runtime's private number for it" |
 | P7 | the `Drug` row removed, then the `Drug` read by its own reference | `IllegalArgumentException`: "no instance 13", where 13 is a number private to the runtime | "a removed row read by its own reference fails naming the runtime's private number for it" |
+| P8 | the `Drug` row removed on a connection that enforces foreign keys | refused by the database, and the `Drug` still read | "removing a row a reference holds is refused on a connection that enforces foreign keys" |
 
-Five of the seven say nothing. The two that fail name neither the shape nor the store key, and P6 does not name the field. P2 is specific to SQLite, whose columns accept a value of any type; PostgreSQL refuses that write.
+Since 2026-11-27 the SQL store declares a foreign key on each reference to one shape (`wiki/Guides/Store-API.md`, "Connecting a system to a store"), so P5 to P7 remove the row with foreign keys turned off, as a connection that does not enforce them or a database created before them can. Of P1 to P7, five say nothing. The two that fail name neither the shape nor the store key, and P6 does not name the field. P2 is specific to SQLite, whose columns accept a value of any type; PostgreSQL refuses that write.
 
 ## 2. What to decide
 

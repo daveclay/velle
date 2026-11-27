@@ -58,6 +58,20 @@ class OutsideChangeProbeTest {
         connection.createStatement().use { direct -> direct.executeUpdate(statement) }
     }
 
+    /**
+     * Removes a row the way a connection that does not enforce foreign keys does: SQLite
+     * enforces them only on a connection that turns them on, and the store turns them on
+     * for its own. The pragma has no effect inside a transaction, and none is open here.
+     */
+    private fun outsideVelleWithoutForeignKeys(statement: String) {
+        outsideVelle("PRAGMA foreign_keys = OFF")
+        try {
+            outsideVelle(statement)
+        } finally {
+            outsideVelle("PRAGMA foreign_keys = ON")
+        }
+    }
+
     private fun read(record: Ref.Persisted, member: String): Any? = system.scope { system.get(system.idOf(record), member) }
 
     @Test
@@ -86,22 +100,28 @@ class OutsideChangeProbeTest {
     }
 
     @Test
+    fun `removing a row a reference holds is refused on a connection that enforces foreign keys`() {
+        assertFailsWith<java.sql.SQLException> { outsideVelle("""DELETE FROM "Drug"""") }
+        assertEquals("Warfarin", read(drug, "name"))
+    }
+
+    @Test
     fun `a reference to a removed row is still read as a reference, with no error`() {
         // no rule deletes a Drug, so the runtime does not look for the row before answering
-        outsideVelle("""DELETE FROM "Drug"""")
+        outsideVelleWithoutForeignKeys("""DELETE FROM "Drug"""")
         system.scope { assertEquals(drug, system.refFor(system.get(system.idOf(interaction), "drug") as Long)) }
     }
 
     @Test
     fun `a member derived through a removed row fails naming the runtime's private number for it`() {
-        outsideVelle("""DELETE FROM "Drug"""")
+        outsideVelleWithoutForeignKeys("""DELETE FROM "Drug"""")
         val failure = assertFailsWith<VelleRuntimeError> { read(interaction, "drugName") }
         assertEquals(true, failure.message!!.matches(Regex("missing instance \\d+")), failure.message)
     }
 
     @Test
     fun `a removed row read by its own reference fails naming the runtime's private number for it`() {
-        outsideVelle("""DELETE FROM "Drug"""")
+        outsideVelleWithoutForeignKeys("""DELETE FROM "Drug"""")
         val failure = assertFailsWith<IllegalArgumentException> { read(drug, "name") }
         assertEquals(true, failure.message!!.matches(Regex("no instance \\d+")), failure.message)
     }
