@@ -42,7 +42,7 @@ private fun Validator.checkExprIn(expression: Expr, scope: String, allowGenerato
         is FunCall -> checkCall(expression, scope)
         is SingularFor -> checkSingularFor(expression, scope)
         is Access -> checkAccess(expression, scope)
-        is ShapeForSource -> checkExpr(expression.forExpr, scope)
+        is ShapeForSource -> checkShapeForSource(expression, scope)
         is SetExpr -> checkCollection(expression.collection, scope)
         is WalkExpr -> checkWalk(expression, scope)
         else -> {}
@@ -159,6 +159,13 @@ private fun Validator.checkCall(call: FunCall, scope: String) {
     checkFunctionCall(call, scope)
 }
 
+/** `Shape for x` as a collection source: one field of the shape takes the record `x`. */
+private fun Validator.checkShapeForSource(source: ShapeForSource, scope: String) {
+    checkExpr(source.forExpr, scope)
+    if (isShapeOrRefinement(source.shape))
+        checkForTypeMatch(source.shape, source.forExpr, scope, "'${Printer.expr(source)}'")
+}
+
 /** `(Shape for x)`: the shape is known, one of its fields takes `x`, and `x` is a record. */
 private fun Validator.checkSingularFor(singular: SingularFor, scope: String) {
     checkExpr(singular.forExpr, scope)
@@ -172,7 +179,12 @@ private fun Validator.checkSingularFor(singular: SingularFor, scope: String) {
         refuseSingularForMatchingSeveralFields(singular, matchedFields)
         return
     }
-    valueKind(scalarTypeOf(singular.forExpr, scope))?.let { kind -> refuseValueAfterFor(singular, kind) }
+    val valueAfterFor = valueKind(scalarTypeOf(singular.forExpr, scope))
+    if (valueAfterFor != null) {
+        refuseValueAfterFor(singular, valueAfterFor)
+        return
+    }
+    checkForTypeMatch(singular.shape, singular.forExpr, scope, "'${Printer.expr(singular)}'")
 }
 
 private fun Validator.refuseSingularForMatchingSeveralFields(singular: SingularFor, matchedFields: Collection<String>) {

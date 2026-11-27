@@ -1,0 +1,11 @@
+-- The loans for a loan, counted as a collection source, where no field of Loan takes a Loan.
+act Member {
+    name: text
+}
+
+act Loan {
+    member: one Member
+    dueOn: Date
+}
+
+shape LoanOfLoan = Member where count(Loan for (Loan for this)) > 0

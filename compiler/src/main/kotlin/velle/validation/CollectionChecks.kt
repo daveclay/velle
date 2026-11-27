@@ -100,7 +100,7 @@ private fun Validator.readBinding(binding: Binding, read: CollectionRead, scope:
 
 /** `Shape for x` as a source, `count(Loan for this)`: the shape is known (Reference §10). */
 private fun Validator.readShapeForBinding(source: ShapeForSource, scope: String): BindingReading {
-    checkExpr(source.forExpr, scope)
+    checkExpr(source, scope)
     if (isShapeOrRefinement(source.shape)) return BindingReading.Records(source.shape)
     diagnostics.add(Diagnostic("F1", "unknown shape '${source.shape}'"))
     return BindingReading.Refused
