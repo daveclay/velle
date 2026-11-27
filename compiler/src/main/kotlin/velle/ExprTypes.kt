@@ -597,10 +597,7 @@ class ExprTypes(private val model: Model) {
                     Narrowing(present = Narrowing.stepsOf(path), established = setOf(PresenceFacts.testKey(IsExpr(cond.subject, "some"))))
                 cond.kind == "some" || cond.kind == "none" ->
                     Narrowing(established = setOf(PresenceFacts.testKey(IsExpr(cond.subject, "none"))))
-                // a name the spec does not declare is refused where it is written, and narrows nothing
-                cond.kind == "refinement" && !model.namesShapeOrRefinement(cond.refinement!!) -> Narrowing.NONE
-                cond.kind == "refinement" && holds -> Narrowing(narrowed = mapOf(path to cond.refinement!!), established = setOf(PresenceFacts.testKey(cond)))
-                cond.kind == "refinement" -> complementOf(cond.subject, cond.refinement!!, scope, env)?.let { Narrowing(narrowed = mapOf(path to it)) } ?: Narrowing.NONE
+                cond.kind == "refinement" -> refinementNarrowing(cond, holds, scope, env)
                 else -> Narrowing.NONE
             }
         }
@@ -619,10 +616,11 @@ class ExprTypes(private val model: Model) {
             .flatMapTo(linkedSetOf()) { (side, _) -> Narrowing.stepsOf(namesOf(side as PathExpr)) }
     }
 
-    /** Over a static union, what a path is when it is not [named]: the other operand, or the union of the rest. */
-    private fun complementOf(path: PathExpr, named: String, scope: String, env: TypeEnv): String? {
-        val declared = (bareOrNull(of(path, scope, env)) as? VType.Inst)?.shape ?: return null
-        return model.residualOf(declared, named)
+    /** `x is Post` read as a `Post` where it holds, and over a union as the rest where it fails (`velle.spec.ShapeNarrowing`). */
+    private fun refinementNarrowing(test: IsExpr, holds: Boolean, scope: String, env: TypeEnv): Narrowing {
+        val narrowed = model.narrowing.shownBy(test, holds, readScope(scope, scopeEnv(env, scope)))
+        if (narrowed.isEmpty()) return Narrowing.NONE
+        return Narrowing(narrowed = narrowed, established = if (holds) setOf(PresenceFacts.testKey(test)) else emptySet())
     }
 
     /** A member's type: its declaration's, or, for a derived property that states none, its expression's (Reference §7). */
