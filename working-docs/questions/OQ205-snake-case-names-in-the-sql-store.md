@@ -1,6 +1,6 @@
 # OQ205 — Whether the SQL store names its tables and columns in snake case
 
-**Status:** opened 2026-11-27 from Dave's question whether capitalized table names are conventional in PostgreSQL. D1 decided 2026-11-27; D2, D3, and D4 await Dave. Nothing built.
+**Status:** opened 2026-11-27 from Dave's question whether capitalized table names are conventional in PostgreSQL. D1 and D2 decided 2026-11-27; D3 and D4 await Dave. Nothing built.
 
 **In plain terms:** The SQL store names a table `"Student"` and a column `"dueOn"`, exactly as the spec spells them. PostgreSQL users write `student` and `due_on`, and a name with capitals must be quoted in every query of their own. The store will use the lower-case names. Three questions follow: how a run of capitals converts, what happens when two names convert to one, and what happens to a database that already has the old names.
 
@@ -57,7 +57,7 @@ The store keeps quoting every name it writes. A quoted lower-case name is the sa
 
 **Decided:** yes, 2026-11-27 ("move to snake case").
 
-### D2. A run of capitals is one word
+### D2. A run of capitals is one word · Decided 2026-11-27
 
 When a name has two capitals in a row, should the run be one word, so `HTTPServer` is `http_server`, rather than one word per capital, `h_t_t_p_server`?
 
@@ -81,6 +81,8 @@ Recommendation: one word per run, the conversion engineers expect.
 **If we don't**
 - Pro: no two Velle names can ever share a snake-case name. A name has no `_` of its own, so each `_` marks exactly one capital, and the name can be read back.
 - Con: an acronym reads as `h_t_t_p_server`, which no engineer would write.
+
+**Decided:** one word per run, 2026-11-27.
 
 ### D3. The store refuses to start when two names become one
 
@@ -122,7 +124,7 @@ Recommendation: 3 if no database you care about runs on the SQL store today, oth
 
 ## 3. The build
 
-Not written. D2, D3, and D4 await Dave.
+Not written. D3 and D4 await Dave.
 
 ## 4. Work items
 
