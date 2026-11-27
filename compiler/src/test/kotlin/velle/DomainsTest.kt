@@ -242,6 +242,35 @@ class DomainsTest {
         never (Institution where sum(ApprovedLoan, amount) > lendingCap)
     """.trimIndent()
 
+    // ── a reference typed with a union, to a field declared on a taken shape ──
+
+    private val gallery = """
+        act Member { name: text }
+
+        shape Contribution { author: one Member }
+
+        act Post is Contribution { body: text }
+
+        act Photo is Contribution { caption: text }
+
+        shape Content = Post or Photo
+
+        act Comment {
+            target: one Content
+            author: one Member
+            body: text
+        }
+
+        never (Comment where target is Post and target.author == author)
+    """.trimIndent()
+
+    @Test
+    fun `a new post read through a comment's target typed with a union keys on the comments naming it`() {
+        val a = analysis(gallery)
+        val d = a.actDomains.getValue("Post")
+        assertFalse(d.wide, "unexpected widenings: ${d.widenings}")
+    }
+
     @Test
     fun `an uncorrelated read widens to the whole shape and names itself`() {
         val a = analysis(institutionCap)
