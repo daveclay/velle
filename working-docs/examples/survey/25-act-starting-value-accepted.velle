@@ -1,8 +1,0 @@
--- An act with a field started by `initially`, computed when the act is committed.
--- The compiler accepts it, as Reference §5 "Starting values" says. No test commits
--- a Payment without `receivedOn` and reads the date back.
-
-act Payment {
-    amount: decimal
-    receivedOn: Date initially today
-}

@@ -1,7 +1,0 @@
--- An act with a `timestamp on create` field. The compiler accepts it, as checks V21
--- says. No test commits a Payment and reads the moment back.
-
-act Payment {
-    amount: decimal
-    receivedOn: timestamp on create
-}
