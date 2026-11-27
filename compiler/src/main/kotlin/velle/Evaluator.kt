@@ -588,17 +588,9 @@ class Evaluator(private val system: VelleSystem) {
     }
 
     /** The declared type at the end of a member path from [scope]; null when it is not a plain member path. */
-    private fun declaredTypeOf(p: PathExpr, scope: String): VType? {
-        val names = if (p.root == "this") p.segs.map { it.name } else listOf(p.root) + p.segs.map { it.name }
-        var sc: String? = scope
-        var t: VType? = null
-        for (n in names) {
-            val m = system.model.membersOf(sc ?: return null)[n] ?: return null
-            t = m.type
-            sc = m.type.instanceShape()
-        }
-        return t
-    }
+    /** The declared type at the end of [path] read on a record of [scope], as the compiler resolves it. */
+    private fun declaredTypeOf(path: PathExpr, scope: String): VType? =
+        system.model.paths.resolve(path, velle.spec.Scope(scope)).endType
 
     private fun sumValues(vals: List<Value>): Value {
         if (vals.any { it is Value.VDuration })
