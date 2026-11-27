@@ -1,6 +1,6 @@
 # OQ205 — Whether the SQL store names its tables and columns in snake case
 
-**Status:** opened 2026-11-27 from Dave's question whether capitalized table names are conventional in PostgreSQL. D1, D2, and D3 decided 2026-11-27; D4 awaits Dave. Nothing built.
+**Status:** opened 2026-11-27 from Dave's question whether capitalized table names are conventional in PostgreSQL. D1 to D4 decided 2026-11-27; the plan is in §3, build pending.
 
 **In plain terms:** The SQL store names a table `"Student"` and a column `"dueOn"`, exactly as the spec spells them. PostgreSQL users write `student` and `due_on`, and a name with capitals must be quoted in every query of their own. The store will use the lower-case names. Three questions follow: how a run of capitals converts, what happens when two names convert to one, and what happens to a database that already has the old names.
 
@@ -102,7 +102,7 @@ Recommendation: yes. The compiler cannot catch it, because a table name is the s
 
 **Decided:** yes, 2026-11-27.
 
-### D4. A database with the old names
+### D4. A database with the old names · Decided 2026-11-27
 
 A database the store created before this change has `"Student"`. After it, the store looks for `student`, finds none, and creates an empty one beside the old table. What should the store do?
 
@@ -124,10 +124,23 @@ Recommendation: 3 if no database you care about runs on the SQL store today, oth
 - Pro: no code for a case that does not occur.
 - Con: a database that does exist would start up empty, with its records still in the old tables.
 
+**Decided:** option 3, nothing, 2026-11-27. Dave has no database he cares about on the SQL store; each can be rebuilt.
+
 ## 3. The build
 
-Not written. D4 awaits Dave.
+D4 adds nothing to build. In order:
+
+1. `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`: one function turning a Velle name into its snake-case name, a run of capitals as one word (D2), used for every table and column the store writes or reads (D1). The tables: `<shape>`, `<shape>__<field>`, `capture__<refinement>`, `velle__tick`; the columns: `<field>` and `<field>__shape`. The junction columns `owner`, `pos`, `target`, `target_shape`, and `value`, and `id`, keep their names.
+2. The same file: before creating any table, the store computes every table name and every table's column names, and refuses to start when two Velle names give one, naming both and the name they share (D3). A test in `stores/sql/src/testFixtures/kotlin/velle/sql/SqlStoreConformance.kt` for two shapes (`HTTPServer` and `HttpServer`), for two fields of one shape, and for a shape whose table is one of the store's own.
+3. A test that `createSchema` writes the snake-case names, for each kind of table and column, in the same file.
+4. Every test that names a table or column in its own SQL: `SqlStoreConformance`, `OutsideChangeProbeTest`, and the SQLite tests of `examples/billing`, `examples/enrollment`, `examples/membership`, and `examples/orders`, including the statements `EnrollmentSchemaOverSqliteTest` pins. Then the full suite.
+5. `wiki/Guides/SQL-store.md`, "The tables it creates", with the new names, the conversion rule, and the refusal; the tuned query in `wiki/Guides/Store-API.md`, "Tuning one question with hand-written SQL".
+6. The settled row in `working-docs/QUESTIONS.md` and the deletion of this file, in the build commit.
 
 ## 4. Work items
 
-None yet.
+- [ ] Write the snake-case conversion and use it for every table and column name in `SqlStore` (§3 step 1).
+- [ ] Refuse to start on two names that give one, with its tests (§3 step 2).
+- [ ] Test the names `createSchema` writes (§3 step 3).
+- [ ] Rewrite the hand-written SQL in the tests and run the full suite (§3 step 4).
+- [ ] Rewrite `wiki/Guides/SQL-store.md` and the tuned query in `wiki/Guides/Store-API.md` (§3 step 5).
