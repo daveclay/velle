@@ -11,7 +11,7 @@
 ## 1. What runs today
 
 - A Velle author cannot write a part of a second. A span in a spec is a whole number and a unit, `90 seconds`, and two moments subtract to whole seconds.
-- A span with a part of a second can only come from outside the spec, in three ways: the engineer's Kotlin code commits an act with `java.time.Duration.ofMillis(1500)`; a request over the JSON, GraphQL or MCP API carries the text `PT1.5S`; or a store hands back a value it kept with a part of a second.
+- A span with a part of a second can only come from outside the spec, in three ways: the engineer's Kotlin code commits an act with `java.time.Duration.ofMillis(1500)`; a request over the JSON, GraphQL or MCP API carries the text `PT1.5S`, which is one and a half seconds in the standard text form for a span of time (ISO 8601: `P` opens it, `T` says the units that follow are hours, minutes and seconds, and a leading `-` means before zero); or a store hands back a value it kept with a part of a second.
 - All three pass through one line, `VDuration.ofJava` in `compiler/src/main/kotlin/velle/Value.kt`, which keeps `javaDuration.seconds` and discards the rest. For one and a half seconds that gives 1 second. For minus one and a half seconds it gives minus 2 seconds, because Java counts the whole seconds downward.
 - Nothing is reported either way. The record holds a different span from the one supplied.
 - This is read from the source. No test commits a span with a part of a second.
@@ -34,11 +34,11 @@ act Shift {
 }
 ```
 
-The engineer's code, or a request over the API, commits a `Shift` with `breakTaken` of `PT90.5S`, ninety and a half seconds.
+The engineer's code, or a request over the API, commits a `Shift` with `breakTaken` of ninety and a half seconds, sent as the text `PT90.5S`.
 
-- **Today:** accepted. The record holds 90 seconds. With `-PT90.5S` it holds minus 91 seconds.
+- **Today:** accepted. The record holds 90 seconds. With minus ninety and a half seconds, `-PT90.5S`, it holds minus 91 seconds.
 - **Recommended:** refused before anything is written, as a text that is not a date is refused for a `Date` field: "'breakTaken' holds whole seconds; PT90.5S has a part of a second". The caller rounds it the way their business wants and sends it again.
-- **The alternative:** accepted, with the part dropped toward zero both ways, so `PT90.5S` is 90 seconds and `-PT90.5S` is minus 90 seconds. That matches how `days` and `hours` drop a part of a unit.
+- **The alternative:** accepted, with the part dropped toward zero both ways, so ninety and a half seconds is 90 seconds and minus ninety and a half is minus 90 seconds. That matches how `days` and `hours` drop a part of a unit.
 
 Costs of refusing:
 
