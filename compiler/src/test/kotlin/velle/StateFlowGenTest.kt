@@ -120,6 +120,22 @@ class StateFlowGenTest {
         assertTrue("MemberWithLateLoan --> out : MoveLoan writes Loan.member — may flip" in member, member)
     }
 
+    @Test
+    fun `time passing draws the member into one with a late loan and never out, read as the loans naming the member`() {
+        val member = memberStateFlow(movingLoans("exists (Loan where member == this and dueOn < today)"))
+
+        assertTrue("out --> MemberWithLateLoan : time passes\n" in member, member)
+        assertFalse("MemberWithLateLoan --> out : time passes" in member, member)
+    }
+
+    @Test
+    fun `time passing draws the member into one with a late loan and never out, read as the loans for the member`() {
+        val member = memberStateFlow(movingLoans("exists (Loan for this where dueOn < today)"))
+
+        assertTrue("out --> MemberWithLateLoan : time passes\n" in member, member)
+        assertFalse("MemberWithLateLoan --> out : time passes" in member, member)
+    }
+
     private fun memberStateFlow(spec: String): String =
         DiagramGen.generate(spec, "Library").substringAfter("## State flow").substringAfter("### Member").substringBefore("\n### ")
 }
