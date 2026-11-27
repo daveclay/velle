@@ -1,6 +1,6 @@
 # OQ225 — Should the compiler resolve every path in a spec once, into one model that every check, generator, and the running system read?
 
-**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built, moves 1 and 2 of 9 done. Two work items.
+**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built, moves 1 to 3 of 9 started (§3). Two work items.
 
 **In plain terms:** when the compiler reads a condition such as "the loan's member is called late", it does not write down once what "the loan's member" means. Each part of the compiler that later reads the condition works it out again for itself, and they do not always agree. Several recent bugs came from one of them working it out differently from the others. The change is to work it out once, keep the answer, and have every part read that.
 
@@ -129,7 +129,7 @@ The API is the package `velle.spec`, in `compiler/src/main/kotlin/velle/spec/`.
 
 1. The resolver; the read analysis's `collectPath` and `pathEndType` in `Model.kt` read it. Done, commit c4b1734.
 2. The rest of the read analysis in `Model.kt` (`walkSegs`, `forRecordShape`, `heldSubjectShape`), and its narrowing passed down as a `Scope` in place of the `narrowedScope` field. Done.
-3. One computation of what an `is` test narrows, taken from `ExprTypes.kt` `narrowingOf`, which is the complete one, and read by the read analysis, the validator, and `ExprTypes.kt`.
+3. One computation of what an `is` test narrows, taken from `ExprTypes.kt` `narrowingOf`, which is the complete one, and read by the read analysis, the validator, and `ExprTypes.kt`. `velle.spec.ShapeNarrowing` is written and the read analysis reads it; the validator and `ExprTypes.kt` adopt it in moves 4 and 5.
 4. `ExprTypes.kt` `pathType` and `along`.
 5. The validator: `validation/PathResolution.kt` and `validation/Narrowing.kt`, with F1 reported from an `UnresolvedStep`.
 6. `Domains.kt`: the `Walker`, `corrExpr`, `bodyCorr`, `bodyPath`.

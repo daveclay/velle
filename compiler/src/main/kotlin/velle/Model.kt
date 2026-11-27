@@ -3,6 +3,7 @@ package velle
 import velle.spec.PathResolver
 import velle.spec.PathStart
 import velle.spec.Scope
+import velle.spec.ShapeNarrowing
 
 import velle.ext.VelleFunction
 import velle.ext.VelleType
@@ -708,6 +709,9 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     /** What each path in the spec names (Reference §9, §10): the one answer every part reads. */
     val paths: PathResolver by lazy { PathResolver(this) }
 
+    /** What an `is` test shows about the shape of a path's record (Reference §10). */
+    val narrowing: ShapeNarrowing by lazy { ShapeNarrowing(this, paths) }
+
 
     /** The order a new record's `initially` values are computed in (Reference §5). */
     val startingValues: StartingValues by lazy { StartingValues(this) }
@@ -1243,24 +1247,8 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     // ── narrowing carried into the read summary (Reference §10) ──────────────
 
-    private fun pathNames(p: PathExpr): List<String> =
-        (if (p.root == "this") emptyList() else listOf(p.root)) + p.segs.map { it.name }
-
-    /** What [cond] shows where it holds or fails: each `path is Shape` conjunct, and over a union the rest when it fails. */
-    private fun narrowedBy(cond: Expr, holds: Boolean, scope: Scope): Map<List<String>, String> {
-        val tests = if (holds) andConjuncts(cond) else listOf(cond)
-        val out = mutableMapOf<List<String>, String>()
-        for (t in tests) {
-            val negated = t is NotExpr
-            val test = (if (t is NotExpr) t.inner else t) as? IsExpr ?: continue
-            val path = test.subject as? PathExpr ?: continue
-            val named = test.refinement ?: continue
-            if (holds != negated) { out[pathNames(path)] = named; continue }
-            val declared = paths.resolve(path, scope).endShape ?: continue
-            residualOf(declared, named)?.let { out[pathNames(path)] = it }
-        }
-        return out
-    }
+    /** What [cond] shows where it holds or fails, read at [scope] (Reference §10). */
+    private fun narrowedBy(cond: Expr, holds: Boolean, scope: Scope): Map<List<String>, String> = narrowing.shownBy(cond, holds, scope)
 
     /** The base shapes whose records [name] holds; a name the spec does not declare stands for itself. */
     private fun basesOrSelf(name: String): Set<String> =
