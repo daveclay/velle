@@ -95,7 +95,13 @@ private fun Validator.signedExpr(expr: Expr?, scope: Scope, sign: Int, accumulat
         // own consults, at sign 0, plus the condition's
         is WalkExpr -> {
             followPath(PathExpr(expr.rel), scope, accumulator, visiting)
-            signedExpr(expr.until, scope, 0, accumulator, visiting)
+            signedExpr(expr.until, model.scopes.ofUntil(expr, scope), 0, accumulator, visiting)
+        }
+        // a branch moves the predicate both ways, and reads what its test shows (Reference §10)
+        is IfExpr -> {
+            signedExpr(expr.condition, scope, 0, accumulator, visiting)
+            signedExpr(expr.thenExpr, model.scopes.ofThen(expr, scope), 0, accumulator, visiting)
+            signedExpr(expr.elseExpr, model.scopes.ofElse(expr, scope), 0, accumulator, visiting)
         }
         is Access -> signedExpr(expr.target, scope, 0, accumulator, visiting)
         else -> valueOperands(expr).forEach { operand -> signedExpr(operand, scope, 0, accumulator, visiting) }
@@ -106,7 +112,7 @@ private fun Validator.signedBinary(binary: Binary, scope: Scope, sign: Int, accu
     when (binary.op) {
         "and", "or" -> {
             signedExpr(binary.left, scope, sign, accumulator, visiting)
-            signedExpr(binary.right, scope, sign, accumulator, visiting)
+            signedExpr(binary.right, model.scopes.ofRightSide(binary, scope), sign, accumulator, visiting)
         }
         in comparisonOperators -> signedComparison(binary, scope, sign, accumulator, visiting)
         else -> signedOperandsAtZero(binary, scope, accumulator, visiting)
@@ -193,48 +199,43 @@ private fun Validator.signedCollection(collection: CollectionExpr, scope: Scope,
     // merged — a fresh element enters through it or not at all), never
     // the collection's bare element shape
     val refinementFilter = (collection.where as? PathExpr)?.takeIf { it.segs.isEmpty() && it.root in model.refinements }
-    var elementShape = scope.element
-    for (binding in collection.bindings) {
-        val filteredByRefinement = refinementFilter != null
-        elementShape = signedBindingSource(binding.source, scope, sign, filteredByRefinement, accumulator, visiting) ?: elementShape
+    // each source reads the names before it, and the `where` reads bare names on the element while
+    // `this` stays the subject (`velle.spec.ScopeRules`)
+    val filter = model.scopes.ofFilter(collection, scope)
+    collection.bindings.forEachIndexed { index, binding ->
+        signedBindingSource(binding.source, filter.sources[index], sign, filteredByRefinement = refinementFilter != null, accumulator, visiting)
     }
     if (refinementFilter != null) absorbConsult(accumulator, refinementFilter.root, sign, visiting, mergeName = true)
-    // the `where` reads bare names on the element while `this` stays the subject (Reference §10)
-    else collection.where?.let { where -> signedExpr(where, scope.inside(elementShape), sign, accumulator, visiting) }
+    else collection.where?.let { where -> signedExpr(where, filter.where, sign, accumulator, visiting) }
 }
 
-/** Signs one collection binding's source and returns the shape of its elements,
- *  or null where the source does not name one. */
+/** Signs one collection binding's source. */
 private fun Validator.signedBindingSource(
     source: Expr, scope: Scope, sign: Int, filteredByRefinement: Boolean,
     accumulator: PolarityAccumulator, visiting: MutableSet<String>,
-): String? = when (source) {
-    is PathExpr -> signedPathSource(source, scope, sign, filteredByRefinement, accumulator, visiting)
-    is ShapeForSource -> {
-        absorbConsult(accumulator, source.shape, sign, visiting, mergeName = true)
-        signedExpr(source.forExpr, scope, 0, accumulator, visiting)
-        source.shape
-    }
-    else -> {
-        accumulator.incomplete = true
-        signedExpr(source, scope, 0, accumulator, visiting)
-        null
+) {
+    when (source) {
+        is PathExpr -> signedPathSource(source, scope, sign, filteredByRefinement, accumulator, visiting)
+        is ShapeForSource -> {
+            absorbConsult(accumulator, source.shape, sign, visiting, mergeName = true)
+            signedExpr(source.forExpr, scope, 0, accumulator, visiting)
+        }
+        else -> {
+            accumulator.incomplete = true
+            signedExpr(source, scope, 0, accumulator, visiting)
+        }
     }
 }
 
 private fun Validator.signedPathSource(
     source: PathExpr, scope: Scope, sign: Int, filteredByRefinement: Boolean,
     accumulator: PolarityAccumulator, visiting: MutableSet<String>,
-): String? {
+) {
     if (source.segs.isEmpty() && (source.root in model.shapes || source.root in model.refinements)) {
         absorbConsult(accumulator, source.root, sign, visiting, mergeName = true)
-        return source.root
+        return
     }
     val elementShape = model.paths.resolve(source, scope).endShape
-    if (elementShape == null) {
-        accumulator.incomplete = true
-        return null
-    }
-    if (!filteredByRefinement) accumulator.merge(elementShape, sign)
-    return elementShape
+    if (elementShape == null) accumulator.incomplete = true
+    else if (!filteredByRefinement) accumulator.merge(elementShape, sign)
 }

@@ -454,4 +454,28 @@ class PathResolutionDisagreementTest {
         // inside the filter 'amount' is read on every Charge on the books, none of which has it in its record
         assertEquals(listOf("V37"), codes(spec))
     }
+
+    // ── 17. the polarity walk: no `is` test, so a read the test licenses is not followed ──
+
+    @Test
+    fun `the polarity walk reads a path after an is test on the shape the test shows, as the read summary does`() {
+        val spec = """
+            act Post {
+                body: text
+                answered: boolean = count(answers) > 0   -- reads Answers
+            }
+            act Answer { post: one Post }
+            act Photo { caption: text }
+            shape Content = Post or Photo
+            act Comment { target: one Content }
+            shape OnAnsweredPost = Comment where target is Post and target.answered
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(spec))
+        val model = Model(Parser.parse(spec))
+
+        // 'target.answered' is Post's property where 'target is Post' holds, so the walk follows it to Answer
+        val polarities = Validator(model).refinementPolarities("OnAnsweredPost")
+        assertTrue(polarities.complete)
+        assertEquals(0, polarities.signByConsult["Answer"])
+    }
 }
