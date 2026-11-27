@@ -1,5 +1,9 @@
 package velle
 
+import velle.spec.PathResolver
+import velle.spec.PathStart
+import velle.spec.Scope
+
 import velle.ext.VelleFunction
 import velle.ext.VelleType
 
@@ -535,7 +539,10 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     /** The shape of the record an `is held` test is written on, null when its subject is not a record. */
     fun heldSubjectShape(test: IsExpr, subject: String, aliases: Map<String, String> = emptyMap(), root: String = subject): String? =
-        (test.subject as? PathExpr)?.let { path -> pathEndType(path, subject, aliases, root)?.instanceShape() }
+        heldSubjectShape(test, Scope.of(subject, aliases, root))
+
+    private fun heldSubjectShape(test: IsExpr, scope: Scope): String? =
+        (test.subject as? PathExpr)?.let { path -> paths.resolve(path, scope).endType?.instanceShape() }
 
     // ── member lookup ────────────────────────────────────────────────────────
 
@@ -699,11 +706,8 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     val types: ExprTypes by lazy { ExprTypes(this) }
 
     /** What each path in the spec names (Reference §9, §10): the one answer every part reads. */
-    val paths: velle.spec.PathResolver by lazy { velle.spec.PathResolver(this) }
+    val paths: PathResolver by lazy { PathResolver(this) }
 
-    /** The scope the read analysis is collecting at: the element, its aliases, the subject, and the narrowing in force. */
-    private fun readScope(subject: String, aliases: Map<String, String>, root: String): velle.spec.Scope =
-        velle.spec.Scope.of(subject, aliases, root).narrowedBy(narrowedScope.toMap())
 
     /** The order a new record's `initially` values are computed in (Reference §5). */
     val startingValues: StartingValues by lazy { StartingValues(this) }
@@ -1019,67 +1023,82 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     /** Collect reads of an expression evaluated with `subject` as its scope.
      *  [aliases] maps `as`-bound names to their element scopes (Reference §10). */
-    fun collectExpr(e: Expr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject) {
-        when (e) {
-            is TodayLit, is NowLit -> s.readsTime = true
-            is PathExpr -> collectPath(e, subject, s, aliases, root)
-            is UnaryMinus -> collectExpr(e.inner, subject, s, aliases, root)
-            is Binary -> {
-                collectExpr(e.left, subject, s, aliases, root)
-                if (e.op == "and") withNarrowed(narrowedBy(e.left, holds = true, subject, aliases, root)) { collectExpr(e.right, subject, s, aliases, root) }
-                else collectExpr(e.right, subject, s, aliases, root)
-            }
-            is NotExpr -> collectExpr(e.inner, subject, s, aliases, root)
+    fun collectExpr(e: Expr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject) =
+        collect(e, Scope.of(subject, aliases, root), s)
+
+    /** Collect the reads of [expression] read at [scope]. */
+    private fun collect(expression: Expr, scope: Scope, summary: ReadSummary) {
+        when (expression) {
+            is TodayLit, is NowLit -> summary.readsTime = true
+            is PathExpr -> collectPath(expression, scope, summary)
+            is UnaryMinus -> collect(expression.inner, scope, summary)
+            is Binary -> collectBinary(expression, scope, summary)
+            is NotExpr -> collect(expression.inner, scope, summary)
             // a branch reads what its test narrowed to (Reference §10): `target.tags` after `target is Post`
             is IfExpr -> {
-                collectExpr(e.condition, subject, s, aliases, root)
-                withNarrowed(narrowedBy(e.condition, holds = true, subject, aliases, root)) { collectExpr(e.thenExpr, subject, s, aliases, root) }
-                withNarrowed(narrowedBy(e.condition, holds = false, subject, aliases, root)) { collectExpr(e.elseExpr, subject, s, aliases, root) }
+                collect(expression.condition, scope, summary)
+                collect(expression.thenExpr, scope.narrowedBy(narrowedBy(expression.condition, holds = true, scope)), summary)
+                collect(expression.elseExpr, scope.narrowedBy(narrowedBy(expression.condition, holds = false, scope)), summary)
             }
-            is Interpolation -> e.pieces.forEach { piece -> collectExpr(piece, subject, s, aliases, root) }
-            is IsExpr -> {
-                collectExpr(e.subject, subject, s, aliases, root)
-                e.refinement?.let { if (it in refinements) s.absorb(predicateSummary(it)) }
-                if (e.kind == "held") collectHolders(heldSubjectShape(e, subject, aliases, root), s)
-            }
-            is ExistsExpr -> {
-                e.shape?.let { consultShape(it, s) }
-                e.shape?.let { shape -> e.forExpr?.let { forExpr -> collectFor(shape, forExpr, subject, s, aliases, root) } }
-                e.collection?.let { collectCollection(it, subject, s, aliases, root) }
-            }
-            is AggCall -> collectAgg(e, subject, s, aliases, root)
-            is FunCall -> e.args.forEach { collectExpr(it, subject, s, aliases, root) }
-            is SingularFor -> { consultShape(e.shape, s); collectFor(e.shape, e.forExpr, subject, s, aliases, root) }
-            is Access -> {
-                val start: String? = when (val t = e.target) {
-                    is AggCall -> collectAgg(t, subject, s, aliases, root)
-                        .takeIf { t.name == "latest" || t.name == "first" }
-                    is SingularFor -> {
-                        consultShape(t.shape, s)
-                        collectFor(t.shape, t.forExpr, subject, s, aliases, root)
-                        t.shape
-                    }
-                    else -> { collectExpr(t, subject, s, aliases, root); null }
-                }
-                walkSegs(start, e.segs, s)
-            }
-            is ShapeForSource -> { consultShape(e.shape, s); collectFor(e.shape, e.forExpr, subject, s, aliases, root) }
-            is SetExpr -> collectCollection(e.collection, subject, s, aliases, root)
-            // a walk reads its relationship on every record it reaches: the field at
-            // shape granularity, which is what the summary records; the condition is
-            // read with each reached record as its subject
-            is WalkExpr -> {
-                val m = membersOf(subject)[e.rel]
-                if (m == null) { s.opaque = true; return }
-                record(subject, m, s)
-                e.until?.let { collectExpr(it, subject, s, emptyMap(), subject) }
-            }
+            is Interpolation -> expression.pieces.forEach { piece -> collect(piece, scope, summary) }
+            is IsExpr -> collectIs(expression, scope, summary)
+            is ExistsExpr -> collectExists(expression, scope, summary)
+            is AggCall -> collectAgg(expression, scope, summary)
+            is FunCall -> expression.args.forEach { argument -> collect(argument, scope, summary) }
+            is SingularFor -> { consultShape(expression.shape, summary); collectFor(expression.shape, expression.forExpr, scope, summary) }
+            is Access -> collectAccess(expression, scope, summary)
+            is ShapeForSource -> { consultShape(expression.shape, summary); collectFor(expression.shape, expression.forExpr, scope, summary) }
+            is SetExpr -> collectCollection(expression.collection, scope, summary)
+            is WalkExpr -> collectWalk(expression, scope, summary)
             else -> {}
         }
     }
 
-    /** A shape-or-refinement's instances are consulted: membership in a consulted
-     *  *refinement* also depends on everything its own predicate reads. */
+    /** `a and b` reads `b` where `a` holds, so what `a` narrows is in force over `b` (Reference §10). */
+    private fun collectBinary(expression: Binary, scope: Scope, summary: ReadSummary) {
+        collect(expression.left, scope, summary)
+        val rightScope = if (expression.op == "and") scope.narrowedBy(narrowedBy(expression.left, holds = true, scope)) else scope
+        collect(expression.right, rightScope, summary)
+    }
+
+    private fun collectIs(test: IsExpr, scope: Scope, summary: ReadSummary) {
+        collect(test.subject, scope, summary)
+        test.refinement?.let { named -> if (named in refinements) summary.absorb(predicateSummary(named)) }
+        if (test.kind == "held") collectHolders(heldSubjectShape(test, scope), summary)
+    }
+
+    private fun collectExists(test: ExistsExpr, scope: Scope, summary: ReadSummary) {
+        test.shape?.let { shape -> consultShape(shape, summary) }
+        test.shape?.let { shape -> test.forExpr?.let { forExpr -> collectFor(shape, forExpr, scope, summary) } }
+        test.collection?.let { collection -> collectCollection(collection, scope, summary) }
+    }
+
+    /** `(Fine for this).loan` and `latest(...).holder`: the target's reads, then each field after it. */
+    private fun collectAccess(access: Access, scope: Scope, summary: ReadSummary) {
+        val start: String? = when (val target = access.target) {
+            is AggCall -> collectAgg(target, scope, summary).takeIf { target.name == "latest" || target.name == "first" }
+            is SingularFor -> {
+                consultShape(target.shape, summary)
+                collectFor(target.shape, target.forExpr, scope, summary)
+                target.shape
+            }
+            else -> { collect(target, scope, summary); null }
+        }
+        val resolved = paths.resolveAfter(start, access.segs.map { seg -> seg.name })
+        resolved.steps.forEach { step -> record(step.readOn, step.member, summary) }
+        if (!resolved.resolves) summary.opaque = true
+    }
+
+    // a walk reads its relationship on every record it reaches: the field at
+    // shape granularity, which is what the summary records; the condition is
+    // read with each reached record as its subject
+    private fun collectWalk(walk: WalkExpr, scope: Scope, summary: ReadSummary) {
+        val relationship = membersOf(scope.element)[walk.rel]
+        if (relationship == null) { summary.opaque = true; return }
+        record(scope.element, relationship, summary)
+        walk.until?.let { condition -> collect(condition, Scope(scope.element, narrowed = scope.narrowed), summary) }
+    }
+
     /** `x is held` reads every field that can hold `x`, and whether a record of each holding shape exists. */
     private fun collectHolders(heldShape: String?, summary: ReadSummary) {
         if (!summary.includesHeldReads) return
@@ -1095,39 +1114,42 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
      *  Every field that could match is recorded, so a spec V13 refuses for matching several
      *  still reads each. When the record's shape cannot be told, or no field of [shape] takes
      *  it, which records the read finds cannot be attributed, and the summary may read anything. */
-    private fun collectFor(shape: String, forExpr: Expr, subject: String, s: ReadSummary, aliases: Map<String, String>, root: String) {
-        collectExpr(forExpr, subject, s, aliases, root)
-        val recordShape = forRecordShape(forExpr, subject, aliases, root)
+    private fun collectFor(shape: String, forExpr: Expr, scope: Scope, summary: ReadSummary) {
+        collect(forExpr, scope, summary)
+        val recordShape = forRecordShape(forExpr, scope)
         val matchedFields = recordShape?.let { basesOf(it) }.orEmpty().flatMap { recordBase -> typeMatchedFields(shape, recordBase) }.distinct()
         if (matchedFields.isEmpty()) {
-            s.opaque = true
+            summary.opaque = true
             return
         }
-        for (matchedField in matchedFields) membersOf(shape)[matchedField]?.let { member -> record(shape, member, s) }
+        for (matchedField in matchedFields) membersOf(shape)[matchedField]?.let { member -> record(shape, member, summary) }
     }
 
     /** The shape of the one record after `for`: a path's end, the shape a `(Shape for ...)` finds,
      *  the element `latest` or `first` picks, and a field read after either; null for anything else. */
-    internal fun forRecordShape(forExpr: Expr, subject: String, aliases: Map<String, String>, root: String): String? = when (forExpr) {
-        is PathExpr -> pathElementShape(forExpr, subject, aliases, root)
+    internal fun forRecordShape(forExpr: Expr, subject: String, aliases: Map<String, String>, root: String): String? =
+        forRecordShape(forExpr, Scope.of(subject, aliases, root))
+
+    private fun forRecordShape(forExpr: Expr, scope: Scope): String? = when (forExpr) {
+        is PathExpr -> paths.resolve(forExpr, scope).endShape
         is SingularFor -> forExpr.shape
-        is AggCall -> pickedElementShape(forExpr, subject, aliases, root)
-        is Access -> accessRecordShape(forExpr, subject, aliases, root)
+        is AggCall -> pickedElementShape(forExpr, scope)
+        is Access -> accessRecordShape(forExpr, scope)
         else -> null
     }
 
-    private fun pickedElementShape(selection: AggCall, subject: String, aliases: Map<String, String>, root: String): String? =
-        if (selection.name == "latest" || selection.name == "first") collectCollection(selection.collection, subject, ReadSummary(), aliases, root)
+    private fun pickedElementShape(selection: AggCall, scope: Scope): String? =
+        if (selection.name == "latest" || selection.name == "first") collectCollection(selection.collection, scope, ReadSummary())
         else null
 
     /** The shape `(Fine for this).loan` or `first(...).holder` reaches: the target's record, then each field's. */
-    private fun accessRecordShape(access: Access, subject: String, aliases: Map<String, String>, root: String): String? {
+    private fun accessRecordShape(access: Access, scope: Scope): String? {
         val start = when (val target = access.target) {
             is SingularFor -> target.shape
-            is AggCall -> pickedElementShape(target, subject, aliases, root)
+            is AggCall -> pickedElementShape(target, scope)
             else -> null
         }
-        return access.segs.fold(start) { recordShape, seg -> recordShape?.let { membersOf(it)[seg.name]?.type?.instanceShape() } }
+        return paths.resolveAfter(start, access.segs.map { seg -> seg.name }).endType?.instanceShape()
     }
 
     private fun consultShape(name: String, s: ReadSummary) {
@@ -1137,56 +1159,70 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     /** Collects an aggregate's reads (collection, sum's selected field, and the
      *  selectors' `by` datums); returns the element scope, null when unresolvable. */
-    private fun collectAgg(e: AggCall, subject: String, s: ReadSummary, aliases: Map<String, String>, root: String = subject): String? {
-        val elem = collectCollection(e.collection, subject, s, aliases, root)
-        for (f in listOfNotNull(e.field) + e.orderBy) {
-            val m = elem?.let { membersOf(it)[f] }
-            if (m != null) record(elem, m, s) else s.opaque = true
+    private fun collectAgg(aggregate: AggCall, scope: Scope, summary: ReadSummary): String? {
+        val element = collectCollection(aggregate.collection, scope, summary)
+        for (fieldName in listOfNotNull(aggregate.field) + aggregate.orderBy) {
+            val member = element?.let { membersOf(it)[fieldName] }
+            if (member != null) record(element, member, summary) else summary.opaque = true
         }
-        return elem
+        return element
     }
 
     /** Returns the last binding's element scope (the innermost scope the shared
      *  `where` evaluates bare names against), null when it can't be resolved. */
-    private fun collectCollection(c: CollectionExpr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject): String? {
+    private fun collectCollection(collection: CollectionExpr, scope: Scope, summary: ReadSummary): String? {
         var elementScope: String? = null
-        var env = aliases
-        for (b in c.bindings) {
-            var bScope: String? = null
-            when (val src = b.source) {
-                is PathExpr -> {
-                    if ((src.root in shapes || src.root in refinements) && src.segs.isEmpty()) {
-                        s.existsShapes.add(baseOf(src.root) ?: src.root)
-                        if (src.root in refinements) s.absorb(predicateSummary(src.root))
-                        bScope = src.root
-                    } else {
-                        collectPath(src, subject, s, env, root)
-                        bScope = pathElementShape(src, subject, env, root)
-                        // a `many` of values filtered by naming each value (Reference §5): the name is a value
-                        if (bScope == null && b.alias != null && pathEndType(src, subject, env, root) is VType.CollS) env = env + (b.alias to VALUE_ALIAS)
-                        else if (bScope == null) s.opaque = true
-                    }
-                }
-                is ShapeForSource -> {
-                    consultShape(src.shape, s)
-                    collectFor(src.shape, src.forExpr, subject, s, env, root)
-                    bScope = src.shape
-                }
-                is WalkExpr -> {
-                    collectExpr(src, subject, s, env, root)
-                    bScope = walkTarget(src, subject)
-                    if (bScope == null) s.opaque = true
-                }
-                else -> { collectExpr(src, subject, s, env, root); s.opaque = true }
-            }
-            if (b.alias != null && bScope != null) env = env + (b.alias to bScope)
-            if (bScope != null) elementScope = bScope
+        var bindingScope = scope
+        for (binding in collection.bindings) {
+            val bound = collectBinding(binding, bindingScope, summary)
+            bindingScope = bound.scope
+            if (bound.element != null) elementScope = bound.element
         }
         // the shared `where` resolves bare names against the innermost element,
         // while `this` keeps naming the outermost subject (Reference §10)
-        c.where?.let { collectExpr(it, elementScope ?: subject, s, env, root) }
+        collection.where?.let { where -> collect(where, bindingScope.inside(elementScope ?: scope.element), summary) }
         // a filter that names a refinement, `(claims where PaidClaim)`, holds that refinement's members
-        return c.where?.let { w -> elementScope?.let { membershipAtomOf(w, it) } } ?: elementScope
+        return collection.where?.let { where -> elementScope?.let { membershipAtomOf(where, it) } } ?: elementScope
+    }
+
+    /** What a binding of a collection reads, the element its records are, and the scope with its `as` name bound. */
+    private class Bound(val element: String?, val scope: Scope)
+
+    private fun collectBinding(binding: Binding, scope: Scope, summary: ReadSummary): Bound {
+        val element: String? = when (val source = binding.source) {
+            is PathExpr -> collectPathSource(source, binding, scope, summary) ?: return valueBinding(source, binding, scope, summary)
+            is ShapeForSource -> {
+                consultShape(source.shape, summary)
+                collectFor(source.shape, source.forExpr, scope, summary)
+                source.shape
+            }
+            is WalkExpr -> {
+                collect(source, scope, summary)
+                walkTarget(source, scope.element).also { target -> if (target == null) summary.opaque = true }
+            }
+            else -> { collect(source, scope, summary); summary.opaque = true; null }
+        }
+        val alias = binding.alias
+        return Bound(element, if (alias != null && element != null) scope.withRecordName(alias, element) else scope)
+    }
+
+    /** A source path's reads and the shape of its records; null when its records are not records. */
+    private fun collectPathSource(source: PathExpr, binding: Binding, scope: Scope, summary: ReadSummary): String? {
+        if ((source.root in shapes || source.root in refinements) && source.segs.isEmpty()) {
+            summary.existsShapes.add(baseOf(source.root) ?: source.root)
+            if (source.root in refinements) summary.absorb(predicateSummary(source.root))
+            return source.root
+        }
+        collectPath(source, scope, summary)
+        return paths.resolve(source, scope).endShape
+    }
+
+    /** A `many` of values filtered by naming each value (Reference §5): the name is a value. */
+    private fun valueBinding(source: PathExpr, binding: Binding, scope: Scope, summary: ReadSummary): Bound {
+        val alias = binding.alias
+        if (alias != null && paths.resolve(source, scope).endType is VType.CollS) return Bound(null, scope.withValueName(alias))
+        summary.opaque = true
+        return Bound(null, scope)
     }
 
     /** The refinement a filter names as a bare conjunct, `where PaidClaim` or `where PaidClaim and ...`,
@@ -1197,46 +1233,21 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
                 ?.takeIf { basesOf(element).let { b -> b.isNotEmpty() && b.all { base -> base in basesOf(it) } } }
         }
 
-    private fun collectPath(p: PathExpr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject) {
-        val resolved = paths.resolve(p, readScope(subject, aliases, root))
+    private fun collectPath(path: PathExpr, scope: Scope, summary: ReadSummary) {
+        val resolved = paths.resolve(path, scope)
         // a bare refinement name is a membership atom: it reads what the refinement's predicate reads
-        (resolved.start as? velle.spec.PathStart.ShapeName)?.let { named -> if (named.name in refinements) s.absorb(predicateSummary(named.name)) }
-        resolved.steps.forEach { step -> record(step.readOn, step.member, s) }
-        if (!resolved.resolves) s.opaque = true
-    }
-
-    private fun walkSegs(start: String?, segs: List<Seg>, s: ReadSummary, prefix: List<String> = emptyList()) {
-        var scope = start
-        val names = prefix.toMutableList()
-        for (seg in segs) {
-            val sc = scope
-            if (sc == null) { s.opaque = true; return }
-            val m = membersOf(sc)[seg.name]
-            if (m == null) { s.opaque = true; return }
-            record(sc, m, s)
-            names.add(seg.name)
-            scope = narrowedScope[names] ?: m.type.instanceShape()
-        }
+        (resolved.start as? PathStart.ShapeName)?.let { named -> if (named.name in refinements) summary.absorb(predicateSummary(named.name)) }
+        resolved.steps.forEach { step -> record(step.readOn, step.member, summary) }
+        if (!resolved.resolves) summary.opaque = true
     }
 
     // ── narrowing carried into the read summary (Reference §10) ──────────────
 
-    /** path, as its names → the shape a governing test narrowed it to, while a branch is collected */
-    private val narrowedScope = mutableMapOf<List<String>, String>()
-
-    private fun pathPrefix(p: PathExpr, segs: Int): List<String> =
-        (if (p.root == "this") emptyList() else listOf(p.root)) + p.segs.take(segs).map { it.name }
-
-    private fun pathNames(p: PathExpr): List<String> = pathPrefix(p, p.segs.size)
-
-    private inline fun withNarrowed(entries: Map<List<String>, String>, body: () -> Unit) {
-        val saved = entries.keys.associateWith { narrowedScope[it] }
-        narrowedScope.putAll(entries)
-        try { body() } finally { saved.forEach { (k, v) -> if (v == null) narrowedScope.remove(k) else narrowedScope[k] = v } }
-    }
+    private fun pathNames(p: PathExpr): List<String> =
+        (if (p.root == "this") emptyList() else listOf(p.root)) + p.segs.map { it.name }
 
     /** What [cond] shows where it holds or fails: each `path is Shape` conjunct, and over a union the rest when it fails. */
-    private fun narrowedBy(cond: Expr, holds: Boolean, subject: String, aliases: Map<String, String>, root: String): Map<List<String>, String> {
+    private fun narrowedBy(cond: Expr, holds: Boolean, scope: Scope): Map<List<String>, String> {
         val tests = if (holds) andConjuncts(cond) else listOf(cond)
         val out = mutableMapOf<List<String>, String>()
         for (t in tests) {
@@ -1245,7 +1256,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             val path = test.subject as? PathExpr ?: continue
             val named = test.refinement ?: continue
             if (holds != negated) { out[pathNames(path)] = named; continue }
-            val declared = pathElementShape(path, subject, aliases, root) ?: continue
+            val declared = paths.resolve(path, scope).endShape ?: continue
             residualOf(declared, named)?.let { out[pathNames(path)] = it }
         }
         return out
@@ -1270,13 +1281,13 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
         (m.type as? VType.Coll)?.let { collection -> s.collShapes.addAll(basesOrSelf(collection.shape)) }
         m.derived?.let { d ->
             val key = m.owner to m.name
-            if (s.derivedSeen.add(key)) collectExpr(d.expr, m.owner, s)
+            if (s.derivedSeen.add(key)) collect(d.expr, Scope(m.owner), s)
         }
     }
 
     /** The element scope of a collection expression, or null when it cannot be resolved. */
     fun collectionElement(c: CollectionExpr, subject: String, aliases: Map<String, String> = emptyMap()): String? =
-        collectCollection(c, subject, ReadSummary(), aliases)
+        collectCollection(c, Scope.of(subject, aliases, subject), ReadSummary())
 
     /** The scalar type a `many <scalar>` member's elements have. */
     fun scalarOf(name: String): VType = typeOf(ScalarType(name, optional = false))
@@ -1292,12 +1303,12 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     }
 
     fun pathElementShape(p: PathExpr, subject: String, aliases: Map<String, String> = emptyMap(), root: String = subject): String? =
-        pathEndType(p, subject, aliases, root)?.let { it.instanceShape() ?: (it as? VType.Coll)?.shape }
+        paths.resolve(p, Scope.of(subject, aliases, root)).endShape
 
     /** The declared type at the end of a path: the record a bare `this` or alias names, else the
      *  last member's type; null when a step does not resolve or the root is a value name. */
     fun pathEndType(p: PathExpr, subject: String, aliases: Map<String, String> = emptyMap(), root: String = subject): VType? =
-        paths.resolve(p, readScope(subject, aliases, root)).endType
+        paths.resolve(p, Scope.of(subject, aliases, root)).endType
 }
 
 /** A required `one` field [field] of [shape], declared with type [declaredType], that holds the record it points at. */

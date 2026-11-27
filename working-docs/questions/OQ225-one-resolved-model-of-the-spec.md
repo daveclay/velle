@@ -1,6 +1,6 @@
 # OQ225 — Should the compiler resolve every path in a spec once, into one model that every check, generator, and the running system read?
 
-**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; not designed. Five work items.
+**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built, moves 1 and 2 of 9 done. Three work items.
 
 **In plain terms:** when the compiler reads a condition such as "the loan's member is called late", it does not write down once what "the loan's member" means. Each part of the compiler that later reads the condition works it out again for itself, and they do not always agree. Several recent bugs came from one of them working it out differently from the others. The change is to work it out once, keep the answer, and have every part read that.
 
@@ -96,17 +96,37 @@ Recommendation: wait.
 
 ## 3. The build
 
-Not designed. Dave's direction, 2026-11-27: the model is a first-class API the compiler provides, and the validators are written against it as its first users. Other tools will be built on the same API, so it is designed to be read by someone who has not seen the compiler's internals: named for the language's own terms, documented, and stable. The more professional and clear it is, the easier those tools and later checks are to write.
+Dave's direction, 2026-11-27: the model is a first-class API the compiler provides, and the validators are written against it as its first users. Other tools will be built on the same API, so it is designed to be read by someone who has not seen the compiler's internals: named for the language's own terms, documented, and stable. The more professional and clear it is, the easier those tools and later checks are to write.
 
 These hold for it, from D1:
 
-- Each part is moved onto the model in a commit of its own, and that commit leaves every test passing and every example's generated output unchanged. A change in output is a bug in the move, unless it is one of the open OQs above becoming right, which is then that OQ's build and not this one's.
+- Each part is moved onto the model in a commit of its own, and that commit leaves every test passing and every example's generated output unchanged. A change in output is a bug in the move, unless it is one of the disagreements in §1 becoming right, which then gets a test of its own in the same commit.
 - Since the validators read the model, it is built before them and holds every path the author wrote, including one that does not resolve. Such a step is recorded as not resolving, with the name and the shape it was looked for on, and the check that reports an unknown name (F1) is written against that.
+
+### The design
+
+The API is the package `velle.spec`, in `compiler/src/main/kotlin/velle/spec/`.
+
+- `Scope` (`Paths.kt`) is one point of a spec: the element, the shape a bare name is a member of; the subject, the shape `this` names; the names bound to a record and to a value; and the narrowing an `is` test gives. It is a value, never changed in place. Moving into a filter's `where` is `inside(element)`, binding a name is `withRecordName` or `withValueName`, and a governing test is `narrowedBy`.
+- `PathResolver.resolve(path, scope)` (`Paths.kt`) answers with a `ResolvedPath`: what the path starts from (`PathStart`: the subject, the element, a record name, a value name, or a shape or refinement named on its own); each `Step`, holding the field's declaration, the shape it is looked up on after narrowing, and its `Reach` (from the start, through a reference to one record, or through a collection); and, when a name does not resolve, the `UnresolvedStep` with the shape it was looked for on.
+- Still to come: a walk of a condition or rule body that hands each expression its `Scope`, so that which scope a nested filter, a `for each`, or an `is` test gives is written once; and one function for the parts of an expression, which the hand-written walks share.
+
+### The order of moves
+
+1. The resolver; the read analysis's `collectPath` and `pathEndType` in `Model.kt` read it. Done, commit c4b1734.
+2. The rest of the read analysis in `Model.kt` (`walkSegs`, `forRecordShape`, `heldSubjectShape`), and its narrowing passed down as a `Scope` in place of the `narrowedScope` field. Done.
+3. One computation of what an `is` test narrows, taken from `ExprTypes.kt` `narrowingOf`, which is the complete one, and read by the read analysis, the validator, and `ExprTypes.kt`.
+4. `ExprTypes.kt` `pathType` and `along`.
+5. The validator: `validation/PathResolution.kt` and `validation/Narrowing.kt`, with F1 reported from an `UnresolvedStep`.
+6. `Domains.kt`: the `Walker`, `corrExpr`, `bodyCorr`, `bodyPath`.
+7. `StateFlowGen.kt`, `validation/SignedConsults.kt`, `validation/TransientFieldCheck.kt`, `validation/Writes.kt`, `Query.kt`, `Evaluator.kt` `declaredTypeOf`, and the small ones in §1.
+8. One function for the parts of an expression, and one for splitting at `and`, shared by the hand-written walks.
+9. OQ222, built on `Reach`.
+
+`Keys.kt` and `PresenceFacts.kt` read declarations before `Model` exists, so they cannot read the resolver as it stands; they move when the model is built earlier, or stay, and the decision is recorded here when it is reached.
 
 ## 4. Work items
 
 - [ ] List the facts about a path those parts compute differently from each other, each pinned by a test that shows the disagreement.
-- [ ] Design the model: what a resolved step records, including the ways of reaching a field listed in OQ222's D1, and where it is built.
-- [ ] Write §3 as the plan: the order in which parts move onto the model.
 - [ ] Move each part onto the model, one commit each, output unchanged.
 - [ ] Build OQ222 on the model.

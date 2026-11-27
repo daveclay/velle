@@ -78,6 +78,9 @@ sealed interface PathStart {
 
     /** A shape or refinement named on its own, as a membership test or as the records a collection reads. */
     data class ShapeName(val name: String) : PathStart
+
+    /** The record an expression finds, `(Fine for this)` or `latest(payments)`, with the names read after it; null when it finds no record. */
+    data class FoundRecord(val shape: String?) : PathStart
 }
 
 /** How a step's record is reached from the step before it. */
@@ -107,10 +110,11 @@ data class UnresolvedStep(val name: String, val readOn: String?)
 /**
  * A path with each name resolved. [steps] holds every name that resolved, in order; when a name does
  * not, [unresolved] says which and the steps after it are absent. [endType] is the declared type at
- * the end, null when the path does not resolve to the end or ends on a value name.
+ * the end, null when the path does not resolve to the end or ends on a value name. [path] is null for
+ * names read after an expression, [PathStart.FoundRecord].
  */
 data class ResolvedPath(
-    val path: PathExpr,
+    val path: PathExpr?,
     val start: PathStart,
     val steps: List<Step>,
     val unresolved: UnresolvedStep?,
@@ -134,7 +138,18 @@ class PathResolver(private val model: Model) {
             is PathStart.Subject -> walk(path, start, VType.Inst(start.shape), emptyList(), path.segs.map { seg -> seg.name }, emptyList(), scope)
             is PathStart.RecordName -> walk(path, start, startTypeOfRecordName(start, scope), emptyList(), path.segs.map { seg -> seg.name }, listOf(start.name), scope)
             is PathStart.Element -> resolveFromElement(path, start, scope)
+            is PathStart.FoundRecord -> resolveAfter(start.shape, path.segs.map { seg -> seg.name })
         }
+    }
+
+    /**
+     * The [names] read after an expression that finds a record of [recordShape], `(Fine for this).loan`.
+     * No `is` test narrows such a record, so no narrowing applies.
+     */
+    fun resolveAfter(recordShape: String?, names: List<String>): ResolvedPath {
+        val start = PathStart.FoundRecord(recordShape)
+        if (recordShape == null) return ResolvedPath(null, start, emptyList(), names.firstOrNull()?.let { name -> UnresolvedStep(name, null) }, null)
+        return walk(null, start, VType.Inst(recordShape), emptyList(), names, emptyList(), Scope(recordShape))
     }
 
     private fun startOf(path: PathExpr, scope: Scope): PathStart = when {
@@ -166,7 +181,7 @@ class PathResolver(private val model: Model) {
 
     /** Resolves [remainingNames] one at a time from a record of [startType], narrowing each by the scope. */
     private fun walk(
-        path: PathExpr,
+        path: PathExpr?,
         start: PathStart,
         startType: VType,
         stepsSoFar: List<Step>,
