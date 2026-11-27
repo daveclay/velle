@@ -1,6 +1,6 @@
 # OQ214 — How an author writes a field on some members of a collection, or with a value that differs per member
 
-**Status:** opened 2026-11-27 while building OQ207, as a one-line question about what the V34 message should advise. Given a file on 2026-11-27 because the message cannot be fixed until the language question is answered. D1 awaits Dave.
+**Status:** opened 2026-11-27 while building OQ207, as a one-line question about what the V34 message should advise. Given a file on 2026-11-27 because the message cannot be fixed until the language question is answered. D1 decided 2026-11-27 and being built; D2 awaits Dave.
 
 **In plain terms:** "Flag every late loan of this member" and "count one more renewal on each of this member's loans" are ordinary things for a business to say. Velle can write one field on every member of a collection with the same value. It can write only some of the members when the shape names them as a collection of its own. It has no direct way to give each member a value worked out from that member; the only spelling that works for that today makes the author keep an extra record per member.
 
@@ -92,7 +92,7 @@ It validates. I ran it once with `velle try`: a member with one late loan and on
 
 Roster: D1 is whether a `for each` block may assign through its own name. D2 is whether a filter may stand on the left of an assignment.
 
-### D1. Whether a `for each` block may assign a field through its own name
+### D1. Whether a `for each` block may assign a field through its own name · Decided 2026-11-27
 
 **May a `for each` block with one name, over a collection of records, hold an assignment to a field of that name's record?**
 
@@ -155,6 +155,8 @@ Not offered, and why:
 - `compiler/src/test/resources/diagnostics/`: the two V34 assignment specs are replaced by specs for the limits, and `wiki/Normative/diagnostics.md` is regenerated.
 - Survey files 57 to 61 leave `working-docs/examples/survey/` as the `implement` skill §4 says.
 
+**Decided:** yes, with the real rule and not the simple limits above (Dave, 2026-11-27: "implement the real rule from the start"). The limits in the proposal refuse every assignment in a nested block. The rule Dave chose refuses an assignment only where a record could be written twice, so a nested block that reaches each record once may assign. The rule is spelled out in §3.
+
 ### D2. Whether a filter may stand on the left of an assignment
 
 **May a rule write one field on the members of a collection that a filter chooses, with the filter written in the rule?**
@@ -196,7 +198,29 @@ Not checked: that the parser can tell this statement from every other that could
 
 ## 3. The build
 
-Written when D1 is decided.
+D1 only. D2 is not decided, so this build does not settle the question and the file stays.
+
+**The rule.** One request never writes the same field of the same record twice. An assignment inside a `for each` block is accepted when the compiler can see that from the declarations:
+
+1. The assignment's left side is `name.field`, where `name` is the name of the block the assignment stands directly in, and `field` is a stored field of that name's record. An assignment through an outer block's name from inside an inner block is refused: the outer record would be written once per inner element.
+2. That block and every block around it has exactly one name, and each runs over a collection of records. A range, a collection of values, or a second name repeats a record by construction.
+3. The outermost block may run over any collection of records the rule reaches. A collection is a set, so each record is met once.
+4. Every inner block runs over a collection reached from the name of the block directly around it through the other side of a `one` reference, with or without a filter. With `Book { shelf: one Shelf }`, `shelf.books` holds each book under one shelf only. A declared `many`, a derived collection, or a source that does not start from the enclosing name is refused: one record could be reached through two outer records.
+5. A field written in a block is written nowhere else in the same rule. Across rules the one-writer check (V1) counts it as a write to that field on every record of the member shape, as it counts a write through a collection.
+
+Each refusal names which of these the assignment breaks, in plain words, with what to write instead where there is something.
+
+**Changes, in build order.**
+
+- `compiler/src/main/kotlin/velle/validation/ForEachCheck.kt`: `checkBlockStatementKind` applies the rule above. The existing V34 advice stays for an assignment the rule refuses, where its spelling exists.
+- The evaluator runs the assignment once per element. Every value and every filter is read from the state before the rule's writes, as for any assignment (`evaluation.md`).
+- The rule's write summary records the field on the member shape, so V1, `velle compare`, the diagrams, and the runtime's recheck of conditions all see the write.
+- `wiki/Reference/Reference-14-for.md`, "Creating one record per element": a block holds creations, blocks, and an assignment through its own name, with the Renew example and the shelf example.
+- `wiki/Reference/Reference-06-Relationships.md`, "Write one field on every member": one sentence pointing at the block for a value per member.
+- `wiki/Normative/checks.md` V34, `wiki/Normative/grammar.md`, `wiki/Normative/evaluation.md`.
+- `compiler/src/test/resources/diagnostics/`: the two V34 assignment specs are replaced by one spec per refusal of the rule, and `wiki/Normative/diagnostics.md` is regenerated.
+- Tests: each accepted form at runtime (one block, a block over a filter, a nested block through the other side of a `one` reference), each refusal, V1 across two rules, and what `velle compare` says for a rule that assigns in a block.
+- The survey files stay until D2 is decided, since file 57 belongs to D2.
 
 ## 4. Work items
 
