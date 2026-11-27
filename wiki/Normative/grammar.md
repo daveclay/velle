@@ -161,9 +161,14 @@ thenLine      := "then"                  -- on its own line, between two stateme
 statement     := assignment | creation | deletion | forEach
 
 assignment    := path "=" valueExpr
+              | "(" path "where" predicate ")" "." Identifier "=" valueExpr
                  -- the target may traverse at most one `many` hop (fan-out assignment: one write per
-                 -- member, `this.invoices.customer = ...`); depth and target legality are validator
-                 -- rules (checks catalog, V20), not grammar
+                 -- member, `this.invoices.customer = ...`); the second form writes the members of the
+                 -- collection `path` names that `predicate` holds of, `(member.loans where dueOn <
+                 -- this.before).flagged = true`, the predicate read as any filter's is (Reference §12).
+                 -- No other statement begins with "(", so the form is told apart by its first token.
+                 -- Depth and target legality, and that `path` names a collection, are validator rules
+                 -- (checks catalog, V20), not grammar
 
 deletion      := "delete" path
                  -- instance-granularity mutation (OQ37): the target is a literal static to-one path
@@ -177,7 +182,8 @@ loopBinding   := Identifier "in" valueExpr
                  -- the block's statements run once per element of each binding, nested for a
                  -- product (Reference §14); `in` names a collection the rule can reach, `from ... to`
                  -- the whole numbers from the first bound to the second, both included, empty when the
-                 -- second is below the first; a block holds creations and blocks only, and a name is
+                 -- second is below the first; a block holds creations, blocks, and assignments
+                 -- through its own name where no record's field can be written twice, and a name is
                  -- new in the rule — validator rules (checks catalog, V34), not grammar
 
 creation      := ShapeName "from" "{" fieldInit* "}" ("as" Identifier)?

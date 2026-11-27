@@ -67,6 +67,56 @@ never (PickUp where amountPaid < fill.amountDue)
 
 Name a condition when it is a word the business already uses, when it reaches through more than one relationship, when it mixes `and` with `or`, or when a second rule or query needs it too.
 
+## Name a filter the business names
+
+A rule can write a field on the members of a collection that a filter chooses, with the filter in the rule ([§12, "Writing the members a filter chooses"](Reference-12-Assignment#writing-the-members-a-filter-chooses)). When the filter is an idea the business has a word for, give it that word on the shape, as a derived collection ([§7](Reference-07-Derived-properties)), and write through the name.
+
+A library says "flag every overdue loan of the member." Written in the rule:
+
+```
+act Member { name: text }
+
+act Loan {
+    member: one Member
+    dueOn: Date
+    flagged: boolean initially false
+}
+
+transient act FlagOverdue { member: one Member }
+
+rule Flag when FlagOverdue {
+    (member.loans where dueOn < today).flagged = true
+}
+```
+
+With the word on the shape:
+
+```
+act Member {
+    name: text
+    overdue: many Loan = (loans where dueOn < today)
+}
+
+act Loan {
+    member: one Member
+    dueOn: Date
+    flagged: boolean initially false
+}
+
+transient act FlagOverdue { member: one Member }
+
+rule Flag when FlagOverdue {
+    member.overdue.flagged = true
+}
+```
+
+Neither example is in the example files. Both compile and write the same loans.
+
+- `overdue` is "a member's overdue loans," stated once, where a query or another rule reads it too.
+- The rule reads as the product owner said it.
+
+Keep the filter in the rule when it reads the request, as `dueOn < this.before` does with a date the request names. The shape cannot state that filter.
+
 ## Related pages
 
 - [§8 Refinements](Reference-08-Refinements), for `where` and what a refinement is.

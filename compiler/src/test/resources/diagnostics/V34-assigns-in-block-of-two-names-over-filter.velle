@@ -1,0 +1,10 @@
+-- An assignment in a block with two names over a filter, 'for each loan in (member.loans where dueOn < today), step from 1 to times'; the advice names the filtered left side.
+act Member { name: text }
+act Loan { member: one Member, dueOn: Date, flagged: boolean initially false }
+transient act Renew { member: one Member, times: integer }
+
+rule Extend when Renew {
+    for each loan in (member.loans where dueOn < today), step from 1 to times {
+        loan.flagged = true
+    }
+}

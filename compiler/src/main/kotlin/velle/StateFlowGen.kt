@@ -929,7 +929,7 @@ private fun ruleActions(rule: RuleDecl): String = rule.body.statements().mapNotN
     when (it) {
         is ForEach -> "for each " + it.bindings.joinToString(", ") { b -> Printer.loopBinding(b) }
         is Creation -> "inserts ${it.shape}"
-        is Assignment -> "sets ${Printer.expr(it.target)} = ${Printer.expr(it.value)}"
+        is Assignment -> "sets ${Printer.assignmentTarget(it)} = ${Printer.expr(it.value)}"
         is DeleteStmt -> "deletes ${Printer.expr(it.target)}"
         ThenMarker -> null
     }

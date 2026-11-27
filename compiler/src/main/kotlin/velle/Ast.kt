@@ -260,7 +260,19 @@ data class RefNot(val inner: RefExpr) : RefExpr
 sealed interface BodyItem
 /** A standalone `then` line ordering the statements on either side of it. */
 data object ThenMarker : BodyItem
-data class Assignment(val target: PathExpr, val value: Expr) : BodyItem
+/**
+ * `target = value` (Reference §12). [filter] is the condition of a filtered left side,
+ * `(member.loans where dueOn < this.before).flagged = true`: [target] is then the path
+ * `member.loans.flagged`, and only the members of `member.loans` the condition holds of are written.
+ */
+data class Assignment(val target: PathExpr, val value: Expr, val filter: Expr? = null) : BodyItem {
+    /** The collection a filtered left side writes through, `(member.loans where dueOn < this.before)`; null for a plain path. */
+    val filteredCollection: SetExpr?
+        get() = filter?.let { condition -> SetExpr(CollectionExpr(listOf(Binding(PathExpr(target.root, target.segs.dropLast(1)))), condition)) }
+
+    /** Every expression the assignment reads: its value and, for a filtered left side, the filtered collection. */
+    val reads: List<Expr> get() = listOfNotNull(value, filteredCollection)
+}
 data class Creation(
     val shape: String,
     /** `for <expr>` in the compact form; null for `from { ... }` */
@@ -276,7 +288,8 @@ data class FieldInit(val name: String, val value: Expr)
 /**
  * `for each <name> in <source>, ... { statements }` (Reference §14): the block's
  * statements run once per element of each source, nested for a product. A
- * statement inside is a creation or another block; the names are values for
+ * statement inside is a creation, another block, or an assignment through the
+ * block's own name that writes no record twice; the names are values for
  * the block's statements and nothing outside it (checks V34).
  */
 data class ForEach(val bindings: List<LoopBinding>, val body: List<BodyItem>) : BodyItem

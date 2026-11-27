@@ -1,0 +1,13 @@
+-- An assignment in an inner block over the other side of a declared 'many', 'for each shelf in book.shelfs'; one shelf can hold several books.
+act Library { name: text }
+act Shelf { name: text, books: many Book, label: text initially "" }
+act Book { library: one Library, label: text initially "" }
+transient act Relabel { library: one Library }
+
+rule LabelShelves when Relabel {
+    for each book in library.books {
+        for each shelf in book.shelfs {
+            shelf.label = book.label
+        }
+    }
+}

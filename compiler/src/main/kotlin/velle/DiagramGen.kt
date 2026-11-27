@@ -163,7 +163,7 @@ object DiagramGen {
             for (item in rule.body.statements()) when (item) {
                 is ForEach -> sb.appendLine("        Note over S: for each ${esc(item.bindings.joinToString(", ") { Printer.loopBinding(it) })}")
                 is Creation -> sb.appendLine("        S->>S: insert ${item.shape}")
-                is Assignment -> sb.appendLine("        S->>S: ${esc(Printer.expr(item.target))} = ${esc(Printer.expr(item.value))}")
+                is Assignment -> sb.appendLine("        S->>S: ${esc(Printer.assignmentTarget(item))} = ${esc(Printer.expr(item.value))}")
                 is DeleteStmt -> sb.appendLine("        S->>S: delete ${esc(Printer.expr(item.target))}")
                 ThenMarker -> {}
             }

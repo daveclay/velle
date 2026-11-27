@@ -583,7 +583,7 @@ rule MakeCopies when PrintCopies {
 - `Receipt for this sentOn: now` is the short form. `for` fills the one field whose type matches `this`.
 - `customer.tier = "paying"` assigns. The left side is a fixed path to a stored field.
 - `delete customer` removes one record named by a fixed path. The invoices hold their customer, so the `never` refuses the request while one does.
-- `for each number from 1 to copies { ... }` runs once per number; `for each line in lines { ... }` once per element. A block holds creations and blocks only.
+- `for each number from 1 to copies { ... }` runs once per number; `for each line in lines { ... }` once per element. A block holds creations, blocks, and assignments through its own name, `line.done = true`, where no record can be written twice (relationships.md, §2).
 - Statements run in any order unless one reads another's result. `then` on its own line between two statements forces an order.
 
 **Refused.** A creation that leaves a field without a value:

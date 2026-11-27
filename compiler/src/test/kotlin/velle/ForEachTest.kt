@@ -233,9 +233,7 @@ class ForEachTest {
     }
 
     @Test
-    fun `V34 - a block holds creations and blocks only`() {
-        val assign = diags(BASE + "\nrule R when Design { for each item in items { item.k = 1 } }")
-        assertTrue(assign.any { it.code == "V34" && "assigns 'item.k' inside 'for each'" in it.message }, assign.toString())
+    fun `V34 - a block does not delete`() {
         val del = diags(BASE + "\nrule R when Design { for each item in items { delete item } }")
         assertTrue(del.any { it.code == "V34" && "deletes inside" in it.message }, del.toString())
     }
@@ -252,33 +250,13 @@ class ForEachTest {
     """.trimIndent()
 
     @Test
-    fun `an assignment through a block's own name draws V34 alone`() {
-        val messages = diags(assignmentThroughLoopName).map { diagnostic -> "[${diagnostic.code}] ${diagnostic.message}" }
-        assertEquals(
-            listOf("[V34] rule 'Tag' assigns 'item.n' inside 'for each' — a block creates records; to write 'n' on every member " +
-                "of 'items', write 'items.n = 1' in the rule, outside the block (Reference §6)"),
-            messages,
-        )
+    fun `an assignment through a block's own name validates, over a collection or a filter, with a value read through the name`() {
+        for (spec in listOf(
+            assignmentThroughLoopName,
+            assignmentThroughLoopName.replace("in items", "in (items where n > 0)"),
+            assignmentThroughLoopName.replace("item.n = 1", "item.n = item.n + 1"),
+        )) assertEquals(emptyList(), diags(spec), spec)
     }
-
-    @Test
-    fun `an assignment through a block's name over a filter is advised in general words`() {
-        val messages = diags(assignmentThroughLoopName.replace("in items", "in (items where n > 0)"))
-            .map { diagnostic -> "[${diagnostic.code}] ${diagnostic.message}" }
-        assertEquals(listOf(generalAssignmentAdvice("item.n")), messages)
-    }
-
-    @Test
-    fun `an assignment whose value reads the block's name is advised in general words`() {
-        val messages = diags(assignmentThroughLoopName.replace("item.n = 1", "item.n = item.n + 1"))
-            .map { diagnostic -> "[${diagnostic.code}] ${diagnostic.message}" }
-        assertEquals(listOf(generalAssignmentAdvice("item.n")), messages)
-    }
-
-    private fun generalAssignmentAdvice(target: String) =
-        "[V34] rule 'Tag' assigns '$target' inside 'for each' — a block creates records; to write one field of every member " +
-            "of a collection, write the assignment in the rule, outside the block, through the path to the collection, " +
-            "as 'this.invoices.customer = this.customer' writes 'customer' on every invoice (Reference §6)"
 
     private val assignmentThroughCollection = """
         act Item { label: text, n: integer }

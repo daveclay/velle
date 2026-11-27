@@ -1,0 +1,10 @@
+-- An assignment in a block to the block's name itself, 'loan = member.loans', rather than to one of its fields.
+act Member { name: text }
+act Loan { member: one Member, dueOn: Date }
+transient act Renew { member: one Member }
+
+rule Extend when Renew {
+    for each loan in member.loans {
+        loan = member.loans
+    }
+}

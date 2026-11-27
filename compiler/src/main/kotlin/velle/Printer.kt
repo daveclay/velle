@@ -79,7 +79,7 @@ object Printer {
     private fun StringBuilder.body(items: List<BodyItem>, indent: String) {
         for (it in items) when (it) {
             ThenMarker -> append("${indent}then\n")
-            is Assignment -> append("$indent${expr(it.target)} = ${expr(it.value)}\n")
+            is Assignment -> append("$indent${assignmentTarget(it)} = ${expr(it.value)}\n")
             is Creation -> append("$indent${creation(it)}\n")
             is DeleteStmt -> append("${indent}delete ${expr(it.target)}\n")
             is ForEach -> {
@@ -88,6 +88,12 @@ object Printer {
                 append("$indent}\n")
             }
         }
+    }
+
+    /** An assignment's left side as written: `member.loans.flagged`, or `(member.loans where dueOn < this.before).flagged`. */
+    fun assignmentTarget(assignment: Assignment): String {
+        val collection = assignment.filteredCollection ?: return expr(assignment.target)
+        return "${expr(collection)}.${assignment.target.segs.last().name}"
     }
 
     /** One statement of a rule's body as written, a `for each` block with its statements. */

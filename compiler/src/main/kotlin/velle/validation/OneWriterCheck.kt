@@ -114,7 +114,7 @@ private fun Validator.bodyReads(rule: RuleDecl): ReadSummary = bodyReadsByRuleNa
 private fun Validator.collectStatementBodyReads(statement: BodyItem, scope: String, reads: ReadSummary, aliases: Map<String, String>) {
     when (statement) {
         is Assignment -> {
-            model.collectExpr(statement.value, scope, reads, aliases)
+            statement.reads.forEach { read -> model.collectExpr(read, scope, reads, aliases) }
             if (statement.target.segs.isNotEmpty())
                 model.collectExpr(PathExpr(statement.target.root, statement.target.segs.dropLast(1)), scope, reads, aliases)
         }

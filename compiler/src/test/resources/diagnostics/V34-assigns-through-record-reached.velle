@@ -1,0 +1,10 @@
+-- An assignment in a block through a record the block's name reaches, 'loan.member.lastRenewed'; one member can hold several loans.
+act Member { name: text, lastRenewed: Date? }
+act Loan { member: one Member, dueOn: Date }
+transient act Renew { member: one Member }
+
+rule Extend when Renew {
+    for each loan in member.loans {
+        loan.member.lastRenewed = today
+    }
+}

@@ -102,7 +102,8 @@ object RuleSentences {
     fun effect(item: BodyItem, subject: Subject = Subject.record): String? = when (item) {
         is Creation -> creation(item, subject)
         is ForEach -> forEach(item, subject)
-        is Assignment -> {
+        // a filtered left side has no words yet: the target alone would name every member
+        is Assignment -> if (item.filter != null) null else {
             val target = Sentences.value(item.target, subject)
             val value = Sentences.value(item.value, subject)
             if (target == null || value == null) null else "sets $target to $value"

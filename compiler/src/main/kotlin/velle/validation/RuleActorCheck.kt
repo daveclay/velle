@@ -144,27 +144,5 @@ private fun creationAliases(rule: RuleDecl): Map<String, String> =
 internal fun Validator.loopAliases(rule: RuleDecl): Map<String, String> = loopAliasesByRuleName.getOrPut(rule.name) {
     val scope = (rule.condition as? RefName)?.name?.takeIf { name -> name in model.shapes || name in model.refinements }
         ?: model.baseOfExpr(rule.condition) ?: return@getOrPut emptyMap()
-    val outerAliases = actorAlias(rule) + creationAliases(rule)
-    val shapeByLoopName = linkedMapOf<String, String>()
-    for ((binding, _) in rule.loopBindings()) {
-        shapeByLoopName[binding.name] = loopElementAlias(binding.source, scope, outerAliases + shapeByLoopName)
-    }
-    shapeByLoopName
+    model.loopElementShapes(rule, scope, actorAlias(rule) + creationAliases(rule))
 }
-
-/** The shape a loop source's element is, or [VALUE_ALIAS] when its elements are values or unknown. */
-private fun Validator.loopElementAlias(source: LoopSource, scope: String, aliases: Map<String, String>): String =
-    (source as? LoopSource.Over)?.let { over -> elementShapeOf(over.expr, scope, aliases) } ?: VALUE_ALIAS
-
-/** The shape of each record a loop's collection holds; null when its elements are values or unknown. */
-private fun Validator.elementShapeOf(collection: Expr, scope: String, aliases: Map<String, String>): String? = when (collection) {
-    is PathExpr -> loopPathElementShape(collection, scope, aliases)
-    is SetExpr -> model.collectionElement(collection.collection, scope, aliases)
-    is WalkExpr -> model.walkTarget(collection, scope)
-    else -> null
-}
-
-/** A bare shape name runs over its records; any other path over the element shape the model gives it. */
-private fun Validator.loopPathElementShape(path: PathExpr, scope: String, aliases: Map<String, String>): String? =
-    if (path.segs.isEmpty() && (path.root in model.shapes || path.root in model.refinements)) path.root
-    else model.pathElementShape(path, scope, aliases)

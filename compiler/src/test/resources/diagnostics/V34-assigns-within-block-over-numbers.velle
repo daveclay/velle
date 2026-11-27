@@ -1,0 +1,12 @@
+-- An assignment in a block inside a block over a range, 'for each step from 1 to times'; each loan would be written once per number.
+act Member { name: text }
+act Loan { member: one Member, renewals: integer initially 0 }
+transient act Renew { member: one Member, times: integer }
+
+rule Extend when Renew {
+    for each step from 1 to times {
+        for each loan in member.loans {
+            loan.renewals = step
+        }
+    }
+}

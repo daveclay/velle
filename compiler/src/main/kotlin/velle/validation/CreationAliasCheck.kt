@@ -107,8 +107,8 @@ private fun Validator.checkAssignmentAvoidsCreatedRecords(rule: RuleDecl, assign
             "give the value in the creation instead"))
         return
     }
-    if (!mentions(assignment.value, createdNames)) return
-    val firstNameRead = createdNames.first { name -> mentions(assignment.value, setOf(name)) }
+    val readingName = assignment.reads.firstOrNull { read -> mentions(read, createdNames) } ?: return
+    val firstNameRead = createdNames.first { name -> mentions(readingName, setOf(name)) }
     diagnostics.add(Diagnostic("V33", "rule '${rule.name}' assigns '${Printer.expr(assignment.target)}' from '$firstNameRead', " +
         "a record this rule creates — a name bound by `as` is read only where a creation takes a reference"))
 }

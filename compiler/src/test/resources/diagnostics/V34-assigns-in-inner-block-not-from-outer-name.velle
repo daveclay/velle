@@ -1,0 +1,13 @@
+-- An assignment in an inner block whose collection does not start from the outer block's name, 'for each book in Book'; every book is met once per shelf.
+act Library { name: text }
+act Shelf { library: one Library, name: text }
+act Book { shelf: one Shelf, label: text initially "" }
+transient act Relabel { library: one Library }
+
+rule LabelBooks when Relabel {
+    for each shelf in library.shelfs {
+        for each book in Book {
+            book.label = shelf.name
+        }
+    }
+}

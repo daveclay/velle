@@ -75,9 +75,10 @@ internal class RuleFiring(private val system: VelleSystem) {
     }
 
     /** A collection path fans out: one write per member, the same value
-     *  (Reference §6, "fan-out assignment"); a plain path is one target. */
+     *  (Reference §6, "fan-out assignment"); a filtered left side writes the members
+     *  its filter holds of (Reference §12); a plain path is one target. */
     private fun addAssignments(assignment: Assignment, context: Evaluator.Ctx, mutations: MutableList<Mutation>) {
-        val (targetIds, field) = evaluator.resolveTargets(assignment.target, context)
+        val (targetIds, field) = filteredTargets(assignment, context) ?: evaluator.resolveTargets(assignment.target, context)
         val value = evaluator.eval(assignment.value, context)
         for (targetId in targetIds) {
             val shape = workingSet.instance(targetId)?.shape
@@ -85,6 +86,15 @@ internal class RuleFiring(private val system: VelleSystem) {
             val coerced = declared?.let { declaredType -> system.commitProcessor.coerceCollection(value, declaredType) } ?: value
             mutations.add(Mutation.Assign(targetId, field, coerced))
         }
+    }
+
+    /** The members a filtered left side chooses, read before the rule writes anything, and the field it writes; null for a plain path. */
+    private fun filteredTargets(assignment: Assignment, context: Evaluator.Ctx): Pair<List<Long>, String>? {
+        val collection = assignment.filteredCollection ?: return null
+        val memberIds = evaluator.collectionValues(collection, context).map { member ->
+            (member as? Value.VRef)?.id ?: throw VelleRuntimeError("'${Printer.assignmentTarget(assignment)}' chooses a value, not a record")
+        }
+        return memberIds to assignment.target.segs.last().name
     }
 
     /** Adds a creation's record to [mutations]; returns the context the rest of the level reads, with its `as` name bound. */
