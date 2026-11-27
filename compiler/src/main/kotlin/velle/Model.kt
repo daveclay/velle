@@ -1250,6 +1250,14 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     /** What [cond] shows where it holds or fails, read at [scope] (Reference §10). */
     private fun narrowedBy(cond: Expr, holds: Boolean, scope: Scope): Map<List<String>, String> = narrowing.shownBy(cond, holds, scope)
 
+    /**
+     * The base shapes whose records a read or a write of [member] lands on when it is read on a record of
+     * [scope] (Reference §9): a field declared on a shape others take with `is` lands on the takers [scope]
+     * can be, the shapes a write and a new record name.
+     */
+    fun recordsHolding(scope: String, member: MemberInfo): Set<String> =
+        (basesOrSelf(scope) intersect basesOrSelf(member.owner)).ifEmpty { setOf(member.owner) }
+
     /** The base shapes whose records [name] holds; a name the spec does not declare stands for itself. */
     private fun basesOrSelf(name: String): Set<String> =
         if (namesShapeOrRefinement(name)) basesOf(name) else setOf(name)
@@ -1258,9 +1266,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
         if (e is Binary && e.op == "and") andConjuncts(e.left) + andConjuncts(e.right) else listOf(e)
 
     private fun record(scope: String, m: MemberInfo, s: ReadSummary) {
-        // a read lands on records of a base shape, the shape a write or a new record names:
-        // a field declared on a taken shape is read on the takers [scope] can be (Reference §9)
-        val readBases = (basesOrSelf(scope) intersect basesOrSelf(m.owner)).ifEmpty { setOf(m.owner) }
+        val readBases = recordsHolding(scope, m)
         if (m.stored) readBases.forEach { base -> s.fields.add(base to m.name) }
         // an inferred inverse is the declared side read from the other end: which records it
         // holds is the reference field each of them stores (Reference §6)

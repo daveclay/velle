@@ -177,17 +177,31 @@ class PathResolutionDisagreementTest {
     }
 
     @Test
-    fun `a write to a field declared on a taken shape wakes no rule in the serialization domain, though the same field declared on the act does`() {
+    fun `a read of a field declared on a taken shape widens over the taker read, not over every taker`() {
+        val spec = """
+            act Peptide { name: text, noted: boolean initially false }
+            shape Trial { peptide: one Peptide }         -- GreenhouseTrial and FieldTrial take 'peptide'
+            act GreenhouseTrial is Trial { bench: text }
+            act FieldTrial is Trial { site: text }
+            -- reads 'peptide' on GreenhouseTrials only, with no key back to the request
+            rule Note when (Peptide where not noted and exists (GreenhouseTrial where peptide.name == "p1")) on commit { noted = true }
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(spec))
+
+        // the read lands on GreenhouseTrial's records (Model.recordsHolding), as the read analysis records it
+        val widened = DomainAnalysis(Model(Parser.parse(spec))).actDomains.values.flatMap { domain -> domain.widenings }.map { widening -> widening.shape }.toSet()
+        assertTrue("FieldTrial" !in widened, widened.toString())
+    }
+
+    @Test
+    fun `a write to a field declared on a taken shape wakes the rule it wakes when the field is declared on the act`() {
         val declaredOnPost = reassignments("act Post { title: text, author: one Member }")
         val takenFromContribution = reassignments("shape Contribution { author: one Member }\nact Post is Contribution { title: text }")
 
+        // the write lands on Post's records either way (Model.recordsHolding), so Credit is woken
+        // and the author it writes is keyed
         assertEquals(listOf("reassign.post", "reassign.post.author", "reassign.receiver"), reassignKeys(declaredOnPost))
-        // Domains.kt walkAssignment records the write as Contribution.author, while the watcher's
-        // read summary (Model) holds Post.author, so `relevant` never matches, Credit is not
-        // woken, and the author it writes is not keyed: a domain narrower than the runtime's
-        assertEquals(listOf("reassign.post"), reassignKeys(takenFromContribution))
-        // the same walk looks the owner up in model.shapes, which holds no taken shape
-        assertEquals(null, Model(Parser.parse(takenFromContribution)).shapes["Contribution"])
+        assertEquals(listOf("reassign.post", "reassign.post.author", "reassign.receiver"), reassignKeys(takenFromContribution))
     }
 
     // ── 6. a refinement named inside a watcher's `where`: not followed for correlations ──

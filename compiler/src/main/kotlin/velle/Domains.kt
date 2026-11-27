@@ -704,7 +704,7 @@ class DomainAnalysis(private val model: Model) {
                     val elem = walkCollection(e.collection, ctx)
                     for (f in listOfNotNull(e.field) + e.orderBy) {
                         val m = elem?.let { model.membersOf(it.name)[f] }
-                        if (m != null) read(m, elem.anchor)
+                        if (m != null) read(m, elem)
                         else acc.widen(elem?.name ?: ctx.innermost().name,
                             "an aggregate selects '$f', which the derivation cannot attribute", decl, tolerated)
                     }
@@ -785,7 +785,7 @@ class DomainAnalysis(private val model: Model) {
         /** Read a member and step to its instance scope (to-one) or its
          *  correlated element scope (collection). */
         private fun memberScope(m: MemberInfo, at: Scope): Scope? {
-            read(m, at.anchor)
+            read(m, at)
             m.type.instanceShape()?.let { return Scope(it, extend(at.anchor, m.name)) }
             (m.type as? VType.Coll)?.let { coll ->
                 // a relationship collection is a correlated scan keyed by its owner
@@ -835,12 +835,14 @@ class DomainAnalysis(private val model: Model) {
 
         /** Record one member read at an anchor — the attribution point. Every
          *  stored/timestamp read either keys or widens; derived members expand. */
-        private fun read(m: MemberInfo, anchor: Anchor) {
-            if (m.stored || m.timestamp) {
-                if (anchor is Anchor.ValCorr && anchor.shape == m.owner && anchor.field == m.name)
-                    return // the correlating field itself: covered by the value key
-                acc.key(anchor, m.owner,
-                    "reads ${m.owner}.${m.name} with no path back to any key", decl, tolerated)
+        private fun read(m: MemberInfo, at: Scope) {
+            val anchor = at.anchor
+            // a field declared on a taken shape is read on the records of the takers (Reference §9)
+            if (m.stored || m.timestamp) for (owner in model.recordsHolding(at.name, m)) {
+                if (anchor is Anchor.ValCorr && (anchor.shape == owner || anchor.shape == m.owner) && anchor.field == m.name)
+                    continue // the correlating field itself: covered by the value key
+                acc.key(anchor, owner,
+                    "reads $owner.${m.name} with no path back to any key", decl, tolerated)
             }
             m.derived?.let { d ->
                 if (expanding.add("d:${m.owner}.${m.name}"))
@@ -1002,35 +1004,41 @@ class DomainAnalysis(private val model: Model) {
                 if (i == route.lastIndex) {
                     val sc = scope ?: return
                     val m = model.membersOf(sc.name)[name]
-                    val owner = m?.owner ?: model.baseOf(sc.name) ?: sc.name
-                    acc.key(sc.anchor, owner,
-                        "writes $owner.$name with no path back to any key", decl, tolerated)
-                    // the writer's half of a correlated scan: a predicate that
-                    // reads "rows of $owner correlated to X via g" keys on X, so
-                    // a write to this row also keys the row's correlatable
-                    // to-one references — where they can be correlated on at all
-                    model.shapes[owner]?.members?.filterIsInstance<StoredProp>()
-                        ?.filter { p -> (p.type as? RelType)?.let { t -> !t.many && correlatable(owner, p.name, t.shape) } == true }
-                        ?.forEach { p ->
-                            acc.key(extend(sc.anchor, p.name), owner,
-                                "writes a $owner whose '${p.name}' reference the derivation cannot key", decl, tolerated)
-                            // reassigning the correlated field itself: the
-                            // pre-state extension above keys the row the field
-                            // *leaves*; correlated readers also meet at the row
-                            // it now names, so the incoming value keys too
-                            if (p.name == name)
-                                acc.key(value?.anchor ?: Anchor.Unknown, owner,
-                                    "assigns $owner.$name a reference the derivation cannot key", decl, tolerated)
-                        }
-                    events.add(Event.Assign(owner, name, sc.anchor))
-                    // any stored write also advances the shape's `on update` timestamps
-                    model.shapes[owner]?.members?.filterIsInstance<TimestampProp>()
-                        ?.filter { it.on == "update" }
-                        ?.forEach { events.add(Event.Assign(owner, it.name, sc.anchor)) }
+                    // a field declared on a taken shape is written on the records of the takers (Reference §9)
+                    val owners = m?.let { member -> model.recordsHolding(sc.name, member) } ?: setOf(model.baseOf(sc.name) ?: sc.name)
+                    for (owner in owners) keyWrite(owner, name, sc, value, events)
                     return
                 }
                 scope = hop(scope, name)
             }
+        }
+
+        /** Keys a write of [owner].[name] on a record at [sc]'s anchor, and the events it raises. */
+        private fun keyWrite(owner: String, name: String, sc: Scope, value: Scope?, events: MutableList<Event>) {
+            acc.key(sc.anchor, owner,
+                "writes $owner.$name with no path back to any key", decl, tolerated)
+            // the writer's half of a correlated scan: a predicate that
+            // reads "rows of $owner correlated to X via g" keys on X, so
+            // a write to this row also keys the row's correlatable
+            // to-one references — where they can be correlated on at all
+            model.shapes[owner]?.members?.filterIsInstance<StoredProp>()
+                ?.filter { p -> (p.type as? RelType)?.let { t -> !t.many && correlatable(owner, p.name, t.shape) } == true }
+                ?.forEach { p ->
+                    acc.key(extend(sc.anchor, p.name), owner,
+                        "writes a $owner whose '${p.name}' reference the derivation cannot key", decl, tolerated)
+                    // reassigning the correlated field itself: the
+                    // pre-state extension above keys the row the field
+                    // *leaves*; correlated readers also meet at the row
+                    // it now names, so the incoming value keys too
+                    if (p.name == name)
+                        acc.key(value?.anchor ?: Anchor.Unknown, owner,
+                            "assigns $owner.$name a reference the derivation cannot key", decl, tolerated)
+                }
+            events.add(Event.Assign(owner, name, sc.anchor))
+            // any stored write also advances the shape's `on update` timestamps
+            model.shapes[owner]?.members?.filterIsInstance<TimestampProp>()
+                ?.filter { it.on == "update" }
+                ?.forEach { events.add(Event.Assign(owner, it.name, sc.anchor)) }
         }
 
         fun walkCreation(cr: Creation, ctx: Ctx, events: MutableList<Event>) {

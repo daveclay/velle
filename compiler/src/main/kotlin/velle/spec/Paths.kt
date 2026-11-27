@@ -98,9 +98,10 @@ enum class Reach {
 /**
  * One name of a path after its start, resolved: the [member] it names, declared on or taken into
  * [readOn], the shape the step is looked up on, which is the shape a governing `is` test narrowed
- * the record to when one did.
+ * the record to when one did. [recordsOf] is the base shapes whose records the step reads: for a field
+ * declared on a shape others take with `is`, the takers [readOn] can be (`Model.recordsHolding`).
  */
-data class Step(val member: MemberInfo, val readOn: String, val reach: Reach) {
+data class Step(val member: MemberInfo, val readOn: String, val reach: Reach, val recordsOf: Set<String>) {
     val name: String get() = member.name
 }
 
@@ -174,7 +175,7 @@ class PathResolver(private val model: Model) {
     private fun resolveFromElement(path: PathExpr, start: PathStart.Element, scope: Scope): ResolvedPath {
         val firstMember = model.membersOf(start.shape)[path.root]
             ?: return ResolvedPath(path, start, emptyList(), UnresolvedStep(path.root, start.shape), null)
-        val firstStep = Step(firstMember, start.shape, Reach.START)
+        val firstStep = Step(firstMember, start.shape, Reach.START, model.recordsHolding(start.shape, firstMember))
         val namesSoFar = listOf(path.root)
         val firstType = scope.narrowed[namesSoFar]?.let { shape -> VType.Inst(shape) } ?: firstMember.type
         return walk(path, start, firstType, listOf(firstStep), path.segs.map { seg -> seg.name }, namesSoFar, scope)
@@ -198,7 +199,7 @@ class PathResolver(private val model: Model) {
                 ?: return ResolvedPath(path, start, steps, UnresolvedStep(name, null), null)
             val member = model.membersOf(readOn)[name]
                 ?: return ResolvedPath(path, start, steps, UnresolvedStep(name, readOn), null)
-            steps.add(Step(member, readOn, reachThrough(currentType, steps.isEmpty())))
+            steps.add(Step(member, readOn, reachThrough(currentType, steps.isEmpty()), model.recordsHolding(readOn, member)))
             names = names + name
             currentType = scope.narrowed[names]?.let { shape -> VType.Inst(shape) } ?: member.type
         }
