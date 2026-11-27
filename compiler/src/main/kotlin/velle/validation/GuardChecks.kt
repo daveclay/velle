@@ -19,7 +19,7 @@ internal fun Validator.guardAtoms(rule: RuleDecl): List<GuardAtom> =
 /** The guard a negated conjunct states: `not exists` a witness, or `not` a flag. */
 private fun Validator.guardAtomOf(negated: Expr): GuardAtom? = when {
     negated is ExistsExpr && negated.shape != null ->
-        GuardAtom.Witness(model.baseOf(negated.shape) ?: negated.shape)
+        GuardAtom.Witness(model.declaredBaseOf(negated.shape) ?: negated.shape)
     negated is ExistsExpr && negated.collection != null -> collectionWitness(negated.collection)
     negated is PathExpr && negated.segs.isEmpty() -> GuardAtom.Flag(negated.root)
     else -> null

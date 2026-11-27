@@ -87,10 +87,7 @@ private fun Validator.readBinding(binding: Binding, read: CollectionRead, scope:
         is PathExpr ->
             if (isShapeOrRefinement(source.root)) BindingReading.Records(source.root)
             else readPathBinding(source, binding, read, scope)
-        is ShapeForSource -> {
-            checkExpr(source.forExpr, scope)
-            BindingReading.Records(source.shape)
-        }
+        is ShapeForSource -> readShapeForBinding(source, scope)
         is WalkExpr -> {
             checkExpr(source, scope)
             BindingReading.Records(model.walkTarget(source, scope))
@@ -100,6 +97,14 @@ private fun Validator.readBinding(binding: Binding, read: CollectionRead, scope:
             BindingReading.Records(null)
         }
     }
+
+/** `Shape for x` as a source, `count(Loan for this)`: the shape is known (Reference §10). */
+private fun Validator.readShapeForBinding(source: ShapeForSource, scope: String): BindingReading {
+    checkExpr(source.forExpr, scope)
+    if (isShapeOrRefinement(source.shape)) return BindingReading.Records(source.shape)
+    diagnostics.add(Diagnostic("F1", "unknown shape '${source.shape}'"))
+    return BindingReading.Refused
+}
 
 /** A binding over a path: a `many` of values has no members to filter, sum, or order by (Reference §5):
  *  it is counted bare, or filtered by naming each value, `(options as o where ...)`. */

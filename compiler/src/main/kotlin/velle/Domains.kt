@@ -215,7 +215,7 @@ class DomainAnalysis(private val model: Model) {
         tolerated: Boolean, captured: List<Pair<String, DerivedProp>> = emptyList(),
     ): Watcher {
         val s = model.summaryOfRefExpr(condition)
-        val sens = (s.existsShapes + s.collShapes).mapNotNull { model.baseOf(it) }.toSet()
+        val sens = (s.existsShapes + s.collShapes).mapNotNull(model::declaredBaseOf).toSet()
         return Watcher(label, condition, base, s, sens, rule, tolerated, captured)
     }
 
@@ -674,7 +674,7 @@ class DomainAnalysis(private val model: Model) {
         fun walkDelete(d: DeleteStmt, ctx: Ctx, events: MutableList<Event>) {
             val sc = if (d.target.root == "this" && d.target.segs.isEmpty()) ctx.subject
             else walkExpr(d.target, ctx)
-            val shape = sc?.let { scope -> baseShapeOf(scope.name) } ?: return
+            val shape = sc?.let { scope -> model.declaredBaseOf(scope.name) } ?: return
             acc.key(sc.anchor, shape, "deletes a $shape with no path back to any key", decl, tolerated)
             events.add(Event.Create(shape, sc.anchor))
         }
@@ -722,7 +722,7 @@ class DomainAnalysis(private val model: Model) {
                 // every record it may touch, so the read widens to the shape (A5)
                 is WalkExpr -> {
                     val at = ctx.innermost()
-                    val shape = baseShapeOf(at.name) ?: at.name
+                    val shape = model.declaredBaseOf(at.name) ?: at.name
                     acc.widen(shape, "'walk ${e.rel}' reads the whole connected part of '$shape'", decl, tolerated)
                     e.until?.let { walkExpr(it, ctxOf(at.name, Anchor.Unknown)) }
                     // the walk reaches records of its relationship's target, keyed by nothing
@@ -738,11 +738,11 @@ class DomainAnalysis(private val model: Model) {
         private fun correlatedSource(shape: String, forExpr: Expr, ctx: Ctx): Scope {
             val target = walkExpr(forExpr, ctx)
             val anchor = target?.anchor ?: Anchor.Unknown
-            val base = model.baseOf(shape) ?: shape
+            val base = model.declaredBaseOf(shape) ?: shape
             acc.key(anchor, base,
                 "consults $shape through a path the derivation cannot key", decl, tolerated)
             val back = target?.let { t ->
-                baseShapeOf(t.name)?.let { targetBase -> model.typeMatchedFields(shape, targetBase).singleOrNull() }
+                model.declaredBaseOf(t.name)?.let { targetBase -> model.typeMatchedFields(shape, targetBase).singleOrNull() }
             }
             val elem = Scope(shape, Anchor.Corr(anchor, back))
             if (shape in model.refinements && expanding.add("src:$shape"))
@@ -769,7 +769,7 @@ class DomainAnalysis(private val model: Model) {
                     val m = model.membersOf(inner.name)[p.root]
                     if (m == null) {
                         val narrowed = narrowedOnUnion(p.root, inner) ?: run {
-                            acc.widen(baseShapeOf(inner.name) ?: inner.name,
+                            acc.widen(model.declaredBaseOf(inner.name) ?: inner.name,
                                 "'${p.root}' cannot be resolved on '${inner.name}'", decl, tolerated)
                             return null
                         }
@@ -801,7 +801,7 @@ class DomainAnalysis(private val model: Model) {
             val m = model.membersOf(scope.name)[field]
             if (m == null) {
                 val narrowed = narrowedOnUnion(field, scope) ?: run {
-                    acc.widen(baseShapeOf(scope.name) ?: scope.name,
+                    acc.widen(model.declaredBaseOf(scope.name) ?: scope.name,
                         "'$field' cannot be resolved on '${scope.name}'", decl, tolerated)
                     return null
                 }
@@ -884,11 +884,6 @@ class DomainAnalysis(private val model: Model) {
         /** Fail-closed element scope for a binding the walker cannot attribute:
          *  no members resolve on it, so every read under it widens. */
         private fun unknownScope() = Scope("?", Anchor.Unknown)
-
-        /** The base shape a scope's name names; null for the unknown scope, a value alias, or any
-         *  other name that is no shape, which the model would otherwise report as unknown (F1). */
-        private fun baseShapeOf(scopeName: String): String? =
-            if (model.namesShapeOrRefinement(scopeName)) model.baseOf(scopeName) else null
 
         /**
          * A bare-shape binding quantifies over the whole shape — the one place

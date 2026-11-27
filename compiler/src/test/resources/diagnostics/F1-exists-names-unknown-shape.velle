@@ -1,0 +1,5 @@
+-- `exists` naming a shape the spec does not declare: `exists Counselling for this`, where the
+-- spec declares no `Counselling`.
+act Fill { fillNumber: integer }
+
+shape CounsellingDue = Fill where not exists Counselling for this
