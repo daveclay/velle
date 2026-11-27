@@ -1,0 +1,12 @@
+-- The loans for one of a member's tags, a text, counted as a collection source, where the subject after 'for' must be a record.
+act Member {
+    name: text
+    tags: many text
+}
+
+act Loan {
+    member: one Member
+    label: text
+}
+
+shape LabelledMember = Member where count(tags as tag where count(Loan for tag) > 0) > 0
