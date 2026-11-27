@@ -129,7 +129,14 @@ private fun Validator.checkExistsShape(exists: ExistsExpr, shape: String, scope:
         diagnostics.add(Diagnostic("F1", "exists names unknown shape '$shape'"))
         return
     }
-    exists.forExpr?.let { subject -> checkForTypeMatch(shape, subject, scope, "exists $shape for ...") }
+    val subject = exists.forExpr ?: return
+    val valueAfterFor = valueKind(scalarTypeOf(subject, scope))
+    if (valueAfterFor != null) {
+        refuseValueAfterFor("exists $shape for ${Printer.expr(subject)}", subject, valueAfterFor,
+            "to find the records by a value, filter them: exists ($shape where <field> == ${Printer.expr(subject)})")
+        return
+    }
+    checkForTypeMatch(shape, subject, scope, "exists $shape for ...")
 }
 
 private fun Validator.checkAggregate(aggregate: AggCall, scope: String) {
@@ -162,8 +169,14 @@ private fun Validator.checkCall(call: FunCall, scope: String) {
 /** `Shape for x` as a collection source: one field of the shape takes the record `x`. */
 private fun Validator.checkShapeForSource(source: ShapeForSource, scope: String) {
     checkExpr(source.forExpr, scope)
-    if (isShapeOrRefinement(source.shape))
-        checkForTypeMatch(source.shape, source.forExpr, scope, "'${Printer.expr(source)}'")
+    if (!isShapeOrRefinement(source.shape)) return
+    val valueAfterFor = valueKind(scalarTypeOf(source.forExpr, scope))
+    if (valueAfterFor != null) {
+        refuseValueAfterFor(Printer.expr(source), source.forExpr, valueAfterFor,
+            "to find the records by a value, filter them: ${source.shape} where <field> == ${Printer.expr(source.forExpr)}")
+        return
+    }
+    checkForTypeMatch(source.shape, source.forExpr, scope, "'${Printer.expr(source)}'")
 }
 
 /** `(Shape for x)`: the shape is known, one of its fields takes `x`, and `x` is a record. */
@@ -181,7 +194,9 @@ private fun Validator.checkSingularFor(singular: SingularFor, scope: String) {
     }
     val valueAfterFor = valueKind(scalarTypeOf(singular.forExpr, scope))
     if (valueAfterFor != null) {
-        refuseValueAfterFor(singular, valueAfterFor)
+        refuseValueAfterFor(Printer.expr(singular), singular.forExpr, valueAfterFor,
+            "to find the record by a value, select it: " +
+                "first(${singular.shape} where <field> == ${Printer.expr(singular.forExpr)} by <field>)")
         return
     }
     checkForTypeMatch(singular.shape, singular.forExpr, scope, "'${Printer.expr(singular)}'")
@@ -196,12 +211,11 @@ private fun Validator.refuseSingularForMatchingSeveralFields(singular: SingularF
 }
 
 /** The subject after `for` is a record (Reference §10); a value here means the author wants
- *  a record found by one of its fields, which is a selection. */
-private fun Validator.refuseValueAfterFor(singular: SingularFor, kind: String) {
-    val subject = Printer.expr(singular.forExpr)
-    diagnostics.add(Diagnostic("F2", "'(${singular.shape} for $subject)' — the subject after 'for' is a record, and " +
-        "'$subject' is $kind; to find the record by a value, select it: " +
-        "first(${singular.shape} where <field> == $subject by <field>) (Reference §10)"))
+ *  records found by one of their fields: a selection for `(Shape for x)`, a filter for
+ *  `exists Shape for x` and a collection source. */
+private fun Validator.refuseValueAfterFor(spelling: String, subject: Expr, kind: String, advice: String) {
+    diagnostics.add(Diagnostic("F2", "'$spelling' — the subject after 'for' is a record, and " +
+        "'${Printer.expr(subject)}' is $kind; $advice (Reference §10)"))
 }
 
 private fun Validator.checkAccess(access: Access, scope: String) {

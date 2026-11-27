@@ -755,11 +755,47 @@ class ValidatorTest {
     private fun forMatchProblems(refinement: String): List<String> =
         diags(membersTaggedAndLending + "\n\n" + refinement).filter { diagnostic -> diagnostic.code == "V13" }.map { diagnostic -> diagnostic.message }
 
-    @Test
-    fun `V13 - the loans for a text, as a collection source, match no field of the loan`() {
-        val problems = forMatchProblems("shape LabelledMember = Member where count(tags as tag where count(Loan for tag) > 0) > 0")
+    private fun everyForProblem(refinement: String): List<String> =
+        diags(membersTaggedAndLending + "\n\n" + refinement).map { diagnostic -> "${diagnostic.code} ${diagnostic.message}" }
 
-        assertEquals(listOf("'Loan for tag' — 'for' matches 0 fields of 'Loan' (needs exactly one; name the field or use the where-filtered form)"), problems)
+    @Test
+    fun `F2 - the loans for a text, counted as a collection source, name the filter to write`() {
+        val problems = everyForProblem("shape LabelledMember = Member where count(tags as tag where count(Loan for tag) > 0) > 0")
+
+        assertEquals(listOf("F2 'Loan for tag' — the subject after 'for' is a record, and 'tag' is a text; " +
+            "to find the records by a value, filter them: Loan where <field> == tag (Reference §10)"), problems)
+    }
+
+    @Test
+    fun `F2 - the latest loan for a text, as a collection source, names the filter to write`() {
+        val problems = everyForProblem("shape LabelledMember = Member where count(tags as tag where latest(Loan for tag by dueOn) is some) > 0")
+
+        assertEquals(listOf("F2 'Loan for tag' — the subject after 'for' is a record, and 'tag' is a text; " +
+            "to find the records by a value, filter them: Loan where <field> == tag (Reference §10)"), problems)
+    }
+
+    @Test
+    fun `F2 - the late loans for a text, as a collection source, name the filter to write`() {
+        val problems = everyForProblem("shape LabelledMember = Member where count(tags as tag where exists (Loan for tag where dueOn < today)) > 0")
+
+        assertEquals(listOf("F2 'Loan for tag' — the subject after 'for' is a record, and 'tag' is a text; " +
+            "to find the records by a value, filter them: Loan where <field> == tag (Reference §10)"), problems)
+    }
+
+    @Test
+    fun `F2 - whether a loan exists for a text names the filter to write`() {
+        val problems = everyForProblem("shape LabelledMember = Member where count(tags as tag where exists Loan for tag) > 0")
+
+        assertEquals(listOf("F2 'exists Loan for tag' — the subject after 'for' is a record, and 'tag' is a text; " +
+            "to find the records by a value, filter them: exists (Loan where <field> == tag) (Reference §10)"), problems)
+    }
+
+    @Test
+    fun `F2 - the one loan for a text names the selection to write`() {
+        val problems = everyForProblem("shape LabelledMember = Member where count(tags as tag where (Loan for tag) is some) > 0")
+
+        assertEquals(listOf("F2 '(Loan for tag)' — the subject after 'for' is a record, and 'tag' is a text; " +
+            "to find the record by a value, select it: first(Loan where <field> == tag by <field>) (Reference §10)"), problems)
     }
 
     @Test

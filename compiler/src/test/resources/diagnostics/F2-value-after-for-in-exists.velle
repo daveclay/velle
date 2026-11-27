@@ -1,0 +1,12 @@
+-- Whether a loan exists for one of a member's tags, a text, where the subject after 'for' must be a record.
+act Member {
+    name: text
+    tags: many text
+}
+
+act Loan {
+    member: one Member
+    label: text
+}
+
+shape LabelledMember = Member where count(tags as tag where exists Loan for tag) > 0
