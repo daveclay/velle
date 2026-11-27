@@ -698,6 +698,13 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     /** The one reading of an expression's type (checks.md F2). */
     val types: ExprTypes by lazy { ExprTypes(this) }
 
+    /** What each path in the spec names (Reference §9, §10): the one answer every part reads. */
+    val paths: velle.spec.PathResolver by lazy { velle.spec.PathResolver(this) }
+
+    /** The scope the read analysis is collecting at: the element, its aliases, the subject, and the narrowing in force. */
+    private fun readScope(subject: String, aliases: Map<String, String>, root: String): velle.spec.Scope =
+        velle.spec.Scope.of(subject, aliases, root).narrowedBy(narrowedScope.toMap())
+
     /** The order a new record's `initially` values are computed in (Reference §5). */
     val startingValues: StartingValues by lazy { StartingValues(this) }
 
@@ -1191,24 +1198,11 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
         }
 
     private fun collectPath(p: PathExpr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject) {
-        val scope: String? = when {
-            p.root == "this" -> root
-            aliases[p.root] == VALUE_ALIAS -> { if (p.segs.isNotEmpty()) s.opaque = true; return }
-            p.root in aliases -> aliases.getValue(p.root)
-            p.root in shapes || p.root in refinements -> {
-                // bare refinement name as a membership atom
-                if (p.root in refinements) s.absorb(predicateSummary(p.root))
-                if (p.segs.isNotEmpty()) s.opaque = true
-                return
-            }
-            else -> {
-                val m = membersOf(subject)[p.root]
-                if (m == null) { s.opaque = true; return }
-                record(subject, m, s)
-                narrowedScope[listOf(p.root)] ?: m.type.instanceShape()
-            }
-        }
-        walkSegs(scope, p.segs, s, pathPrefix(p, 0))
+        val resolved = paths.resolve(p, readScope(subject, aliases, root))
+        // a bare refinement name is a membership atom: it reads what the refinement's predicate reads
+        (resolved.start as? velle.spec.PathStart.ShapeName)?.let { named -> if (named.name in refinements) s.absorb(predicateSummary(named.name)) }
+        resolved.steps.forEach { step -> record(step.readOn, step.member, s) }
+        if (!resolved.resolves) s.opaque = true
     }
 
     private fun walkSegs(start: String?, segs: List<Seg>, s: ReadSummary, prefix: List<String> = emptyList()) {
@@ -1302,23 +1296,8 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     /** The declared type at the end of a path: the record a bare `this` or alias names, else the
      *  last member's type; null when a step does not resolve or the root is a value name. */
-    fun pathEndType(p: PathExpr, subject: String, aliases: Map<String, String> = emptyMap(), root: String = subject): VType? {
-        var type: VType? = when {
-            p.root == "this" -> VType.Inst(root)
-            aliases[p.root] == VALUE_ALIAS -> return null
-            p.root in aliases -> VType.Inst(aliases.getValue(p.root))
-            else -> membersOf(subject)[p.root]?.type
-        }
-        var names = pathPrefix(p, 0)
-        narrowedScope[names]?.let { if (p.root != "this") type = VType.Inst(it) }
-        for (seg in p.segs) {
-            val scope = type?.let { it.instanceShape() ?: (it as? VType.Coll)?.shape } ?: return null
-            type = membersOf(scope)[seg.name]?.type ?: return null
-            names = names + seg.name
-            narrowedScope[names]?.let { type = VType.Inst(it) }
-        }
-        return type
-    }
+    fun pathEndType(p: PathExpr, subject: String, aliases: Map<String, String> = emptyMap(), root: String = subject): VType? =
+        paths.resolve(p, readScope(subject, aliases, root)).endType
 }
 
 /** A required `one` field [field] of [shape], declared with type [declaredType], that holds the record it points at. */

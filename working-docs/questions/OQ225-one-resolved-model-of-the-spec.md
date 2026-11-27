@@ -1,6 +1,6 @@
 # OQ225 — Should the compiler resolve every path in a spec once, into one model that every check, generator, and the running system read?
 
-**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Not designed; the inventory in §1 is incomplete. Seven work items.
+**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; not designed. Five work items.
 
 **In plain terms:** when the compiler reads a condition such as "the loan's member is called late", it does not write down once what "the loan's member" means. Each part of the compiler that later reads the condition works it out again for itself, and they do not always agree. Several recent bugs came from one of them working it out differently from the others. The change is to work it out once, keep the answer, and have every part read that.
 
@@ -21,15 +21,26 @@ A path here means a chain of names in a condition or a rule body, such as `membe
 
 - A path is kept as names only. `member.name` is `PathExpr(root = "member", segs = [Seg("name", ...)])` (`Ast.kt`, line 381). It holds no link to the declaration of `Loan.member`, and no note of how the subject reaches it.
 - The validator resolves each path to check that it is legal (`resolvePath` in `compiler/src/main/kotlin/velle/validation/PathResolution.kt`) and keeps no record of the answer.
-- Each later part resolves the path again. Those found so far, by the function that does it:
-  - the read analysis behind `velle compare` and the diagrams, `collectPath` in `Model.kt` (line 1018);
-  - the serialization-domain analysis, the `Walker` in `compiler/src/main/kotlin/velle/Domains.kt` (`walkPath`, line 754);
-  - the type of an expression, `pathType` in `compiler/src/main/kotlin/velle/ExprTypes.kt` (line 109);
-  - which way a commit can move a condition, `mono` and `dir` in `compiler/src/main/kotlin/velle/StateFlowGen.kt` (from line 418);
-  - the sentence `velle describe` writes for a condition, `nameCondition` in `compiler/src/main/kotlin/velle/Sentences.kt` (line 94);
-  - the query compiler, `compileBoolAtom` in `compiler/src/main/kotlin/velle/Query.kt` (line 174);
-  - the running system's evaluator, `evalPath` in `compiler/src/main/kotlin/velle/Evaluator.kt` (line 156), and its relevance analysis, `ConditionWatcher` in `compiler/src/main/kotlin/velle/ConditionWatchers.kt`.
-- 32 source files under `compiler/src/main/kotlin/velle/` match on `PathExpr`, and 39 call `membersOf`. The list above is not yet every one of them (§4).
+- Each later part resolves the path again. The inventory, by file under `compiler/src/main/kotlin/velle/` and function, taken 2026-11-27 at commit fd7a12d:
+
+| Part | Where | What it is for | What it records |
+|---|---|---|---|
+| Read analysis | `Model.kt`: `collectExpr`, `collectPath`, `walkSegs`, `collectCollection`, `collectFor`, `record` | about 25 callers: the V-checks that read a `ReadSummary`, `ConditionWatchers.kt`, `DiagramGen.kt`, `RuleGraphGen.kt`, `StateFlowGen.kt`, `Domains.kt` | (shape, field) pairs, shapes consulted, whether time is read |
+| Type at a path's end | `Model.kt`: `pathEndType`, `pathElementShape`, `collectionElement`, `heldSubjectShape` | about 20 callers | a type or a shape name |
+| Expression types | `ExprTypes.kt`: `of`, `pathType`, `along`, `recordElement`, `narrowingOf` | F2, V11, `AgreedSpelling.kt`, `validation/TransientFieldCheck.kt` | a type, and what a test narrows |
+| Validator paths | `validation/PathResolution.kt`: `resolvePath`; `validation/Narrowing.kt`; the walk in `validation/ExpressionChecks.kt`, `CollectionChecks.kt`, `ForEachCheck.kt`, `RuleBodyChecks.kt` | F1, F2, V11 | messages only |
+| Serialization domains | `Domains.kt`: `Walker` (`walkPath`, `hop`, `read`, `walkCollection`, `walkAssignment`), `corrExpr`, `bodyCorr`, `bodyPath` | the queue keys of OQ40 | queue keys, correlations |
+| Running system | `Evaluator.kt`: `eval`, `evalPath`, `readMember`, `readResolved`, `declaredTypeOf`, `resolveTargets` | evaluating a condition | values |
+| Store pre-filters | `Query.kt`: `resolveHops`, `compileBoolAtom`, `compileExists`, `backFieldOf` | the filter a store applies before the runtime | a filter tree |
+| Direction | `StateFlowGen.kt`: `mono`, `dir`, `existsDir`, `pathDelta`, `staticPathSign`, `fieldAtBirth` | the state-flow diagram and `velle compare` | which way a commit moves a condition |
+| Polarity | `validation/SignedConsults.kt`: `signedExpr`, `followPath` | V15 | a sign per shape consulted |
+| Transient fields | `validation/TransientFieldCheck.kt`: `transientFieldOnPath`, `elementScopeOf` | V37 | the transient field read |
+| Declarations before `Model` | `Keys.kt`: `KeyLookups`; `PresenceFacts.kt`: `factsOf`, `pathType` | V36, the presence facts of a prohibition | a declared type |
+| Writes | `validation/Writes.kt`: `resolveWrite` | V1, fan-out | the field written |
+| Aliases | `Kinds.kt`: `producedKinds`; `validation/RuleActorCheck.kt`: `ruleAliases`, `loopAliases`; `validation/CreationChecks.kt`: `instanceShapeOf` | the alias maps the read analysis is given | an alias map |
+| Small ones | `validation/TextPatternChecks.kt`: `membersAlong`; `validation/DeleteStatementChecks.kt`: `pathHasCollectionHop`; `SpecGen.kt`: `traversesCollection`; `validation/SelfReadProblems.kt`: `visitOneStep`; `validation/OwnCollectionReadAdvisory.kt`; `StartingValues.kt`; `Validator.kt`: `checkQueryOrder` | one check or generator each | a yes or no, or members |
+
+- Beside those, about 30 functions walk the expression tree by hand, each listing every form again: among them `ExpressionParts.kt` `subExpressionsOf`, `BodyOrder.kt` `childrenOf` (the same as `subExpressionsOf`), `FormsWithoutWords.kt` `childrenOf` (a third, which skips a path used as a collection source), `Printer.kt`, `Sentences.kt`, `AgreedSpelling.kt`, `validation/RefinementMentions.kt`. Splitting a condition at `and` is written again in twelve files.
 
 ### What it costs
 
@@ -39,6 +50,13 @@ One rule of the language is taught to each of those parts on its own, and they d
 - OQ222: the read analysis cannot tell a field read on the subject from one read through a reference.
 - OQ223: the read analysis records a read of a taken shape under the name written, while the running system compares by the base shape.
 - OQ224: the read analysis mishandles `this.branch` inside a nested filter.
+
+### Open OQs it closes or changes
+
+Read 2026-11-27 against every open line of `working-docs/QUESTIONS.md`.
+
+- Closes, since each is two parts disagreeing about a path or one part resolving it wrongly: OQ222, OQ223, OQ224; OQ206 (the read analysis sees MoveLoan's write to `loan.member` for `exists Loan for this`, while the "entry is permanent" note in `StateFlowGen.kt` looks only at deletions); OQ55 §2 and §3 P2 and P3 (the `Walker` in `Domains.kt` resolving a second binding on the first binding's element, a `this.` path inside a `where` going opaque, and the condition side not following refinement filters or `is`).
+- Changes the build of: OQ91 (a field read through a `many` step, which the model must define either way); OQ182 (direction lost through a refinement named in the condition); OQ172 (which edits a consequence points at); OQ194 (the nevers and rules that name a field, a reverse index over resolved steps); OQ186 (which record `this` is, in V13's message); OQ119 (a derived step in `Query.kt` `resolveHops`); OQ58 §1 (walking a condition's paths backward from a write); OQ55 S12 and P4; OQ53 B6; OQ214 D1 and D2, being built in another session.
 
 ## 2. What to decide
 
@@ -78,16 +96,16 @@ Recommendation: wait.
 
 ## 3. The build
 
-Not designed. These hold for it, from D1:
+Not designed. Dave's direction, 2026-11-27: the model is a first-class API the compiler provides, and the validators are written against it as its first users. Other tools will be built on the same API, so it is designed to be read by someone who has not seen the compiler's internals: named for the language's own terms, documented, and stable. The more professional and clear it is, the easier those tools and later checks are to write.
+
+These hold for it, from D1:
 
 - Each part is moved onto the model in a commit of its own, and that commit leaves every test passing and every example's generated output unchanged. A change in output is a bug in the move, unless it is one of the open OQs above becoming right, which is then that OQ's build and not this one's.
-- The model is built after the validator has accepted the spec, so a part reading it never meets a path that does not resolve.
+- Since the validators read the model, it is built before them and holds every path the author wrote, including one that does not resolve. Such a step is recorded as not resolving, with the name and the shape it was looked for on, and the check that reports an unknown name (F1) is written against that.
 
 ## 4. Work items
 
-- [ ] List every part of the compiler and runtime that resolves a path or walks a condition, by file and function, and what each records about how a field is reached.
 - [ ] List the facts about a path those parts compute differently from each other, each pinned by a test that shows the disagreement.
-- [ ] Check which open OQs in `working-docs/QUESTIONS.md` besides OQ222, OQ223, and OQ224 the model would close or change.
 - [ ] Design the model: what a resolved step records, including the ways of reaching a field listed in OQ222's D1, and where it is built.
 - [ ] Write §3 as the plan: the order in which parts move onto the model.
 - [ ] Move each part onto the model, one commit each, output unchanged.
