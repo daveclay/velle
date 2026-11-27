@@ -50,7 +50,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V4 — Boundary/apparatus, both ways
 
-([§11](Reference-11-rule-when-on), [§18](Reference-18-Run-once-guards).) `after commit` without a dischargeable guard plus a backstop schedule is the stranding error ("this firing can be lost at the declared boundary, and its trigger is not data"); guard-plus-backstop on a plain `on commit` rule is dead machinery ("serves no boundary — did you mean `after commit`?"). A capture-reading rule is checked by [V7](#v7--capture-transaction-boundedness), not here.
+([§11](Reference-11-rule-when-on), [§18](Reference-18-Run-once-guards).) `after commit` without a dischargeable guard plus a backstop schedule is the stranding error ("this firing can be lost at the declared boundary, and its trigger is not data"). A guard and a backup schedule on a plain `on commit` rule are accepted: the rule fires in the commit, and the schedule finds whatever came to match in some other way. A capture-reading rule is checked by [V7](#v7--capture-transaction-boundedness), not here.
 
 ### V5 — Freeze disjointness
 
@@ -66,7 +66,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V8 — Fold obligations and tolerance coverage
 
-([§19](Reference-19-Self-referential-folds-and-tolerates).) Classify each assignment RHS (act-only / recomputing / self-referential fold); for folds, compute hazard exposure per axis (duplication: unguarded + re-firable; reordering: tick-cadence) minus the folds accepted as written (`max`/`min`/set-union/or; `+`/`-` order-safe — subtractions commute with each other; for a field of an extension type, the two facts the type's author declared on the operator the fold applies, checked on the type's samples by [E2](#e2--a-types-claims-hold-on-its-samples)) minus discharges (guard [V2](#v2--disarm-proof), commit-cadence ordering, reconciliation sweep, declared tolerance). Undischarged hazard → error demanding a stated policy. A tolerance covering no exposure is dead ([A2](#a2--dead-machinery)'s family): "this rule cannot experience reordering — did you mean duplication?"
+([§19](Reference-19-Self-referential-folds-and-tolerates).) Classify each assignment RHS (act-only / recomputing / self-referential fold); for folds, compute hazard exposure per axis (duplication: unguarded + re-firable; reordering: tick-cadence) minus the folds accepted as written (`max`/`min`/set-union/or; `+`/`-` order-safe — subtractions commute with each other; for a field of an extension type, the two facts the type's author declared on the operator the fold applies, checked on the type's samples by [E2](#e2--a-types-claims-hold-on-its-samples)) minus discharges (guard [V2](#v2--disarm-proof), commit-cadence ordering, reconciliation sweep, declared tolerance). Undischarged hazard → error demanding a stated policy. A tolerance covering no exposure is accepted and changes nothing.
 
 ### V9 — Refinement overlap and exhaustiveness
 

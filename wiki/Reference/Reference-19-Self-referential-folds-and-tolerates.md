@@ -154,7 +154,6 @@ The clause goes at the end of a `never`, at the end of a `requires` ([§21](Refe
 ## What the compiler checks
 
 - **Rejects** a self-referential assignment exposed to duplication (the rule can fire twice for one commit) or reordering (a scheduled rule) when the formula is not on the safe list for that hazard, unless a guard, a periodic recompute, or the matching `tolerates` covers it ([checks.md, V8](checks#v8--fold-obligations-and-tolerance-coverage)).
-- **Rejects** a `tolerates` that covers no hazard the rule can meet, such as `tolerates reordering` on an `on commit` rule. The message names the hazard you may have meant ([checks.md, V8](checks#v8--fold-obligations-and-tolerance-coverage)).
 - **Warns** when a rule, `never`, or `requires` reads every record of a shape with nothing tying the read to the commit, so every commit on that shape takes turns, unless the declaration carries `tolerates contention`. The message names the read and the three answers ([checks.md, A5](checks#a5--contention-width)).
 - **Warns** when `tolerates contention` is written on a declaration none of whose reads makes commits take turns ([checks.md, A5](checks#a5--contention-width)).
 - **Rejects** a derived property that refers to itself through another record unless the chain provably ends: a reference that strictly descends a field fixed at creation, as `previous` does by `receivedOn`, with a base case, or a `never` that rules out the cycle ([checks.md, V14](checks#v14--well-foundedness-coarse)). A walk ([§7](Reference-07-Derived-properties)) needs no such proof.

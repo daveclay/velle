@@ -222,7 +222,7 @@ rule CountVisit when Visit on commit, Hourly {
 
 - `visits` is folded by a rule with an hourly backup, so a visit may be counted twice. `tolerates duplication` says the business accepts that. Read it as a claim: `balance: decimal tolerates duplication` would be visibly wrong.
 - `largest` uses `max`, which gives the same answer however often it runs. It needs nothing.
-- Write `tolerates` only for a hazard the rule meets. The compiler does not always catch one that covers nothing.
+- Write `tolerates` only for a hazard the rule meets. The compiler accepts one that covers nothing, and a reader takes it as a claim about the business.
 
 **Refused.** A running total folded by a rule with a backup schedule, unguarded:
 
