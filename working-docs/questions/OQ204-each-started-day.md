@@ -1,6 +1,6 @@
 # OQ204 — How does an author say "charge for each started day"?
 
-**Status:** opened 2026-11-26 from OQ184 D2. D1 awaits Dave.
+**Status:** opened 2026-11-26 from OQ184 D2. D1 is decided. The build is pending.
 
 **In plain terms:** a tool library charges 2 for each day a tool is late, and a day that has started counts as a whole day, so a tool 36 hours late owes for 2 days. Velle's `days` gives 1 for 36 hours, because it drops the half day. Nothing in Velle rounds up.
 
@@ -32,7 +32,7 @@ act Return {
 
 Roster: D1 (what Velle gains so the sentence can be said).
 
-### D1. Velle gains functions that count each started unit of a span
+### D1. Velle gains functions that count each started unit of a span · Decided 2026-11-27
 
 Does Velle get built-in functions `startedDays`, `startedWeeks`, `startedHours`, and `startedMinutes`, each taking one `duration` and counting a unit that has begun as a whole one?
 
@@ -79,10 +79,19 @@ The other alternative is to add nothing: the Reference shows the spelling in §1
 - A test per function: a span with a part, a span that is a whole number of the unit, zero, and a span before zero.
 - An example under `examples/` gains a value computed with one of them, or the survey file's act `Return` moves into a test with the new spelling. The survey file `60-started-day-workaround.velle` is deleted.
 
+**Decided:** yes, as recommended (Dave, 2026-11-27).
+
 ## 3. The build
 
-Written when D1 is decided.
+In build order, from D1's proposed changes.
+
+1. Code. `compiler/src/main/kotlin/velle/ext/builtin/BuiltinFunctions.kt` gains `startedWeeks`, `startedDays`, `startedHours`, and `startedMinutes`, each a `VelleFunction` taking one `duration` and returning an `integer`, a begun unit counted as a whole one, away from zero. Each is added to `BuiltinFunctions.all`.
+2. Wiki. `Reference-05-Scalars.md`, "The built-in functions": one bullet, with `startedDays(36 hours)` is 2 beside `days(36 hours)` is 1. `checks.md` F2, `grammar.md`, `wiki/Guides/Extension-functions.md`, and `skills/velle-design/references/expressions.md` list the four names.
+3. Examples. A system under `examples/` gains a value computed with one of them, or the act `Return` of the survey file stands in a test with the new spelling.
+4. Tests. One per function: a span with a part, a span that is a whole number of the unit, zero, and a span before zero.
+5. Survey. `60-started-day-workaround.velle` is deleted, and its line leaves the survey README.
+6. Settle. The OQ204 line leaves `QUESTIONS.md`, a row goes at the top of the settled table, and this file is deleted in the same commit.
 
 ## 4. Work items
 
-- [ ] Decide D1 (Dave).
+- [ ] Build items 1 to 6 of §3.
