@@ -702,17 +702,27 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
         }
     }
 
-    private fun pathDelta(p: PathExpr, k: CommitKind, subject: String): SD {
-        var scope = subject
-        val names = (if (p.root == "this") emptyList() else listOf(p.root)) + p.segs.map { it.name }
-        for ((i, name) in names.withIndex()) {
-            val m = model.membersOf(scope)[name] ?: return SD.UNKNOWN
-            if (i == names.lastIndex)
-                return m.derived?.let { signDelta(it.expr, k, m.owner) } ?: SD.UNKNOWN
-            if (k is CommitKind.Assign && k.shape == model.baseOf(scope) && k.field == name) return SD.UNKNOWN
-            scope = m.type.instanceShape() ?: return SD.UNKNOWN
+    /** How a commit of kind [k] moves the derived field at the end of [path]: unknown when a commit
+     *  can move a reference on the way, or the path goes through a collection. */
+    private fun pathDelta(path: PathExpr, k: CommitKind, subject: String): SD {
+        val steps = stepsThroughOneReferences(path, subject) ?: return SD.UNKNOWN
+        val stepsBeforeLast = steps.dropLast(1)
+        val movesAReferenceOnTheWay = stepsBeforeLast.any { step ->
+            k is CommitKind.Assign && k.shape == model.baseOf(step.readOn) && k.field == step.name
         }
-        return SD.UNKNOWN
+        if (movesAReferenceOnTheWay) return SD.UNKNOWN
+        val end = steps.last().member
+        return end.derived?.let { derived -> signDelta(derived.expr, k, end.owner) } ?: SD.UNKNOWN
+    }
+
+    /** The steps of [path] read on a [subject], when every name resolves through references to one
+     *  record and there is at least one; null otherwise. */
+    private fun stepsThroughOneReferences(path: PathExpr, subject: String): List<velle.spec.Step>? {
+        val resolved = model.paths.resolve(path, velle.spec.Scope(subject))
+        val readsFromSubject = resolved.start is velle.spec.PathStart.Subject || resolved.start is velle.spec.PathStart.Element
+        if (!readsFromSubject || !resolved.resolves || resolved.steps.isEmpty()) return null
+        if (resolved.steps.any { step -> step.reach == velle.spec.Reach.COLLECTION }) return null
+        return resolved.steps
     }
 
     /** A create of the fold's element shape adds one contribution; the
@@ -806,14 +816,9 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
         else -> SS.UNKNOWN
     }
 
-    private fun staticPathSign(p: PathExpr, scope: String, guard: MutableSet<String>): SS {
-        var s = scope
-        val names = (if (p.root == "this") emptyList() else listOf(p.root)) + p.segs.map { it.name }
-        for ((i, name) in names.withIndex()) {
-            if (i == names.lastIndex) return staticFieldSign(s, name, guard)
-            s = model.membersOf(s)[name]?.type?.instanceShape() ?: return SS.UNKNOWN
-        }
-        return SS.UNKNOWN
+    private fun staticPathSign(path: PathExpr, scope: String, guard: MutableSet<String>): SS {
+        val end = stepsThroughOneReferences(path, scope)?.last() ?: return SS.UNKNOWN
+        return staticFieldSign(end.readOn, end.name, guard)
     }
 
     private fun isZero(e: Expr): Boolean =
