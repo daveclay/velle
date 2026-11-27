@@ -109,7 +109,7 @@ A rule on a schedule runs at its next tick for every record that is a member the
 - SendReceipt could then run for it, though nothing happened to the Invoice itself: the change to the spec is what made it a PaidInvoice.
 ```
 
-That sentence is from `examples/billing/changes/05-zero-total-receipts.md`, where `PaidInvoice` stops requiring a total above 0. When a `never` is added over a shape, or over an act that is kept as a record, a record stored before the change could break it, and its next change could be refused. The report says so only for a shape or act the earlier version already declared, since nothing of a new one, or of a `transient act` ([§4](Reference-04-State-and-commits)), was stored before.
+That sentence is from `examples/billing/changes/05-zero-total-receipts.md`, where `PaidInvoice` stops requiring a total above 0. When a `never` is added over a shape, or over an act that is kept as a record, a record stored before the change could break it. While one does, every new record of that kind is refused, and the refusal names the stored one. The report says so only for a shape or act the earlier version already declared, since nothing of a new one, or of a `transient act` ([§4](Reference-04-State-and-commits)), was stored before.
 
 This part describes one record of a kind. It never says which records a running system holds, or how many.
 

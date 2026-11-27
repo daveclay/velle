@@ -202,12 +202,12 @@ class SpecComparisonTest {
         Regex("\\b(env|commit|q|ref|end)[A-Z][A-Za-z0-9]*\\b").findAll(report).map { match -> match.value }.toList()
 
     @Test
-    fun `a constraint added over a kept shape says a record stored before it could be refused at its next change`() {
+    fun `a constraint added over a kept shape says a record stored before it refuses every new one while it is stored`() {
         val report = reportFor(edited("never (SubmitPayment where amount <= 0)\n", "never (SubmitPayment where amount <= 0)\nnever (Payment where amount <= 0)\n"))
 
         assertTrue("- A Payment is now forbidden when its amount is at most 0." in report, report)
         assertTrue(
-            "- A Payment stored before this change is now forbidden when its amount is at most 0. Its next change could be refused." in report,
+            "- A Payment stored before this change is now forbidden when its amount is at most 0. While such a Payment is stored, every new Payment is refused, and the refusal names the stored one." in report,
             report,
         )
         assertTrue("example test" !in report, "a case the generator skips, such as a never over a kept shape, is not a generated case: $report")
@@ -260,15 +260,15 @@ class SpecComparisonTest {
     }
 
     @Test
-    fun `a constraint added over a kept act already in the spec says a record stored before it could be refused at its next change`() {
+    fun `a constraint added over a kept act already in the spec says a record stored before it refuses every new one while it is stored`() {
         val report = reportBetween(visits, visits + visitConstraints)
 
         assertTrue(
-            "- A Visit stored before this change is now forbidden when its minutes is above 600. Its next change could be refused." in report,
+            "- A Visit stored before this change is now forbidden when its minutes is above 600. While such a Visit is stored, every new Visit is refused, and the refusal names the stored one." in report,
             report,
         )
         assertTrue(
-            "- A Deposit stored before this change is now forbidden when its amount is above 5000. Its next change could be refused." in report,
+            "- A Deposit stored before this change is now forbidden when its amount is above 5000. While such a Deposit is stored, every new Deposit is refused, and the refusal names the stored one." in report,
             report,
         )
     }

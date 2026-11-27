@@ -176,7 +176,8 @@ object HypotheticalRecords {
     // ── a constraint added ───────────────────────────────────────────────────────
 
     /** A `never` added over a shape or kept act the earlier version, [before], already declared: a
-     *  record stored under it may already break the prohibition. A transient act stores nothing. */
+     *  record stored under it may already break the prohibition, and while it does, every commit that
+     *  adds a record of the same base is refused, naming it. A transient act stores nothing. */
     private fun constraintAdded(added: Compared, before: SpecVersion): List<RecordChange> {
         val prohibition = added.declaration as? NeverDecl ?: return emptyList()
         val version = added.version
@@ -186,7 +187,8 @@ object HypotheticalRecords {
         val forbidden = DeclarationSentences.forbidden(prohibition, version) ?: return emptyList()
         val connective = if (prohibition.requirement != null) "unless" else "when"
         val sentence = "${Sentences.capitalized(Sentences.withArticle(subject))} stored before this change is now forbidden " +
-            "$connective $forbidden. Its next change could be refused."
+            "$connective $forbidden. While such ${Sentences.withArticle(subject)} is stored, every new $base is refused, " +
+            "and the refusal names the stored one."
         return listOf(RecordChange(base, sentence, added.pointer))
     }
 }
