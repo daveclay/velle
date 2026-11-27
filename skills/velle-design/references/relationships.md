@@ -83,12 +83,12 @@ act Batch { items: many Item, n: integer }
 
 rule Tag when Batch {
     for each item in items {
-        this.n = 1
+        item.n = 1
     }
 }
 ```
 
-> [V34] rule 'Tag' assigns inside `for each` — a block creates records; to write one field of every member of a collection, assign through the collection (`this.n = ...` on the collection path)
+> [V34] rule 'Tag' assigns 'item.n' inside 'for each' — a block creates records; to write 'n' on every member of 'items', write 'items.n = 1' in the rule, outside the block
 
 ## 3. Deleting a record others point at
 

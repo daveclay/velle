@@ -32,7 +32,7 @@ private fun aliasesRead(item: BodyItem, names: Set<String>): Set<String> = when 
 }
 
 /** The root name of every path [expr] reads, in reading order. */
-private fun rootsOf(expr: Expr): List<String> {
+internal fun rootsOf(expr: Expr): List<String> {
     val roots = mutableListOf<String>()
     collectRoots(expr, roots)
     return roots

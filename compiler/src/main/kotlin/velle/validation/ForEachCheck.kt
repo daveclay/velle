@@ -19,7 +19,7 @@ internal fun Validator.checkForEach(rule: RuleDecl, scope: String, block: ForEac
     val forEachNamesOutside = forEachNames
     forEachNames = forEachNamesOutside + block.bindings.map { binding -> binding.name }
     val boundNames = block.bindings.filter { binding -> bindLoopName(rule, scope, binding, created) }.map { binding -> binding.name }
-    block.body.forEach { item -> checkBlockStatementKind(rule, item) }
+    block.body.forEach { item -> checkBlockStatementKind(rule, block, forEachNamesOutside, item) }
     try {
         checkBody(rule, scope, block.body, created)
     } finally {
@@ -68,15 +68,44 @@ private fun Validator.rangeElement(rule: RuleDecl, scope: String, range: LoopSou
 }
 
 /** V34: a block creates records; it neither assigns nor deletes. */
-private fun Validator.checkBlockStatementKind(rule: RuleDecl, item: BodyItem) {
+private fun Validator.checkBlockStatementKind(rule: RuleDecl, block: ForEach, forEachNamesOutside: Set<String>, item: BodyItem) {
     when (item) {
-        is Assignment -> diagnostics.add(Diagnostic("V34", "rule '${rule.name}' assigns inside `for each` — a block creates records; " +
-            "to write one field of every member of a collection, assign through the collection " +
-            "(`this.${Printer.expr(item.target).substringAfterLast('.')} = ...` on the collection path, Reference §12)"))
+        is Assignment -> diagnostics.add(Diagnostic("V34", "rule '${rule.name}' assigns '${Printer.expr(item.target)}' inside 'for each' — " +
+            "a block creates records; " + (assignmentThroughCollection(block, forEachNamesOutside, item) ?: GENERAL_ASSIGNMENT_ADVICE)))
         is DeleteStmt -> diagnostics.add(Diagnostic("V34", "rule '${rule.name}' deletes inside `for each` — a block creates records; " +
             "to delete every member of a collection, write a rule on the member shape that deletes `this` (Reference §12)"))
         else -> {}
     }
+}
+
+private const val GENERAL_ASSIGNMENT_ADVICE =
+    "to write one field of every member of a collection, write the assignment in the rule, outside the block, " +
+        "through the path to the collection, as 'this.invoices.customer = this.customer' writes 'customer' on every invoice (Reference §6)"
+
+/** The advice naming the author's own collection, `items.n = 1` for `item.n = 1` inside `for each item in items`,
+ *  or null when that spelling would not stand outside the block: the target is not `name.field` through this
+ *  block's name, the source is not a path to a collection the rule reaches without a block, or the value reads
+ *  a name a block binds. */
+private fun Validator.assignmentThroughCollection(block: ForEach, forEachNamesOutside: Set<String>, assignment: Assignment): String? {
+    val target = assignment.target
+    if (target.segs.size != 1) return null
+    val collectionPath = collectionPathOf(block, target.root, forEachNamesOutside) ?: return null
+    val blockNames = block.bindings.map { binding -> binding.name } + block.body.mapNotNull { statement -> (statement as? Creation)?.alias }
+    if (rootsOf(assignment.value).any { root -> root in blockNames || root in forEachNamesOutside }) return null
+    val field = target.segs.single().name
+    val collection = Printer.expr(collectionPath)
+    return "to write '$field' on every member of '$collection', write '$collection.$field = ${Printer.expr(assignment.value)}' " +
+        "in the rule, outside the block (Reference §6)"
+}
+
+/** The source of the block's name [name] when it is a path the rule reaches outside the block:
+ *  neither a bare shape name nor a path through an outer block's name. */
+private fun Validator.collectionPathOf(block: ForEach, name: String, forEachNamesOutside: Set<String>): PathExpr? {
+    val source = block.bindings.find { binding -> binding.name == name }?.source as? LoopSource.Over ?: return null
+    val path = source.expr as? PathExpr ?: return null
+    val isShapeName = path.segs.isEmpty() && (path.root in model.shapes || path.root in model.refinements)
+    if (isShapeName || path.root in forEachNamesOutside) return null
+    return path
 }
 
 /** What a `for each` name's source shows about each element, kept under the name (Reference §14):
