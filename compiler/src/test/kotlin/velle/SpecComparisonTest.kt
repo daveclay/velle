@@ -213,6 +213,86 @@ class SpecComparisonTest {
         assertTrue("example test" !in report, "a case the generator skips, such as a never over a kept shape, is not a generated case: $report")
     }
 
+    // ── which records were stored before a constraint was added ─────────────────
+
+    private val visits = """
+        act Member { name: text }
+
+        act Visit {
+            member: one Member
+            minutes: integer
+        }
+
+        transient act MakeDeposit {
+            member: one Member
+            amount: decimal
+        }
+
+        shape Deposit {
+            member: one Member
+            amount: decimal
+        }
+
+        rule RecordDeposit when MakeDeposit {
+            Deposit from { member: member, amount: amount }
+        }
+    """.trimIndent() + "\n"
+
+    private val visitConstraints = """
+        never (Visit where minutes > 600)
+
+        never (MakeDeposit where amount > 1000)
+
+        never (Deposit where amount > 5000)
+    """.trimIndent() + "\n"
+
+    private fun reportBetween(beforeSpec: String, afterSpec: String): String {
+        assertEquals(emptyList(), Validator.validate(afterSpec), "the later spec validates")
+        return SpecComparison.report(SpecVersion("visits.velle (before)", beforeSpec), SpecVersion("visits.velle", afterSpec))
+    }
+
+    @Test
+    fun `a shape and its constraint both new say nothing of records stored before the change`() {
+        val report = reportBetween("", visits + visitConstraints)
+
+        assertTrue("- A Deposit is now forbidden when its amount is above 5000." in report, report)
+        assertTrue("stored before this change" !in report, "no record of a new shape or act was stored before: $report")
+    }
+
+    @Test
+    fun `a constraint added over a kept act already in the spec says a record stored before it could be refused at its next change`() {
+        val report = reportBetween(visits, visits + visitConstraints)
+
+        assertTrue(
+            "- A Visit stored before this change is now forbidden when its minutes is above 600. Its next change could be refused." in report,
+            report,
+        )
+        assertTrue(
+            "- A Deposit stored before this change is now forbidden when its amount is above 5000. Its next change could be refused." in report,
+            report,
+        )
+    }
+
+    @Test
+    fun `a constraint added over a transient act says nothing of records stored before the change`() {
+        val report = reportBetween(visits, visits + visitConstraints)
+
+        assertTrue("- A MakeDeposit is now refused when its amount is above 1000." in report, report)
+        assertTrue("A MakeDeposit stored before" !in report, "nothing of a transient act is stored: $report")
+    }
+
+    @Test
+    fun `a kept act and its constraint both new say nothing of records stored before the change`() {
+        val withoutVisit = visits.replace("act Visit {\n    member: one Member\n    minutes: integer\n}\n", "")
+        assertTrue("Visit" !in withoutVisit, "the earlier spec still declares Visit: $withoutVisit")
+
+        val report = reportBetween(withoutVisit, visits + visitConstraints)
+
+        assertTrue("- A Visit is now refused when its minutes is above 600." in report, report)
+        assertTrue("A Visit stored before" !in report, "no Visit was stored before Visit was declared: $report")
+        assertTrue("A Deposit stored before this change" in report, "Deposit was already declared: $report")
+    }
+
     @Test
     fun `case F, renaming Reminder to Nudge is one rename, with the warning about stored records`() {
         val report = reportFor(edited("Reminder", "Nudge"))
