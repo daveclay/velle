@@ -4,7 +4,9 @@ import velle.spec.PathResolver
 import velle.spec.PathStart
 import velle.spec.Reach
 import velle.spec.ResolvedPath
+import velle.spec.BoundElement
 import velle.spec.Scope
+import velle.spec.ScopeRules
 import velle.spec.ShapeNarrowing
 
 import velle.ext.VelleFunction
@@ -720,6 +722,9 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     /** What an `is` test shows about the shape of a path's record (Reference §10). */
     val narrowing: ShapeNarrowing by lazy { ShapeNarrowing(this, paths) }
 
+    /** Which scope each part of an expression is read at (Reference §7, §10). */
+    val scopes: ScopeRules by lazy { ScopeRules(this, paths, narrowing) }
+
 
     /** The order a new record's `initially` values are computed in (Reference §5). */
     val startingValues: StartingValues by lazy { StartingValues(this) }
@@ -1052,8 +1057,8 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
             // a branch reads what its test narrowed to (Reference §10): `target.tags` after `target is Post`
             is IfExpr -> {
                 collect(expression.condition, scope, summary)
-                collect(expression.thenExpr, scope.narrowedBy(narrowedBy(expression.condition, holds = true, scope)), summary)
-                collect(expression.elseExpr, scope.narrowedBy(narrowedBy(expression.condition, holds = false, scope)), summary)
+                collect(expression.thenExpr, scopes.ofThen(expression, scope), summary)
+                collect(expression.elseExpr, scopes.ofElse(expression, scope), summary)
             }
             is Interpolation -> expression.pieces.forEach { piece -> collect(piece, scope, summary) }
             is IsExpr -> collectIs(expression, scope, summary)
@@ -1069,11 +1074,10 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
         }
     }
 
-    /** `a and b` reads `b` where `a` holds, so what `a` narrows is in force over `b` (Reference §10). */
+    /** `a and b` reads `b` where `a` holds and `a or b` reads `b` where `a` fails, so what `a` shows is in force over `b` (Reference §10). */
     private fun collectBinary(expression: Binary, scope: Scope, summary: ReadSummary) {
         collect(expression.left, scope, summary)
-        val rightScope = if (expression.op == "and") scope.narrowedBy(narrowedBy(expression.left, holds = true, scope)) else scope
-        collect(expression.right, rightScope, summary)
+        collect(expression.right, scopes.ofRightSide(expression, scope), summary)
     }
 
     private fun collectIs(test: IsExpr, scope: Scope, summary: ReadSummary) {
@@ -1111,7 +1115,7 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
         val relationship = membersOf(scope.element)[walk.rel]
         if (relationship == null) { summary.opaque = true; return }
         record(scope.element, relationship, summary)
-        walk.until?.let { condition -> collect(condition, Scope(scope.element, narrowed = scope.narrowed), summary) }
+        walk.until?.let { condition -> collect(condition, scopes.ofUntil(walk, scope), summary) }
     }
 
     /** `x is held` reads every field that can hold `x`, and whether a record of each holding shape exists. */
@@ -1184,61 +1188,36 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
         return element
     }
 
-    /** Returns the last binding's element scope (the innermost scope the shared
-     *  `where` evaluates bare names against), null when it can't be resolved. */
+    /** Collects what a collection reads: each binding's source, then its `where`. Returns the shape
+     *  of the records it holds, null when that cannot be told. */
     private fun collectCollection(collection: CollectionExpr, scope: Scope, summary: ReadSummary): String? {
-        var elementScope: String? = null
-        var bindingScope = scope
-        for (binding in collection.bindings) {
-            val bound = collectBinding(binding, bindingScope, summary)
-            bindingScope = bound.scope
-            if (bound.element != null) elementScope = bound.element
-        }
-        // the shared `where` resolves bare names against the innermost element,
-        // while `this` keeps naming the outermost subject (Reference §10)
-        collection.where?.let { where -> collect(where, bindingScope.inside(elementScope ?: scope.element), summary) }
-        // a filter that names a refinement, `(claims where PaidClaim)`, holds that refinement's members
-        return collection.where?.let { where -> elementScope?.let { membershipAtomOf(where, it) } } ?: elementScope
+        val filter = scopes.ofFilter(collection, scope)
+        collection.bindings.forEachIndexed { index, binding -> collectBinding(binding, filter.sources[index], summary) }
+        collection.where?.let { where -> collect(where, filter.where, summary) }
+        return filter.element
     }
 
-    /** What a binding of a collection reads, the element its records are, and the scope with its `as` name bound. */
-    private class Bound(val element: String?, val scope: Scope)
-
-    private fun collectBinding(binding: Binding, scope: Scope, summary: ReadSummary): Bound {
-        val element: String? = when (val source = binding.source) {
-            is PathExpr -> collectPathSource(source, binding, scope, summary) ?: return valueBinding(source, binding, scope, summary)
+    /** What a binding's source reads; a source whose records cannot be told may read anything. */
+    private fun collectBinding(binding: Binding, scope: Scope, summary: ReadSummary) {
+        when (val source = binding.source) {
+            is PathExpr -> collectPathSource(source, scope, summary)
             is ShapeForSource -> {
                 consultShape(source.shape, summary)
                 collectFor(source.shape, source.forExpr, scope, summary)
-                source.shape
             }
-            is WalkExpr -> {
-                collect(source, scope, summary)
-                walkTarget(source, scope.element).also { target -> if (target == null) summary.opaque = true }
-            }
-            else -> { collect(source, scope, summary); summary.opaque = true; null }
+            else -> collect(source, scope, summary)
         }
-        val alias = binding.alias
-        return Bound(element, if (alias != null && element != null) scope.withRecordName(alias, element) else scope)
+        if (scopes.elementOf(binding, scope) == BoundElement.Unknown) summary.opaque = true
     }
 
-    /** A source path's reads and the shape of its records; null when its records are not records. */
-    private fun collectPathSource(source: PathExpr, binding: Binding, scope: Scope, summary: ReadSummary): String? {
+    /** A source path's reads: a shape named on its own is consulted, any other path is read. */
+    private fun collectPathSource(source: PathExpr, scope: Scope, summary: ReadSummary) {
         if ((source.root in shapes || source.root in refinements) && source.segs.isEmpty()) {
             summary.existsShapes.add(baseOf(source.root) ?: source.root)
             if (source.root in refinements) summary.absorb(predicateSummary(source.root))
-            return source.root
+            return
         }
         collectPath(source, scope, summary)
-        return paths.resolve(source, scope).endShape
-    }
-
-    /** A `many` of values filtered by naming each value (Reference §5): the name is a value. */
-    private fun valueBinding(source: PathExpr, binding: Binding, scope: Scope, summary: ReadSummary): Bound {
-        val alias = binding.alias
-        if (alias != null && paths.resolve(source, scope).endType is VType.CollS) return Bound(null, scope.withValueName(alias))
-        summary.opaque = true
-        return Bound(null, scope)
     }
 
     /** The refinement a filter names as a bare conjunct, `where PaidClaim` or `where PaidClaim and ...`,
@@ -1279,11 +1258,6 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
 
     /** A shape that is its own only base: not a union, and not a shape others take with `is`. */
     private fun isPlainShape(shape: String?): Boolean = shape != null && shape in shapes && basesOf(shape) == setOf(shape)
-
-    // ── narrowing carried into the read summary (Reference §10) ──────────────
-
-    /** What [cond] shows where it holds or fails, read at [scope] (Reference §10). */
-    private fun narrowedBy(cond: Expr, holds: Boolean, scope: Scope): Map<List<String>, String> = narrowing.shownBy(cond, holds, scope)
 
     /**
      * The base shapes whose records a read or a write of [member] lands on when it is read on a record of

@@ -322,4 +322,67 @@ class PathResolutionDisagreementTest {
         assertTrue(validator.readsReferenceTo(conditionReads, "Post"))
         assertTrue(validator.conditionReadsRefTo(rule, "Post"))
     }
+
+    // ── 12. the right side of an `or`: narrowed for the validator, not for the read analysis ──
+
+    @Test
+    fun `the right side of an or is read where its left side failed, for the read analysis as for the validator`() {
+        val spec = """
+            act Post { body: text }
+            act Photo { caption: text }
+            shape Content = Post or Photo
+            act Comment { target: one Content }
+            shape PhotoOrEmptyPost = Comment where target is Photo or target.body == ""
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(spec))
+
+        // where 'target is Photo' failed the target is a Post, so 'body' is read on Post
+        val reads = Model(Parser.parse(spec)).predicateSummary("PhotoOrEmptyPost")
+        assertFalse(reads.opaque)
+        assertTrue(("Post" to "body") in reads.fields)
+    }
+
+    // ── 13. a filter that names a refinement: its members for the validator, the collection's for the read analysis ──
+
+    @Test
+    fun `a filter that names a refinement reads that refinement's own properties, for the read analysis as for the validator`() {
+        val spec = """
+            act Member { name: text }
+            act Loan {
+                member: one Member
+                fee: integer
+            }
+            shape LateLoan = Loan where fee > 0 {
+                penalty: integer = fee * 2
+            }
+            shape PenalisedMember = Member where exists (loans where LateLoan and penalty > 10)
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(spec))
+
+        // 'penalty' is a property of LateLoan, which the filter names, and it reads 'fee'
+        val reads = Model(Parser.parse(spec)).predicateSummary("PenalisedMember")
+        assertFalse(reads.opaque)
+        assertTrue(("Loan" to "fee") in reads.fields)
+    }
+
+    // ── 14. a walk's `until`: a name the filter around it binds resolves for the validator, not for the read analysis ──
+
+    private val renewals = """
+        act Member { name: text }
+        act Loan {
+            member: one Member
+            title: text
+            renewedFrom: one Loan?
+        }
+    """.trimIndent()
+
+    @Test
+    fun `a walk's until reads a name the filter around it binds, for the read analysis as for the validator`() {
+        val spec = renewals + "\nshape Renewer = Member where exists (loans as loan where (walk renewedFrom until title == loan.member.name) is some)"
+        assertEquals(emptyList(), Validator.validate(spec))
+
+        val reads = Model(Parser.parse(spec)).predicateSummary("Renewer")
+        assertFalse(reads.opaque)
+        assertTrue(("Member" to "name") in reads.fields)
+    }
 }
