@@ -15,7 +15,7 @@ object HypotheticalRecords {
 
     fun of(comparison: Comparison): List<RecordChange> =
         comparison.changed.flatMap { (old, new) -> refinementChange(old, new, comparison) } +
-            comparison.added.flatMap { added -> constraintAdded(added) }
+            comparison.added.flatMap { added -> constraintAdded(added, comparison.beforeRenamed) }
 
     // ── a refinement whose condition changed ─────────────────────────────────────
 
@@ -175,12 +175,14 @@ object HypotheticalRecords {
 
     // ── a constraint added ───────────────────────────────────────────────────────
 
-    private fun constraintAdded(added: Compared): List<RecordChange> {
+    /** A `never` added over a shape or kept act the earlier version, [before], already declared: a
+     *  record stored under it may already break the prohibition. A transient act stores nothing. */
+    private fun constraintAdded(added: Compared, before: SpecVersion): List<RecordChange> {
         val prohibition = added.declaration as? NeverDecl ?: return emptyList()
         val version = added.version
         val subject = prohibition.requirement?.subject ?: Sentences.leftmostName(prohibition.target)
         val base = version.baseOf(subject)
-        if (base in version.acts || base !in version.baseShapes) return emptyList()
+        if (base !in before.keptBaseShapes || base !in version.keptBaseShapes) return emptyList()
         val forbidden = DeclarationSentences.forbidden(prohibition, version) ?: return emptyList()
         val connective = if (prohibition.requirement != null) "unless" else "when"
         val sentence = "${Sentences.capitalized(Sentences.withArticle(subject))} stored before this change is now forbidden " +

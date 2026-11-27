@@ -23,6 +23,9 @@ class SpecVersion(val fileName: String, val source: String, val writtenSource: S
 
     val acts: Set<String> = shapes.filter { shape -> shape.exposed }.map { shape -> shape.name }.toSet()
 
+    /** The shapes and acts whose records are stored: every one but a transient act. */
+    val keptBaseShapes: Set<String> = shapes.filter { shape -> !shape.transient }.map { shape -> shape.name }.toSet()
+
     /** The refinements [name] is made from, at any depth: `ActionableOverdue = OverdueInvoice and not
      *  ArchivedInvoice` reads OverdueInvoice and ArchivedInvoice and whatever those are made from. */
     fun refinementsReadBy(name: String, seen: Set<String> = emptySet()): Set<String> {
