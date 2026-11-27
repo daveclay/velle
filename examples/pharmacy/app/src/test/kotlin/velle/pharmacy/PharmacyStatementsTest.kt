@@ -97,7 +97,7 @@ class PharmacyStatementsTest {
         val items = ((answer["data"] as Map<*, *>)["page"] as Map<*, *>)["items"] as List<*>
         assertEquals(Roster.interactions.size, items.size)
         // a drug's stock, price, and prescriptions are members nobody asked for
-        val unasked = statements.filter { statement -> listOf("StockLot", "PriceChange", "Prescription", "Fill", "PurchaseOrder").any { table -> "\"$table\"" in statement } }
+        val unasked = statements.filter { statement -> listOf("stock_lot", "price_change", "prescription", "fill", "purchase_order").any { table -> "\"$table\"" in statement } }
         assertEquals(emptyList(), unasked.distinct())
         // one request is one snapshot: who is calling, found by the identity the sign-in carries, the
         // list and the actor's record, then the drugs the interactions name as drugA in one statement
@@ -133,13 +133,13 @@ class PharmacyStatementsTest {
         val resolving = statementsOf {
             mvc.get("/api/shapes/Ingredient/count") { with(margaret) }.andExpect { status { isOk() } }
         }
-        assertEquals(1, resolving.count { statement -> "\"identityId\"" in statement }, resolving.toString())
-        assertEquals(emptyList(), resolving.filter { statement -> listOf("\"Fill\"", "\"Verification\"", "\"LicenceRenewal\"").any { table -> table in statement } })
+        assertEquals(1, resolving.count { statement -> "\"identity_id\"" in statement }, resolving.toString())
+        assertEquals(emptyList(), resolving.filter { statement -> listOf("\"fill\"", "\"verification\"", "\"licence_renewal\"").any { table -> table in statement } })
 
         val generatedLookup = statementsOf {
             pharmacy.system.scope { pharmacy.read.staffByIdentityId(Roster.founder.identityId) }
         }
-        val collectionTables = listOf("Fill", "Verification", "LicenceRenewal", "LicenceReminder", "EntryVoid", "StockAdjustment", "CountConfirmation")
+        val collectionTables = listOf("fill", "verification", "licence_renewal", "licence_reminder", "entry_void", "stock_adjustment", "count_confirmation")
         assertTrue(collectionTables.all { table -> generatedLookup.any { statement -> "\"$table\"" in statement } }, generatedLookup.toString())
     }
 }

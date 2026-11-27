@@ -101,8 +101,8 @@ class HydrationCandidatesTest {
         accept(billing.commit(NewSubmitPayment(inv, Money.of("1200.00"))))
 
         assertEquals(Status.paid, billing.read(inv).status)
-        assertEquals(1, sqlCount("Receipt"))
-        assertEquals(1, sqlCount("ReceiptEmail"))
+        assertEquals(1, sqlCount("receipt"))
+        assertEquals(1, sqlCount("receipt_email"))
 
         // the fold writes customer.largestPayment through a by-id read — the
         // Customer table is never scanned, here or anywhere in this scenario
@@ -124,7 +124,7 @@ class HydrationCandidatesTest {
         store.reset()
 
         billing.tickWeekly()
-        assertEquals(1, sqlCount("Reminder"))
+        assertEquals(1, sqlCount("reminder"))
 
         // the sweep's one scan is the compiled candidate query for the invoices (the
         // previous tick is no record and no scan, Reference §17); the reminder guard
@@ -136,7 +136,7 @@ class HydrationCandidatesTest {
 
         // same tick again: the Reminder evidence suppresses re-nagging
         billing.tickWeekly()
-        assertEquals(1, sqlCount("Reminder"))
+        assertEquals(1, sqlCount("reminder"))
     }
 
     @Test
@@ -148,14 +148,14 @@ class HydrationCandidatesTest {
         val overdue = first.invoices().last()
         accept(first.commit(NewLineItem(overdue, "Old work", Money.of("99.00"), 1)))
         first.tickWeekly()
-        assertEquals(1, sqlCount("Reminder"))
+        assertEquals(1, sqlCount("reminder"))
 
         // a second process over the same storage: last run's Reminder row is
         // excluded by the NOT EXISTS in the candidate query itself
         val (second, store) = connect()
         store.reset()
         second.tickWeekly()
-        assertEquals(1, sqlCount("Reminder"))
+        assertEquals(1, sqlCount("reminder"))
         assertEquals(emptyList(), store.fetchAlls)
     }
 }

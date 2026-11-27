@@ -89,7 +89,7 @@ class BatchesPersistenceTest {
         // Fermentation#1, ExternalOrder#1, Composition#1 share a key; the discriminator tells them apart
         assertEquals(
             listOf(listOf(1L, "Fermentation"), listOf(1L, "ExternalOrder"), listOf(1L, "Composition")),
-            rows("""SELECT origin, origin__shape FROM PeptideBatch ORDER BY id"""),
+            rows("""SELECT origin, origin__shape FROM peptide_batch ORDER BY id"""),
         )
 
         val second = process()
@@ -108,6 +108,6 @@ class BatchesPersistenceTest {
 
         // the one-origin-one-batch refusal is decided against stored rows
         assertIs<Commit.Refused<*, *>>(second.commit(NewPeptideBatch(second.read.peptide(1L), BigDecimal("1"), OriginReference.Existing(second.read.fermentation(1L).ref))))
-        assertEquals(listOf(listOf(3L)), rows("""SELECT COUNT(*) FROM PeptideBatch"""))
+        assertEquals(listOf(listOf(3L)), rows("""SELECT COUNT(*) FROM peptide_batch"""))
     }
 }

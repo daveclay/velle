@@ -75,23 +75,23 @@ fun main() {
 
         // ── the engineer's own SQL against their own DB ──
         println("-- customers (largestPayment maintained by the TrackLargestPayment fold):")
-        query(conn, """SELECT id, name, email, largestPayment FROM Customer""") {
+        query(conn, """SELECT id, name, email, largest_payment FROM customer""") {
             println("   #${it.getLong(1)} ${it.getString(2)} <${it.getString(3)}> largestPayment=${it.getString(4)}")
         }
         println("-- receipts (SendReceipt fired when the invoice became PaidInvoice):")
         query(
             conn,
-            """SELECT r.id, r.invoice, c.name, r.sentOn FROM Receipt r
-               JOIN Invoice i ON i.id = r.invoice JOIN Customer c ON c.id = i.customer"""
+            """SELECT r.id, r.invoice, c.name, r.sent_on FROM receipt r
+               JOIN invoice i ON i.id = r.invoice JOIN customer c ON c.id = i.customer"""
         ) {
             println("   #${it.getLong(1)} for invoice #${it.getLong(2)} (${it.getString(3)}) sent ${it.getString(4)}")
         }
         println("-- receipt emails (EmailReceipt, after commit — its own transaction):")
-        query(conn, """SELECT id, receipt, queuedOn FROM ReceiptEmail""") {
+        query(conn, """SELECT id, receipt, queued_on FROM receipt_email""") {
             println("   #${it.getLong(1)} for receipt #${it.getLong(2)} queued ${it.getString(3)}")
         }
         println("-- reminders (RemindOverdue at the weekly tick):")
-        query(conn, """SELECT id, invoice, sentOn FROM Reminder""") {
+        query(conn, """SELECT id, invoice, sent_on FROM reminder""") {
             println("   #${it.getLong(1)} for invoice #${it.getLong(2)} sent ${it.getString(3)}")
         }
     }

@@ -69,7 +69,7 @@ interface TickMemory {
 - `latestTick` returns the moment a schedule last ran, or nothing before its first tick. The runtime calls it at the start of every tick, since a `when leaving` rule on a schedule fires for the records that left since that moment ([§17](Reference-17-Schedule-triggers)).
 - `persistTick` receives the moment a tick ran, after the tick's rules have fired. The store keeps it in place of the moment it held for that schedule. A store holds one moment per schedule and never a history.
 
-A tick is not a row. It never arrives in a commit set and no read of a shape returns it, so these two functions are everything a store does about ticks. The SQL store keeps the moments in a table of its own, `velle_tick`, with one row per schedule. A table named `Tick` in a database that an earlier version of Velle wrote to is no longer read, and is yours to drop.
+A tick is not a row. It never arrives in a commit set and no read of a shape returns it, so these two functions are everything a store does about ticks. The SQL store keeps the moments in a table of its own, `velle__tick`, with one row per schedule ([The SQL store](SQL-store)).
 
 A system is connected with `system.connect(resolver, callback, tickMemory)`, which is what `SqliteStore.attach` calls after creating the schema. One object may implement all three, as the SQLite store does, or separate objects may split them.
 
@@ -188,9 +188,9 @@ class TunedStore(backend: SqliteStore, model: Model, private val conn: Connectio
 
     override fun remindOverdueCandidates(dueBefore: LocalDate, sentOnAfter: LocalDate): List<InvoiceRow> {
         val sql = """
-            SELECT i.* FROM "Invoice" i
+            SELECT i.* FROM "invoice" i
             WHERE i."due" < ?
-              AND NOT EXISTS (SELECT 1 FROM "Reminder" r WHERE r."invoice" = i.id AND r."sentOn" > ?)
+              AND NOT EXISTS (SELECT 1 FROM "reminder" r WHERE r."invoice" = i.id AND r."sent_on" > ?)
         """
         // bind the two dates, run the query, map each result to an InvoiceRow
     }

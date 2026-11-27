@@ -77,14 +77,14 @@ class ModerationPersistenceTest {
         accept(first.commit(NewListingReport(lamp, "brass lamp", "spam")))
 
         accept(first.commit(NewDiscardDraft(lamp, "duplicate")))
-        assertEquals(emptyList(), rows("""SELECT id FROM Listing"""), "the deletion landed")
-        assertEquals(listOf(listOf<Any?>(null)), rows("""SELECT listing FROM ListingReport"""), "the report's reference at the deleted listing is emptied")
-        assertEquals(listOf(listOf("brass lamp")), rows("""SELECT listingTitle FROM DiscardRecord"""))
-        assertEquals(listOf(listOf(1L)), rows("""SELECT COUNT(*) FROM SellerNotice"""))
+        assertEquals(emptyList(), rows("""SELECT id FROM listing"""), "the deletion landed")
+        assertEquals(listOf(listOf<Any?>(null)), rows("""SELECT listing FROM listing_report"""), "the report's reference at the deleted listing is emptied")
+        assertEquals(listOf(listOf("brass lamp")), rows("""SELECT listing_title FROM discard_record"""))
+        assertEquals(listOf(listOf(1L)), rows("""SELECT COUNT(*) FROM seller_notice"""))
 
         // a later listing does not inherit the deleted listing's key
         accept(first.commit(NewListing("vase", ada)))
-        assertEquals(listOf(listOf(2L)), rows("""SELECT id FROM Listing"""))
+        assertEquals(listOf(listOf(2L)), rows("""SELECT id FROM listing"""))
 
         val second = process()
         val report = second.read.listingReport(1L)
@@ -107,8 +107,8 @@ class ModerationPersistenceTest {
 
         val second = process()
         accept(second.commit(NewCloseAccount(second.read.seller(1L))))
-        assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM Seller"""))
-        assertEquals(listOf(listOf<Any?>(2L, null)), rows("""SELECT id, seller FROM Listing"""), "the survivor's reference at the deleted seller is emptied")
+        assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM seller"""))
+        assertEquals(listOf(listOf<Any?>(2L, null)), rows("""SELECT id, seller FROM listing"""), "the survivor's reference at the deleted seller is emptied")
 
         val third = process()
         val published = third.read.listing(2L)

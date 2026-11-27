@@ -81,7 +81,7 @@ class MembershipPersistenceTest {
         val grace = first.agents().last()
         accept(first.commit(NewRaiseTicket(ada, "billing question", LocalDate.of(2026, 3, 1), Priority.normal)))
         accept(first.commit(NewCloseTicket(first.tickets().last(), grace)))
-        assertEquals(listOf(listOf(1L)), rows("""SELECT closedBy FROM capture_ClosedTicket"""), "the capture landed as a row")
+        assertEquals(listOf(listOf(1L)), rows("""SELECT closed_by FROM capture__closed_ticket"""), "the capture landed as a row")
 
         val second = process()
         val ada2 = second.read.member(1L)
@@ -95,7 +95,7 @@ class MembershipPersistenceTest {
         accept(second.commit(NewReopenTicket(ticket)))
         assertTrue(!second.system.isMember(second.system.idOf(ticket), "ClosedTicket"))
         assertEquals(grace2, second.read(second.reopenNotices().single()).reassignTo, "the exit rule was the capture's last reader")
-        assertEquals(emptyList(), rows("""SELECT closedBy FROM capture_ClosedTicket"""), "the retraction deleted the row")
+        assertEquals(emptyList(), rows("""SELECT closed_by FROM capture__closed_ticket"""), "the retraction deleted the row")
     }
 
     @Test
@@ -110,7 +110,7 @@ class MembershipPersistenceTest {
         val ada2 = second.read.member(1L)
         assertEquals(1, second.charges().size, "the tick's sweep selected the member from storage")
         assertEquals(0, second.read(ada2).balance.compareTo(BigDecimal("10")), "the fold read the stored deposit and charge")
-        assertEquals(listOf(listOf(1L)), rows("""SELECT COUNT(*) FROM Charge"""))
+        assertEquals(listOf(listOf(1L)), rows("""SELECT COUNT(*) FROM charge"""))
     }
 }
 

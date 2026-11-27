@@ -45,9 +45,9 @@ class TypedStoreTest {
             // hand-written SQL for the hot question — parameters arrive as
             // already-folded dates, no filter tree in sight
             val sql = """
-                SELECT i.* FROM "Invoice" i
+                SELECT i.* FROM "invoice" i
                 WHERE i."due" < ?
-                  AND NOT EXISTS (SELECT 1 FROM "Reminder" r WHERE r."invoice" = i.id AND r."sentOn" > ?)
+                  AND NOT EXISTS (SELECT 1 FROM "reminder" r WHERE r."invoice" = i.id AND r."sent_on" > ?)
             """.trimIndent()
             return conn.prepareStatement(sql).use { ps ->
                 ps.setString(1, dueBefore.toString())
@@ -59,7 +59,7 @@ class TypedStoreTest {
                                 put("customer", Ref.Persisted("Customer", StoreKey(rs.getLong("customer"))))
                                 put("due", LocalDate.parse(rs.getString("due")))
                                 put("reference", rs.getString("reference"))
-                                put("issuedOn", java.time.Instant.parse(rs.getString("issuedOn")))
+                                put("issuedOn", java.time.Instant.parse(rs.getString("issued_on")))
                             }
                             add(Row("Invoice", StoreKey(rs.getLong("id")), fields).toInvoiceRow())
                         }

@@ -76,52 +76,52 @@ class OutsideChangeProbeTest {
 
     @Test
     fun `a value that breaks a never is read as it stands, with no error`() {
-        outsideVelle("""UPDATE "Drug" SET strength = -5""")
+        outsideVelle("""UPDATE "drug" SET strength = -5""")
         assertEquals(BigDecimal(-5), read(drug, "strength"))
     }
 
     @Test
     fun `a text in an integer column is read as zero, with no error`() {
-        outsideVelle("""UPDATE "Drug" SET strength = 'strong'""")
+        outsideVelle("""UPDATE "drug" SET strength = 'strong'""")
         assertEquals(BigDecimal.ZERO, read(drug, "strength"))
     }
 
     @Test
     fun `a required field emptied is read as absent, with no error`() {
-        outsideVelle("""UPDATE "Drug" SET name = NULL""")
+        outsideVelle("""UPDATE "drug" SET name = NULL""")
         assertNull(read(drug, "name"))
         assertNull(read(interaction, "drugName"), "and so is a member derived from it")
     }
 
     @Test
     fun `a required reference emptied is read as absent, with no error`() {
-        outsideVelle("""UPDATE "Interaction" SET drug = NULL""")
+        outsideVelle("""UPDATE "interaction" SET drug = NULL""")
         assertNull(read(interaction, "drug"))
     }
 
     @Test
     fun `removing a row a reference holds is refused on a connection that enforces foreign keys`() {
-        assertFailsWith<java.sql.SQLException> { outsideVelle("""DELETE FROM "Drug"""") }
+        assertFailsWith<java.sql.SQLException> { outsideVelle("""DELETE FROM "drug"""") }
         assertEquals("Warfarin", read(drug, "name"))
     }
 
     @Test
     fun `a reference to a removed row is still read as a reference, with no error`() {
         // no rule deletes a Drug, so the runtime does not look for the row before answering
-        outsideVelleWithoutForeignKeys("""DELETE FROM "Drug"""")
+        outsideVelleWithoutForeignKeys("""DELETE FROM "drug"""")
         system.scope { assertEquals(drug, system.refFor(system.get(system.idOf(interaction), "drug") as Long)) }
     }
 
     @Test
     fun `a member derived through a removed row fails naming the runtime's private number for it`() {
-        outsideVelleWithoutForeignKeys("""DELETE FROM "Drug"""")
+        outsideVelleWithoutForeignKeys("""DELETE FROM "drug"""")
         val failure = assertFailsWith<VelleRuntimeError> { read(interaction, "drugName") }
         assertEquals(true, failure.message!!.matches(Regex("missing instance \\d+")), failure.message)
     }
 
     @Test
     fun `a removed row read by its own reference fails naming the runtime's private number for it`() {
-        outsideVelleWithoutForeignKeys("""DELETE FROM "Drug"""")
+        outsideVelleWithoutForeignKeys("""DELETE FROM "drug"""")
         val failure = assertFailsWith<IllegalArgumentException> { read(drug, "name") }
         assertEquals(true, failure.message!!.matches(Regex("no instance \\d+")), failure.message)
     }

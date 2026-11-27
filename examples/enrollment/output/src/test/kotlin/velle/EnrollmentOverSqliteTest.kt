@@ -80,9 +80,9 @@ class EnrollmentPersistenceTest {
         accept(first.commit(NewTag(ada, "stem")))
         for (note in listOf("late", "early", "late")) accept(first.commit(NewNote(ada, note)))
 
-        assertEquals(listOf(1L, 2L, 3L), rows("""SELECT target FROM Student__courses WHERE owner = 1 ORDER BY pos""").map { it[0] })
-        assertEquals(listOf("honors", "stem"), rows("""SELECT value FROM Student__tags WHERE owner = 1 ORDER BY pos""").map { it[0] })
-        assertEquals(listOf("late", "early", "late"), rows("""SELECT value FROM Student__notes WHERE owner = 1 ORDER BY pos""").map { it[0] })
+        assertEquals(listOf(1L, 2L, 3L), rows("""SELECT target FROM student__courses WHERE owner = 1 ORDER BY pos""").map { it[0] })
+        assertEquals(listOf("honors", "stem"), rows("""SELECT value FROM student__tags WHERE owner = 1 ORDER BY pos""").map { it[0] })
+        assertEquals(listOf("late", "early", "late"), rows("""SELECT value FROM student__notes WHERE owner = 1 ORDER BY pos""").map { it[0] })
 
         val second = process()
         val ada2 = second.read.student(1L)
@@ -91,14 +91,14 @@ class EnrollmentPersistenceTest {
         assertEquals(listOf("honors", "stem"), second.read(ada2).tags)
         assertEquals(listOf("late", "early", "late"), second.read(ada2).notes, "a collection tolerating duplication reads back in the order written, duplicates kept")
         // a `duration` column is whole seconds, a `uuid` column its canonical text (Reference §5)
-        assertEquals(listOf(84L * 86_400), rows("""SELECT term FROM Course WHERE id = 1""").map { it[0] })
+        assertEquals(listOf(84L * 86_400), rows("""SELECT term FROM course WHERE id = 1""").map { it[0] })
         assertEquals(java.time.Duration.ofDays(84), second.read(logic).term)
-        assertEquals(second.read(logic).code, java.util.UUID.fromString(rows("""SELECT code FROM Course WHERE id = 1""").single()[0] as String))
+        assertEquals(second.read(logic).code, java.util.UUID.fromString(rows("""SELECT code FROM course WHERE id = 1""").single()[0] as String))
         assertTrue(second.shortCourses().none { it.key == logic.key }, "term < 4 weeks over the seconds column")
         // a `time` column is ISO text, a `bytes` column a BLOB handed back as given (Reference §5)
         accept(second.commit(NewCourse("Early", 30, java.time.Duration.ofDays(84), startsAt = java.time.LocalTime.of(8, 0), syllabus = byteArrayOf(1, 2, 3))))
         val early = second.courses().last()
-        assertEquals(listOf("08:00"), rows("""SELECT startsAt FROM Course WHERE id = ${early.key.value}""").map { it[0] })
+        assertEquals(listOf("08:00"), rows("""SELECT starts_at FROM course WHERE id = ${early.key.value}""").map { it[0] })
         val third = process()
         val early3 = third.read.course(early.key.value as Long)
         assertEquals(java.time.LocalTime.of(8, 0), third.read(early3).startsAt)
@@ -111,7 +111,7 @@ class EnrollmentPersistenceTest {
 
         // removal rewrites the edge set whole
         accept(second.commit(NewDrop(ada2, logic)))
-        assertEquals(listOf(2L, 3L), rows("""SELECT target FROM Student__courses WHERE owner = 1 ORDER BY pos""").map { it[0] })
+        assertEquals(listOf(2L, 3L), rows("""SELECT target FROM student__courses WHERE owner = 1 ORDER BY pos""").map { it[0] })
         assertEquals(listOf(sets, proofs), second.read(ada2).courses)
         assertTrue(second.overloadeds().none { it.key == ada2.key })
         assertEquals(emptyList(), second.read(logic).students)
@@ -129,7 +129,7 @@ class EnrollmentPersistenceTest {
         accept(first.commit(NewAssignAdvisor(advisor, listOf(students[0], students[1]))))
         assertEquals(
             listOf(listOf(1L, 1L), listOf(2L, 1L), listOf(3L, null)),
-            rows("""SELECT id, advisor FROM Student ORDER BY id"""),
+            rows("""SELECT id, advisor FROM student ORDER BY id"""),
         )
 
         val second = process()
@@ -157,17 +157,17 @@ class EnrollmentSchemaOverSqliteTest {
     fun `a student's table, its collection of tags, and its collection of courses`() {
         EnrollmentSystem().also { enrollment -> SqliteStore.attach(enrollment.system, connection) }
         assertEquals(
-            """CREATE TABLE "Student" (id INTEGER PRIMARY KEY AUTOINCREMENT, "name" TEXT, "advisor" INTEGER, FOREIGN KEY ("advisor") REFERENCES "Advisor"(id))""",
-            createTableStatement("Student"),
+            """CREATE TABLE "student" (id INTEGER PRIMARY KEY AUTOINCREMENT, "name" TEXT, "advisor" INTEGER, FOREIGN KEY ("advisor") REFERENCES "advisor"(id))""",
+            createTableStatement("student"),
         )
         assertEquals(
-            """CREATE TABLE "Student__tags" (owner INTEGER NOT NULL, pos INTEGER NOT NULL, value TEXT NOT NULL)""",
-            createTableStatement("Student__tags"),
+            """CREATE TABLE "student__tags" (owner INTEGER NOT NULL, pos INTEGER NOT NULL, value TEXT NOT NULL)""",
+            createTableStatement("student__tags"),
         )
         assertEquals(
-            """CREATE TABLE "Student__courses" (owner INTEGER NOT NULL, pos INTEGER NOT NULL, target INTEGER NOT NULL, FOREIGN KEY ("target") REFERENCES "Course"(id))""",
-            createTableStatement("Student__courses"),
+            """CREATE TABLE "student__courses" (owner INTEGER NOT NULL, pos INTEGER NOT NULL, target INTEGER NOT NULL, FOREIGN KEY ("target") REFERENCES "course"(id))""",
+            createTableStatement("student__courses"),
         )
-        assertEquals("""CREATE TABLE "velle_tick" (schedule TEXT PRIMARY KEY, ran_at TEXT NOT NULL)""", createTableStatement("velle_tick"))
+        assertEquals("""CREATE TABLE "velle__tick" (schedule TEXT PRIMARY KEY, ran_at TEXT NOT NULL)""", createTableStatement("velle__tick"))
     }
 }

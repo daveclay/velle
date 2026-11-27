@@ -243,7 +243,7 @@ abstract class SqlStoreConformance {
         a.customer("Ada", tier = 3, balance = "150.25", score = 0.75, visits = 12, active = false, since = LocalDate.of(2019, 3, 4),
             lastSeen = seen, window = Duration.ofDays(21), opensAt = LocalTime.of(7, 45), avatar = avatar,
             tags = listOf("vip", "beta"), notes = listOf("late", "early", "late"))
-        val key = (a.scalar("""SELECT id FROM "Customer"""") as Number).toLong()
+        val key = (a.scalar("""SELECT id FROM "customer"""") as Number).toLong()
 
         val b = attach(a.ds)
         b.sys.scope {
@@ -281,24 +281,24 @@ abstract class SqlStoreConformance {
             }
         """.trimIndent()
         val a = attach(spec = keyed)
-        a.execute("""INSERT INTO "Field" ("kindName", "name") VALUES ('site', 'notes')""")
-        a.execute("""INSERT INTO "Field" ("kindName", "name") VALUES ('plot', 'notes')""")
+        a.execute("""INSERT INTO "field" ("kind_name", "name") VALUES ('site', 'notes')""")
+        a.execute("""INSERT INTO "field" ("kind_name", "name") VALUES ('plot', 'notes')""")
         assertFailsWith<Exception>("the second row with the key must be refused by the database") {
-            a.execute("""INSERT INTO "Field" ("kindName", "name") VALUES ('site', 'notes')""")
+            a.execute("""INSERT INTO "field" ("kind_name", "name") VALUES ('site', 'notes')""")
         }
-        assertEquals(2L, a.count("Field"))
-        a.execute("""INSERT INTO "Entry" ("key", "label") VALUES (NULL, 'a')""")
-        a.execute("""INSERT INTO "Entry" ("key", "label") VALUES (NULL, 'b')""")
-        a.execute("""INSERT INTO "Entry" ("key", "label") VALUES ('PLOT-1', 'c')""")
-        assertFailsWith<Exception> { a.execute("""INSERT INTO "Entry" ("key", "label") VALUES ('PLOT-1', 'd')""") }
-        assertEquals(3L, a.count("Entry"))
+        assertEquals(2L, a.count("field"))
+        a.execute("""INSERT INTO "entry" ("key", "label") VALUES (NULL, 'a')""")
+        a.execute("""INSERT INTO "entry" ("key", "label") VALUES (NULL, 'b')""")
+        a.execute("""INSERT INTO "entry" ("key", "label") VALUES ('PLOT-1', 'c')""")
+        assertFailsWith<Exception> { a.execute("""INSERT INTO "entry" ("key", "label") VALUES ('PLOT-1', 'd')""") }
+        assertEquals(3L, a.count("entry"))
     }
 
     @Test
     fun `absent optionals stay absent and an empty collection reads back empty`() {
         val a = attach()
         a.customer("Bea", email = null, lastSeen = null, opensAt = null, avatar = null)
-        val key = (a.scalar("""SELECT id FROM "Customer"""") as Number).toLong()
+        val key = (a.scalar("""SELECT id FROM "customer"""") as Number).toLong()
         val b = attach(a.ds)
         b.sys.scope {
             val bea = b.sys.handleFor("Customer", key)
@@ -491,7 +491,7 @@ abstract class SqlStoreConformance {
         accepted(a.sys.commit("Comment", mapOf("target" to a.id(post), "body" to "first")))
         accepted(a.sys.commit("Comment", mapOf("target" to a.id(photo), "body" to "nice")))
         accepted(a.sys.commit("Comment", mapOf("target" to a.id(photo), "body" to "very")))
-        assertEquals("Photo", a.scalar("""SELECT "target__shape" FROM "Comment" WHERE body = 'nice'"""))
+        assertEquals("Photo", a.scalar("""SELECT "target__shape" FROM "comment" WHERE body = 'nice'"""))
 
         val b = attach(a.ds)
         b.sys.scope {
@@ -728,27 +728,27 @@ abstract class SqlStoreConformance {
         val a = attach()
         val ada = a.customer("Ada", tier = 1)
         accepted(a.sys.commit("SetTier", mapOf("customer" to a.id(ada), "tier" to 5)))
-        assertEquals(1L, a.count("capture_Flagged"))
-        assertEquals(5L, (a.scalar("""SELECT "flaggedTier" FROM "capture_Flagged"""") as Number).toLong())
+        assertEquals(1L, a.count("capture__flagged"))
+        assertEquals(5L, (a.scalar("""SELECT "flagged_tier" FROM "capture__flagged"""") as Number).toLong())
 
         // the next process raises the tier again while still flagged: the memory is untouched
         val b = attach(a.ds)
-        val adaB = Ref.Persisted("Customer", StoreKey((a.scalar("""SELECT id FROM "Customer"""") as Number).toLong()))
+        val adaB = Ref.Persisted("Customer", StoreKey((a.scalar("""SELECT id FROM "customer"""") as Number).toLong()))
         accepted(b.sys.commit("SetTier", mapOf("customer" to b.id(adaB), "tier" to 7)))
-        assertEquals(5L, (b.scalar("""SELECT "flaggedTier" FROM "capture_Flagged"""") as Number).toLong())
+        assertEquals(5L, (b.scalar("""SELECT "flagged_tier" FROM "capture__flagged"""") as Number).toLong())
 
         // exit: the notice reads the captured values, the row goes
         accepted(b.sys.commit("SetTier", mapOf("customer" to b.id(adaB), "tier" to 1)))
-        assertEquals(0L, b.count("capture_Flagged"))
-        assertEquals(1L, b.count("UnflagNotice"))
-        assertEquals(5L, (b.scalar("""SELECT "tierThen" FROM "UnflagNotice"""") as Number).toLong())
+        assertEquals(0L, b.count("capture__flagged"))
+        assertEquals(1L, b.count("unflag_notice"))
+        assertEquals(5L, (b.scalar("""SELECT "tier_then" FROM "unflag_notice"""") as Number).toLong())
 
         // re-entry writes fresh memory into the same row key: the upsert path
         accepted(b.sys.commit("SetTier", mapOf("customer" to b.id(adaB), "tier" to 9)))
-        assertEquals(1L, b.count("capture_Flagged"))
-        assertEquals(9L, (b.scalar("""SELECT "flaggedTier" FROM "capture_Flagged"""") as Number).toLong())
+        assertEquals(1L, b.count("capture__flagged"))
+        assertEquals(9L, (b.scalar("""SELECT "flagged_tier" FROM "capture__flagged"""") as Number).toLong())
         accepted(b.sys.commit("SetTier", mapOf("customer" to b.id(adaB), "tier" to 2)))
-        assertEquals(2L, b.count("UnflagNotice"))
+        assertEquals(2L, b.count("unflag_notice"))
     }
 
     // ── ticks: one moment per schedule, kept across processes ────────────────
@@ -779,10 +779,10 @@ abstract class SqlStoreConformance {
         val laterNight = Instant.parse("2026-01-25T09:00:00Z")
         secondProcess.sys.setTime(laterNight)
         secondProcess.sys.tick("Nightly")
-        assertEquals(1L, secondProcess.count("Lapse"), "the permit left Valid since the tick the first process ran")
+        assertEquals(1L, secondProcess.count("lapse"), "the permit left Valid since the tick the first process ran")
         assertEquals(laterNight, secondProcess.sys.latestTick("Nightly"), "the next tick replaces the moment")
         assertEquals(weeklyRun, secondProcess.sys.latestTick("Weekly"), "and leaves the other schedule's alone")
-        assertEquals(2L, secondProcess.count("velle_tick"), "one moment per schedule, however many ticks")
+        assertEquals(2L, secondProcess.count("velle__tick"), "one moment per schedule, however many ticks")
     }
 
     // ── deletion: the row and what hangs off it go, and every reference at it is emptied ──
@@ -792,17 +792,17 @@ abstract class SqlStoreConformance {
         val a = attach()
         val ada = a.customer("Ada", tier = 6, tags = listOf("vip"), notes = listOf("x"))
         accepted(a.sys.commit("Order", mapOf("customer" to a.id(ada), "total" to BigDecimal("5.00"))))
-        assertEquals(1L, a.count("capture_Flagged"))
-        assertEquals(1L, a.count("Customer__tags"))
-        val key = (a.scalar("""SELECT id FROM "Customer"""") as Number).toLong()
+        assertEquals(1L, a.count("capture__flagged"))
+        assertEquals(1L, a.count("customer__tags"))
+        val key = (a.scalar("""SELECT id FROM "customer"""") as Number).toLong()
 
         accepted(a.sys.commit("Remove", mapOf("customer" to a.id(ada))))
-        assertEquals(0L, a.count("Customer"))
-        assertEquals(0L, a.count("Customer__tags"))
-        assertEquals(0L, a.count("Customer__notes"))
-        assertEquals(0L, a.count("capture_Flagged"))
-        assertEquals(1L, a.count("Order"), "the order stays")
-        assertNull(a.scalar("""SELECT customer FROM "Order""""), "the surviving row's reference is emptied")
+        assertEquals(0L, a.count("customer"))
+        assertEquals(0L, a.count("customer__tags"))
+        assertEquals(0L, a.count("customer__notes"))
+        assertEquals(0L, a.count("capture__flagged"))
+        assertEquals(1L, a.count("order"), "the order stays")
+        assertNull(a.scalar("""SELECT customer FROM "order""""), "the surviving row's reference is emptied")
 
         val b = attach(a.ds)
         b.sys.scope {
@@ -811,7 +811,7 @@ abstract class SqlStoreConformance {
         }
         // a new customer never inherits the deleted row's key
         b.customer("Bea")
-        assertTrue((b.scalar("""SELECT id FROM "Customer"""") as Number).toLong() > key)
+        assertTrue((b.scalar("""SELECT id FROM "customer"""") as Number).toLong() > key)
     }
 
     protected val pointedAtSpec = """
@@ -866,10 +866,10 @@ abstract class SqlStoreConformance {
         accepted(a.sys.commit("Bookmark", mapOf("label" to "on the photo", "target" to a.id(photo))))
 
         accepted(a.sys.commit("RemovePost", mapOf("post" to a.id(post))))
-        assertNull(a.scalar("""SELECT "target" FROM "Bookmark" WHERE label = 'on the post'"""), "the key column is emptied")
-        assertNull(a.scalar("""SELECT "target__shape" FROM "Bookmark" WHERE label = 'on the post'"""), "the shape column is emptied with it")
-        assertEquals(photo.key.value, (a.scalar("""SELECT "target" FROM "Bookmark" WHERE label = 'on the photo'""") as Number).toLong())
-        assertEquals("Photo", a.scalar("""SELECT "target__shape" FROM "Bookmark" WHERE label = 'on the photo'"""))
+        assertNull(a.scalar("""SELECT "target" FROM "bookmark" WHERE label = 'on the post'"""), "the key column is emptied")
+        assertNull(a.scalar("""SELECT "target__shape" FROM "bookmark" WHERE label = 'on the post'"""), "the shape column is emptied with it")
+        assertEquals(photo.key.value, (a.scalar("""SELECT "target" FROM "bookmark" WHERE label = 'on the photo'""") as Number).toLong())
+        assertEquals("Photo", a.scalar("""SELECT "target__shape" FROM "bookmark" WHERE label = 'on the photo'"""))
     }
 
     @Test
@@ -887,10 +887,10 @@ abstract class SqlStoreConformance {
 
         accepted(a.sys.commit("CloseAccount", mapOf("seller" to a.id(ada))))
         accepted(a.sys.commit("RemovePost", mapOf("post" to a.id(post))))
-        assertEquals(1L, a.count("Shelf__sellers"))
-        assertEquals(bea.key.value, (a.scalar("""SELECT target FROM "Shelf__sellers"""") as Number).toLong())
-        assertEquals(1L, a.count("Shelf__items"))
-        assertEquals("Photo", a.scalar("""SELECT target_shape FROM "Shelf__items""""), "the photo with the post's key stays")
+        assertEquals(1L, a.count("shelf__sellers"))
+        assertEquals(bea.key.value, (a.scalar("""SELECT target FROM "shelf__sellers"""") as Number).toLong())
+        assertEquals(1L, a.count("shelf__items"))
+        assertEquals("Photo", a.scalar("""SELECT target_shape FROM "shelf__items""""), "the photo with the post's key stays")
 
         val b = attach(a.ds, spec = pointedAtSpec)
         b.sys.scope {
@@ -907,8 +907,8 @@ abstract class SqlStoreConformance {
         val lamp = accepted(a.sys.commit("Listing", mapOf("title" to "Lamp", "seller" to a.id(ada))))!!
 
         accepted(a.sys.commit("CloseAndRetitle", mapOf("seller" to a.id(ada), "listing" to a.id(lamp), "title" to "Brass lamp")))
-        assertEquals("Brass lamp", a.scalar("""SELECT title FROM "Listing""""))
-        assertNull(a.scalar("""SELECT seller FROM "Listing""""))
+        assertEquals("Brass lamp", a.scalar("""SELECT title FROM "listing""""))
+        assertNull(a.scalar("""SELECT seller FROM "listing""""))
     }
 
     @Test
@@ -919,8 +919,8 @@ abstract class SqlStoreConformance {
         accepted(a.sys.commit("CloseAccount", mapOf("seller" to a.id(ada))))
 
         accepted(a.sys.commit("Retitle", mapOf("listing" to a.id(lamp), "title" to "Brass lamp")))
-        assertEquals("Brass lamp", a.scalar("""SELECT title FROM "Listing""""))
-        assertNull(a.scalar("""SELECT seller FROM "Listing""""))
+        assertEquals("Brass lamp", a.scalar("""SELECT title FROM "listing""""))
+        assertNull(a.scalar("""SELECT seller FROM "listing""""))
     }
 
     @Test
@@ -941,11 +941,11 @@ abstract class SqlStoreConformance {
         val a = attach(spec = escalationSpec)
         val ada = accepted(a.sys.commit("Agent", mapOf("name" to "Ada")))!!
         accepted(a.sys.commit("Ticket", mapOf("subject" to "Outage", "agent" to a.id(ada), "urgent" to true)))
-        assertEquals(ada.key.value, (a.scalar("""SELECT "escalatedWith" FROM "capture_Escalated"""") as Number).toLong())
+        assertEquals(ada.key.value, (a.scalar("""SELECT "escalated_with" FROM "capture__escalated"""") as Number).toLong())
 
         accepted(a.sys.commit("Dismiss", mapOf("agent" to a.id(ada))))
-        assertEquals(1L, a.count("capture_Escalated"), "the ticket is still escalated")
-        assertNull(a.scalar("""SELECT "escalatedWith" FROM "capture_Escalated""""))
+        assertEquals(1L, a.count("capture__escalated"), "the ticket is still escalated")
+        assertNull(a.scalar("""SELECT "escalated_with" FROM "capture__escalated""""))
     }
 
     @Test
@@ -1006,15 +1006,15 @@ abstract class SqlStoreConformance {
         accepted(a.sys.commit("Listing", mapOf("title" to "Lamp", "seller" to a.id(ada))))
         accepted(a.sys.commit("Shelf", mapOf("label" to "all", "sellers" to listOf(a.id(bea)), "items" to emptyList<Any>())))
 
-        assertFailsWith<Exception>("a listing's seller") { a.executePrepared("""DELETE FROM "Seller" WHERE id = ${ada.key.value}""") }
-        assertFailsWith<Exception>("a shelf's member") { a.executePrepared("""DELETE FROM "Seller" WHERE id = ${bea.key.value}""") }
-        assertEquals(2L, a.count("Seller"))
+        assertFailsWith<Exception>("a listing's seller") { a.executePrepared("""DELETE FROM "seller" WHERE id = ${ada.key.value}""") }
+        assertFailsWith<Exception>("a shelf's member") { a.executePrepared("""DELETE FROM "seller" WHERE id = ${bea.key.value}""") }
+        assertEquals(2L, a.count("seller"))
 
         accepted(a.sys.commit("CloseAccount", mapOf("seller" to a.id(ada))))
         accepted(a.sys.commit("CloseAccount", mapOf("seller" to a.id(bea))))
-        assertEquals(0L, a.count("Seller"))
-        assertNull(a.scalar("""SELECT seller FROM "Listing""""))
-        assertEquals(0L, a.count("Shelf__sellers"))
+        assertEquals(0L, a.count("seller"))
+        assertNull(a.scalar("""SELECT seller FROM "listing""""))
+        assertEquals(0L, a.count("shelf__sellers"))
     }
 
     @Test
@@ -1023,7 +1023,7 @@ abstract class SqlStoreConformance {
         val missingSeller = Ref.Persisted("Seller", StoreKey(999L))
         val listing = CommitSet.Creation("Listing", mapOf("title" to "Lamp", "seller" to missingSeller))
         assertFailsWith<Exception> { a.commitDirectly(CommitSet(created = listOf(listing), assigned = emptyList())) }
-        assertEquals(0L, a.count("Listing"), "the failed commit wrote nothing")
+        assertEquals(0L, a.count("listing"), "the failed commit wrote nothing")
     }
 
     @Test
@@ -1033,8 +1033,8 @@ abstract class SqlStoreConformance {
         val listing = CommitSet.Creation("Listing", mapOf("title" to "Lamp", "seller" to Ref.Pending("Seller", 0)))
         val shelf = CommitSet.Creation("Shelf", mapOf("label" to "all", "sellers" to listOf(Ref.Pending("Seller", 0)), "items" to emptyList<Any>()))
         val minted = a.commitDirectly(CommitSet(created = listOf(seller, listing, shelf), assigned = emptyList()))
-        assertEquals(minted[0].value, (a.scalar("""SELECT seller FROM "Listing"""") as Number).toLong())
-        assertEquals(minted[0].value, (a.scalar("""SELECT target FROM "Shelf__sellers"""") as Number).toLong())
+        assertEquals(minted[0].value, (a.scalar("""SELECT seller FROM "listing"""") as Number).toLong())
+        assertEquals(minted[0].value, (a.scalar("""SELECT target FROM "shelf__sellers"""") as Number).toLong())
     }
 
     @Test
@@ -1054,8 +1054,8 @@ abstract class SqlStoreConformance {
         val ada = accepted(a.sys.commit("Dancer", mapOf("name" to "Ada")))!!
         val bea = accepted(a.sys.commit("Dancer", mapOf("name" to "Bea", "partner" to a.id(ada))))!!
         accepted(a.sys.commit("Pair", mapOf("dancer" to a.id(ada), "partner" to a.id(bea))))
-        assertEquals(bea.key.value, (a.scalar("""SELECT partner FROM "Dancer" WHERE name = 'Ada'""") as Number).toLong())
-        assertFailsWith<Exception> { a.executePrepared("""DELETE FROM "Dancer" WHERE id = ${ada.key.value}""") }
+        assertEquals(bea.key.value, (a.scalar("""SELECT partner FROM "dancer" WHERE name = 'Ada'""") as Number).toLong())
+        assertFailsWith<Exception> { a.executePrepared("""DELETE FROM "dancer" WHERE id = ${ada.key.value}""") }
     }
 
     @Test
@@ -1063,8 +1063,8 @@ abstract class SqlStoreConformance {
         val a = attach(spec = pointedAtSpec)
         val post = accepted(a.sys.commit("Post", mapOf("title" to "Hello")))!!
         accepted(a.sys.commit("Bookmark", mapOf("label" to "on the post", "target" to a.id(post))))
-        a.executePrepared("""DELETE FROM "Post" WHERE id = ${post.key.value}""")
-        assertEquals(0L, a.count("Post"))
+        a.executePrepared("""DELETE FROM "post" WHERE id = ${post.key.value}""")
+        assertEquals(0L, a.count("post"))
     }
 
     @Test
@@ -1073,7 +1073,7 @@ abstract class SqlStoreConformance {
         val dialect = store(system(pointedAtSpec).model, dataSource, emptyList()).dialect
         dataSource.connection.use { connection ->
             connection.createStatement().use { statement ->
-                statement.execute("""CREATE TABLE "Listing" (id ${dialect.keyColumn}, "title" TEXT, "seller" BIGINT)""")
+                statement.execute("""CREATE TABLE "listing" (id ${dialect.keyColumn}, "title" TEXT, "seller" BIGINT)""")
             }
         }
         val a = attach(dataSource, spec = pointedAtSpec)
@@ -1082,11 +1082,60 @@ abstract class SqlStoreConformance {
         accepted(a.sys.commit("Listing", mapOf("title" to "Lamp", "seller" to a.id(ada))))
         accepted(a.sys.commit("Shelf", mapOf("label" to "all", "sellers" to listOf(a.id(bea)), "items" to emptyList<Any>())))
 
-        a.executePrepared("""DELETE FROM "Seller" WHERE id = ${ada.key.value}""")
-        assertEquals(ada.key.value, (a.scalar("""SELECT seller FROM "Listing"""") as Number).toLong(), "the existing table has no foreign key")
+        a.executePrepared("""DELETE FROM "seller" WHERE id = ${ada.key.value}""")
+        assertEquals(ada.key.value, (a.scalar("""SELECT seller FROM "listing"""") as Number).toLong(), "the existing table has no foreign key")
         assertFailsWith<Exception>("a table the store created has its foreign key") {
-            a.executePrepared("""DELETE FROM "Seller" WHERE id = ${bea.key.value}""")
+            a.executePrepared("""DELETE FROM "seller" WHERE id = ${bea.key.value}""")
         }
+    }
+
+    // ── names: every table and column in snake case, and two Velle names that give one are refused ──
+
+    @Test
+    fun `every table and column the store creates is named in snake case`() {
+        val a = attach()
+        val ada = a.customer("Ada", tier = 6, tags = listOf("vip"), lastSeen = Instant.parse("2025-12-31T23:59:59Z"))
+        accepted(a.sys.commit("Order", mapOf("customer" to a.id(ada), "total" to BigDecimal("5.00"))))
+        val photo = accepted(a.sys.commit("Photo", mapOf("caption" to "Sunset")))!!
+        accepted(a.sys.commit("Comment", mapOf("target" to a.id(photo), "body" to "nice")))
+
+        assertNotNull(a.scalar("""SELECT last_seen FROM customer"""), "a field in camel case is a column in snake case")
+        assertEquals(1L, a.count("customer__tags"))
+        assertEquals(ada.key.value, (a.scalar("""SELECT customer FROM "order"""") as Number).toLong(), "a table named for an SQL keyword is quoted")
+        assertEquals("Photo", a.scalar("""SELECT target__shape FROM comment"""), "the shape column holds the Velle name of the shape")
+        assertEquals(6L, (a.scalar("""SELECT flagged_tier FROM capture__flagged""") as Number).toLong())
+        assertEquals(0L, a.count("velle__tick"))
+    }
+
+    private fun refusalOfNames(spec: String): String =
+        assertFailsWith<IllegalStateException> { store(system(spec).model, ds(), emptyList()) }.message!!
+
+    @Test
+    fun `the store refuses to start when two shapes give one table name`() {
+        val message = refusalOfNames("""
+            act HTTPServer { hostName: text }
+            act HttpServer { port: integer }
+        """.trimIndent())
+        assertTrue("shape 'HTTPServer'" in message && "shape 'HttpServer'" in message && "'http_server'" in message, message)
+    }
+
+    @Test
+    fun `the store refuses to start when two fields of one shape give one column name`() {
+        val message = refusalOfNames("""
+            act Page {
+                pathURL: text
+                pathUrl: text
+            }
+        """.trimIndent())
+        assertTrue("field 'Page.pathURL'" in message && "field 'Page.pathUrl'" in message && "'path_url'" in message && "'page'" in message, message)
+    }
+
+    @Test
+    fun `the store refuses to start when a shape's table would be one of the store's own`() {
+        val message = refusalOfNames("""
+            act Velle { tick: many text }
+        """.trimIndent())
+        assertTrue("field 'Velle.tick'" in message && "'velle__tick'" in message, message)
     }
 
     // ── E4: an extension type's binding, checked at start-up through the dialect's column ──
@@ -1129,7 +1178,7 @@ abstract class SqlStoreConformance {
         val bea = a.customer("Bea")
         a.sys.scope {
             assertEquals("Ada", a.sys.get(a.id(ada), "name")) // the read unit's snapshot is taken here
-            a.execute("""UPDATE "Customer" SET "name" = 'Beatrix' WHERE "name" = 'Bea'""") // another connection, committed
+            a.execute("""UPDATE "customer" SET "name" = 'Beatrix' WHERE "name" = 'Bea'""") // another connection, committed
             assertEquals("Bea", a.sys.get(a.id(bea), "name"), "the read sees the state it started from, not the write landed since")
         }
         a.sys.scope { assertEquals("Beatrix", a.sys.get(a.id(bea), "name"), "the next read sees it") }
@@ -1140,9 +1189,9 @@ abstract class SqlStoreConformance {
         val a = attach()
         a.customer("Ada")
         // the customer's own row is written before its tags, and the tags now have nowhere to go
-        a.execute("""DROP TABLE "Customer__tags"""")
+        a.execute("""DROP TABLE "customer__tags"""")
         assertFailsWith<Exception> { a.customer("Bea", tags = listOf("vip")) }
-        assertEquals(1L, a.count("Customer"), "Bea's row went with the failed commit")
+        assertEquals(1L, a.count("customer"), "Bea's row went with the failed commit")
     }
 
     @Test
@@ -1157,7 +1206,7 @@ abstract class SqlStoreConformance {
         } finally {
             readUnit.end(Outcome.Committed)
         }
-        assertEquals(0L, a.count("Post"))
+        assertEquals(0L, a.count("post"))
     }
 
     @Test
@@ -1167,7 +1216,7 @@ abstract class SqlStoreConformance {
         val r = a.sys.commit("Customer", mapOf("name" to "Zed", "tier" to 1, "balance" to BigDecimal.ONE, "score" to 0.1, "visits" to 5000L,
             "active" to true, "since" to LocalDate.of(2024, 1, 1), "window" to Duration.ofDays(1), "tags" to emptyList<String>(), "notes" to emptyList<String>()))
         assertIs<CommitResult.Refused>(r)
-        assertEquals(0L, a.count("Customer"))
+        assertEquals(0L, a.count("customer"))
         assertEquals(0, leases.open)
     }
 
@@ -1245,7 +1294,7 @@ abstract class SqlStoreConformance {
         val acct = accepted(a.sys.commit("Account", emptyMap()))!!
         accepted(a.sys.commit("Account", emptyMap()))
         accepted(a.sys.commit("Deposit", mapOf("account" to a.id(acct), "amount" to Money.of("12.50"))))
-        assertEquals(1250L, (a.scalar("""SELECT balance FROM "Account" WHERE balance > 0""") as Number).toLong())
+        assertEquals(1250L, (a.scalar("""SELECT balance FROM "account" WHERE balance > 0""") as Number).toLong())
         val b = attach(a.ds, spec = moneySpec, bindings = listOf(CentsBinding()))
         b.counting.reset()
         assertEquals(1, b.sys.scope { b.sys.instancesOf("Funded") }.size)

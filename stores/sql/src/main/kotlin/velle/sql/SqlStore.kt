@@ -425,16 +425,61 @@ open class SqlStore(
 
     /** The column's own name, and its discriminator column's when it is typed with a union. */
     private fun storedNames(column: FieldColumn): List<String> =
-        if (column.union) listOf(column.name, shapeColumn(column.name)) else listOf(column.name)
+        if (column.union) listOf(columnName(column.name), shapeColumn(column.name)) else listOf(columnName(column.name))
 
     private fun quoted(names: List<String>): String = names.joinToString(", ") { name -> "\"$name\"" }
 
-    private fun shapeColumn(field: String) = "${field}__shape"
-    private fun junctionTable(shape: String, field: String) = "${shape}__$field"
-    private fun captureTable(refinement: String) = "capture_$refinement"
+    /** The table of a shape's records. */
+    private fun tableName(shape: String) = snakeCase(shape)
+    /** The column of a field, or of a value a refinement remembers. */
+    private fun columnName(field: String) = snakeCase(field)
+    private fun shapeColumn(field: String) = "${columnName(field)}__shape"
+    private fun junctionTable(shape: String, field: String) = "${tableName(shape)}__${columnName(field)}"
+    private fun captureTable(refinement: String) = "capture__${snakeCase(refinement)}"
 
-    /** The moment each schedule last ran, one row per schedule ([TickMemory]). No shape's table starts in lower case. */
-    private val tickTable = "velle_tick"
+    /** The moment each schedule last ran, one row per schedule ([TickMemory]). */
+    private val tickTable = "velle__tick"
+
+    init {
+        refuseNamesThatCollide()
+    }
+
+    /**
+     * Two Velle names that give one table or one column name would be stored as one:
+     * `HTTPServer` and `HttpServer` are both `http_server` ([snakeCase]). The compiler
+     * cannot see this, since the names are this store's, so the store refuses to start.
+     */
+    private fun refuseNamesThatCollide() {
+        refuseCollisions(tableOwners(), "the table")
+        for (shape in persistedShapes) {
+            val owners = columnsOf(shape).flatMap { column -> storedNames(column).map { name -> name to "field '$shape.${column.name}'" } }
+            refuseCollisions(listOf("id" to "the key column") + owners, "the column", "of the table '${tableName(shape)}'")
+        }
+        for (captureSchema in model.captureSchemas) {
+            val owners = captureSchema.props.map { remembered -> columnName(remembered.name) to "the captured value '${captureSchema.refinement}.${remembered.name}'" }
+            refuseCollisions(listOf("id" to "the key column") + owners, "the column", "of the table '${captureTable(captureSchema.refinement)}'")
+        }
+    }
+
+    /** Each table the store keeps, with what it holds in Velle's words. */
+    private fun tableOwners(): List<Pair<String, String>> {
+        val shapeTables = persistedShapes.map { shape -> tableName(shape) to "shape '$shape'" }
+        val junctionTables = persistedShapes.flatMap { shape ->
+            collectionsOf(shape).map { collection -> junctionTable(shape, collection.name) to "field '$shape.${collection.name}'" }
+        }
+        val captureTables = model.captureSchemas.map { captureSchema -> captureTable(captureSchema.refinement) to "the values refinement '${captureSchema.refinement}' captures" }
+        return shapeTables + junctionTables + captureTables + (tickTable to "the moment each schedule last ran")
+    }
+
+    /** Throws when two of [owners] share a name, naming both and the name. */
+    private fun refuseCollisions(owners: List<Pair<String, String>>, kind: String, place: String = "") {
+        val sharing = owners.groupBy({ owner -> owner.first }, { owner -> owner.second }).entries.firstOrNull { entry -> entry.value.size > 1 } ?: return
+        val where = if (place.isEmpty()) "" else " $place"
+        throw IllegalStateException(
+            "${dialect.name} store: ${sharing.value.joinToString(" and ")} would both be stored in $kind '${sharing.key}'$where. " +
+                "Rename one of them in the spec."
+        )
+    }
     private val momentStorage: StorageColumn get() = dialect.column(StorageClass.DATETIME)
     private val textColumnType: String get() = dialect.column(StorageClass.TEXT).columnType
 
@@ -449,8 +494,8 @@ open class SqlStore(
      * refuses a write leaving the column holding a key no row of that table has, and the
      * removal of a row a reference still holds.
      */
-    private data class ForeignKey(val table: String, val column: String, val targetShape: String) {
-        val clause: String get() = """FOREIGN KEY ("$column") REFERENCES "$targetShape"(id)"""
+    private data class ForeignKey(val table: String, val column: String, val targetTable: String) {
+        val clause: String get() = """FOREIGN KEY ("$column") REFERENCES "$targetTable"(id)"""
     }
 
     /**
@@ -461,10 +506,10 @@ open class SqlStore(
      */
     private fun foreignKeysOf(shape: String): List<ForeignKey> {
         val columnKeys = columnsOf(shape).filterNot { column -> column.union }.mapNotNull { column ->
-            referencedTable(column.type)?.let { targetShape -> ForeignKey(shape, column.name, targetShape) }
+            referencedTable(column.type)?.let { targetShape -> ForeignKey(tableName(shape), columnName(column.name), tableName(targetShape)) }
         }
         val memberKeys = collectionsOf(shape).filterNot { collection -> collection.union }.mapNotNull { collection ->
-            referencedTable(collection.element)?.let { targetShape -> ForeignKey(junctionTable(shape, collection.name), "target", targetShape) }
+            referencedTable(collection.element)?.let { targetShape -> ForeignKey(junctionTable(shape, collection.name), "target", tableName(targetShape)) }
         }
         return columnKeys + memberKeys
     }
@@ -517,10 +562,11 @@ open class SqlStore(
 
     private fun createShapeTables(statement: Statement, shape: String) {
         val columns = columnsOf(shape).joinToString("") { column ->
-            """, "${column.name}" ${columnType(column.type)}""" +
+            """, "${columnName(column.name)}" ${columnType(column.type)}""" +
                 if (column.union) """, "${shapeColumn(column.name)}" $textColumnType""" else ""
         }
-        statement.execute("""CREATE TABLE IF NOT EXISTS "$shape" (id ${dialect.keyColumn}$columns${keyConstraints(shape)}${inlineForeignKeys(shape)})""")
+        val table = tableName(shape)
+        statement.execute("""CREATE TABLE IF NOT EXISTS "$table" (id ${dialect.keyColumn}$columns${keyConstraints(shape)}${inlineForeignKeys(table)})""")
         for (collection in collectionsOf(shape)) createJunctionTable(statement, shape, collection)
     }
 
@@ -546,7 +592,7 @@ open class SqlStore(
      * (Hydration.kt, captureSchemas).
      */
     private fun createCaptureTable(statement: Statement, captureSchema: CaptureSchema) {
-        val columns = captureSchema.props.joinToString("") { remembered -> ", \"${remembered.name}\" ${columnType(remembered.type)}" }
+        val columns = captureSchema.props.joinToString("") { remembered -> ", \"${columnName(remembered.name)}\" ${columnType(remembered.type)}" }
         statement.execute("""CREATE TABLE IF NOT EXISTS "${captureTable(captureSchema.refinement)}" (id ${keyStorage.columnType} PRIMARY KEY$columns)""")
     }
 
@@ -601,7 +647,7 @@ open class SqlStore(
         val union = columnsOf(shape).first { column -> column.name == field }.union
         return targets.distinct().chunked(keysPerStatement).flatMap { some ->
             if (union) referencingAnyOfUnion(shape, field, some)
-            else select(shape, """WHERE "$field" IN (${placeholders(some.size)})""") { statement ->
+            else select(shape, """WHERE "${columnName(field)}" IN (${placeholders(some.size)})""") { statement ->
                 some.forEachIndexed { index, target -> statement.setLong(index + 1, keyLong(target.key)) }
             }
         }
@@ -609,7 +655,7 @@ open class SqlStore(
 
     private fun referencingAnyOfUnion(shape: String, field: String, targets: List<Ref.Persisted>): List<Row> {
         val keysByShape = targets.groupBy({ target -> target.shape }, { target -> keyLong(target.key) }).toList()
-        val where = keysByShape.joinToString(" OR ") { (_, keys) -> """("${shapeColumn(field)}" = ? AND "$field" IN (${placeholders(keys.size)}))""" }
+        val where = keysByShape.joinToString(" OR ") { (_, keys) -> """("${shapeColumn(field)}" = ? AND "${columnName(field)}" IN (${placeholders(keys.size)}))""" }
         val arguments: List<Any> = keysByShape.flatMap { (targetShape, keys) -> listOf<Any>(targetShape) + keys }
         return select(shape, "WHERE $where") { statement ->
             arguments.forEachIndexed { index, argument ->
@@ -635,7 +681,7 @@ open class SqlStore(
 
     private fun readCaptures(captureSchema: CaptureSchema, results: ResultSet): Map<String, Any?> = buildMap {
         for (remembered in captureSchema.props) {
-            if (results.getObject(remembered.name) == null) continue
+            if (results.getObject(columnName(remembered.name)) == null) continue
             put(remembered.name, readColumn(remembered.type, remembered.name, results, union = false))
         }
     }
@@ -659,7 +705,7 @@ open class SqlStore(
         val where = renderer.render(filter, shape, "t0", positive = true)
         if (where == "TRUE") return fetchAll(shape)
         return onConnection { connection ->
-            val rows = connection.prepareStatement("""SELECT t0.* FROM "$shape" t0 WHERE $where ORDER BY t0.id""").use { select ->
+            val rows = connection.prepareStatement("""SELECT t0.* FROM "${tableName(shape)}" t0 WHERE $where ORDER BY t0.id""").use { select ->
                 renderer.binds.forEachIndexed { index, bound -> select.setObject(index + 1, bound) }
                 readRows(shape, select)
             }
@@ -677,8 +723,8 @@ open class SqlStore(
             is QF.And -> "(${render(filter.l, shape, alias, positive)} AND ${render(filter.r, shape, alias, positive)})"
             is QF.Or -> "(${render(filter.l, shape, alias, positive)} OR ${render(filter.r, shape, alias, positive)})"
             is QF.Not -> "NOT (${render(filter.inner, shape, alias, !positive)})"
-            is QF.NullCheck -> """$alias."${filter.field}" IS ${if (filter.isNull) "" else "NOT "}NULL"""
-            is QF.TextBlank -> """($alias."${filter.field}" IS NULL OR TRIM($alias."${filter.field}") = '')"""
+            is QF.NullCheck -> """$alias."${columnName(filter.field)}" IS ${if (filter.isNull) "" else "NOT "}NULL"""
+            is QF.TextBlank -> """($alias."${columnName(filter.field)}" IS NULL OR TRIM($alias."${columnName(filter.field)}") = '')"""
             is QF.Cmp -> renderCmp(filter, shape, alias, positive)
             is QF.CallCmp -> renderCallCmp(filter, alias, positive)
             is QF.Pred -> renderPred(filter, alias, positive)
@@ -694,13 +740,13 @@ open class SqlStore(
             val correlation = exists.refField
                 ?.let { referenceField -> correlation(exists.shape, referenceField, pointingAlias, subjectShape, subjectAlias) }
                 ?: ""
-            return """EXISTS (SELECT 1 FROM "${exists.shape}" $pointingAlias WHERE $correlation${render(exists.inner, exists.shape, pointingAlias, positive)})"""
+            return """EXISTS (SELECT 1 FROM "${tableName(exists.shape)}" $pointingAlias WHERE $correlation${render(exists.inner, exists.shape, pointingAlias, positive)})"""
         }
 
         /** The pointing row's reference is the subject row. Through a union-typed reference it
          *  must also match the subject's concrete shape, since keys are per table. */
         private fun correlation(pointingShape: String, referenceField: String, pointingAlias: String, subjectShape: String, subjectAlias: String): String {
-            val sameKey = """$pointingAlias."$referenceField" = $subjectAlias.id AND """
+            val sameKey = """$pointingAlias."${columnName(referenceField)}" = $subjectAlias.id AND """
             val unionTyped = columnsOf(pointingShape).find { column -> column.name == referenceField }?.union == true
             if (!unionTyped) return sameKey
             binds.add(subjectShape)
@@ -711,13 +757,13 @@ open class SqlStore(
         private fun renderRelPred(relation: QF.RelPred, alias: String, positive: Boolean): String {
             if (relation.shape !in persistedShapes) return degrade(positive)
             val targetAlias = newAlias()
-            return """EXISTS (SELECT 1 FROM "${relation.shape}" $targetAlias WHERE $targetAlias.id = $alias."${relation.field}" AND ${render(relation.inner, relation.shape, targetAlias, positive)})"""
+            return """EXISTS (SELECT 1 FROM "${tableName(relation.shape)}" $targetAlias WHERE $targetAlias.id = $alias."${columnName(relation.field)}" AND ${render(relation.inner, relation.shape, targetAlias, positive)})"""
         }
 
         private fun renderCmp(comparison: QF.Cmp, shape: String, alias: String, positive: Boolean): String {
             val columnType = columnsOf(shape).find { column -> column.name == comparison.field }?.type ?: return degrade(positive)
             val bareType = bareOf(columnType)
-            val column = """$alias."${comparison.field}""""
+            val column = """$alias."${columnName(comparison.field)}""""
             if (comparison.op in TEXT_OPERATORS)
                 return textComparison(comparison.op, comparison.value, bareType) { column } ?: degrade(positive)
             val value = constantFor(comparison.value, bareType) ?: return degrade(positive)
@@ -783,7 +829,7 @@ open class SqlStore(
         }
 
         private fun operand(argument: QArg, alias: String): SqlExpr? = when (argument) {
-            is QArg.Column -> SqlExpr.Column("""$alias."${argument.field}"""", bareOf(argument.type))
+            is QArg.Column -> SqlExpr.Column("""$alias."${columnName(argument.field)}"""", bareOf(argument.type))
             is QArg.Const -> bareOf(argument.type).let { bareType -> constantFor(argument.value, bareType)?.let { value -> SqlExpr.Param(value, bareType) } }
             is QArg.Many -> null
         }
@@ -889,7 +935,7 @@ open class SqlStore(
 
     /** The rows of [shape] under [where], and each collection field of all of them in one statement more. */
     private fun select(shape: String, where: String, bind: (PreparedStatement) -> Unit = {}): List<Row> = onConnection { connection ->
-        val rows = connection.prepareStatement("""SELECT * FROM "$shape" $where ORDER BY id""").use { select ->
+        val rows = connection.prepareStatement("""SELECT * FROM "${tableName(shape)}" $where ORDER BY id""").use { select ->
             bind(select)
             readRows(shape, select)
         }
@@ -918,7 +964,7 @@ open class SqlStore(
         val key = results.getLong("id")
         val fields = buildMap {
             for (column in columnsOf(shape)) {
-                if (results.getObject(column.name) == null) continue
+                if (results.getObject(columnName(column.name)) == null) continue
                 put(column.name, readColumn(column.type, column.name, results, column.union))
             }
         }
@@ -931,9 +977,9 @@ open class SqlStore(
         // the model, or from the discriminator when the model only says "union"
         is VType.Inst -> Ref.Persisted(
             if (union) results.getString(shapeColumn(name)) else type.shape,
-            StoreKey(keyStorage.read(results, name) as Long),
+            StoreKey(keyStorage.read(results, columnName(name)) as Long),
         )
-        else -> scalarColumn(type).read(results, name)
+        else -> scalarColumn(type).read(results, columnName(name))
     }
 
     /**
@@ -1028,7 +1074,7 @@ open class SqlStore(
         val names = columns.flatMap { column -> storedNames(column) }
         val bound = columns.flatMap { column -> boundValues(column, creation.fields[column.name], minted) }
         // the minted key comes back with the insert (standard SQL `RETURNING`)
-        val sql = """INSERT INTO "${creation.shape}" (${quoted(names)}) VALUES (${placeholders(names.size)}) RETURNING id"""
+        val sql = """INSERT INTO "${tableName(creation.shape)}" (${quoted(names)}) VALUES (${placeholders(names.size)}) RETURNING id"""
         val key = connection.prepareStatement(sql).use { insert ->
             bound.forEachIndexed { index, value -> insert.setObject(index + 1, value) }
             insert.executeQuery().use { results -> results.next(); StoreKey(results.getLong(1)) }
@@ -1051,7 +1097,7 @@ open class SqlStore(
         val column = columnsOf(shape).first { candidate -> candidate.name == assignment.field }
         val assignments = storedNames(column).joinToString(", ") { name -> "\"$name\" = ?" }
         val bound = boundValues(column, assignment.value, minted)
-        connection.prepareStatement("""UPDATE "$shape" SET $assignments WHERE id = ?""").use { update ->
+        connection.prepareStatement("""UPDATE "${tableName(shape)}" SET $assignments WHERE id = ?""").use { update ->
             bound.forEachIndexed { index, value -> update.setObject(index + 1, value) }
             update.setLong(bound.size + 1, key)
             update.executeUpdate()
@@ -1082,10 +1128,10 @@ open class SqlStore(
 
     private fun upsertCapture(connection: Connection, capture: CommitSet.Capture, minted: List<StoreKey>) {
         val captureSchema = model.captureSchemas.first { schema -> schema.refinement == capture.refinement }
-        val names = listOf("id") + captureSchema.props.map { remembered -> remembered.name }
+        val names = listOf("id") + captureSchema.props.map { remembered -> columnName(remembered.name) }
         // re-entry overwrites the previous membership's memory (standard SQL upsert)
         val onConflict = if (captureSchema.props.isEmpty()) "DO NOTHING"
-            else "DO UPDATE SET " + captureSchema.props.joinToString(", ") { remembered -> "\"${remembered.name}\" = excluded.\"${remembered.name}\"" }
+            else "DO UPDATE SET " + captureSchema.props.joinToString(", ") { remembered -> "\"${columnName(remembered.name)}\" = excluded.\"${columnName(remembered.name)}\"" }
         val sql = """INSERT INTO "${captureTable(capture.refinement)}" (${quoted(names)}) VALUES (${placeholders(names.size)}) ON CONFLICT (id) $onConflict"""
         connection.prepareStatement(sql).use { upsert ->
             upsert.setLong(1, refKey(capture.instance, minted))
@@ -1133,13 +1179,13 @@ open class SqlStore(
     /** A to-one column is set to NULL, and the discriminator column of a union-typed one with it. */
     private fun columnEmptyings(pointingShape: String, deletedShape: String): List<EmptyingStatement> =
         columnsOf(pointingShape).filter { column -> pointsAt(column.type, deletedShape) }.map { column ->
-            val keyColumn = "\"${column.name}\""
+            val keyColumn = "\"${columnName(column.name)}\""
             val discriminator = "\"${shapeColumn(column.name)}\""
             if (column.union) EmptyingStatement(
-                """UPDATE "$pointingShape" SET $keyColumn = NULL, $discriminator = NULL WHERE $keyColumn = ? AND $discriminator = ?""",
+                """UPDATE "${tableName(pointingShape)}" SET $keyColumn = NULL, $discriminator = NULL WHERE $keyColumn = ? AND $discriminator = ?""",
                 namesShape = true,
             )
-            else EmptyingStatement("""UPDATE "$pointingShape" SET $keyColumn = NULL WHERE $keyColumn = ?""", namesShape = false)
+            else EmptyingStatement("""UPDATE "${tableName(pointingShape)}" SET $keyColumn = NULL WHERE $keyColumn = ?""", namesShape = false)
         }
 
     /** A member's row leaves the junction table, so the record leaves the collection. */
@@ -1157,7 +1203,7 @@ open class SqlStore(
                 .filter { remembered -> pointsAt(remembered.type, deletedShape) && remembered.type.instanceShape()?.let { declaredShape -> isUnion(declaredShape) } == false }
                 .map { remembered ->
                     EmptyingStatement(
-                        """UPDATE "${captureTable(captureSchema.refinement)}" SET "${remembered.name}" = NULL WHERE "${remembered.name}" = ?""",
+                        """UPDATE "${captureTable(captureSchema.refinement)}" SET "${columnName(remembered.name)}" = NULL WHERE "${columnName(remembered.name)}" = ?""",
                         namesShape = false,
                     )
                 }
@@ -1181,7 +1227,7 @@ open class SqlStore(
         val shape = deletion.target.shape
         val key = keyLong(deletion.target.key)
         for (emptying in emptyingStatementsByShape.getValue(shape)) emptyReferences(connection, emptying, deletion.target)
-        deleteByKey(connection, """DELETE FROM "$shape" WHERE id = ?""", key)
+        deleteByKey(connection, """DELETE FROM "${tableName(shape)}" WHERE id = ?""", key)
         for (collection in collectionsOf(shape))
             deleteByKey(connection, """DELETE FROM "${junctionTable(shape, collection.name)}" WHERE owner = ?""", key)
         for (captureSchema in model.captureSchemas.filter { schema -> schema.base == shape })

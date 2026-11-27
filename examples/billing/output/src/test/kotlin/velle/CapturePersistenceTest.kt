@@ -54,10 +54,10 @@ class CapturePersistenceTest {
         val cust = first.customers().last()
         accept(first.commit(NewBillCustomer(cust, due = java.time.LocalDate.of(2026, 2, 1))))
         val inv = first.invoices().last()
-        val invKey = assertIs<Long>(scalar("""SELECT id FROM "Invoice""""), "store key expected for the persisted invoice")
+        val invKey = assertIs<Long>(scalar("""SELECT id FROM "invoice""""), "store key expected for the persisted invoice")
         accept(first.commit(NewArchiveRequest(inv)))
 
-        assertEquals("2026-01-01", scalar("""SELECT archivedOn FROM "capture_ArchivedInvoice" WHERE id = ?""", invKey))
+        assertEquals("2026-01-01", scalar("""SELECT archived_on FROM "capture__archived_invoice" WHERE id = ?""", invKey))
 
         // process two, five days later: unarchive. Handles are session-local —
         // the second process enters from its own storage side, by store key.
@@ -67,9 +67,9 @@ class CapturePersistenceTest {
         val invHandle = second.system.handleFor("Invoice", invKey)
         accept(second.commit(NewUnarchiveRequest(second.system.refFor(invHandle))))
 
-        assertEquals(1L, scalar("""SELECT COUNT(*) FROM "UnarchiveNotice""""))
-        assertEquals("2026-01-01", scalar("""SELECT wasArchivedOn FROM "UnarchiveNotice" WHERE invoice = ?""", invKey))
+        assertEquals(1L, scalar("""SELECT COUNT(*) FROM "unarchive_notice""""))
+        assertEquals("2026-01-01", scalar("""SELECT was_archived_on FROM "unarchive_notice" WHERE invoice = ?""", invKey))
         // retraction landed in the same envelope: the membership's memory is gone
-        assertEquals(0L, scalar("""SELECT COUNT(*) FROM "capture_ArchivedInvoice""""))
+        assertEquals(0L, scalar("""SELECT COUNT(*) FROM "capture__archived_invoice""""))
     }
 }

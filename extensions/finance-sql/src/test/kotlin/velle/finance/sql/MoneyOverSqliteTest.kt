@@ -86,7 +86,7 @@ class MoneyOverSqliteTest {
         SqliteStore.attach(sys, conn)
         flow(sys)
         // the column holds cents
-        conn.prepareStatement("SELECT balance FROM Account").use { ps -> ps.executeQuery().use { rs -> rs.next(); assertEquals(-750L, rs.getLong(1)) } }
+        conn.prepareStatement("SELECT balance FROM account").use { ps -> ps.executeQuery().use { rs -> rs.next(); assertEquals(-750L, rs.getLong(1)) } }
     }
 
     /** A TEXT column of the decimal: faithful for equality, not for order, so it claims only `==`/`!=`. */
@@ -103,7 +103,7 @@ class MoneyOverSqliteTest {
         val sys = system()
         SqliteStore.attach(sys, conn, bindings = listOf(TextMoneyBinding()))
         flow(sys)
-        conn.prepareStatement("SELECT balance FROM Account").use { ps -> ps.executeQuery().use { rs -> rs.next(); assertEquals("-7.50", rs.getString(1)) } }
+        conn.prepareStatement("SELECT balance FROM account").use { ps -> ps.executeQuery().use { rs -> rs.next(); assertEquals("-7.50", rs.getString(1)) } }
     }
 
     @Test

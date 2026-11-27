@@ -90,7 +90,7 @@ class GalleryPersistenceTest {
         // Post#1 and Photo#1 share a key; the discriminator column tells them apart
         assertEquals(
             listOf(listOf(1L, "Post"), listOf(1L, "Photo"), listOf(1L, "Photo")),
-            rows("""SELECT target, target__shape FROM Comment ORDER BY id"""),
+            rows("""SELECT target, target__shape FROM comment ORDER BY id"""),
         )
 
         // a second process enters from the storage side, by key
@@ -128,9 +128,9 @@ class GalleryPersistenceTest {
         val photo = second.read.photo(1L)
         val refused = second.commit(NewComment(post, ada, "me again"))
         assertIs<Commit.Refused<*, *>>(refused)
-        assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM Comment"""), "a refused act reaches no row")
+        assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM comment"""), "a refused act reaches no row")
         accept(second.commit(NewComment(photo, ada, "my own photo")))
-        assertEquals(listOf(listOf(1L)), rows("""SELECT COUNT(*) FROM Comment"""))
+        assertEquals(listOf(listOf(1L)), rows("""SELECT COUNT(*) FROM comment"""))
     }
 }
 

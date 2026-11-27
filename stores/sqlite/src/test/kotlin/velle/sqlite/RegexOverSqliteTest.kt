@@ -35,7 +35,7 @@ class RegexOverSqliteTest {
             assertEquals(RegexValue("\\d+"), sys.get(sys.idOf(digits), "valuePattern"))
             assertEquals(listOf(sys.idOf(digits)), sys.instancesOf("Digits"))
         }
-        conn.prepareStatement("SELECT valuePattern FROM Field").use { statement ->
+        conn.prepareStatement("SELECT value_pattern FROM field").use { statement ->
             statement.executeQuery().use { rows ->
                 val stored = mutableSetOf<String>()
                 while (rows.next()) stored.add(rows.getString(1))

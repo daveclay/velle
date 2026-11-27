@@ -50,22 +50,30 @@ act Student {
 Over SQLite the store creates these tables for `Student`, among others. The text is what SQLite records, pinned by `EnrollmentSchemaOverSqliteTest` in `examples/enrollment/output/src/test/kotlin/velle/EnrollmentOverSqliteTest.kt`:
 
 ```sql
-CREATE TABLE "Student" (id INTEGER PRIMARY KEY AUTOINCREMENT, "name" TEXT, "advisor" INTEGER, FOREIGN KEY ("advisor") REFERENCES "Advisor"(id))
-CREATE TABLE "Student__tags" (owner INTEGER NOT NULL, pos INTEGER NOT NULL, value TEXT NOT NULL)
-CREATE TABLE "Student__courses" (owner INTEGER NOT NULL, pos INTEGER NOT NULL, target INTEGER NOT NULL, FOREIGN KEY ("target") REFERENCES "Course"(id))
+CREATE TABLE "student" (id INTEGER PRIMARY KEY AUTOINCREMENT, "name" TEXT, "advisor" INTEGER, FOREIGN KEY ("advisor") REFERENCES "advisor"(id))
+CREATE TABLE "student__tags" (owner INTEGER NOT NULL, pos INTEGER NOT NULL, value TEXT NOT NULL)
+CREATE TABLE "student__courses" (owner INTEGER NOT NULL, pos INTEGER NOT NULL, target INTEGER NOT NULL, FOREIGN KEY ("target") REFERENCES "course"(id))
 ```
 
-- **One table per shape**, named as the shape is, with the same capitals. A [transient act](Reference-04-State-and-commits#transient-acts-transient-act) has no table, since it is never kept.
+- **One table per shape**, named for the shape in lower-case words (below, "How a name is written"): `Student` is `student`, `ArchivedInvoice` is `archived_invoice`. A [transient act](Reference-04-State-and-commits#transient-acts-transient-act) has no table, since it is never kept.
 - **`id` is the record's key.** The database assigns it when the row is written and never gives a deleted row's key to a later row: SQLite's `AUTOINCREMENT`, PostgreSQL's identity column.
-- **One column per stored field**, named as the field is. A field computed with `=` has no column, and neither has a transient field. A `timestamp on create` field and the actor of a kept act each have one.
+- **One column per stored field**, named for the field the same way: `dueOn` is `due_on`. A field computed with `=` has no column, and neither has a transient field. A `timestamp on create` field and the actor of a kept act each have one.
 - **A column may hold `NULL`** even for a field the spec requires. The spec's rules decide what is required, and the store does not repeat it.
 - **A `one` field holds the key of the record it points at.** `advisor` holds an `Advisor`'s `id`.
 - **A `one` field typed with a union has a second column** naming the shape, since a key is unique only within one table. In `examples/gallery/gallery.velle`, `Comment.target: one Content`, where `shape Content = Post or Photo`, is stored as `target` and `target__shape`.
-- **Each `many` field is a table of its own**, `<Shape>__<field>`, with one row per member. `owner` is the key of the record the field belongs to, and `pos` is the member's place in the list, so the order is kept. A `many` of values holds the value in `value`. A `many` of records holds the member's key in `target`, and a member typed with a union adds `target_shape`.
+- **Each `many` field is a table of its own**, the shape's table name and the field's joined by two underscores, such as `student__courses`, with one row per member. `owner` is the key of the record the field belongs to, and `pos` is the member's place in the list, so the order is kept. A `many` of values holds the value in `value`. A `many` of records holds the member's key in `target`, and a member typed with a union adds `target_shape`.
 - **A key the shape declares** ([§21, "Keys"](Reference-21-never#keys)) is a `UNIQUE` declaration over the key's columns.
-- **A refinement that remembers values** with `captured` has a table `capture_<Refinement>`, one row per record currently in it. In `examples/billing/billing.velle`, `ArchivedInvoice` remembers `archivedOn`, so its table is `capture_ArchivedInvoice` with the columns `id` and `archivedOn`.
-- **`velle_tick`** holds the moment each [schedule](Reference-17-Schedule-triggers) last ran.
+- **A refinement that remembers values** with `captured` has a table named `capture__` and the refinement's name, one row per record currently in it. In `examples/billing/billing.velle`, `ArchivedInvoice` remembers `archivedOn`, so its table is `capture__archived_invoice` with the columns `id` and `archived_on`.
+- **`velle__tick`** holds the moment each [schedule](Reference-17-Schedule-triggers) last ran.
 - **A shape other shapes take with `is`** ([§9](Reference-09-Composing-refinements)) has no table. Its fields are columns on each taker's table.
+
+### How a name is written
+
+A shape's or a field's name is written in lower-case words joined by `_`, the convention of PostgreSQL. A capital starts a new word. A run of capitals is one word, and its last capital starts the next word when a lower-case letter follows it: `HTTPServer` is `http_server`, and `pathURL` is `path_url`. A Velle name has no `_` of its own, so a double underscore always separates two names, as in `student__courses` and `target__shape`.
+
+The store quotes every name it writes. A lower-case name means the same quoted or not, so your own queries may leave the quotes out. The exception is a name that is an SQL keyword: `act Order` in `examples/orders/orders.velle` is the table `order`, which a query must write as `"order"`.
+
+Two Velle names can be written the same way. `act HTTPServer` and `act HttpServer` would both be `http_server`, and the fields `pathURL` and `pathUrl` would both be `path_url`. The store refuses to start when that happens, naming both and the name they share, and one of them must be renamed in the spec. The same goes for a name that would be one of the store's own tables: `act Velle { tick: many text }` would be `velle__tick`.
 
 Each field's type has a column type per database:
 

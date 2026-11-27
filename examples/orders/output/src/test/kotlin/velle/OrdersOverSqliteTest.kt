@@ -89,9 +89,9 @@ class OrdersPersistenceTest {
         )))
 
         // back-references were pending refs at commit time, resolved to the minted keys
-        assertEquals(listOf(listOf(1L, 1L), listOf(2L, 1L)), rows("""SELECT id, "order" FROM OrderLine ORDER BY id"""))
-        assertEquals(listOf(listOf(1L)), rows("""SELECT line FROM Customization"""))
-        assertEquals(listOf(listOf(1L, 2L), listOf(2L, 3L)), rows("""SELECT line, quantity FROM Reservation ORDER BY id"""))
+        assertEquals(listOf(listOf(1L, 1L), listOf(2L, 1L)), rows("""SELECT id, "order" FROM order_line ORDER BY id"""))
+        assertEquals(listOf(listOf(1L)), rows("""SELECT line FROM customization"""))
+        assertEquals(listOf(listOf(1L, 2L), listOf(2L, 3L)), rows("""SELECT line, quantity FROM reservation ORDER BY id"""))
 
         val second = process()
         val order = second.read.order(1L)
@@ -115,12 +115,12 @@ class OrdersPersistenceTest {
             customer = ada,
             requestedItems = listOf(NewRequestedItem(product = prod, quantity = 3)),
         )))
-        val orderColumns = rows("""PRAGMA table_info("Order")""").map { it[1] }
-        assertTrue("cardNumber" !in orderColumns && "cardholder" !in orderColumns, "the card is never stored: $orderColumns")
-        assertEquals(listOf(listOf(1L, "Ada Lovelace")), rows("""SELECT "order", cardholder FROM Charge"""))
+        val orderColumns = rows("""PRAGMA table_info("order")""").map { it[1] }
+        assertTrue("card_number" !in orderColumns && "cardholder" !in orderColumns, "the card is never stored: $orderColumns")
+        assertEquals(listOf(listOf(1L, "Ada Lovelace")), rows("""SELECT "order", cardholder FROM charge"""))
         val tables = rows("""SELECT name FROM sqlite_master WHERE type = 'table'""").map { it[0] }
-        assertTrue("PriceRequest" !in tables && "RequestedItem" !in tables, "a transient act and its parts have no table: $tables")
-        assertEquals(listOf(listOf(1L, 3L, 10L)), rows("""SELECT quote, quantity, unitPrice FROM QuoteLine"""))
+        assertTrue("price_request" !in tables && "requested_item" !in tables, "a transient act and its parts have no table: $tables")
+        assertEquals(listOf(listOf(1L, 3L, 10L)), rows("""SELECT quote, quantity, unit_price FROM quote_line"""))
     }
 
     @Test
@@ -137,9 +137,9 @@ class OrdersPersistenceTest {
             ),
         ))
         assertIs<Commit.Refused<*, *>>(r)
-        for (table in listOf("Order", "OrderLine", "Customization", "Reservation"))
+        for (table in listOf("order", "order_line", "customization", "reservation"))
             assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM "$table""""), "$table rows after a refused closure")
-        assertNull(rows("""SELECT MAX(id) FROM "Order"""").single().single(), "no key was minted")
+        assertNull(rows("""SELECT MAX(id) FROM "order"""").single().single(), "no key was minted")
     }
 }
 

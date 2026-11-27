@@ -59,8 +59,8 @@ class PlateLayoutPersistenceTest {
         assertIs<Commit.Accepted<*, *>>(first.commit(NewContainerType("96-well", 96)))
         assertIs<Commit.Accepted<*, *>>(first.commit(NewExperimentDesign(
             first.containerTypes().last(), 3, 2, 24, (1..4).map { NewCondition(it, BigDecimal(it)) })))
-        assertEquals(6L, count("Container"))
-        assertEquals(576L, count("Well"))
+        assertEquals(6L, count("container"))
+        assertEquals(576L, count("well"))
 
         val second = process()
         val design = second.read.experimentDesign(1L)
