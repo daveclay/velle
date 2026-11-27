@@ -279,17 +279,15 @@ class PathResolutionDisagreementTest {
         QueryCompiler(Model(Parser.parse(spec)), LocalDate.of(2026, 1, 1), Instant.parse("2026-01-01T00:00:00Z")).filterFor(RefName(refinement))
 
     @Test
-    fun `exists for this over a union-typed reference compiles to no store pre-filter, though the Evaluator matches it`() {
+    fun `exists for this over a union-typed reference compiles to the store pre-filter a plain reference does, as the Evaluator matches it`() {
         assertEquals(emptyList(), Validator.validate(comments))
         val plainReference = comments.replace("target: one Content", "target: one Post")
         assertEquals(QF.Exists("Comment", "target", QF.True), preFilter(plainReference, "Discussed"))
         assertEquals(QF.Exists("Comment", "target", QF.True), preFilter(plainReference, "DiscussedByFilter"))
 
-        // Query.kt backFieldOf compares the declared type, Content, with Post exactly, and the
-        // sugar form falls back to no pre-filter; asCorrelation does the same for the filter form,
-        // which keeps an exists over Comments correlated to nothing
-        assertEquals(QF.True, preFilter(comments, "Discussed"))
-        assertEquals(QF.Exists("Comment", null, QF.True), preFilter(comments, "DiscussedByFilter"))
+        // a reference typed Content holds Posts (Model.referencesRecordsOf), so both forms correlate on 'target'
+        assertEquals(QF.Exists("Comment", "target", QF.True), preFilter(comments, "Discussed"))
+        assertEquals(QF.Exists("Comment", "target", QF.True), preFilter(comments, "DiscussedByFilter"))
 
         // the Evaluator matches the reference by the bases of its declared type
         val system = VelleSystem(Model(Parser.parse(comments)))
@@ -304,7 +302,7 @@ class PathResolutionDisagreementTest {
     // ── 9. a union-typed reference: no read through it for ReadConflicts, a read for PossibleCommits ──
 
     @Test
-    fun `a read of a union-typed reference is no read of a reference to its operand for the read conflicts, though it is for the possible commits`() {
+    fun `a read of a union-typed reference is a read of a reference to its operand, for the read conflicts as for the possible commits`() {
         val spec = """
             act Post { body: text }
             act Photo { caption: text }
@@ -320,10 +318,8 @@ class PathResolutionDisagreementTest {
         val conditionReads = model.summaryOfRefExpr(rule.condition)
         assertEquals(setOf("Comment" to "target"), conditionReads.fields.toSet())
 
-        // validation/ReadConflicts.kt readsReferenceTo asks `baseOf(Content) == Post`, and a
-        // union has no single base, so deleting a Post conflicts with no read of 'target'
-        assertFalse(validator.readsReferenceTo(conditionReads, "Post"))
-        // validation/PossibleCommits.kt conditionReadsRefTo asks whether Post is among the bases of Content
+        // both ask whether a field typed Content holds Posts (Model.referencesRecordsOf)
+        assertTrue(validator.readsReferenceTo(conditionReads, "Post"))
         assertTrue(validator.conditionReadsRefTo(rule, "Post"))
     }
 }

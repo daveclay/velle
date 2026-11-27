@@ -507,6 +507,11 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
     fun typeAccepts(declared: String, actual: String): Boolean =
         declared == actual || actual in basesOf(declared)
 
+    /** Can a field of [type] hold a record of the base shape [shape]? A reference typed with a union
+     *  or a taken shape holds records of each base it names (Reference §9). */
+    fun referencesRecordsOf(type: VType, shape: String): Boolean =
+        type.instanceShape()?.let { declared -> typeAccepts(declared, shape) } == true
+
     /** The stored to-one fields of [shape] that accept a record of [targetShape]: the fields
      *  `Shape for <record>` may name (Reference §10, "Testing for related records with exists").
      *  Over a shape several shapes take with `is`, or a static union, a field counts only when

@@ -298,7 +298,7 @@ class QueryCompiler(
         val p = pathSide as? PathExpr ?: return null
         if (p.segs.isNotEmpty()) return null
         val m = model.membersOf(elemScope)[p.root] ?: return null
-        if (!m.stored || m.type.instanceShape() != subjectBase) return null
+        if (!m.stored || !model.referencesRecordsOf(m.type, subjectBase)) return null
         return p.root
     }
 
@@ -482,7 +482,7 @@ class QueryCompiler(
 
     private fun backFieldOf(shape: String, targetShape: String): String? =
         model.shapes[shape]?.members?.filterIsInstance<StoredProp>()
-            ?.singleOrNull { (it.type as? RelType)?.let { t -> !t.many && t.shape == targetShape } == true }
+            ?.singleOrNull { (it.type as? RelType)?.let { t -> !t.many && model.typeAccepts(t.shape, targetShape) } == true }
             ?.name
 
     // ── constants ────────────────────────────────────────────────────────────

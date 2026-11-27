@@ -95,7 +95,6 @@ A derivation recalculates when a record it aggregates over is deleted: `balance 
 - [ ] Let V29, V10, and V26 discharge a creation or deletion whose only effect on the aggregate a prohibition consults is in the safe direction (P4).
 - [ ] Teach the disarm proof (V2, and V16 through it) to look through a named refinement whose predicate is an inverse collection's `is not empty` (P7).
 - [ ] Prove a `never` over a rule-written field inductively instead of failing closed (S7, P5; rides OQ16's discharge vocabulary). The survey pass adds the sharpest case: a request renames a record and other requests refer to records by that name, so every refusal that resolves a name is refused with the rename rule (`working-docs/examples/survey/03-*`; "V10" above).
-- [ ] Put a derived collection's self-read through a `many` hop into V14's definition graph, so it fails closed as Reference §19 says (B6; masked today by the evaluator's refusal of the read, OQ91).
 - [ ] Collect the data point OQ37's coarseness ruling asked for: whether V25's accepted false positive (window arithmetic the refinement-overlap prover cannot see) forces the field-witness restructure often enough to justify sharpening the prover.
 - [ ] Let V24 discharge a referrer whose existence the deleter's scope provably excludes (P6: the fills of a never-filled prescription).
 - [ ] Write a spec that deletes against a stored fold twin or a snapshot and rule whether the existence-dependency check should name them (OQ37's flagged edge).

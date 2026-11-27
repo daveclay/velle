@@ -25,7 +25,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **OQ83** — The dead-`until` advisory: a `walk R until P` whose condition the record itself can never satisfy and no step can reach serves nothing; not built, A2 covers `for 1 steps` only (OQ76, settled table).
 - **OQ177** — Decide whether a run-once guard may be a field going absent: Reference §18 "How to write one" says `appliedOn: Date?` with the guard `appliedOn is none` and the body setting `this.appliedOn = now` is a guard, and the compiler refuses it with V4 and V16 as unguarded, `working-docs/examples/survey/27-guard-field-absent-refused.velle`; only `not exists` and `not` a boolean field are recognized, and the boolean form, `27-guard-not-flag-workaround.velle`, gives up recording when · opened 2026-11-26 from OQ174
 - **[OQ62](questions/OQ62-advisory-levels.md)** — whether the advisory series gains a quieter level that records what the spec entails without warning · deferred 2026-10-14 out of OQ52 §4 until a second case wants it; one such case recorded 2026-11-18 from OQ143 D3
-- **[OQ53](questions/OQ53-validator-precision.md)** — legitimate specs the fail-closed checks reject: V6, V29/V10/V26, the disarm proof, V10's induction · opened 2026-10-14 from the two passes; eleven work items
+- **[OQ53](questions/OQ53-validator-precision.md)** — legitimate specs the fail-closed checks reject: V6, V29/V10/V26, the disarm proof, V10's induction · opened 2026-10-14 from the two passes; ten work items
 
 ## Expressions, refinements, and unions
 

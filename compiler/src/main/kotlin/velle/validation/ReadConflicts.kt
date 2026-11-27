@@ -42,5 +42,5 @@ private fun Validator.deletedShapeConflicts(effects: RuleEffects, reads: ReadSum
 /** Does [reads] read a reference-typed field whose target's base is [shape]? */
 internal fun Validator.readsReferenceTo(reads: ReadSummary, shape: String): Boolean =
     (reads.fields + reads.collFields).any { (owner, field) ->
-        model.membersOf(owner)[field]?.type?.instanceShape()?.let { model.baseOf(it) } == shape
+        model.membersOf(owner)[field]?.type?.let { type -> model.referencesRecordsOf(type, shape) } == true
     }

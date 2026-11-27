@@ -171,15 +171,14 @@ class BatchesProbesTest {
             }
     }
 
-    // ── B6: V14 does not see a derived collection that reads itself ──
+    // ── B6: V14 sees a derived collection that reads itself through a `many` hop ──
 
     @Test
-    fun `B6 - a derived collection reading itself through a many hop draws no V14`() {
+    fun `B6 - a derived collection reading itself through a many hop draws V14`() {
         // Reference §19: every static cycle in the definition graph owes a
-        // certificate, "and no certificate is a compile error". V14 certifies
-        // one cycle form and is meant to fail closed on every other; a
-        // self-read through a `many` is not in its definition graph at all.
-        // Masked today by B5 — the read cannot be evaluated either way.
+        // certificate, "and no certificate is a compile error". The read
+        // analysis follows `kids.descendants` through the `many`, so the
+        // self-read is in V14's definition graph and fails closed.
         val src = """
             act Node {
                 name: text
@@ -187,6 +186,6 @@ class BatchesProbesTest {
                 descendants: many Node = kids + kids.descendants
             }
         """.trimIndent()
-        assertEquals(emptyList(), codes(src), messages(src))
+        assertEquals(listOf("V14"), codes(src), messages(src))
     }
 }

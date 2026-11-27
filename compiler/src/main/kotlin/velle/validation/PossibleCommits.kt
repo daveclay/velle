@@ -98,7 +98,7 @@ internal fun Validator.conditionReadsRefTo(rule: RuleDecl, shape: String): Boole
     val condition = conditionSummary(rule)
     if (condition.opaque) return true
     return (condition.fields + condition.collFields).any { (owner, field) ->
-        model.membersOf(owner)[field]?.type?.instanceShape()?.let { shape in model.basesOf(it) } == true
+        model.membersOf(owner)[field]?.type?.let { type -> model.referencesRecordsOf(type, shape) } == true
     }
 }
 
