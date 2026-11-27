@@ -90,7 +90,7 @@ It validates. I ran it once with `velle try`: a member with one late loan and on
 
 ## 2. What to decide
 
-Roster: D1 is the only decision.
+Roster: D1 is whether a `for each` block may assign through its own name. D2 is whether a filter may stand on the left of an assignment.
 
 ### D1. Whether a `for each` block may assign a field through its own name
 
@@ -130,7 +130,7 @@ Costs of no:
 
 Not offered, and why:
 
-- **A filter on the left side**, as in file 57. It would cover "some members" but not a value per member, since the right side has no name for the member.
+- A filter on the left side was listed here at first. Dave asked about it on 2026-11-27, and it is now D2.
 - **Letting a rule create a transient act**, as in file 60. It would remove the kept record from file 59, but it goes against "an incoming act is an input to the state, not a member of it": a transient act arrives from outside.
 
 #### Proposed changes
@@ -143,6 +143,45 @@ Not offered, and why:
 - `compiler/src/test/resources/diagnostics/`: the two V34 assignment specs are replaced by specs for the limits, and `wiki/Normative/diagnostics.md` is regenerated.
 - Survey files 57 to 61 leave `working-docs/examples/survey/` as the `implement` skill §4 says.
 
+### D2. Whether a filter may stand on the left of an assignment
+
+**May a rule write one field on the members of a collection that a filter chooses, with the filter written in the rule?**
+
+```
+transient act FlagLate {
+    member: one Member
+    before: Date                                              -- the request names the date
+}
+
+rule Flag when FlagLate {
+    (member.loans where dueOn < before).flagged = true        -- writes `flagged` on each loan the filter chooses
+}
+```
+
+I recommend yes. I found no reason for the refusal beyond the grammar: a statement may not begin with `(`.
+
+- **The compiler loses no proof.** The statement still names one stored field of one known shape, `Loan.flagged`. The one-writer check (V1) counts a write through a collection as a write to that field on every record of the member shape, filtered or not. `velle compare` and the diagrams read the same summary.
+- **The runtime already does it.** File 61 writes through a derived collection, which is the same filter stated on the shape.
+- **It says something file 61 cannot.** A filter that reads the request, `dueOn < before` above, cannot be stated on `Member`.
+- **It does not cover a value per member.** The right side still has no name for the member, so D1 stands on its own.
+
+Costs of yes:
+
+- Two places to state a filter, the shape and the rule. Naming it on the shape stays the better practice when the filter means something to the business, and that goes in `wiki/Guides/Best-practices.md`.
+- The parentheses are required, so that `where` is not read as part of the value.
+
+Costs of no: a filter that reads the request needs file 59's kept record per member.
+
+Not checked: that the parser can tell this statement from every other that could begin with `(`, and that a filter reading the field it writes, `(loans where not flagged).flagged = true`, is evaluated before any write. Both are work items.
+
+#### Proposed changes
+
+- `wiki/Normative/grammar.md` and the parser: an assignment's left side may be `(path where condition).field`.
+- The validator checks the filter as it checks any filter, and V20's limits on a path through a collection apply unchanged.
+- `wiki/Reference/Reference-06-Relationships.md`, "Write one field on every member", and `wiki/Reference/Reference-12-Assignment.md`, "The left side is a fixed path": the filtered form, with the FlagLate example.
+- `wiki/Guides/Best-practices.md`: name a filter on the shape when it means something to the business.
+- Survey file 57 becomes the settled spelling and moves as the `implement` skill §4 says.
+
 ## 3. The build
 
 Written when D1 is decided.
@@ -153,4 +192,5 @@ Written when D1 is decided.
 - [ ] Pin with a compiler test what file 61 does at runtime: only the late loan is flagged.
 - [ ] Run the rule over the member itself from §1 and record whether it fires at a member's second `Renewal`.
 - [ ] Whatever D1 decides: make the V34 message for an assignment over a filter name the derived-collection spelling of file 61.
+- [ ] Before building D2: confirm the parser can tell `(path where condition).field = value` from every other statement, and pin with a test that a filter reading the field it writes is evaluated before any write.
 - [ ] After D1: reword the V34 message for an assignment over a filter and for a value that reads the block's name, so that it names a spelling that exists.
