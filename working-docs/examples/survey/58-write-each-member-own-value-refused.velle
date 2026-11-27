@@ -1,0 +1,17 @@
+-- "Count one more renewal on every loan of this member." The value differs per loan,
+-- since each loan has its own count. Through the collection, the right side reads every
+-- loan's count at once, a collection of numbers, and the compiler refuses it with F2.
+act Member { name: text }
+
+act Loan {
+    member: one Member
+    dueOn: Date
+    renewals: integer initially 0
+    flagged: boolean initially false
+}
+
+transient act Renew { member: one Member }
+
+rule Extend when Renew {
+    member.loans.renewals = member.loans.renewals + 1
+}

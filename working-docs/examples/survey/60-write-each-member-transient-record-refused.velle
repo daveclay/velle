@@ -1,0 +1,24 @@
+-- The workaround of file 59 with the record per loan not kept. A rule cannot create a
+-- transient act, so the compiler refuses it with V17. The record per loan must be kept.
+act Member { name: text }
+
+act Loan {
+    member: one Member
+    dueOn: Date
+    renewals: integer initially 0
+    flagged: boolean initially false
+}
+
+transient act Renew { member: one Member }
+
+transient act RenewLoan { loan: one Loan }
+
+rule Spread when Renew {
+    for each loan in (member.loans where dueOn < today) {
+        RenewLoan from { loan: loan }
+    }
+}
+
+rule Count when RenewLoan {
+    loan.renewals = loan.renewals + 1
+}
