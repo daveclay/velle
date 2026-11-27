@@ -441,6 +441,11 @@ class Model(rawDecls: List<Decl>, baseRegistry: TypeRegistry = TypeRegistry.defa
      *  about any other name reports nothing. */
     fun namesShapeOrRefinement(name: String): Boolean = name in shapes || name in residuals || name in refinements
 
+    /** The single base shape of a shape or refinement the spec declares, as [baseOf] gives it; null for
+     *  any other name, without reporting it. A name the author wrote and the spec does not declare is
+     *  reported where it is written, so an analysis that meets it asks this and reports nothing again. */
+    fun declaredBaseOf(name: String): String? = if (namesShapeOrRefinement(name)) baseOf(name) else null
+
     fun baseOfExpr(expr: RefExpr): String? = basesOfExpr(expr).singleOrNull()
 
     /** A refinement whose members span more than one base shape. */

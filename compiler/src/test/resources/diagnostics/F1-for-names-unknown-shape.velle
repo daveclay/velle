@@ -1,0 +1,5 @@
+-- `Shape for x` naming a shape the spec does not declare: `count(Counselling for this)`, where the
+-- spec declares no `Counselling`.
+act Fill { fillNumber: integer }
+
+shape UncounselledFill = Fill where count(Counselling for this) == 0

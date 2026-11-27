@@ -43,5 +43,5 @@ private fun Validator.existsTargetBase(exists: ExistsExpr): String? =
 
 private fun Validator.collectionSourceBase(collection: CollectionExpr?): String? {
     val source = collection?.bindings?.firstOrNull()?.source as? PathExpr ?: return null
-    return if (source.segs.isEmpty() && model.namesShapeOrRefinement(source.root)) model.baseOf(source.root) else null
+    return if (source.segs.isEmpty()) model.declaredBaseOf(source.root) else null
 }

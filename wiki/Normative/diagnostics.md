@@ -8,7 +8,9 @@ Every message the compiler prints for a refused spelling, one row per spelling. 
 | E1 | A type declared by its words whose reading function would be a builtin function's name: `number`. | `[E1] 'Number is one of ...': its reading function 'number' is a builtin function name; choose another name` |
 | F1 | A rule creating a union, which has no records of its own. | `[F1] rule 'Make' creates 'Content', which has no records of its own: a record of it is a Post or a Photo; create one of them (Reference §9)` |
 | F1 | A rule creating a shape other shapes take, which has no records of its own. | `[F1] rule 'Mint' creates 'Dated', which has no records of its own: SiteVisit and PlotInspection are Dated; create one of them` |
+| F1 | `exists` naming a shape the spec does not declare: `exists Counselling for this`, where the spec declares no `Counselling`. | `[F1] exists names unknown shape 'Counselling'` |
 | F1 | A field typed with a shape the spec does not declare: `fill: one Fill` with no `Fill`. | `[F1] 'PickUp.fill' relates to unknown shape 'Fill'` |
+| F1 | `Shape for x` naming a shape the spec does not declare: `count(Counselling for this)`, where the spec declares no `Counselling`. | `[F1] unknown shape 'Counselling'` |
 | F1 | A refinement over a union reading a field each operand declares for itself. | `[F1] 'views' is declared on 'Post' and 'Photo' separately, so it is not a member of 'Content'; read it after narrowing, 'if this is Post then this.views else ...', or declare 'views' once on a shape they take with 'is' (Reference §9)` |
 | F1 | A refinement over a shape the spec does not declare: `Fil`, where the spec declares `Fill`. | `[F1] unknown shape or refinement 'Fil'` |
 | F1 | A shape and a type declared by its words sharing one name. | `[F1] 'Role' is both a shape and a type declared with 'Role is one of ...'; rename one of them` |

@@ -214,6 +214,86 @@ class ValidatorTest {
         )
     }
 
+    private val fillAndPickUp = """
+        act Fill { fillNumber: integer }
+        transient act PickUp { fill: one Fill }
+    """.trimIndent()
+
+    private fun printedMessages(source: String, code: String): List<String> =
+        diags(source).filter { diagnostic -> diagnostic.code == code }.map { diagnostic -> diagnostic.message }
+
+    @Test
+    fun `F1 - exists naming a shape the spec does not declare draws one message, under a never over a refinement`() {
+        val src = fillAndPickUp + """
+
+            shape CounsellingDue = Fill where not exists Counselling for this
+            never (PickUp where fill is CounsellingDue)
+        """.trimIndent()
+        assertEquals(listOf("F1", "V18"), codes(src), "got: ${diags(src)}")
+        assertEquals(listOf("exists names unknown shape 'Counselling'"), printedMessages(src, "F1"))
+    }
+
+    @Test
+    fun `F1 - exists naming a shape the spec does not declare draws one message, in a never`() {
+        val src = fillAndPickUp + "\nnever (PickUp where not exists Counselling for fill)"
+        assertEquals(listOf("exists names unknown shape 'Counselling'"), printedMessages(src, "F1"))
+    }
+
+    @Test
+    fun `F1 - exists naming a shape the spec does not declare draws one message, as a rule's guard`() {
+        val src = fillAndPickUp + """
+
+            act Counsel { fill: one Fill }
+            rule Note when (PickUp where not exists Counselling for fill) {
+                Counsel from { fill: fill }
+            }
+        """.trimIndent()
+        assertEquals(listOf("exists names unknown shape 'Counselling'"), printedMessages(src, "F1"))
+    }
+
+    @Test
+    fun `F1 - the one record for a shape the spec does not declare draws one message, in a refinement`() {
+        val src = fillAndPickUp + """
+
+            shape CounsellingDue = Fill where (Counselling for this).given == false
+            never (PickUp where fill is CounsellingDue)
+        """.trimIndent()
+        assertEquals(listOf("unknown shape 'Counselling'"), printedMessages(src, "F1"))
+    }
+
+    @Test
+    fun `F1 - the one record for a shape the spec does not declare draws one message, in a never`() {
+        val src = fillAndPickUp + "\nnever (PickUp where (Counselling for fill).given == false)"
+        assertEquals(listOf("unknown shape 'Counselling'"), printedMessages(src, "F1"))
+    }
+
+    @Test
+    fun `F1 - counting the records for a shape the spec does not declare names it where it is written`() {
+        val src = fillAndPickUp + """
+
+            shape CounsellingDue = Fill where count(Counselling for this) == 0
+            never (PickUp where fill is CounsellingDue)
+        """.trimIndent()
+        assertEquals(listOf("unknown shape 'Counselling'"), printedMessages(src, "F1"))
+    }
+
+    @Test
+    fun `F1 - counting the records for a shape the spec does not declare names it, in a never`() {
+        val src = fillAndPickUp + "\nnever (PickUp where count(Counselling for fill) == 0)"
+        assertEquals(listOf("unknown shape 'Counselling'"), printedMessages(src, "F1"))
+    }
+
+    @Test
+    fun `F1 - counting the records for a shape the spec does not declare names it, in a derived property`() {
+        val src = """
+            act Fill { fillNumber: integer }
+            shape CountedFill = Fill where fillNumber > 0 {
+                counsellings: integer = count(Counselling for this)
+            }
+        """.trimIndent()
+        assertEquals(listOf("unknown shape 'Counselling'"), printedMessages(src, "F1"))
+    }
+
     @Test
     fun `F1 - bare name resolves in the innermost scope only`() {
         val src = """
