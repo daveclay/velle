@@ -1,6 +1,6 @@
 # OQ225 — Should the compiler resolve every path in a spec once, into one model that every check, generator, and the running system read?
 
-**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built, moves 1 to 3 of 9 started (§3). Two work items.
+**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built, moves 1 to 5 of 9 done (§3). Two work items.
 
 **In plain terms:** when the compiler reads a condition such as "the loan's member is called late", it does not write down once what "the loan's member" means. Each part of the compiler that later reads the condition works it out again for itself, and they do not always agree. Several recent bugs came from one of them working it out differently from the others. The change is to work it out once, keep the answer, and have every part read that.
 
@@ -55,15 +55,16 @@ One rule of the language is taught to each of those parts on its own, and they d
 
 Each is pinned by a test in `compiler/src/test/kotlin/velle/PathResolutionDisagreementTest.kt` that holds today's answer and names the part that answers differently. The move that makes the two agree turns the test into one that holds the agreed answer.
 
-1. The validator reads `this.target` and `target` as different paths when it narrows, so `if this.target is Post then target.body` is refused with F1, while `ExprTypes.kt` types it ("a test spelled with this does not narrow a read spelled without it ...", and the reverse).
+1. Resolved in move 5. The validator read `this.target` and `target` as different paths when it narrowed, so `if this.target is Post then target.body` is refused with F1, while `ExprTypes.kt` types it ("a test spelled with this does not narrow a read spelled without it ...", and the reverse).
 2. `validation/SignedConsults.kt` reads `this` inside a filter as the element, while the read analysis reads it as the subject ("the polarity walk reads this inside a filter as the element ...").
-3. `ExprTypes.kt` types a bare collection or a `walk` inside a filter over another shape on the subject, so the validator refuses a valid `sum(lines, amount)` with F2, while the read analysis reads it on the element ("a bare collection inside a filter over another shape ...", "a walk inside a filter over another shape ...").
+3. Resolved in move 4. `ExprTypes.kt` typed a bare collection or a `walk` inside a filter over another shape on the subject, so the validator refuses a valid `sum(lines, amount)` with F2, while the read analysis reads it on the element ("a bare collection inside a filter over another shape ...", "a walk inside a filter over another shape ...").
 4. `validation/TransientFieldCheck.kt` reads a bare name in a filter over two collections on the first, while everything else reads it on the last: V37 is raised for a stored field and missed for a transient one (the two tests "the transient check reads a bare name in a filter over two collections ...").
 5. The serialization-domain analysis in `Domains.kt` gives a write to a field declared on a taken shape no queue key, so a rule the write should wake is missed: a soundness gap ("a write to a field declared on a taken shape wakes no rule ...").
 6. `Domains.kt` `corrExpr` does not follow a refinement named inside a rule's `where`, while it follows one that is the condition's shape ("a refinement named inside a rule's where is not followed ...").
 7. `Domains.kt` `bodyPath` gives a read through a `for each` name no route ("a read through a for each name gives the serialization domain no correlation route ...").
 8. `Query.kt` compiles `exists ... for this` over a union-typed reference to no store pre-filter, while the running system matches it ("exists for this over a union-typed reference compiles to no store pre-filter ...").
 9. `ReadConflicts.kt` does not count a read of a union-typed reference as a read of a reference to its operand, while `PossibleCommits.kt` does ("a read of a union-typed reference is no read of a reference to its operand ...").
+10. Found and resolved in move 4: the read analysis ignored `this is RenameEntry` narrowing `this` itself, while `ExprTypes.kt` honoured it (`compiler/src/test/kotlin/velle/spec/PathResolverTest.kt`, "after this is loan a name only loan declares is looked up on loan"; `SharedShapeTest`, "a rule over a taken shape fires inside a transient taker's own commit ...").
 
 ### Open OQs it closes or changes
 
@@ -129,9 +130,9 @@ The API is the package `velle.spec`, in `compiler/src/main/kotlin/velle/spec/`.
 
 1. The resolver; the read analysis's `collectPath` and `pathEndType` in `Model.kt` read it. Done, commit c4b1734.
 2. The rest of the read analysis in `Model.kt` (`walkSegs`, `forRecordShape`, `heldSubjectShape`), and its narrowing passed down as a `Scope` in place of the `narrowedScope` field. Done.
-3. One computation of what an `is` test narrows, taken from `ExprTypes.kt` `narrowingOf`, which is the complete one, and read by the read analysis, the validator, and `ExprTypes.kt`. `velle.spec.ShapeNarrowing` is written and the read analysis reads it; the validator and `ExprTypes.kt` adopt it in moves 4 and 5.
-4. `ExprTypes.kt` `pathType` and `along`.
-5. The validator: `validation/PathResolution.kt` and `validation/Narrowing.kt`, with F1 reported from an `UnresolvedStep`.
+3. One computation of what an `is` test narrows, taken from `ExprTypes.kt` `narrowingOf`, which is the complete one, and read by the read analysis, the validator, and `ExprTypes.kt`. Done: `velle.spec.ShapeNarrowing`, read by all three.
+4. `ExprTypes.kt` `pathType`, `recordElement`, and the type of a `walk`. Done.
+5. The validator: `validation/PathResolution.kt` and `validation/Narrowing.kt`, with F1 reported from an `UnresolvedStep`. Done.
 6. `Domains.kt`: the `Walker`, `corrExpr`, `bodyCorr`, `bodyPath`.
 7. `StateFlowGen.kt`, `validation/SignedConsults.kt`, `validation/TransientFieldCheck.kt`, `validation/Writes.kt`, `Query.kt`, `Evaluator.kt` `declaredTypeOf`, and the small ones in §1.
 8. One function for the parts of an expression, and one for splitting at `and`, shared by the hand-written walks.
