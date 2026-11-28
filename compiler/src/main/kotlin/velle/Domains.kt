@@ -788,14 +788,18 @@ class DomainAnalysis(private val model: Model) {
         /** Reads a path as `velle.spec.PathResolver` resolves it at this point, and steps the key along each name. */
         private fun walkPath(p: PathExpr, ctx: Ctx): Scope? {
             val resolved = model.paths.resolve(p, ctx.pathScope())
+            if (resolved.start is PathStart.ShapeName) return walkShapeName(p, ctx)
+            val start = startOf(resolved, p, ctx) ?: return null
             val segmentNames = p.segs.map { seg -> seg.name }
-            return when (resolved.start) {
-                is PathStart.Subject -> walkSteps(ctx.subject, resolved, segmentNames)
-                is PathStart.RecordName, is PathStart.ValueName -> walkSteps(ctx.aliases.getValue(p.root), resolved, segmentNames)
-                is PathStart.Element -> walkSteps(ctx.innermost(), resolved, listOf(p.root) + segmentNames)
-                is PathStart.ShapeName -> walkShapeName(p, ctx)
-                is PathStart.FoundRecord -> null
-            }
+            return walkSteps(start, resolved, if (resolved.start is PathStart.Element) listOf(p.root) + segmentNames else segmentNames)
+        }
+
+        /** The record a resolved path starts from, with its key: the subject, a named record, or the innermost element. */
+        private fun startOf(resolved: ResolvedPath, p: PathExpr, ctx: Ctx): Scope? = when (resolved.start) {
+            is PathStart.Subject -> ctx.subject
+            is PathStart.RecordName, is PathStart.ValueName -> ctx.aliases.getValue(p.root)
+            is PathStart.Element -> ctx.innermost()
+            is PathStart.ShapeName, is PathStart.FoundRecord -> null
         }
 
         /** A shape or refinement named on its own: a membership atom of the innermost element. */
@@ -1013,25 +1017,14 @@ class DomainAnalysis(private val model: Model) {
          * Records nothing: the reads were attributed by the walk that led here.
          */
         private fun sourceOf(p: PathExpr, ctx: Ctx): ValueSource? {
-            val steps = p.segs.map { it.name }
-            var scope: Scope
-            var rest: List<String>
-            when {
-                p.root == "this" -> { scope = ctx.subject; rest = steps }
-                p.root in ctx.aliases -> { scope = ctx.aliases.getValue(p.root); rest = steps }
-                else -> { scope = ctx.innermost(); rest = listOf(p.root) + steps }
+            val resolved = model.paths.resolve(p, ctx.pathScope())
+            if (!resolved.resolves || resolved.steps.isEmpty()) return null
+            var anchor = startOf(resolved, p, ctx)?.anchor ?: return null
+            for (step in resolved.steps.dropLast(1)) {
+                if (!step.member.stored || step.member.type.instanceShape() == null) return null
+                anchor = extend(anchor, step.name)
             }
-            if (rest.isEmpty()) return null
-            var anchor = scope.anchor
-            var shape = scope.name
-            for (seg in rest.dropLast(1)) {
-                val m = model.membersOf(shape)[seg] ?: return null
-                val target = m.type.instanceShape() ?: return null
-                if (!m.stored) return null
-                anchor = extend(anchor, seg)
-                shape = target
-            }
-            val m = model.membersOf(shape)[rest.last()] ?: return null
+            val m = resolved.steps.last().member
             if (!m.stored || m.type.instanceShape() != null || m.type is VType.Coll || m.type is VType.CollS) return null
             return when (anchor) {
                 is Anchor.Reach -> ValueSource.Reach(anchor.segs, m.name)

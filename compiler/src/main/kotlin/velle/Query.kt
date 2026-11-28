@@ -3,6 +3,8 @@ package velle
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
+import velle.spec.PathStart
+import velle.spec.Scope
 import velle.spec.partsJoinedByAnd
 
 /**
@@ -449,25 +451,19 @@ class QueryCompiler(
         scope: String,
         wantInstance: Boolean = false,
     ): List<Pair<String, MemberInfo>>? {
-        val names = if (p.root == "this") p.segs.map { it.name }
-        else listOf(p.root) + p.segs.map { it.name }
-        if (names.isEmpty()) return null
-        var sc: String? = scope
-        val hops = mutableListOf<Pair<String, MemberInfo>>()
-        for ((i, name) in names.withIndex()) {
-            val m = model.membersOf(sc ?: return null)[name] ?: return null
-            val last = i == names.lastIndex
-            // a transient field is in the act's input and has no column (Reference §4)
-            val column = (m.stored && !m.transient) || m.timestamp
-            if (!column) return null
-            if (!last && m.type.instanceShape() == null) return null
-            if (last && !wantInstance && m.type.strip() is VType.Inst) return null
-            if (last && wantInstance && m.type.instanceShape() == null) return null
-            hops.add(name to m)
-            sc = m.type.instanceShape()
-        }
-        return hops
+        val resolved = model.paths.resolve(p, Scope(scope))
+        val startsAtRecord = resolved.start is PathStart.Subject || resolved.start is PathStart.Element
+        if (!startsAtRecord || !resolved.resolves || resolved.steps.isEmpty()) return null
+        if (resolved.steps.any { step -> !isColumn(step.member) }) return null
+        if (resolved.steps.dropLast(1).any { step -> step.member.type.instanceShape() == null }) return null
+        val lastType = resolved.steps.last().member.type
+        if (!wantInstance && lastType.strip() is VType.Inst) return null
+        if (wantInstance && lastType.instanceShape() == null) return null
+        return resolved.steps.map { step -> step.name to step.member }
     }
+
+    /** A transient field is in the act's input and has no column (Reference §4). */
+    private fun isColumn(member: MemberInfo): Boolean = (member.stored && !member.transient) || member.timestamp
 
     /** Wraps a column condition in forward joins for each leading reference hop. */
     private fun wrapHops(refs: List<Pair<String, MemberInfo>>, leaf: QF): QF =

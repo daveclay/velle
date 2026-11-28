@@ -21,6 +21,11 @@ import velle.spec.partsJoinedByAnd
  * enclosing refinement or `if` narrows with `is some`. Everything else may be
  * absent, because two absent values compare equal (Reference §10) and an absent
  * key would match every record without one.
+ *
+ * This class walks a path over the declared fields itself and does not ask
+ * `velle.spec.PathResolver`: what it rewrites is the declarations the model, and
+ * with it the resolver, is built from. A name it does not find among a shape's
+ * declared fields may be absent.
  */
 class KeyLookups(decls: List<Decl>) {
 

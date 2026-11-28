@@ -10,6 +10,11 @@ import velle.spec.partsJoinedByOr
  * holds. Read from the declarations, before the model, so the key filter ([KeyLookups]) and the
  * type reading ([ExprTypes]) read the same facts.
  *
+ * This class walks a path over the declared fields itself and does not ask `velle.spec.PathResolver`.
+ * The resolver reads each member's type, a property that states no type takes its type from
+ * [ExprTypes], and [ExprTypes] reads these facts, so the facts would be asked for while they are
+ * being worked out. A name it does not find among a shape's declared fields spends nothing.
+ *
  * A prohibition is spent only when no rule can move it: no rule assigns a field its predicate
  * reads, by name anywhere in the spec, and no shape it reads through beyond its own is deleted
  * anywhere, since a deleted record reads absent. A predicate with a part this class does not

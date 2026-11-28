@@ -1,6 +1,6 @@
 # OQ225 — Should the compiler resolve every path in a spec once, into one model that every check, generator, and the running system read?
 
-**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built; moves 1 to 15 done, every disagreement in §1 resolved (§3). One work item.
+**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built; moves 1 to 16 done, every disagreement in §1 resolved (§3). One work item.
 
 **In plain terms:** when the compiler reads a condition such as "the loan's member is called late", it does not write down once what "the loan's member" means. Each part of the compiler that later reads the condition works it out again for itself, and they do not always agree. Several recent bugs came from one of them working it out differently from the others. The change is to work it out once, keep the answer, and have every part read that.
 
@@ -152,8 +152,9 @@ The API is the package `velle.spec`, in `compiler/src/main/kotlin/velle/spec/`.
 13. `validation/TransientFieldCheck.kt` walks every expression with `ScopeRules.scopedPartsOf` and a block with `ofBlock`. Done.
 14. `validation/SignedConsults.kt` reads `ScopeRules` for the right side of an `and` or an `or`, the branches of an `if`, a collection, and a walk's `until`. Done.
 15. The `Walker` in `Domains.kt`: its `Ctx` carries what the governing `is` tests show, `walkPath` resolves each path at the `Scope` of that point, and the right side of an `and` or an `or`, the branches of an `if`, a filter's `where` and a walk's `until` are read at the scope `ScopeRules` gives. `hop` and `narrowedOnUnion` stay for the names read after a selection, `first(rows where target is Post by key).target.body`, whose narrowing `ExprTypes.elementNarrowing` holds and no `Scope` carries. Done.
+16. `Query.kt` `resolveHops`, `Domains.kt` `sourceOf`, and the names `Kinds.kt` `producedKinds` reads an assignment's target against (`Model.namesBoundIn`). Done.
 
-`Keys.kt` and `PresenceFacts.kt` read declarations before `Model` exists, so they cannot read the resolver as it stands; they move when the model is built earlier, or stay, and the decision is recorded here when it is reached.
+`Keys.kt` and `PresenceFacts.kt` stay off the resolver, and each file's header says why. `KeyLookups` rewrites the declarations the model is built from (`Model.kt`, the `init` block). `PresenceFacts` is read by `ExprTypes.scopeEnv` while a member's type is worked out, and the resolver reads member types, so it would be asked for while it is being worked out. Both read only a shape's declared fields and treat any other name as unknown, which refuses or spends nothing.
 
 ## 4. Work items
 
