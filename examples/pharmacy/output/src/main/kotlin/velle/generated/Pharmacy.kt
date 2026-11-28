@@ -40,6 +40,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  System-wide over Verification — consults Verification through 'verifications' with no keyable owner (unexamined (A5)).
      *  System-wide over Pickup — consults Pickup through a path the derivation cannot key (unexamined (A5)).
@@ -48,6 +50,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over CounterAlert — consults CounterAlert through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Prescription — reads Prescription.order with no path back to any key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
@@ -64,7 +68,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         boundary("Ingredient", input).carrying(input)
 
     /** Queue: system-wide.
-     *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
+     *  System-wide over Ingredient — consults Ingredient through 'allergies' with no keyable owner (unexamined (A5)).
      *  System-wide over Fill — reads Fill.lot with no path back to any key (unexamined (A5)).
      *  System-wide over StockLot — reads StockLot.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.schedule with no path back to any key (unexamined (A5)).
@@ -79,6 +85,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over CounterAlert — consults CounterAlert through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
      *  System-wide over Prescription — `Prescription` reads every Prescription and correlates to no key (unexamined (A5)).
@@ -106,6 +114,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
@@ -168,6 +178,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  System-wide over Verification — consults Verification through 'verifications' with no keyable owner (unexamined (A5)).
      *  System-wide over Pickup — consults Pickup through a path the derivation cannot key (unexamined (A5)).
@@ -176,6 +188,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over CounterAlert — consults CounterAlert through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Verification — consults Verification through 'verifications' with no keyable owner (unexamined (A5)).
      *  System-wide over Fill — reads Fill.prescription with no path back to any key (unexamined (A5)).
@@ -207,6 +221,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  System-wide over Verification — consults Verification through 'verifications' with no keyable owner (unexamined (A5)).
      *  System-wide over Pickup — consults Pickup through a path the derivation cannot key (unexamined (A5)).
@@ -215,6 +231,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over CounterAlert — consults CounterAlert through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Prescription — reads Prescription.order with no path back to any key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
@@ -234,6 +252,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  System-wide over Verification — consults Verification through 'verifications' with no keyable owner (unexamined (A5)).
      *  System-wide over Pickup — consults Pickup through a path the derivation cannot key (unexamined (A5)).
@@ -242,6 +262,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over CounterAlert — consults CounterAlert through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Prescription — reads Prescription.order with no path back to any key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
@@ -270,6 +292,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over CounterAlert — consults CounterAlert through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over Verification — consults Verification through 'verifications' with no keyable owner (unexamined (A5)).
      *  System-wide over Fill — reads Fill.prescription with no path back to any key (unexamined (A5)).
@@ -298,6 +322,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
@@ -308,7 +334,6 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — `Prescription` reads every Prescription and correlates to no key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
      *  System-wide over Interaction — `Interaction` reads every Interaction and correlates to no key (unexamined (A5)).
-     *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewCorrectEntry, actor: Ref<Staff>): Commit<NewCorrectEntry, Nothing?> =
@@ -329,6 +354,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
@@ -343,12 +370,10 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         boundary("ConflictOverride", input, actor).carrying(input)
 
     /** Queue keys: [fillPrescription.lot], [fillPrescription.lot.drug], [fillPrescription.prescription], [fillPrescription.prescription.drug], [fillPrescription.prescription.order], [fillPrescription.prescription.order.patient] — plus system-wide width below.
-     *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
      *  System-wide over Prescription — `Prescription` reads every Prescription and correlates to no key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
      *  System-wide over Interaction — `Interaction` reads every Interaction and correlates to no key (unexamined (A5)).
      *  System-wide over Fill — creates Fill referencing an instance the derivation cannot key (unexamined (A5)).
-     *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
      *  System-wide over Prescription — `Prescription` reads every Prescription and correlates to no key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
      *  System-wide over Interaction — `Interaction` reads every Interaction and correlates to no key (unexamined (A5)).
@@ -362,11 +387,12 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over EntryVoid — consults EntryVoid through 'entryVoids' with no keyable owner (unexamined (A5)).
      *  System-wide over Interaction — `Interaction` reads every Interaction and correlates to no key (unexamined (A5)).
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
-     *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
      *  System-wide over Claim — creates Claim referencing an instance the derivation cannot key (unexamined (A5)).
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
@@ -393,10 +419,11 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over EntryVoid — consults EntryVoid through 'entryVoids' with no keyable owner (unexamined (A5)).
      *  System-wide over Interaction — `Interaction` reads every Interaction and correlates to no key (unexamined (A5)).
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
-     *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
+     *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
+     *  System-wide over Patient — reads Patient.allergies with no path back to any key (unexamined (A5)).
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
@@ -410,8 +437,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun commit(input: NewCounselling, actor: Ref<Staff>): Commit<NewCounselling, Ref<Counselling>> =
         boundary("Counselling", input, actor).carrying(input)
 
-    /** Queue keys: [pickUp.fill], [pickUp.fill.lot], [pickUp.fill.lot.drug], [pickUp.fill.prescription], [pickUp.fill.prescription.drug], [pickUp.fill.prescription.order], [pickUp.fill.prescription.order.patient] — plus system-wide width below.
-     *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
+    /** Queue keys: [pickUp.fill], [pickUp.fill.lot], [pickUp.fill.lot.drug], [pickUp.fill.prescription], [pickUp.fill.prescription.drug], [pickUp.fill.prescription.order], [pickUp.fill.prescription.order.patient].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewPickUp): Commit<NewPickUp, Nothing?> =

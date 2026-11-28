@@ -657,6 +657,9 @@ class DomainAnalysis(private val model: Model) {
                 narrowed,
             )
 
+            /** The same point with one more name bound. */
+            fun withAlias(named: Pair<String, Scope>) = Ctx(subject, elements, aliases + named, narrowed)
+
             /** The same point read at [scope]: what its tests show is in force. */
             fun readAt(scope: PathScope) = Ctx(subject, elements, aliases, scope.narrowed)
 
@@ -907,35 +910,48 @@ class DomainAnalysis(private val model: Model) {
 
         // ── collections: where correlation is found or width is born ─────────
 
-        /** Returns the last binding's element scope. */
+        /**
+         * Returns the last binding's element scope. Each source is read on the record the collection is
+         * written on, with the names of the bindings before it, and the `where` on the last binding's
+         * element with every name (`velle.spec.ScopeRules`).
+         */
         fun walkCollection(c: CollectionExpr, ctx: Ctx): Scope? {
             var elem: Scope? = null
+            var sourceCtx = ctx
             var inner = ctx
             for (b in c.bindings) {
-                val bScope: Scope = when (val src = b.source) {
-                    is PathExpr ->
-                        if ((src.root in model.shapes || src.root in model.refinements) && src.segs.isEmpty())
-                            bareShapeSource(src.root, b, c, ctx)
-                        else walkPath(src, inner) ?: if (b.alias != null && namesValues(src, inner)) {
-                            // a binding over a `many` of values names a value, not a record (Reference §5): its
-                            // `as` name is an alias only, and a bare field in the `where` still reads the record
-                            inner = Ctx(inner.subject, inner.elements, inner.aliases + (b.alias to Scope(VALUE_ALIAS, Anchor.Unknown)), inner.narrowed)
-                            continue
-                        } else unknownScope()
-                    is ShapeForSource -> correlatedSource(src.shape, src.forExpr, inner)
-                    else -> {
-                        walkExpr(src, inner)
-                        unknownScope()
-                    }
+                val bScope = bindingScope(b, c, ctx, sourceCtx)
+                if (bScope == null) {
+                    // a binding over a `many` of values names a value, not a record (Reference §5): its
+                    // `as` name is an alias only, and a bare field in the `where` still reads the record
+                    val valueName = b.alias!! to Scope(VALUE_ALIAS, Anchor.Unknown)
+                    sourceCtx = sourceCtx.withAlias(valueName)
+                    inner = inner.withAlias(valueName)
+                    continue
                 }
+                b.alias?.let { alias -> sourceCtx = sourceCtx.withAlias(alias to bScope) }
                 inner = inner.push(bScope, b.alias)
                 elem = bScope
             }
-            // a filter that names a refinement reads its `where` on that refinement's members (`velle.spec.ScopeRules`)
+            // a filter that names a refinement reads its `where` on that refinement's members
             val whereElement = model.scopes.ofFilter(c, ctx.pathScope()).element
             if (elem != null && whereElement != null && whereElement != elem.name) inner = inner.withInnermostAs(whereElement)
             c.where?.let { walkExpr(it, inner) }
             return elem
+        }
+
+        /** The element scope one binding gives, its source read at [sourceCtx]; null when it names each value of a `many` of values. */
+        private fun bindingScope(b: Binding, c: CollectionExpr, ctx: Ctx, sourceCtx: Ctx): Scope? = when (val src = b.source) {
+            is PathExpr -> when {
+                (src.root in model.shapes || src.root in model.refinements) && src.segs.isEmpty() -> bareShapeSource(src.root, b, c, ctx)
+                b.alias != null && namesValues(src, sourceCtx) -> { walkPath(src, sourceCtx); null }
+                else -> walkPath(src, sourceCtx) ?: unknownScope()
+            }
+            is ShapeForSource -> correlatedSource(src.shape, src.forExpr, sourceCtx)
+            else -> {
+                walkExpr(src, sourceCtx)
+                unknownScope()
+            }
         }
 
         /** Whether a binding path names a `many` of values, so its `as` name is a value (Reference §5). */

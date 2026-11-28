@@ -1,0 +1,23 @@
+-- A thread is about a post or a photo, and so is each comment in it. The condition tests the
+-- thread's own `target`, and then, inside the filter over the thread's comments, reads `body` on
+-- each comment's `target`.
+--
+-- The compiler accepts it. Inside the filter a bare `target` is the comment's, which no test has
+-- shown to be a Post. A thread about a post with a comment about a photo makes the running system
+-- fail when it reads the condition: "'body' is not readable on 'Photo' instance".
+-- `PathResolutionDisagreementTest`, "a test on the subject is taken to hold for a field of the same
+-- name on a filter's record", pins both.
+act Post { body: text }
+
+act Photo { caption: text }
+
+shape Content = Post or Photo
+
+act Thread { target: one Content }
+
+act Comment {
+    target: one Content
+    thread: one Thread
+}
+
+shape ThreadWithEmptyComment = Thread where target is Post and exists (comments where target.body == "")

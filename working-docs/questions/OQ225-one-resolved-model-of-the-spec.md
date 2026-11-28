@@ -1,6 +1,6 @@
 # OQ225 — Should the compiler resolve every path in a spec once, into one model that every check, generator, and the running system read?
 
-**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built; moves 1 to 16 done, every disagreement in §1 resolved (§3). One work item.
+**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built; moves 1 to 17 done, every disagreement in §1 resolved (§3). One work item.
 
 **In plain terms:** when the compiler reads a condition such as "the loan's member is called late", it does not write down once what "the loan's member" means. Each part of the compiler that later reads the condition works it out again for itself, and they do not always agree. Several recent bugs came from one of them working it out differently from the others. The change is to work it out once, keep the answer, and have every part read that.
 
@@ -74,6 +74,8 @@ Each is pinned by a test in `compiler/src/test/kotlin/velle/PathResolutionDisagr
 16. Found and resolved in move 13: `validation/TransientFieldCheck.kt` read no `is` test, read every `for each` source without the names before it, and took a bare name inside a filter over the act's own shape for the act being committed, so V37 was missed in each (the three tests "the transient check reads a path after an is test ...", "... reads a for each source on the names before it", "... takes a bare name inside a filter over the act's own shape as another record's field").
 17. Found and resolved in move 14: `validation/SignedConsults.kt` read no `is` test, so a property read after one, `target is Post and target.answered`, was not followed and the signs were marked incomplete ("the polarity walk reads a path after an is test on the shape the test shows ...").
 18. Found and resolved in move 15: the `Walker` in `Domains.kt` read a filter's `where` on the collection's shape, so a property of the refinement the filter names, `penalty` in `(loans where LateLoan and penalty > 10)`, did not resolve and the domain widened over `Loan` ("the serialization domain reads a filter that names a refinement on that refinement's own properties ...").
+19. Found, still open, OQ236: what a test shows is kept under the path's names without the record, so `target is Post` on a Thread is taken to hold for a Comment's `target` inside `(comments where target.body == "")` ("a test on the subject is taken to hold for a field of the same name on a filter's record").
+20. Found and resolved in move 17: the `Walker` in `Domains.kt` read a second binding's source on the first binding's record, so `order.patient.allergies` in `examples/pharmacy/pharmacy.velle`, shape `AllergyConflict`, did not resolve ("the serialization domain reads each source of a collection on the record the collection is written on ..."). Pharmacy's generated queue comments changed: the reads of `PrescriberOrder.patient` and `Patient.allergies` are now listed, and `PickUp` is no longer system-wide. This was OQ55 §2.
 
 ### Open OQs it closes or changes
 
@@ -153,6 +155,7 @@ The API is the package `velle.spec`, in `compiler/src/main/kotlin/velle/spec/`.
 14. `validation/SignedConsults.kt` reads `ScopeRules` for the right side of an `and` or an `or`, the branches of an `if`, a collection, and a walk's `until`. Done.
 15. The `Walker` in `Domains.kt`: its `Ctx` carries what the governing `is` tests show, `walkPath` resolves each path at the `Scope` of that point, and the right side of an `and` or an `or`, the branches of an `if`, a filter's `where` and a walk's `until` are read at the scope `ScopeRules` gives. `hop` and `narrowedOnUnion` stay for the names read after a selection, `first(rows where target is Post by key).target.body`, whose narrowing `ExprTypes.elementNarrowing` holds and no `Scope` carries. Done.
 16. `Query.kt` `resolveHops`, `Domains.kt` `sourceOf`, and the names `Kinds.kt` `producedKinds` reads an assignment's target against (`Model.namesBoundIn`). Done.
+17. `Domains.kt` `walkCollection` reads each binding's source with the names before it on the enclosing record. Done.
 
 `Keys.kt` and `PresenceFacts.kt` stay off the resolver, and each file's header says why. `KeyLookups` rewrites the declarations the model is built from (`Model.kt`, the `init` block). `PresenceFacts` is read by `ExprTypes.scopeEnv` while a member's type is worked out, and the resolver reads member types, so it would be asked for while it is being worked out. Both read only a shape's declared fields and treat any other name as unknown, which refuses or spends nothing.
 

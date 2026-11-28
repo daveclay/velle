@@ -1,0 +1,17 @@
+-- A thread may have an owner, and so may each comment in it. The condition tests that the thread's
+-- own `owner` is present, and then, inside the filter over the thread's comments, reads `name`
+-- through each comment's `owner` with a plain dot.
+--
+-- The compiler accepts it. Inside the filter a bare `owner` is the comment's, which no test has
+-- shown present. Without `owner is some and` the same filter draws V11: "'owner.name' reads through
+-- 'owner', which may be absent".
+act Member { name: text }
+
+act Thread { owner: one Member? }
+
+act Comment {
+    owner: one Member?
+    thread: one Thread
+}
+
+shape ThreadOfAda = Thread where owner is some and exists (comments where owner.name == "Ada")

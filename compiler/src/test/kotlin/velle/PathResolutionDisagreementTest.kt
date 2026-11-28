@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
  * Places where two parts of the compiler disagree about what one path in a spec means, pinned
  * before OQ225 resolves every path once into one model. Each test asserts what the compiler does
  * today and says in its comment which parts disagree and what the other part answers, so the
- * test is flipped when the parts are made to agree.
+ * test is flipped when the parts are made to agree. Every one but number 19 has been flipped.
  */
 class PathResolutionDisagreementTest {
 
@@ -496,5 +496,52 @@ class PathResolutionDisagreementTest {
         // 'penalty' is LateLoan's property, read on the member's own loans, so no read is left unattributed
         val widenings = DomainAnalysis(Model(Parser.parse(spec))).actDomains.values.flatMap { domain -> domain.widenings }
         assertEquals(emptyList(), widenings.map { widening -> widening.toString() })
+    }
+
+    // ── 20. a second binding's source: the first binding's record for Domains, the enclosing record elsewhere ──
+
+    @Test
+    fun `the serialization domain reads each source of a collection on the record the collection is written on, as the running system does`() {
+        val spec = """
+            act Ingredient { name: text }
+            act Drug { name: text, ingredients: many Ingredient }
+            act Patient { name: text, allergies: many Ingredient }
+            act Prescription { drug: one Drug, patient: one Patient, flagged: boolean initially false }
+            rule Flag when (Prescription where not flagged and exists (drug.ingredients as ingredient, patient.allergies as allergy where ingredient == allergy)) on commit { flagged = true }
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(spec))
+
+        // 'patient' is the prescription's field; read on an Ingredient it resolved to nothing
+        val widenings = DomainAnalysis(Model(Parser.parse(spec))).actDomains.values.flatMap { domain -> domain.widenings }
+        assertEquals(emptyList(), widenings.map { widening -> widening.toString() }.filter { reason -> "cannot be resolved" in reason })
+    }
+
+    // ── 19. open, OQ236: a test on the subject, taken by the validator to hold for a filter's record ──
+
+    @Test
+    fun `a test on the subject is taken to hold for a field of the same name on a filter's record`() {
+        val spec = """
+            act Post { body: text }
+            act Photo { caption: text }
+            shape Content = Post or Photo
+            act Thread { target: one Content }
+            act Comment { target: one Content, thread: one Thread }
+            shape ThreadWithEmptyComment = Thread where target is Post and exists (comments where target.body == "")
+        """.trimIndent()
+
+        // the validator keeps what 'target is Post' shows under the name 'target', and inside the
+        // filter that name is the comment's field, which no test narrowed
+        assertEquals(emptyList(), Validator.validate(spec))
+
+        // the running system reads the comment's target, a Photo, and has no 'body' to read
+        val system = VelleSystem(Model(Parser.parse(spec)))
+        system.scope {
+            val post = accepted(system.commit("Post", mapOf("body" to "hello")))
+            val photo = accepted(system.commit("Photo", mapOf("caption" to "sunset")))
+            val thread = accepted(system.commit("Thread", mapOf("target" to post)))
+            accepted(system.commit("Comment", mapOf("target" to photo, "thread" to thread)))
+            val failure = runCatching { system.isMember(thread, "ThreadWithEmptyComment") }.exceptionOrNull()
+            assertIs<VelleRuntimeError>(failure)
+        }
     }
 }
