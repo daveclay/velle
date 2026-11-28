@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 
 /**
  * Places where two parts of the compiler disagree about what one path in a spec means, pinned
- * before OQ225 resolves every path once into one model. Each test asserts what the compiler does
+ * before every path was resolved once into one model (`velle.spec`). Each test asserts what the compiler does
  * today and says in its comment which parts disagree and what the other part answers, so the
  * test is flipped when the parts are made to agree. Every one but number 19 has been flipped.
  */
@@ -514,6 +514,37 @@ class PathResolutionDisagreementTest {
         // 'patient' is the prescription's field; read on an Ingredient it resolved to nothing
         val widenings = DomainAnalysis(Model(Parser.parse(spec))).actDomains.values.flatMap { domain -> domain.widenings }
         assertEquals(emptyList(), widenings.map { widening -> widening.toString() }.filter { reason -> "cannot be resolved" in reason })
+    }
+
+    // ── 21. this inside a filter, and an is test on a reference: both read by the serialization domain ──
+
+    @Test
+    fun `the serialization domain reads a field of this inside a filter on the subject`() {
+        val spec = """
+            act Branch { name: text }
+            act Member { name: text, branch: one Branch, flagged: boolean initially false }
+            act Loan { member: one Member, branch: one Branch }
+            rule Flag when (Member where not flagged and exists (loans where branch == this.branch)) on commit { flagged = true }
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(spec))
+
+        val widenings = DomainAnalysis(Model(Parser.parse(spec))).actDomains.values.flatMap { domain -> domain.widenings }
+        assertEquals(emptyList(), widenings.map { widening -> widening.toString() })
+    }
+
+    @Test
+    fun `the serialization domain follows an is test on a reference into the refinement it names`() {
+        val spec = """
+            act Member { name: text }
+            act Loan { member: one Member, fee: integer }
+            shape LateLoan = Loan where fee > 0
+            act Notice { loan: one Loan, sent: boolean initially false }
+            rule Send when (Notice where not sent and loan is LateLoan) on commit { sent = true }
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(spec))
+
+        val widenings = DomainAnalysis(Model(Parser.parse(spec))).actDomains.values.flatMap { domain -> domain.widenings }
+        assertEquals(emptyList(), widenings.map { widening -> widening.toString() })
     }
 
     // ── 19. open, OQ236: a test on the subject, taken by the validator to hold for a filter's record ──

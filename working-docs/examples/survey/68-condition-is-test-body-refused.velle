@@ -1,0 +1,18 @@
+-- A comment is about a post or a photo. PostComment is a comment about a post, and its property
+-- `quoted` reads the post's `body`.
+--
+-- The compiler refuses the read: "[F1] 'body' is declared on 'Post' separately, so it is not a
+-- member of 'Content'; read it after narrowing". The refinement's own condition, `target is Post`,
+-- already says every PostComment's target is a Post. A rule over PostComment, and a rule written
+-- `when (Comment where target is Post)`, are refused the same read in their bodies.
+act Post { body: text }
+
+act Photo { caption: text }
+
+shape Content = Post or Photo
+
+act Comment { target: one Content }
+
+shape PostComment = Comment where target is Post {
+    quoted: text = target.body
+}
