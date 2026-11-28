@@ -1,6 +1,6 @@
 # OQ225 — Should the compiler resolve every path in a spec once, into one model that every check, generator, and the running system read?
 
-**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built; moves 1 to 14 done, every disagreement in §1 resolved (§3). One work item.
+**Status:** opened 2026-11-27 from a discussion of OQ222 (`working-docs/QUESTIONS.md`), checked against commit 4738255. D1 and D2 decided 2026-11-27. Inventory taken; designed (§3); being built; moves 1 to 15 done, every disagreement in §1 resolved (§3). One work item.
 
 **In plain terms:** when the compiler reads a condition such as "the loan's member is called late", it does not write down once what "the loan's member" means. Each part of the compiler that later reads the condition works it out again for itself, and they do not always agree. Several recent bugs came from one of them working it out differently from the others. The change is to work it out once, keep the answer, and have every part read that.
 
@@ -73,6 +73,7 @@ Each is pinned by a test in `compiler/src/test/kotlin/velle/PathResolutionDisagr
 15. Found and resolved in move 11: inside a filter the validator read `this` in a walk's `until` as the outer subject, while the running system reads it as the record the walk reached, so `exists (loans where (walk renewedFrom until this.title == "first") is some)` on a `Member` was refused with F1 and the same read of a `Member` field was accepted ("this in a walk's until inside a filter names the record reached ...").
 16. Found and resolved in move 13: `validation/TransientFieldCheck.kt` read no `is` test, read every `for each` source without the names before it, and took a bare name inside a filter over the act's own shape for the act being committed, so V37 was missed in each (the three tests "the transient check reads a path after an is test ...", "... reads a for each source on the names before it", "... takes a bare name inside a filter over the act's own shape as another record's field").
 17. Found and resolved in move 14: `validation/SignedConsults.kt` read no `is` test, so a property read after one, `target is Post and target.answered`, was not followed and the signs were marked incomplete ("the polarity walk reads a path after an is test on the shape the test shows ...").
+18. Found and resolved in move 15: the `Walker` in `Domains.kt` read a filter's `where` on the collection's shape, so a property of the refinement the filter names, `penalty` in `(loans where LateLoan and penalty > 10)`, did not resolve and the domain widened over `Loan` ("the serialization domain reads a filter that names a refinement on that refinement's own properties ...").
 
 ### Open OQs it closes or changes
 
@@ -133,7 +134,6 @@ The API is the package `velle.spec`, in `compiler/src/main/kotlin/velle/spec/`.
 - `Scope` (`Paths.kt`) is one point of a spec: the element, the shape a bare name is a member of; the subject, the shape `this` names; the names bound to a record and to a value; and the narrowing an `is` test gives. It is a value, never changed in place. Moving into a filter's `where` is `inside(element)`, binding a name is `withRecordName` or `withValueName`, and a governing test is `narrowedBy`.
 - `PathResolver.resolve(path, scope)` (`Paths.kt`) answers with a `ResolvedPath`: what the path starts from (`PathStart`: the subject, the element, a record name, a value name, or a shape or refinement named on its own); each `Step`, holding the field's declaration, the shape it is looked up on after narrowing, and its `Reach` (from the start, through a reference to one record, or through a collection); and, when a name does not resolve, the `UnresolvedStep` with the shape it was looked for on.
 - `ScopeRules` (`Scopes.kt`), read as `Model.scopes`, answers which `Scope` each part of an expression is read at, so that it is written once: `ofRightSide` for the right side of an `and` or an `or`, `ofThen` and `ofElse` for the branches of an `if`, `ofFilter` for a collection's sources and its `where`, `ofUntil` for a walk's `until`, and `ofBlock` for the body of a `for each`, with `elementOf` and `elementOfLoop` answering what one `as` name or one `for each` name runs over. `scopedPartsOf` hands a walk each expression directly inside another with its scope, so a walk that reads paths goes through a whole expression without naming a form. Pinned by `compiler/src/test/kotlin/velle/spec/ScopeRulesTest.kt`.
-- Still to come: the serialization-domain analysis reading `ScopeRules`.
 
 ### The order of moves
 
@@ -151,6 +151,7 @@ The API is the package `velle.spec`, in `compiler/src/main/kotlin/velle/spec/`.
 12. What a `for each` name runs over: `Model.loopElementShape` in `BlockAssignments.kt` and `elementOfLoopSource` in `validation/ForEachCheck.kt` read `ScopeRules.elementOfLoop`. Done.
 13. `validation/TransientFieldCheck.kt` walks every expression with `ScopeRules.scopedPartsOf` and a block with `ofBlock`. Done.
 14. `validation/SignedConsults.kt` reads `ScopeRules` for the right side of an `and` or an `or`, the branches of an `if`, a collection, and a walk's `until`. Done.
+15. The `Walker` in `Domains.kt`: its `Ctx` carries what the governing `is` tests show, `walkPath` resolves each path at the `Scope` of that point, and the right side of an `and` or an `or`, the branches of an `if`, a filter's `where` and a walk's `until` are read at the scope `ScopeRules` gives. `hop` and `narrowedOnUnion` stay for the names read after a selection, `first(rows where target is Post by key).target.body`, whose narrowing `ExprTypes.elementNarrowing` holds and no `Scope` carries. Done.
 
 `Keys.kt` and `PresenceFacts.kt` read declarations before `Model` exists, so they cannot read the resolver as it stands; they move when the model is built earlier, or stay, and the decision is recorded here when it is reached.
 

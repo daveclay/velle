@@ -1,6 +1,8 @@
 package velle
 
+import velle.spec.Narrowings
 import velle.spec.PathStart
+import velle.spec.ResolvedPath
 import velle.spec.Scope as PathScope
 import velle.spec.partsJoinedByAnd
 
@@ -589,7 +591,7 @@ class DomainAnalysis(private val model: Model) {
                         is LoopSource.Over -> (if (s.expr is PathExpr) walker.walkCollection(CollectionExpr(listOf(Binding(s.expr))), inner)
                             else walker.walkExpr(s.expr, inner)) ?: walker.Scope("?", Anchor.Unknown)
                     }
-                    inner = walker.Ctx(inner.subject, inner.elements, inner.aliases + (b.name to sc))
+                    inner = walker.Ctx(inner.subject, inner.elements, inner.aliases + (b.name to sc), inner.narrowed)
                 }
                 walkBody(item.body, walker, inner, events)
             }
@@ -645,11 +647,30 @@ class DomainAnalysis(private val model: Model) {
             val subject: Scope,
             val elements: List<Scope> = emptyList(),
             val aliases: Map<String, Scope> = emptyMap(),
+            /** What the `is` tests governing this point show about the shape of a path's record (Reference §10). */
+            val narrowed: Narrowings = emptyMap(),
         ) {
             fun innermost(): Scope = elements.lastOrNull() ?: subject
             fun push(s: Scope, alias: String?) = Ctx(
                 subject, elements + s,
                 if (alias != null) aliases + (alias to s) else aliases,
+                narrowed,
+            )
+
+            /** The same point read at [scope]: what its tests show is in force. */
+            fun readAt(scope: PathScope) = Ctx(subject, elements, aliases, scope.narrowed)
+
+            /** The same point with its innermost element read as a record of [shape], at the same key. */
+            fun withInnermostAs(shape: String) = Ctx(subject, elements.dropLast(1) + Scope(shape, innermost().anchor), aliases, narrowed)
+
+            /** This point as `velle.spec.PathResolver` and `velle.spec.ScopeRules` read it. */
+            fun pathScope() = PathScope(
+                element = innermost().name,
+                subject = subject.name,
+                recordNames = aliases.filterValues { bound -> bound.name != VALUE_ALIAS }.mapValues { (_, bound) -> bound.name },
+                valueNames = aliases.filterValues { bound -> bound.name == VALUE_ALIAS }.keys,
+                narrowed = narrowed,
+                inFilter = elements.isNotEmpty(),
             )
         }
 
@@ -692,9 +713,14 @@ class DomainAnalysis(private val model: Model) {
             when (e) {
                 is PathExpr -> return walkPath(e, ctx)
                 is UnaryMinus -> walkExpr(e.inner, ctx)
-                is Binary -> { walkExpr(e.left, ctx); walkExpr(e.right, ctx) }
+                // the right side and each branch are read under what the test before them shows (`velle.spec.ScopeRules`)
+                is Binary -> { walkExpr(e.left, ctx); walkExpr(e.right, ctx.readAt(model.scopes.ofRightSide(e, ctx.pathScope()))) }
                 is NotExpr -> walkExpr(e.inner, ctx)
-                is IfExpr -> { walkExpr(e.condition, ctx); walkExpr(e.thenExpr, ctx); walkExpr(e.elseExpr, ctx) }
+                is IfExpr -> {
+                    walkExpr(e.condition, ctx)
+                    walkExpr(e.thenExpr, ctx.readAt(model.scopes.ofThen(e, ctx.pathScope())))
+                    walkExpr(e.elseExpr, ctx.readAt(model.scopes.ofElse(e, ctx.pathScope())))
+                }
                 is Interpolation -> e.pieces.forEach { piece -> walkExpr(piece, ctx) }
                 is IsExpr -> {
                     val subj = walkExpr(e.subject, ctx)
@@ -729,7 +755,11 @@ class DomainAnalysis(private val model: Model) {
                     val at = ctx.innermost()
                     val shape = model.declaredBaseOf(at.name) ?: at.name
                     acc.widen(shape, "'walk ${e.rel}' reads the whole connected part of '$shape'", decl, tolerated)
-                    e.until?.let { walkExpr(it, ctxOf(at.name, Anchor.Unknown)) }
+                    // the condition is asked of each record reached, keyed by nothing
+                    e.until?.let { condition ->
+                        val until = model.scopes.ofUntil(e, ctx.pathScope())
+                        walkExpr(condition, Ctx(Scope(until.element, Anchor.Unknown), emptyList(), ctx.aliases, until.narrowed))
+                    }
                     // the walk reaches records of its relationship's target, keyed by nothing
                     return model.walkTarget(e, at.name)?.let { target -> Scope(target, Anchor.Unknown) } ?: unknownScope()
                 }
@@ -755,23 +785,42 @@ class DomainAnalysis(private val model: Model) {
             return elem
         }
 
+        /** Reads a path as `velle.spec.PathResolver` resolves it at this point, and steps the key along each name. */
         private fun walkPath(p: PathExpr, ctx: Ctx): Scope? {
+            val resolved = model.paths.resolve(p, ctx.pathScope())
             val segmentNames = p.segs.map { seg -> seg.name }
-            return when {
-                p.root == "this" -> walkNames(ctx.subject, segmentNames)
-                p.root in ctx.aliases -> walkNames(ctx.aliases.getValue(p.root), segmentNames)
-                p.root in model.shapes || p.root in model.refinements -> {
-                    // bare name as a membership atom of the innermost element
-                    if (p.root in model.refinements && expanding.add("atom:${p.root}"))
-                        walkRef(model.refinements.getValue(p.root).expr,
-                            ctxOf(p.root, ctx.innermost().anchor))
-                    if (p.segs.isNotEmpty())
-                        acc.widen(model.baseOf(p.root) ?: p.root,
-                            "'${Printer.expr(p)}' reads through a bare shape name", decl, tolerated)
-                    null
-                }
-                else -> walkNames(ctx.innermost(), listOf(p.root) + segmentNames)
+            return when (resolved.start) {
+                is PathStart.Subject -> walkSteps(ctx.subject, resolved, segmentNames)
+                is PathStart.RecordName, is PathStart.ValueName -> walkSteps(ctx.aliases.getValue(p.root), resolved, segmentNames)
+                is PathStart.Element -> walkSteps(ctx.innermost(), resolved, listOf(p.root) + segmentNames)
+                is PathStart.ShapeName -> walkShapeName(p, ctx)
+                is PathStart.FoundRecord -> null
             }
+        }
+
+        /** A shape or refinement named on its own: a membership atom of the innermost element. */
+        private fun walkShapeName(p: PathExpr, ctx: Ctx): Scope? {
+            if (p.root in model.refinements && expanding.add("atom:${p.root}"))
+                walkRef(model.refinements.getValue(p.root).expr, ctxOf(p.root, ctx.innermost().anchor))
+            if (p.segs.isNotEmpty())
+                acc.widen(model.baseOf(p.root) ?: p.root, "'${Printer.expr(p)}' reads through a bare shape name", decl, tolerated)
+            return null
+        }
+
+        /**
+         * Reads the steps of [resolved] one after another from [start], each on the shape the resolver read it
+         * on, and steps the key along each. A name of [names] the resolver did not resolve goes to [hop].
+         */
+        private fun walkSteps(start: Scope, resolved: ResolvedPath, names: List<String>): Scope? {
+            var scope: Scope? = start
+            for (step in resolved.steps) {
+                val before = scope ?: return null
+                scope = memberScope(step.member, Scope(step.readOn, before.anchor))
+            }
+            for (name in names.drop(resolved.steps.size)) scope = hop(scope, name)
+            val reached = scope ?: return null
+            // a path a test narrowed ends on a record of the shape the test showed
+            return if (resolved.resolves) Scope(resolved.endShape ?: reached.name, reached.anchor) else reached
         }
 
         /**
@@ -781,12 +830,7 @@ class DomainAnalysis(private val model: Model) {
          */
         private fun walkNames(start: Scope?, names: List<String>): Scope? {
             if (start == null || names.isEmpty()) return start
-            val resolved = model.paths.resolveAfter(start.name, names)
-            var scope: Scope? = start
-            for (step in resolved.steps) scope = memberScope(step.member, scope ?: return null)
-            val unresolvedAt = resolved.steps.size
-            for (name in names.drop(unresolvedAt)) scope = hop(scope, name)
-            return scope
+            return walkSteps(start, model.paths.resolveAfter(start.name, names), names)
         }
 
         /** Read a member and step to its instance scope (to-one) or its
@@ -871,7 +915,7 @@ class DomainAnalysis(private val model: Model) {
                         else walkPath(src, inner) ?: if (b.alias != null && namesValues(src, inner)) {
                             // a binding over a `many` of values names a value, not a record (Reference §5): its
                             // `as` name is an alias only, and a bare field in the `where` still reads the record
-                            inner = Ctx(inner.subject, inner.elements, inner.aliases + (b.alias to Scope(VALUE_ALIAS, Anchor.Unknown)))
+                            inner = Ctx(inner.subject, inner.elements, inner.aliases + (b.alias to Scope(VALUE_ALIAS, Anchor.Unknown)), inner.narrowed)
                             continue
                         } else unknownScope()
                     is ShapeForSource -> correlatedSource(src.shape, src.forExpr, inner)
@@ -883,6 +927,9 @@ class DomainAnalysis(private val model: Model) {
                 inner = inner.push(bScope, b.alias)
                 elem = bScope
             }
+            // a filter that names a refinement reads its `where` on that refinement's members (`velle.spec.ScopeRules`)
+            val whereElement = model.scopes.ofFilter(c, ctx.pathScope()).element
+            if (elem != null && whereElement != null && whereElement != elem.name) inner = inner.withInnermostAs(whereElement)
             c.where?.let { walkExpr(it, inner) }
             return elem
         }

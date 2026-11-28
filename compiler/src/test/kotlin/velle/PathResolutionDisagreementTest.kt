@@ -478,4 +478,23 @@ class PathResolutionDisagreementTest {
         assertTrue(polarities.complete)
         assertEquals(0, polarities.signByConsult["Answer"])
     }
+
+    // ── 18. a filter that names a refinement: the collection's shape for Domains, the refinement elsewhere ──
+
+    @Test
+    fun `the serialization domain reads a filter that names a refinement on that refinement's own properties, as the validator does`() {
+        val spec = """
+            act Member { name: text, flagged: boolean initially false }
+            act Loan { member: one Member, fee: integer }
+            shape LateLoan = Loan where fee > 0 {
+                penalty: integer = fee * 2
+            }
+            rule Flag when (Member where not flagged and exists (loans where LateLoan and penalty > 10)) on commit { flagged = true }
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(spec))
+
+        // 'penalty' is LateLoan's property, read on the member's own loans, so no read is left unattributed
+        val widenings = DomainAnalysis(Model(Parser.parse(spec))).actDomains.values.flatMap { domain -> domain.widenings }
+        assertEquals(emptyList(), widenings.map { widening -> widening.toString() })
+    }
 }
